@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   buildLocalRagContext,
+  _buildFileContextPrefix as buildFileContextPrefix,
   _chunkText as chunkText,
   _cosineSimilarity as cosineSimilarity,
+  _extractFrontmatter as extractFrontmatter,
+  _keywordSearchScore as keywordSearchScore,
   _simpleChecksum as simpleChecksum,
   _shouldIncludeFile as shouldIncludeFile,
 } from "./localRagStore";
@@ -227,6 +230,56 @@ describe("buildLocalRagContext", () => {
     const ctx = buildLocalRagContext(results);
     expect(ctx).toContain("Legacy content");
     expect(ctx).not.toContain("[Text file]");
+  });
+});
+
+// ── frontmatter helpers ─────────────────────────────────────────────
+
+describe("extractFrontmatter", () => {
+  it("extracts YAML frontmatter and returns the remaining body", () => {
+    const content = "---\n{\"tags\":[\"obsidian\"],\"aliases\":[\"Vault\"]}\n---\n# Title\nBody";
+    const result = extractFrontmatter(content);
+
+    expect(result.frontmatter).toEqual({
+      tags: ["obsidian"],
+      aliases: ["Vault"],
+    });
+    expect(result.bodyContent).toBe("# Title\nBody");
+  });
+
+  it("keeps the full content when frontmatter parsing fails", () => {
+    const content = "---\ntags: [unterminated\n---\n# Title\nBody";
+    const result = extractFrontmatter(content);
+
+    expect(result.frontmatter).toEqual({});
+    expect(result.bodyContent).toBe(content);
+  });
+
+  it("does not strip a leading thematic break that is not valid frontmatter", () => {
+    const content = "---\n# Visible heading\nBody";
+    const result = extractFrontmatter(content);
+
+    expect(result.frontmatter).toEqual({});
+    expect(result.bodyContent).toBe(content);
+  });
+});
+
+describe("buildFileContextPrefix", () => {
+  it("includes file name, folder, tags, and aliases", () => {
+    expect(buildFileContextPrefix("notes/topic.md", {
+      tags: ["a", "b"],
+      aliases: ["Topic"],
+    })).toBe("Document: topic | Folder: notes | Tags: a, b | Aliases: Topic");
+  });
+});
+
+describe("keywordSearchScore", () => {
+  it("scores matching text higher than non-matching text", () => {
+    const matching = keywordSearchScore("obsidian plugins improve search", ["obsidian", "search"]);
+    const nonMatching = keywordSearchScore("typescript compiler options", ["obsidian", "search"]);
+
+    expect(matching).toBeGreaterThan(nonMatching);
+    expect(nonMatching).toBe(0);
   });
 });
 

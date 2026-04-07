@@ -403,6 +403,18 @@ class LocalRagStore {
       newChecksums[path] = checksum;
     }
 
+    // Preserve metadata for unchanged files and replace it only for re-embedded files.
+    const nextFileFrontmatter: Record<string, Record<string, unknown>> = {};
+    for (const path of filesToKeepSet) {
+      const frontmatter = index.fileFrontmatter?.[path];
+      if (frontmatter) {
+        nextFileFrontmatter[path] = frontmatter;
+      }
+    }
+    for (const [path, frontmatter] of Object.entries(fileFrontmatterMap)) {
+      nextFileFrontmatter[path] = frontmatter;
+    }
+
     // Save
     index = {
       meta: allMeta,
@@ -413,7 +425,7 @@ class LocalRagStore {
       chunkOverlap,
       pdfChunkPages: normalizedPdfChunkPages,
       indexMultimodal,
-      fileFrontmatter: Object.keys(fileFrontmatterMap).length > 0 ? fileFrontmatterMap : undefined,
+      fileFrontmatter: Object.keys(nextFileFrontmatter).length > 0 ? nextFileFrontmatter : undefined,
     };
     vectors = combinedVectors;
     this.entries.set(settingName, { index, vectors });
@@ -434,7 +446,6 @@ class LocalRagStore {
     scoreThreshold?: number,
     searchFileExtensions?: string[],
     options?: {
-      hybridSearch?: boolean;
       hybridKeywordWeight?: number;
       contextExpansion?: number;
     }
@@ -476,9 +487,8 @@ class LocalRagStore {
       : null;
 
     // Prepare keyword matching for hybrid search
-    const enableHybrid = options?.hybridSearch ?? true;
     const keywordWeight = options?.hybridKeywordWeight ?? 0.3;
-    const queryTerms = enableHybrid
+    const queryTerms = keywordWeight > 0
       ? query.toLowerCase().split(/\s+/).filter(t => t.length > 1)
       : [];
 
@@ -497,11 +507,11 @@ class LocalRagStore {
       const docVec = vectors.subarray(start, end);
       const vectorScore = cosineSimilarity(queryEmbedding, docVec);
 
-      const keywordScore = (enableHybrid && queryTerms.length > 0)
+      const keywordScore = (keywordWeight > 0 && queryTerms.length > 0)
         ? keywordSearchScore(index.meta[i].text + " " + index.meta[i].filePath, queryTerms)
         : 0;
 
-      const combinedScore = (enableHybrid && queryTerms.length > 0)
+      const combinedScore = (keywordWeight > 0 && queryTerms.length > 0)
         ? vectorScore * (1 - keywordWeight) + keywordScore * keywordWeight
         : vectorScore;
 
@@ -664,7 +674,7 @@ function extractFrontmatter(content: string): { frontmatter: Record<string, unkn
       bodyContent: body,
     };
   } catch {
-    return { frontmatter: {}, bodyContent: content.slice(match[0].length) };
+    return { frontmatter: {}, bodyContent: content };
   }
 }
 
@@ -818,15 +828,15 @@ export async function searchLocalRag(
   if (!store || !apiKey) {
     return { context: "", sources: [], mediaReferences: [], citations: [] };
   }
+  const overFetchExtra = ragSetting.overFetchExtra ?? 0;
   const results = await store.search(
     settingName, query, apiKey,
     ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),
-    ragSetting.overFetchEnabled ? (ragSetting.overFetchTopN ?? 20) : ragSetting.topK,
+    ragSetting.topK + overFetchExtra,
     ragSetting.embeddingBaseUrl || undefined,
     ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
     ragSetting.searchFileExtensions,
     {
-      hybridSearch: ragSetting.hybridSearch ?? true,
       hybridKeywordWeight: ragSetting.hybridKeywordWeight ?? 0.3,
       contextExpansion: ragSetting.contextExpansion ?? 1,
     }
@@ -835,8 +845,8 @@ export async function searchLocalRag(
     return { context: "", sources: [], mediaReferences: [], citations: [] };
   }
 
-  // If over-fetch is enabled, trim to topK (over-fetch retrieves more candidates for better recall)
-  const finalResults = ragSetting.overFetchEnabled
+  // If over-fetch is enabled, trim to topK
+  const finalResults = overFetchExtra > 0
     ? results.slice(0, ragSetting.topK)
     : results;
 

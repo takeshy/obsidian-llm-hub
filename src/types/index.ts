@@ -250,14 +250,12 @@ export interface RagSetting {
   lastFullSync: number | null;
   externalIndexPath: string;    // 外部インデックスのパス（空 = 通常のvault sync）
   indexMultimodal: boolean;     // 画像/PDF/音声/動画もインデックス対象にする（Gemini native時のみ有効）
-  // Hybrid search: combine vector similarity with keyword matching
-  hybridSearch: boolean;        // default: true - enable hybrid vector+keyword search
-  hybridKeywordWeight: number;  // default: 0.3 - weight for keyword score (0.0-1.0)
-  // Context expansion: return surrounding chunks for better context
-  contextExpansion: number;     // default: 1 - number of surrounding chunks to include (0=disabled)
-  // Over-fetch: fetch more candidates then trim to topK for better recall
-  overFetchEnabled: boolean;    // default: false - fetch overFetchTopN candidates then trim
-  overFetchTopN: number;        // default: 20 - number of candidates to fetch before trimming
+  // Hybrid search: keyword weight blended with vector similarity (0.0=vector only, 1.0=keyword only)
+  hybridKeywordWeight: number;  // default: 0.3
+  // Context expansion: number of surrounding chunks to include (0=disabled)
+  contextExpansion: number;     // default: 1
+  // Over-fetch: additional candidates beyond topK to fetch before trimming (0=disabled)
+  overFetchExtra: number;       // default: 0
 }
 
 // Workspace状態ファイル（.gemini-workspace.json）
@@ -288,11 +286,9 @@ export const DEFAULT_RAG_SETTING: RagSetting = {
   lastFullSync: null,
   externalIndexPath: "",
   indexMultimodal: false,
-  hybridSearch: true,
   hybridKeywordWeight: 0.3,
   contextExpansion: 1,
-  overFetchEnabled: false,
-  overFetchTopN: 20,
+  overFetchExtra: 0,
 };
 
 // デフォルトのWorkspace状態

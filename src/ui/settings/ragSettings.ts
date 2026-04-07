@@ -217,6 +217,9 @@ function displayLocalStoreSettings(
     // Score threshold
     displayScoreThresholdSetting(containerEl, plugin, name, ragSetting, display);
 
+    // Search quality settings
+    displaySearchQualitySettings(containerEl, plugin, name, ragSetting, display);
+
     // Index status
     displayIndexStatus(containerEl, app, name, ragSetting);
   } else {
@@ -226,6 +229,9 @@ function displayLocalStoreSettings(
 
     // Top K (per-setting)
     displayTopKSetting(containerEl, plugin, name, ragSetting, display);
+
+    // Search quality settings
+    displaySearchQualitySettings(containerEl, plugin, name, ragSetting, display);
 
     // Target Folders
     new Setting(containerEl)
@@ -580,6 +586,103 @@ function displayScoreThresholdSetting(
         .onClick(() => {
           void (async () => {
             await plugin.updateRagSetting(name, { scoreThreshold: DEFAULT_RAG_SETTING.scoreThreshold });
+            display();
+          })();
+        })
+    );
+}
+
+/** Search quality settings (hybrid keyword weight, context expansion, over-fetch extra) */
+function displaySearchQualitySettings(
+  containerEl: HTMLElement,
+  plugin: SettingsContext["plugin"],
+  name: string,
+  ragSetting: RagSetting,
+  display: () => void
+): void {
+  // Hybrid keyword weight (0.0-1.0 via 0-10 slider)
+  const kwWeight = ragSetting.hybridKeywordWeight ?? DEFAULT_RAG_SETTING.hybridKeywordWeight;
+  new Setting(containerEl)
+    .setName(t("settings.hybridKeywordWeight"))
+    .setDesc(t("settings.hybridKeywordWeight.desc"))
+    .addSlider((slider) => {
+      slider
+        .setLimits(0, 10, 1)
+        .setValue(Math.round(kwWeight * 10))
+        .setDynamicTooltip()
+        .onChange((value) => {
+          void (async () => {
+            await plugin.updateRagSetting(name, { hybridKeywordWeight: value / 10 });
+          })();
+        });
+      const tooltipEl = slider.sliderEl.nextElementSibling;
+      if (tooltipEl) {
+        const updateTooltip = () => { tooltipEl.textContent = (slider.getValue() / 10).toFixed(1); };
+        updateTooltip();
+        slider.sliderEl.addEventListener("input", updateTooltip);
+      }
+    })
+    .addExtraButton((button) =>
+      button
+        .setIcon("reset")
+        .setTooltip(t("settings.resetToDefault", { value: String(DEFAULT_RAG_SETTING.hybridKeywordWeight) }))
+        .onClick(() => {
+          void (async () => {
+            await plugin.updateRagSetting(name, { hybridKeywordWeight: DEFAULT_RAG_SETTING.hybridKeywordWeight });
+            display();
+          })();
+        })
+    );
+
+  // Context expansion (0-5)
+  new Setting(containerEl)
+    .setName(t("settings.contextExpansion"))
+    .setDesc(t("settings.contextExpansion.desc"))
+    .addSlider((slider) =>
+      slider
+        .setLimits(0, 5, 1)
+        .setValue(ragSetting.contextExpansion ?? DEFAULT_RAG_SETTING.contextExpansion)
+        .setDynamicTooltip()
+        .onChange((value) => {
+          void (async () => {
+            await plugin.updateRagSetting(name, { contextExpansion: value });
+          })();
+        })
+    )
+    .addExtraButton((button) =>
+      button
+        .setIcon("reset")
+        .setTooltip(t("settings.resetToDefault", { value: String(DEFAULT_RAG_SETTING.contextExpansion) }))
+        .onClick(() => {
+          void (async () => {
+            await plugin.updateRagSetting(name, { contextExpansion: DEFAULT_RAG_SETTING.contextExpansion });
+            display();
+          })();
+        })
+    );
+
+  // Over-fetch extra (0-50)
+  new Setting(containerEl)
+    .setName(t("settings.overFetchExtra"))
+    .setDesc(t("settings.overFetchExtra.desc"))
+    .addSlider((slider) =>
+      slider
+        .setLimits(0, 50, 5)
+        .setValue(ragSetting.overFetchExtra ?? DEFAULT_RAG_SETTING.overFetchExtra)
+        .setDynamicTooltip()
+        .onChange((value) => {
+          void (async () => {
+            await plugin.updateRagSetting(name, { overFetchExtra: value });
+          })();
+        })
+    )
+    .addExtraButton((button) =>
+      button
+        .setIcon("reset")
+        .setTooltip(t("settings.resetToDefault", { value: String(DEFAULT_RAG_SETTING.overFetchExtra) }))
+        .onClick(() => {
+          void (async () => {
+            await plugin.updateRagSetting(name, { overFetchExtra: DEFAULT_RAG_SETTING.overFetchExtra });
             display();
           })();
         })
