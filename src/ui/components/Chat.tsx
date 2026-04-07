@@ -40,6 +40,7 @@ import {
 	type VaultToolMode,
 	type McpServerConfig,
 	type McpAppInfo,
+	type RagCitation,
 	isImageGenerationModel,
 	DEFAULT_WORKSPACE_FOLDER,
 } from "src/types";
@@ -135,6 +136,43 @@ function getLatestPendingInfo<T>(items: T[]): T | undefined {
 
 function getPendingInfos<T>(items: T[]): T[] | undefined {
 	return items.length > 0 ? items : undefined;
+}
+
+/** Perform local RAG search and attach results to userMessage + systemPrompt. */
+async function performLocalRagSearch(
+	plugin: LlmHubPlugin,
+	selectedRagSetting: string | null,
+	query: string,
+	systemPrompt: string,
+	userMessage: Message,
+): Promise<{ systemPrompt: string; sources: string[]; citations: RagCitation[] }> {
+	if (!selectedRagSetting || selectedRagSetting === "__websearch__") {
+		return { systemPrompt, sources: [], citations: [] };
+	}
+	const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
+	if (!ragSettingObj) {
+		return { systemPrompt, sources: [], citations: [] };
+	}
+	try {
+		const localRag = await searchLocalRag(
+			selectedRagSetting, query,
+			ragSettingObj, getGeminiApiKey(plugin.settings)
+		);
+		if (localRag.sources.length > 0) {
+			systemPrompt += localRag.context;
+			if (localRag.mediaReferences.length > 0) {
+				const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
+				if (ragAttachments.length > 0) {
+					const existing = userMessage.attachments || [];
+					(userMessage as { attachments?: Attachment[] }).attachments = [...existing, ...ragAttachments];
+				}
+			}
+			return { systemPrompt, sources: localRag.sources, citations: localRag.citations };
+		}
+	} catch (e) {
+		console.error("Local RAG search failed:", formatError(e));
+	}
+	return { systemPrompt, sources: [], citations: [] };
 }
 
 interface ChatProps {
@@ -1134,32 +1172,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			}
 
 			// Local RAG: search and inject context into system prompt
-			let localRagSources: string[] = [];
-			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
-				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
-				if (ragSettingObj) {
-					try {
-						const localRag = await searchLocalRag(
-							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings)
-						);
-						if (localRag.sources.length > 0) {
-							systemPrompt += localRag.context;
-							localRagSources = localRag.sources;
-							// Attach multimodal RAG files so the LLM can see actual content
-							if (localRag.mediaReferences.length > 0) {
-								const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
-								if (ragAttachments.length > 0) {
-									const existing = userMessage.attachments || [];
-									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-								}
-							}
-						}
-					} catch (e) {
-						console.error("Local RAG search failed:", formatError(e));
-					}
-				}
-			}
+			const localRag = await performLocalRagSearch(plugin, selectedRagSetting, resolvedContent, systemPrompt, userMessage);
+			systemPrompt = localRag.systemPrompt;
+			const localRagSources = localRag.sources;
+			const localRagCitations = localRag.citations;
 
 			let fullContent = "";
 			let stopped = false;
@@ -1258,7 +1274,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				content: processedContent,
 				timestamp: Date.now(),
 				model: currentProvider,
-				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
+				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources, ragCitations: localRagCitations.length > 0 ? localRagCitations : undefined } : {}),
 			};
 
 			const newMessages = [...messages, userMessage, assistantMessage];
@@ -1373,32 +1389,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			}
 
 			// Local RAG: search and inject context into system prompt
-			let localRagSources: string[] = [];
-			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
-				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
-				if (ragSettingObj) {
-					try {
-						const localRag = await searchLocalRag(
-							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings)
-						);
-						if (localRag.sources.length > 0) {
-							systemPrompt += localRag.context;
-							localRagSources = localRag.sources;
-							// Attach multimodal RAG files so the LLM can see actual content
-							if (localRag.mediaReferences.length > 0) {
-								const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
-								if (ragAttachments.length > 0) {
-									const existing = userMessage.attachments || [];
-									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-								}
-							}
-						}
-					} catch (e) {
-						console.error("Local RAG search failed:", formatError(e));
-					}
-				}
-			}
+			const localRag = await performLocalRagSearch(plugin, selectedRagSetting, resolvedContent, systemPrompt, userMessage);
+			systemPrompt = localRag.systemPrompt;
+			const localRagSources = localRag.sources;
+			const localRagCitations = localRag.citations;
 
 			let fullContent = "";
 			let fullThinking = "";
@@ -1475,7 +1469,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				timestamp: Date.now(),
 				model: "local-llm",
 				...(fullThinking ? { thinking: fullThinking } : {}),
-				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
+				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources, ragCitations: localRagCitations.length > 0 ? localRagCitations : undefined } : {}),
 			};
 
 			const newMessages = [...messages, userMessage, assistantMessage];
@@ -1553,32 +1547,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			}
 
 			// Local RAG: search and inject context into system prompt
-			let localRagSources: string[] = [];
-			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
-				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
-				if (ragSettingObj) {
-					try {
-						const localRag = await searchLocalRag(
-							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings)
-						);
-						if (localRag.sources.length > 0) {
-							systemPrompt += localRag.context;
-							localRagSources = localRag.sources;
-							// Attach multimodal RAG files so the LLM can see actual content
-							if (localRag.mediaReferences.length > 0) {
-								const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
-								if (ragAttachments.length > 0) {
-									const existing = userMessage.attachments || [];
-									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-								}
-							}
-						}
-					} catch (e) {
-						console.error("Local RAG search failed:", formatError(e));
-					}
-				}
-			}
+			const localRag = await performLocalRagSearch(plugin, selectedRagSetting, resolvedContent, systemPrompt, userMessage);
+			systemPrompt = localRag.systemPrompt;
+			const localRagSources = localRag.sources;
+			const localRagCitations = localRag.citations;
 
 			// Build vault tools (same as Gemini path)
 			const allMessages = [...messages, userMessage];
@@ -1986,6 +1958,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				pendingRenames,
 				ragUsed: localRagSources.length > 0,
 				ragSources: localRagSources.length > 0 ? localRagSources : undefined,
+				ragCitations: localRagCitations.length > 0 ? localRagCitations : undefined,
 				generatedImages: generatedImages.length > 0 ? generatedImages : undefined,
 				imageGenerationUsed: generatedImages.length > 0 || undefined,
 				usage: streamUsage,
@@ -2561,32 +2534,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				}
 
 				// Local RAG: search and inject context into system prompt
-				let localRagSources: string[] = [];
-				if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
-					const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
-					if (ragSettingObj) {
-						try {
-							const localRag = await searchLocalRag(
-								selectedRagSetting, resolvedContent,
-								ragSettingObj, getGeminiApiKey(plugin.settings)
-							);
-							if (localRag.sources.length > 0) {
-								systemPrompt += localRag.context;
-								localRagSources = localRag.sources;
-								// Attach multimodal RAG files so the LLM can see actual content
-								if (localRag.mediaReferences.length > 0) {
-									const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
-									if (ragAttachments.length > 0) {
-										const existing = userMessage.attachments || [];
-										(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-									}
-								}
-							}
-						} catch (e) {
-							console.error("Local RAG search failed:", formatError(e));
-						}
-					}
-				}
+				const localRag = await performLocalRagSearch(plugin, selectedRagSetting, resolvedContent, systemPrompt, userMessage);
+				systemPrompt = localRag.systemPrompt;
+				const localRagSources = localRag.sources;
+				const localRagCitations = localRag.citations;
 
 				const allMessages = [...messages, userMessage];
 
@@ -2763,6 +2714,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					toolResults: toolResults.length > 0 ? toolResults : undefined,
 					ragUsed: ragUsed || undefined,
 					ragSources: ragSources.length > 0 ? ragSources : undefined,
+					ragCitations: localRagCitations.length > 0 ? localRagCitations : undefined,
 					webSearchUsed: webSearchUsed || undefined,
 					imageGenerationUsed: imageGenerationUsed || undefined,
 					generatedImages: generatedImages.length > 0 ? generatedImages : undefined,

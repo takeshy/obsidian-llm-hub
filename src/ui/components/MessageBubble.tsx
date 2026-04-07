@@ -419,13 +419,40 @@ export default function MessageBubble({
         </div>
       )}
 
-      {/* Semantic search indicator with sources */}
+      {/* Semantic search indicator with sources and citations */}
       {message.ragUsed && (
         <div className="llm-hub-rag-used">
           <span className="llm-hub-rag-indicator">
             📚 {t("message.rag")}
           </span>
-          {message.ragSources && message.ragSources.length > 0 && (
+          {message.ragCitations && message.ragCitations.length > 0 ? (
+            <div className="llm-hub-rag-sources">
+              {message.ragCitations.map((citation, index) => (
+                <div
+                  key={index}
+                  className="llm-hub-rag-citation llm-hub-tool-clickable"
+                  onClick={() => {
+                    if (app.vault.getAbstractFileByPath(citation.filePath)) {
+                      void app.workspace.openLinkText(citation.filePath, "", false);
+                    } else {
+                      new Notice(`Source: ${citation.filePath}`, 3000);
+                    }
+                  }}
+                  title={`${citation.filePath} (score: ${citation.score.toFixed(3)})\n${citation.text}`}
+                >
+                  <span className="llm-hub-rag-citation-file">
+                    📄 {citation.filePath.split("/").pop() || citation.filePath}
+                    <span className="llm-hub-rag-citation-score">
+                      {(citation.score * 100).toFixed(0)}%
+                    </span>
+                  </span>
+                  <span className="llm-hub-rag-citation-text">
+                    {citation.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : message.ragSources && message.ragSources.length > 0 ? (
             <div className="llm-hub-rag-sources">
               {message.ragSources.map((source, index) => (
                 <span
@@ -444,7 +471,7 @@ export default function MessageBubble({
                 </span>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
       )}
 

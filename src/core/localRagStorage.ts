@@ -22,6 +22,7 @@ export interface LocalRagIndex {
   chunkOverlap: number;
   pdfChunkPages?: number;      // undefined treated as 6 for backward compat
   indexMultimodal?: boolean;  // undefined treated as false for backward compat
+  fileFrontmatter?: Record<string, Record<string, unknown>>;  // per-file frontmatter metadata
 }
 
 const EMPTY_INDEX: LocalRagIndex = {

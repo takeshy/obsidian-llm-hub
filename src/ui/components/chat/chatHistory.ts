@@ -58,6 +58,7 @@ export async function messagesToMarkdown(
 		if (msg.toolResults) metadata.toolResults = msg.toolResults;
 		if (msg.ragUsed) metadata.ragUsed = msg.ragUsed;
 		if (msg.ragSources) metadata.ragSources = msg.ragSources;
+		if (msg.ragCitations) metadata.ragCitations = msg.ragCitations;
 		if (msg.webSearchUsed) metadata.webSearchUsed = msg.webSearchUsed;
 		if (msg.imageGenerationUsed) metadata.imageGenerationUsed = msg.imageGenerationUsed;
 		if (msg.generatedImages) metadata.generatedImages = msg.generatedImages;
@@ -183,6 +184,7 @@ export function parseMarkdownToMessages(content: string): { messages: Message[];
 						if (meta.toolResults) message.toolResults = meta.toolResults as Message["toolResults"];
 						if (meta.ragUsed) message.ragUsed = meta.ragUsed as boolean;
 						if (meta.ragSources) message.ragSources = meta.ragSources as string[];
+						if (meta.ragCitations) message.ragCitations = meta.ragCitations as Message["ragCitations"];
 						if (meta.webSearchUsed) message.webSearchUsed = meta.webSearchUsed as boolean;
 						if (meta.imageGenerationUsed) message.imageGenerationUsed = meta.imageGenerationUsed as boolean;
 						if (meta.generatedImages) message.generatedImages = meta.generatedImages as Message["generatedImages"];

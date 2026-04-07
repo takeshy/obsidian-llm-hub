@@ -1,4 +1,4 @@
-import { type App, TFile } from "obsidian";
+import { type App, TFile, parseYaml } from "obsidian";
 import { PDFDocument } from "pdf-lib";
 import {
   generateEmbeddings,
@@ -21,7 +21,7 @@ import {
   loadExternalRagIndex,
   loadExternalRagVectors,
 } from "./localRagStorage";
-import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING } from "../types";
+import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type RagCitation } from "../types";
 export interface FilterConfig {
   includeFolders: string[];
   excludePatterns: string[];
@@ -68,6 +68,9 @@ export interface LocalRagSearchResult {
   chunkIndex: number;
   contentType?: RagContentType;
   pageLabel?: string;
+  frontmatter?: Record<string, unknown>;
+  /** Original chunk text snippet for citation display (before context expansion) */
+  citationText?: string;
 }
 
 export interface LocalRagStatus {
@@ -248,6 +251,7 @@ class LocalRagStore {
     // Embed new/changed files
     const newMeta: LocalRagChunkMeta[] = [];
     const newVectorParts: Float32Array[] = [];
+    const fileFrontmatterMap: Record<string, Record<string, unknown>> = {};
     const embeddedChecksums: Record<string, string> = {};
     let dimension = index.dimension;
     let currentOp = filesToKeepSet.size + filesToRemove.length;
@@ -261,17 +265,27 @@ class LocalRagStore {
           // Text file: chunk and embed
           const content = contentCache.get(file.path);
           if (!content) continue;
-          const chunks = chunkText(content, chunkSize, chunkOverlap);
+
+          // Extract frontmatter metadata
+          const { frontmatter, bodyContent } = extractFrontmatter(content);
+
+          // Build file context prefix
+          const fileContext = buildFileContextPrefix(file.path, frontmatter);
+
+          const chunks = chunkText(bodyContent, chunkSize, chunkOverlap);
           if (chunks.length === 0) continue;
+
+          // Prepend file context to each chunk for better embedding
+          const embeddingTexts = chunks.map(chunk => fileContext ? `${fileContext}\n${chunk}` : chunk);
 
           let embeddings: number[][];
           if (isGeminiNative) {
             embeddings = await generateGeminiNativeEmbeddings(
-              chunks.map(text => ({ text })),
+              embeddingTexts.map(text => ({ text })),
               apiKey, model
             );
           } else {
-            embeddings = await generateEmbeddings(chunks, apiKey, model, embeddingBaseUrl);
+            embeddings = await generateEmbeddings(embeddingTexts, apiKey, model, embeddingBaseUrl);
           }
 
           if (embeddings.length > 0 && embeddings[0].length > 0) {
@@ -283,6 +297,10 @@ class LocalRagStore {
               newMeta.push({ filePath: file.path, chunkIndex: i, text: chunks[i], contentType: "text" });
               newVectorParts.push(new Float32Array(embeddings[i]));
             }
+          }
+          // Store frontmatter at file level (not per-chunk) to avoid index bloat
+          if (Object.keys(frontmatter).length > 0) {
+            fileFrontmatterMap[file.path] = frontmatter;
           }
           result.embedded++;
           embeddedChecksums[file.path] = currentChecksums[file.path];
@@ -395,6 +413,7 @@ class LocalRagStore {
       chunkOverlap,
       pdfChunkPages: normalizedPdfChunkPages,
       indexMultimodal,
+      fileFrontmatter: Object.keys(fileFrontmatterMap).length > 0 ? fileFrontmatterMap : undefined,
     };
     vectors = combinedVectors;
     this.entries.set(settingName, { index, vectors });
@@ -413,7 +432,12 @@ class LocalRagStore {
     topK: number,
     embeddingBaseUrl?: string,
     scoreThreshold?: number,
-    searchFileExtensions?: string[]
+    searchFileExtensions?: string[],
+    options?: {
+      hybridSearch?: boolean;
+      hybridKeywordWeight?: number;
+      contextExpansion?: number;
+    }
   ): Promise<LocalRagSearchResult[]> {
     if (!this.app) {
       return [];
@@ -444,12 +468,19 @@ class LocalRagStore {
     if (!queryEmbedding) return [];
 
     const dim = index.dimension;
-    const scores: Array<{ index: number; score: number }> = [];
+    const scores: Array<{ index: number; vectorScore: number; keywordScore: number; combinedScore: number }> = [];
 
     // Build extension filter set (normalized to lowercase without leading dot)
     const extFilter = searchFileExtensions && searchFileExtensions.length > 0
       ? new Set(searchFileExtensions.map(e => e.replace(/^\./, "").toLowerCase()))
       : null;
+
+    // Prepare keyword matching for hybrid search
+    const enableHybrid = options?.hybridSearch ?? true;
+    const keywordWeight = options?.hybridKeywordWeight ?? 0.3;
+    const queryTerms = enableHybrid
+      ? query.toLowerCase().split(/\s+/).filter(t => t.length > 1)
+      : [];
 
     for (let i = 0; i < index.meta.length; i++) {
       // Skip entries that don't match the file extension filter
@@ -464,23 +495,70 @@ class LocalRagStore {
       if (end > vectors.length) break;
 
       const docVec = vectors.subarray(start, end);
-      const score = cosineSimilarity(queryEmbedding, docVec);
-      scores.push({ index: i, score });
+      const vectorScore = cosineSimilarity(queryEmbedding, docVec);
+
+      const keywordScore = (enableHybrid && queryTerms.length > 0)
+        ? keywordSearchScore(index.meta[i].text + " " + index.meta[i].filePath, queryTerms)
+        : 0;
+
+      const combinedScore = (enableHybrid && queryTerms.length > 0)
+        ? vectorScore * (1 - keywordWeight) + keywordScore * keywordWeight
+        : vectorScore;
+
+      scores.push({ index: i, vectorScore, keywordScore, combinedScore });
     }
 
-    scores.sort((a, b) => b.score - a.score);
-    const topResults = scores.slice(0, topK);
+    scores.sort((a, b) => b.combinedScore - a.combinedScore);
+    const filteredResults = scores
+      .slice(0, topK)
+      .filter(r => r.combinedScore > (scoreThreshold ?? 0));
 
-    return topResults
-      .filter(r => r.score > (scoreThreshold ?? 0))
-      .map(r => ({
-        filePath: index.meta[r.index].filePath,
-        text: index.meta[r.index].text,
-        score: r.score,
-        chunkIndex: index.meta[r.index].chunkIndex,
-        contentType: index.meta[r.index].contentType,
-        pageLabel: index.meta[r.index].pageLabel,
-      }));
+    // Build chunk lookup map for O(1) context expansion
+    const contextExpansionCount = options?.contextExpansion ?? 0;
+    let chunkLookup: Map<string, Map<number, number>> | null = null;
+    if (contextExpansionCount > 0) {
+      chunkLookup = new Map();
+      for (let i = 0; i < index.meta.length; i++) {
+        const m = index.meta[i];
+        let fileMap = chunkLookup.get(m.filePath);
+        if (!fileMap) { fileMap = new Map(); chunkLookup.set(m.filePath, fileMap); }
+        fileMap.set(m.chunkIndex, i);
+      }
+    }
+
+    return filteredResults.map(r => {
+      const meta = index.meta[r.index];
+      let text = meta.text;
+      const citationText = truncateForCitation(meta.text);
+
+      if (contextExpansionCount > 0 && chunkLookup && meta.contentType !== "pdf") {
+        const fileMap = chunkLookup.get(meta.filePath);
+        if (fileMap) {
+          const expandedParts: string[] = [];
+          for (let ci = meta.chunkIndex - contextExpansionCount; ci <= meta.chunkIndex + contextExpansionCount; ci++) {
+            if (ci < 0) continue;
+            const neighborIdx = fileMap.get(ci);
+            if (neighborIdx !== undefined) {
+              expandedParts.push(index.meta[neighborIdx].text);
+            }
+          }
+          if (expandedParts.length > 1) {
+            text = expandedParts.join("\n\n");
+          }
+        }
+      }
+
+      return {
+        filePath: meta.filePath,
+        text,
+        score: r.combinedScore,
+        chunkIndex: meta.chunkIndex,
+        contentType: meta.contentType,
+        pageLabel: meta.pageLabel,
+        frontmatter: index.fileFrontmatter?.[meta.filePath],
+        citationText,
+      };
+    });
   }
 
   async clear(app: App, settingName: string): Promise<void> {
@@ -554,10 +632,92 @@ export function buildLocalRagContext(results: LocalRagSearchResult[]): string {
 
   let context = "\n\n--- Relevant context from vault (semantic search) ---\n";
   for (const r of results) {
-    context += `\n[Source: ${r.filePath}] (relevance: ${r.score.toFixed(3)})\n${r.text}\n`;
+    let header = `[Source: ${r.filePath}] (relevance: ${r.score.toFixed(3)})`;
+    // Include frontmatter tags if available
+    if (r.frontmatter) {
+      const tags = r.frontmatter.tags;
+      if (Array.isArray(tags) && tags.length > 0) {
+        header += ` [Tags: ${tags.join(", ")}]`;
+      }
+    }
+    context += `\n${header}\n${r.text}\n`;
   }
   context += "\n--- End of context ---\n";
   return context;
+}
+
+function truncateForCitation(text: string, maxLen = 200): string {
+  return text.length > maxLen ? text.slice(0, maxLen) + "..." : text;
+}
+
+/** Extract YAML frontmatter from markdown content. */
+function extractFrontmatter(content: string): { frontmatter: Record<string, unknown>; bodyContent: string } {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!match) {
+    return { frontmatter: {}, bodyContent: content };
+  }
+  try {
+    const parsed = parseYaml(match[1]);
+    const body = content.slice(match[0].length);
+    return {
+      frontmatter: (parsed && typeof parsed === "object" && !Array.isArray(parsed)) ? parsed as Record<string, unknown> : {},
+      bodyContent: body,
+    };
+  } catch {
+    return { frontmatter: {}, bodyContent: content.slice(match[0].length) };
+  }
+}
+
+/** Build a contextual prefix from file path and frontmatter for improved embedding retrieval. */
+function buildFileContextPrefix(filePath: string, frontmatter: Record<string, unknown>): string {
+  const parts: string[] = [];
+
+  // File name (without extension)
+  const fileName = filePath.split("/").pop()?.replace(/\.md$/, "") ?? "";
+  if (fileName) parts.push(`Document: ${fileName}`);
+
+  // Folder path
+  const folder = filePath.split("/").slice(0, -1).join("/");
+  if (folder) parts.push(`Folder: ${folder}`);
+
+  // Tags from frontmatter
+  const tags = frontmatter.tags;
+  if (Array.isArray(tags) && tags.length > 0) {
+    parts.push(`Tags: ${tags.join(", ")}`);
+  } else if (typeof tags === "string" && tags) {
+    parts.push(`Tags: ${tags}`);
+  }
+
+  // Aliases
+  const aliases = frontmatter.aliases;
+  if (Array.isArray(aliases) && aliases.length > 0) {
+    parts.push(`Aliases: ${aliases.join(", ")}`);
+  }
+
+  return parts.length > 0 ? parts.join(" | ") : "";
+}
+
+/** Keyword relevance score: term coverage (70%) + density (30%). */
+function keywordSearchScore(text: string, queryTerms: string[]): number {
+  if (queryTerms.length === 0) return 0;
+  const lowerText = text.toLowerCase();
+  let matchedTerms = 0;
+  let totalOccurrences = 0;
+  for (const term of queryTerms) {
+    if (lowerText.includes(term)) {
+      matchedTerms++;
+      let idx = 0;
+      let occ = 0;
+      while ((idx = lowerText.indexOf(term, idx)) !== -1) {
+        occ++;
+        idx += term.length;
+      }
+      totalOccurrences += occ;
+    }
+  }
+  const coverage = matchedTerms / queryTerms.length;
+  const density = Math.min(totalOccurrences / (lowerText.length / 100), 1);
+  return coverage * 0.7 + density * 0.3;
 }
 
 // Chunking: split text into chunks with overlap at paragraph/sentence boundaries
@@ -643,6 +803,8 @@ export interface LocalRagResult {
   sources: string[];
   /** Non-text files that should be attached to the LLM call for content-based answering */
   mediaReferences: RagMediaReference[];
+  /** Detailed citations for UI display */
+  citations: RagCitation[];
 }
 
 export async function searchLocalRag(
@@ -654,28 +816,49 @@ export async function searchLocalRag(
   const store = getLocalRagStore();
   const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
   if (!store || !apiKey) {
-    return { context: "", sources: [], mediaReferences: [] };
+    return { context: "", sources: [], mediaReferences: [], citations: [] };
   }
   const results = await store.search(
     settingName, query, apiKey,
-    ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL), ragSetting.topK,
+    ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),
+    ragSetting.overFetchEnabled ? (ragSetting.overFetchTopN ?? 20) : ragSetting.topK,
     ragSetting.embeddingBaseUrl || undefined,
     ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
-    ragSetting.searchFileExtensions
+    ragSetting.searchFileExtensions,
+    {
+      hybridSearch: ragSetting.hybridSearch ?? true,
+      hybridKeywordWeight: ragSetting.hybridKeywordWeight ?? 0.3,
+      contextExpansion: ragSetting.contextExpansion ?? 1,
+    }
   );
   if (results.length === 0) {
-    return { context: "", sources: [], mediaReferences: [] };
+    return { context: "", sources: [], mediaReferences: [], citations: [] };
   }
 
+  // If over-fetch is enabled, trim to topK (over-fetch retrieves more candidates for better recall)
+  const finalResults = ragSetting.overFetchEnabled
+    ? results.slice(0, ragSetting.topK)
+    : results;
+
   // Collect non-text file references for multimodal attachment
-  const mediaReferences: RagMediaReference[] = results
+  const mediaReferences: RagMediaReference[] = finalResults
     .filter(r => r.contentType && r.contentType !== "text")
     .map(r => ({ filePath: r.filePath, contentType: r.contentType!, pageLabel: r.pageLabel }));
 
+  // Build citations for UI (#9)
+  const citations: RagCitation[] = finalResults.map(r => ({
+    filePath: r.filePath,
+    text: r.citationText!,
+    score: r.score,
+    chunkIndex: r.chunkIndex,
+    pageLabel: r.pageLabel,
+  }));
+
   return {
-    context: buildLocalRagContext(results),
-    sources: [...new Set(results.map(r => r.filePath))],
+    context: buildLocalRagContext(finalResults),
+    sources: [...new Set(finalResults.map(r => r.filePath))],
     mediaReferences,
+    citations,
   };
 }
 
@@ -839,7 +1022,7 @@ function parsePageLabel(label: string): { startPage: number; endPage: number; to
 }
 
 // Exported for testing
-export { chunkText as _chunkText, cosineSimilarity as _cosineSimilarity, simpleChecksum as _simpleChecksum, shouldIncludeFile as _shouldIncludeFile };
+export { chunkText as _chunkText, cosineSimilarity as _cosineSimilarity, simpleChecksum as _simpleChecksum, shouldIncludeFile as _shouldIncludeFile, extractFrontmatter as _extractFrontmatter, buildFileContextPrefix as _buildFileContextPrefix, keywordSearchScore as _keywordSearchScore };
 
 // Singleton
 let localRagStoreInstance: LocalRagStore | null = null;

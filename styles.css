@@ -729,6 +729,46 @@
   border-radius: 12px;
 }
 
+/* Enhanced RAG citations */
+.llm-hub-rag-citation {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--background-primary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border-left: 2px solid var(--interactive-accent);
+  max-width: 100%;
+}
+
+.llm-hub-rag-citation-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.llm-hub-rag-citation-score {
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--background-modifier-border);
+  padding: 0 4px;
+  border-radius: 8px;
+  margin-left: 4px;
+}
+
+.llm-hub-rag-citation-text {
+  font-size: 10px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(300px, 100%);
+}
+
 /* Thinking Content (Collapsible) */
 .llm-hub-thinking {
   display: block;
