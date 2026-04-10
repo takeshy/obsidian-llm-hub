@@ -296,7 +296,8 @@ Please revise the output based on the user's feedback above.`;
           try {
             const localRag = await searchLocalRag(
               effectiveApiRagName, prompt,
-              resolvedRagSetting, getGeminiApiKey(plugin.settings)
+              resolvedRagSetting, getGeminiApiKey(plugin.settings),
+              plugin.settings.proxyUrl, plugin.settings.proxyBypass
             );
             if (localRag.sources.length > 0) {
               apiSystemPrompt = localRag.context;
@@ -390,11 +391,15 @@ Please revise the output based on the user's feedback above.`;
               providerConfig.baseUrl, providerConfig.apiKey,
               providerModelName, apiMessages, apiTools,
               apiSystemPrompt, apiToolExecutor,
+              undefined, undefined,
+              plugin.settings.proxyUrl, plugin.settings.proxyBypass,
             )
           : openaiChatWithToolsStream(
               providerConfig.baseUrl, providerConfig.apiKey,
               providerModelName, apiMessages, apiTools,
               apiSystemPrompt, apiToolExecutor,
+              undefined, undefined,
+              plugin.settings.proxyUrl, plugin.settings.proxyBypass,
             );
         for await (const chunk of streamFn) {
           if (chunk.type === "text") {
@@ -458,7 +463,8 @@ Please revise the output based on the user's feedback above.`;
         try {
           const localRag = await searchLocalRag(
             effectiveRagSettingName, prompt,
-            resolvedRagSetting, getGeminiApiKey(plugin.settings)
+            resolvedRagSetting, getGeminiApiKey(plugin.settings),
+            plugin.settings.proxyUrl, plugin.settings.proxyBypass
           );
           if (localRag.sources.length > 0) {
             localRagSystemPrompt = localRag.context;
@@ -477,7 +483,9 @@ Please revise the output based on the user's feedback above.`;
   const client = geminiProviderConfig
     ? new GeminiClient(
         geminiProviderConfig.apiKey || getGeminiApiKey(plugin.settings),
-        model
+        model,
+        plugin.settings.proxyUrl,
+        plugin.settings.proxyBypass
       )
     : getGeminiClient();
   if (!client) {

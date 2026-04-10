@@ -155,6 +155,10 @@ export interface LlmHubSettings {
 
   // Discord integration
   discord: DiscordSettings;
+
+  // Proxy settings for corporate gateways
+  proxyUrl?: string;              // HTTP(S) proxy URL (e.g. http://proxy:8080)
+  proxyBypass?: string;           // Comma-separated hosts to bypass proxy (e.g. api.openai.com,localhost)
 }
 
 // Edit history settings

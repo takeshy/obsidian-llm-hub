@@ -1,6 +1,8 @@
 import { requestUrl } from "obsidian";
 import { GoogleGenAI, type Part } from "@google/genai";
 import type { RagContentType } from "./localRagStorage";
+import { createProxyFetch } from "./proxyFetch";
+import { patchGeminiProxy } from "./gemini";
 
 const EMBEDDING_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/embeddings";
 const GEMINI_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/openai/models";
@@ -71,16 +73,33 @@ export function extensionToContentType(ext: string): RagContentType {
  * - When baseUrl is empty: fetches from Gemini API and filters for embedding models.
  * - When baseUrl is set: tries Ollama /api/tags first, then falls back to OpenAI-compatible /v1/models.
  */
+/**
+ * Fetch a URL, routing through the proxy when configured.
+ * Falls back to Obsidian's requestUrl when no proxy is set.
+ */
+async function proxyAwareGet(url: string, headers: Record<string, string>, proxyUrl?: string, proxyBypass?: string): Promise<{ json: unknown }> {
+  if (proxyUrl) {
+    const proxyFetch = createProxyFetch(proxyUrl, proxyBypass);
+    const resp = await proxyFetch(url, { method: "GET", headers });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+    return { json: await resp.json() };
+  }
+  const resp = await requestUrl({ url, method: "GET", headers });
+  return { json: resp.json };
+}
+
 export async function fetchEmbeddingModels(
   apiKey: string,
-  baseUrl?: string
+  baseUrl?: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): Promise<string[]> {
   if (!baseUrl) {
     // Gemini API: fetch all models and filter by name
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-    const response = await requestUrl({ url: GEMINI_MODELS_URL, method: "GET", headers });
-    const data = response.json as OpenAiModelsResponse;
+    const { json } = await proxyAwareGet(GEMINI_MODELS_URL, headers, proxyUrl, proxyBypass);
+    const data = json as OpenAiModelsResponse;
     return (data.data || []).map(m => m.id).filter(name => EMBEDDING_NAME_PATTERN.test(name));
   }
 
@@ -90,8 +109,8 @@ export async function fetchEmbeddingModels(
 
   // Try Ollama /api/tags first (has family info for precise embedding model filtering)
   try {
-    const ollamaResp = await requestUrl({ url: `${normalizedBase}/api/tags`, method: "GET" });
-    const ollamaData = ollamaResp.json as {
+    const { json } = await proxyAwareGet(`${normalizedBase}/api/tags`, {}, proxyUrl, proxyBypass);
+    const ollamaData = json as {
       models?: { name: string; details?: { families?: string[] } }[];
     };
     if (ollamaData.models) {
@@ -105,14 +124,14 @@ export async function fetchEmbeddingModels(
 
   // OpenRouter: use dedicated embedding models endpoint
   if (normalizedBase.includes("openrouter.ai")) {
-    const resp = await requestUrl({ url: `${normalizedBase}/v1/embeddings/models`, method: "GET", headers });
-    const data = resp.json as OpenAiModelsResponse;
+    const { json } = await proxyAwareGet(`${normalizedBase}/v1/embeddings/models`, headers, proxyUrl, proxyBypass);
+    const data = json as OpenAiModelsResponse;
     return (data.data || []).map(m => m.id);
   }
 
   // OpenAI-compatible /v1/models (LM Studio, vLLM, etc.)
-  const response = await requestUrl({ url: `${normalizedBase}/v1/models`, method: "GET", headers });
-  const data = response.json as OpenAiModelsResponse;
+  const { json } = await proxyAwareGet(`${normalizedBase}/v1/models`, headers, proxyUrl, proxyBypass);
+  const data = json as OpenAiModelsResponse;
   return (data.data || []).map(m => m.id).filter(name => EMBEDDING_NAME_PATTERN.test(name));
 }
 
@@ -143,36 +162,40 @@ export async function generateEmbeddings(
   texts: string[],
   apiKey: string,
   model: string,
-  baseUrl?: string
+  baseUrl?: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): Promise<number[][]> {
   const results: number[][] = [];
   const url = baseUrl
     ? `${normalizeBaseUrl(baseUrl)}/v1/embeddings`
     : EMBEDDING_API_URL;
 
+  const proxyFetch = proxyUrl ? createProxyFetch(proxyUrl, proxyBypass) : null;
+
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
     const batch = texts.slice(i, i + BATCH_SIZE);
-
-    const response = await requestUrl({
-      url,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        input: batch,
-      }),
-    });
-
-    if (response.status !== 200) {
-      throw new Error(`Embedding API error: ${response.status} ${response.text}`);
-    }
-
-    const data = response.json as {
-      data: Array<{ embedding: number[] }>;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
     };
+    const body = JSON.stringify({ model, input: batch });
+
+    let data: { data: Array<{ embedding: number[] }> };
+    if (proxyFetch) {
+      const resp = await proxyFetch(url, { method: "POST", headers, body });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => "");
+        throw new Error(`Embedding API error: ${resp.status} ${detail}`);
+      }
+      data = await resp.json() as typeof data;
+    } else {
+      const response = await requestUrl({ url, method: "POST", headers, body });
+      if (response.status !== 200) {
+        throw new Error(`Embedding API error: ${response.status} ${response.text}`);
+      }
+      data = response.json as typeof data;
+    }
 
     for (const item of data.data) {
       results.push(item.embedding);
@@ -200,8 +223,13 @@ export async function generateGeminiNativeEmbeddings(
   apiKey: string,
   model: string,
   outputDimensionality?: number,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): Promise<number[][]> {
   const ai = new GoogleGenAI({ apiKey });
+  if (proxyUrl) {
+    patchGeminiProxy(ai, proxyUrl, proxyBypass);
+  }
 
   // Separate text-only inputs (can be batched) from multimodal inputs (one at a time)
   const textOnlyIndices: number[] = [];

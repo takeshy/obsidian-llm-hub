@@ -391,7 +391,7 @@ function displayEmbeddingSettings(
         try {
           const current = plugin.getRagSetting(name) ?? ragSetting;
           const apiKey = current.embeddingApiKey || getGeminiApiKey(plugin.settings);
-          const models = await fetchEmbeddingModels(apiKey, current.embeddingBaseUrl || undefined);
+          const models = await fetchEmbeddingModels(apiKey, current.embeddingBaseUrl || undefined, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
           if (models.length === 0) {
             // Show text input as fallback
             if (embeddingDropdown) embeddingDropdown.addClass("llm-hub-hidden");

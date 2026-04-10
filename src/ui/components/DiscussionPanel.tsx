@@ -365,7 +365,8 @@ const DiscussionPanel = forwardRef<DiscussionPanelRef, DiscussionPanelProps>(({ 
         try {
           const localRag = await searchLocalRag(
             selectedRagSetting, theme,
-            ragSettingObj, getGeminiApiKey(plugin.settings)
+            ragSettingObj, getGeminiApiKey(plugin.settings),
+            plugin.settings.proxyUrl, plugin.settings.proxyBypass
           );
           if (localRag.sources.length > 0) {
             ragContext = localRag.context;

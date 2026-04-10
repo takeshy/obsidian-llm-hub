@@ -86,7 +86,7 @@ export async function* streamChatForModel(
 
     if (providerConfig.type === "gemini") {
       const { GeminiClient } = await import("./gemini");
-      const client = new GeminiClient(providerConfig.apiKey, modelName as ModelType);
+      const client = new GeminiClient(providerConfig.apiKey, modelName as ModelType, settings.proxyUrl, settings.proxyBypass);
       // Gemini SDK doesn't accept AbortSignal, so check between chunks
       for await (const chunk of client.chatWithToolsStream(
         messages,
@@ -108,6 +108,8 @@ export async function* streamChatForModel(
         systemPrompt,
         (_n: string, _a: Record<string, unknown>) => Promise.resolve({}),
         signal,
+        undefined,
+        settings.proxyUrl, settings.proxyBypass,
       );
     } else {
       // OpenAI, OpenRouter, Grok, custom - all OpenAI-compatible
@@ -121,6 +123,8 @@ export async function* streamChatForModel(
         systemPrompt,
         (_n: string, _a: Record<string, unknown>) => Promise.resolve({}),
         signal,
+        undefined,
+        settings.proxyUrl, settings.proxyBypass,
       );
     }
   } else if (model === "local-llm" && !Platform.isMobile) {

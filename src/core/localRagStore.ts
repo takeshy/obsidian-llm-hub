@@ -134,7 +134,9 @@ class LocalRagStore {
     filterConfig: FilterConfig,
     onProgress?: (current: number, total: number, fileName: string, action: "embed" | "skip" | "remove") => void,
     embeddingBaseUrl?: string,
-    indexMultimodal = false
+    indexMultimodal = false,
+    proxyUrl?: string,
+    proxyBypass?: string,
   ): Promise<{ embedded: number; skipped: number; removed: number; errors: string[] }> {
     this.app = app;
     const result = { embedded: 0, skipped: 0, removed: 0, errors: [] as string[] };
@@ -270,10 +272,10 @@ class LocalRagStore {
           if (isGeminiNative) {
             embeddings = await generateGeminiNativeEmbeddings(
               chunks.map(text => ({ text })),
-              apiKey, model
+              apiKey, model, undefined, proxyUrl, proxyBypass,
             );
           } else {
-            embeddings = await generateEmbeddings(chunks, apiKey, model, embeddingBaseUrl);
+            embeddings = await generateEmbeddings(chunks, apiKey, model, embeddingBaseUrl, proxyUrl, proxyBypass);
           }
 
           if (embeddings.length > 0 && embeddings[0].length > 0) {
@@ -314,7 +316,7 @@ class LocalRagStore {
 
               const embeddings = await generateGeminiNativeEmbeddings(
                 [{ inlineData: { mimeType: "application/pdf", data: chunkBase64 } }],
-                apiKey, model
+                apiKey, model, undefined, proxyUrl, proxyBypass,
               );
 
               if (embeddings.length > 0 && embeddings[0].length > 0) {
@@ -340,7 +342,7 @@ class LocalRagStore {
             if (chunks.length === 0) continue;
 
             const embeddings = await generateEmbeddings(
-              chunks.map(c => c.text), apiKey, model, embeddingBaseUrl,
+              chunks.map(c => c.text), apiKey, model, embeddingBaseUrl, proxyUrl, proxyBypass,
             );
 
             if (embeddings.length > 0 && embeddings[0].length > 0) {
@@ -378,7 +380,7 @@ class LocalRagStore {
 
           const embeddings = await generateGeminiNativeEmbeddings(
             [{ inlineData: { mimeType, data: base64 } }],
-            apiKey, model
+            apiKey, model, undefined, proxyUrl, proxyBypass,
           );
 
           if (embeddings.length > 0 && embeddings[0].length > 0) {
@@ -445,7 +447,9 @@ class LocalRagStore {
     topK: number,
     embeddingBaseUrl?: string,
     scoreThreshold?: number,
-    searchFileExtensions?: string[]
+    searchFileExtensions?: string[],
+    proxyUrl?: string,
+    proxyBypass?: string,
   ): Promise<LocalRagSearchResult[]> {
     if (!this.app) {
       return [];
@@ -467,10 +471,10 @@ class LocalRagStore {
     // Pass index dimension to match the dimensionality used during indexing
     let queryEmbedding: number[];
     if (!embeddingBaseUrl) {
-      const results = await generateGeminiNativeEmbeddings([{ text: query }], apiKey, effectiveModel, index.dimension || undefined);
+      const results = await generateGeminiNativeEmbeddings([{ text: query }], apiKey, effectiveModel, index.dimension || undefined, proxyUrl, proxyBypass);
       queryEmbedding = results[0];
     } else {
-      const results = await generateEmbeddings([query], apiKey, effectiveModel, embeddingBaseUrl);
+      const results = await generateEmbeddings([query], apiKey, effectiveModel, embeddingBaseUrl, proxyUrl, proxyBypass);
       queryEmbedding = results[0];
     }
     if (!queryEmbedding) return [];
@@ -831,7 +835,9 @@ export async function searchLocalRag(
   settingName: string,
   query: string,
   ragSetting: import("src/types").RagSetting,
-  fallbackApiKey: string
+  fallbackApiKey: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): Promise<LocalRagResult> {
   const store = getLocalRagStore();
   const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
@@ -843,7 +849,8 @@ export async function searchLocalRag(
     ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL), ragSetting.topK,
     ragSetting.embeddingBaseUrl || undefined,
     ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
-    ragSetting.searchFileExtensions
+    ragSetting.searchFileExtensions,
+    proxyUrl, proxyBypass,
   );
   if (results.length === 0) {
     return { context: "", sources: [], mediaReferences: [] };

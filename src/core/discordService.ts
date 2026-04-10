@@ -1006,7 +1006,8 @@ export class DiscordService {
           try {
             const ragResult = await searchLocalRag(
               ragSettingName, lastUserMsg.content,
-              ragSetting, getGeminiApiKey(settings)
+              ragSetting, getGeminiApiKey(settings),
+              this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass
             );
             if (ragResult.sources.length > 0) {
               systemPrompt += ragResult.context;
@@ -1262,6 +1263,7 @@ export class DiscordService {
           systemPrompt, executeToolCall,
           undefined,
           enableThinking,
+          this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
         )
       : openaiChatWithToolsStream(
           providerConfig.baseUrl, providerConfig.apiKey,
@@ -1269,6 +1271,7 @@ export class DiscordService {
           systemPrompt, executeToolCall,
           undefined,
           enableThinking,
+          this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
         );
 
     let fullResponse = "";
@@ -1328,7 +1331,7 @@ export class DiscordService {
     if (modelOverride) {
       const apiKey = getGeminiApiKey(this.plugin.settings);
       if (!apiKey) throw new Error("Gemini API key not configured");
-      client = new GeminiClient(apiKey, modelOverride as ModelType);
+      client = new GeminiClient(apiKey, modelOverride as ModelType, this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass);
     } else {
       const shared = getGeminiClient();
       if (!shared) throw new Error("Gemini client not initialized");

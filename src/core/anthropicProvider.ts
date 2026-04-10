@@ -9,6 +9,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Message, StreamChunk, ToolDefinition } from "../types";
 import { calculateCost } from "./modelPricing";
+import { createProxyFetch } from "./proxyFetch";
 
 function isThinkingParameterError(message: string): boolean {
   const lower = message.toLowerCase();
@@ -24,13 +25,16 @@ function isThinkingParameterError(message: string): boolean {
  */
 export async function verifyAnthropicProvider(
   baseUrl: string,
-  apiKey: string
+  apiKey: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): Promise<{ success: boolean; error?: string; models?: string[] }> {
   try {
     const client = new Anthropic({
       apiKey,
       baseURL: baseUrl.replace(/\/+$/, ""),
       dangerouslyAllowBrowser: true,
+      ...(proxyUrl ? { fetch: createProxyFetch(proxyUrl, proxyBypass) } : {}),
     });
 
     const response = await client.models.list();
@@ -124,11 +128,14 @@ export async function* anthropicChatWithToolsStream(
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>,
   signal?: AbortSignal,
   enableThinking?: boolean,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): AsyncGenerator<StreamChunk> {
   const client = new Anthropic({
     apiKey,
     baseURL: baseUrl.replace(/\/+$/, ""),
     dangerouslyAllowBrowser: true,
+    ...(proxyUrl ? { fetch: createProxyFetch(proxyUrl, proxyBypass) } : {}),
   });
 
   const anthropicTools = tools.length > 0 ? toAnthropicTools(tools) : undefined;

@@ -27,6 +27,7 @@ import {
 import { tracing, type TracingUsage } from "src/core/tracingHooks";
 import { formatError } from "src/utils/error";
 import { Platform, requestUrl } from "obsidian";
+import { createProxyFetch } from "./proxyFetch";
 
 // ---------------------------------------------------------------------------
 // CORS-free fetch implementations for the Interactions API.
@@ -371,22 +372,50 @@ function extractInteractionsUsage(usage: Interactions.Usage | undefined, model?:
   };
 }
 
+/**
+ * Patch a GoogleGenAI instance so all SDK HTTP requests go through the proxy.
+ * The SDK's ApiClient.apiCall uses global `fetch`; we override it to use our
+ * CONNECT-tunnel fetch instead.
+ */
+export function patchGeminiProxy(ai: GoogleGenAI, proxyUrl: string, proxyBypass?: string): void {
+  const proxyFetch = createProxyFetch(proxyUrl, proxyBypass);
+  try {
+    const client = (ai as unknown as { apiClient: { apiCall: (url: string, init: RequestInit) => Promise<Response> } }).apiClient;
+    if (client) {
+      client.apiCall = (url: string, init: RequestInit) => proxyFetch(url, init);
+    } else {
+      console.warn("[LLM Hub] Failed to patch Gemini SDK for proxy: apiClient not found. Proxy may not be applied.");
+    }
+  } catch (e) {
+    console.warn("[LLM Hub] Failed to patch Gemini SDK for proxy:", e);
+  }
+}
+
 export class GeminiClient {
   private ai: GoogleGenAI;
   private model: ModelType;
 
-  constructor(apiKey: string, model: ModelType = "gemini-3-flash-preview" as ModelType) {
+  constructor(apiKey: string, model: ModelType = "gemini-3-flash-preview" as ModelType, proxyUrl?: string, proxyBypass?: string) {
     this.ai = new GoogleGenAI({ apiKey });
     this.model = model;
+
+    // Proxy: tunnel all SDK requests through HTTP CONNECT proxy
+    if (proxyUrl) {
+      patchGeminiProxy(this.ai, proxyUrl, proxyBypass);
+    }
 
     // Patch Interactions API client to bypass CORS.
     // The Interactions API endpoint doesn't return CORS headers, so browser/Electron
     // fetch blocks the request. Desktop uses Node.js https, mobile uses Obsidian's requestUrl.
+    // When a proxy is configured, use the proxy fetch instead so Interactions traffic
+    // also goes through the CONNECT tunnel.
     try {
       const interactions = this.ai.interactions;
       const client = (interactions as unknown as { _client: { fetch: typeof fetch } })._client;
       if (client) {
-        client.fetch = corsFetch as typeof fetch;
+        client.fetch = proxyUrl
+          ? createProxyFetch(proxyUrl, proxyBypass)
+          : corsFetch;
       }
     } catch {
       // Fallback: global fetch
@@ -1565,10 +1594,13 @@ export class GeminiClient {
  * Verify a Gemini API key by listing available models via @google/genai SDK.
  */
 export async function verifyGeminiProvider(
-  apiKey: string
+  apiKey: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): Promise<{ success: boolean; error?: string; models?: string[] }> {
   try {
     const ai = new GoogleGenAI({ apiKey });
+    if (proxyUrl) patchGeminiProxy(ai, proxyUrl, proxyBypass);
     const response = await ai.models.list();
     const models: string[] = [];
     for await (const model of response) {
@@ -1591,8 +1623,8 @@ export function getGeminiClient(): GeminiClient | null {
   return geminiClientInstance;
 }
 
-export function initGeminiClient(apiKey: string, model: ModelType): GeminiClient {
-  geminiClientInstance = new GeminiClient(apiKey, model);
+export function initGeminiClient(apiKey: string, model: ModelType, proxyUrl?: string, proxyBypass?: string): GeminiClient {
+  geminiClientInstance = new GeminiClient(apiKey, model, proxyUrl, proxyBypass);
   return geminiClientInstance;
 }
 

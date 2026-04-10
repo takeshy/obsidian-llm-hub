@@ -656,7 +656,7 @@ export class LlmHubPlugin extends Plugin {
       // Use first available model from Gemini provider, or a reasonable default
       const geminiProvider = this.settings.apiProviders.find(p => p.type === "gemini" && p.enabled);
       const defaultModel = geminiProvider?.enabledModels[0] || "gemini-3-flash-preview";
-      initGeminiClient(geminiApiKey, defaultModel as ModelType);
+      initGeminiClient(geminiApiKey, defaultModel as ModelType, this.settings.proxyUrl, this.settings.proxyBypass);
     }
     initLangfuse(this.settings.langfuse);
 
@@ -829,7 +829,9 @@ export class LlmHubPlugin extends Plugin {
         },
         onProgress,
         ragSetting.embeddingBaseUrl || undefined,
-        indexMultimodal
+        indexMultimodal,
+        this.settings.proxyUrl,
+        this.settings.proxyBypass,
       );
 
       // Update sync metadata

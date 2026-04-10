@@ -14,6 +14,7 @@ import OpenAI from "openai";
 import type { Message, StreamChunk, ToolDefinition, GeneratedImage } from "../types";
 import { calculateCost } from "./modelPricing";
 import { parseThinkTags } from "./thinkTagParser";
+import { createProxyFetch } from "./proxyFetch";
 
 /** DALL-E model name patterns */
 const DALLE_PATTERN = /^dall-e/i;
@@ -28,7 +29,9 @@ export function isOpenAiImageModel(model: string): boolean {
  */
 export async function verifyApiProvider(
   baseUrl: string,
-  apiKey: string
+  apiKey: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): Promise<{ success: boolean; error?: string; models?: string[] }> {
   try {
     const url = `${baseUrl.replace(/\/+$/, "")}/v1/models`;
@@ -36,6 +39,22 @@ export async function verifyApiProvider(
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
     };
+    if (proxyUrl) {
+      const proxyFetch = createProxyFetch(proxyUrl, proxyBypass);
+      const response = await proxyFetch(url, { method: "GET", headers });
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        const detail = errorText.trim();
+        throw new Error(
+          detail
+            ? `HTTP ${response.status} ${response.statusText}: ${detail}`
+            : `HTTP ${response.status} ${response.statusText}`
+        );
+      }
+      const data = await response.json() as { data?: { id: string }[] };
+      const models = (data.data || []).map((m: { id: string }) => m.id);
+      return { success: true, models };
+    }
     const response = await requestUrl({ url, method: "GET", headers });
     const data = response.json as { data?: { id: string }[] };
     const models = (data.data || []).map(m => m.id);
@@ -46,11 +65,12 @@ export async function verifyApiProvider(
   }
 }
 
-function createClient(baseUrl: string, apiKey: string): OpenAI {
+function createClient(baseUrl: string, apiKey: string, proxyUrl?: string, proxyBypass?: string): OpenAI {
   return new OpenAI({
     apiKey,
     baseURL: `${baseUrl.replace(/\/+$/, "")}/v1`,
     dangerouslyAllowBrowser: true,
+    ...(proxyUrl ? { fetch: createProxyFetch(proxyUrl, proxyBypass) } : {}),
   });
 }
 
@@ -130,8 +150,10 @@ export async function* openaiGenerateImageStream(
   model: string,
   prompt: string,
   signal?: AbortSignal,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): AsyncGenerator<StreamChunk> {
-  const client = createClient(baseUrl, apiKey);
+  const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
 
   try {
     const response = await client.images.generate({
@@ -314,8 +336,10 @@ export async function* openaiChatWithToolsStream(
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>,
   signal?: AbortSignal,
   enableThinking?: boolean,
+  proxyUrl?: string,
+  proxyBypass?: string,
 ): AsyncGenerator<StreamChunk> {
-  const client = createClient(baseUrl, apiKey);
+  const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
   const useReasoning = enableThinking === true;
 
   // Responses API is only available on OpenAI's official API, not on compatible providers (OpenRouter, etc.)

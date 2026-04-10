@@ -1033,7 +1033,7 @@ export class AIWorkflowModal extends Modal {
             new Notice(t("aiWorkflow.apiKeyNotConfigured"));
             return;
           }
-          const client = new GeminiClient(geminiApiKey, resolvedModelName as ModelType);
+          const client = new GeminiClient(geminiApiKey, resolvedModelName as ModelType, this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass);
           streamSource = client.generateWorkflowStream(userMessages, systemPrompt, traceId);
         } else if (providerConfig?.type === "anthropic") {
           // Anthropic provider
@@ -1043,6 +1043,7 @@ export class AIWorkflowModal extends Modal {
             resolvedModelName, userMessages, [],
             systemPrompt, noopToolExecutor, abortController.signal,
             true,
+            this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
           );
         } else if (providerConfig) {
           // OpenAI-compatible providers (OpenRouter, Grok, custom, openai)
@@ -1052,6 +1053,7 @@ export class AIWorkflowModal extends Modal {
             resolvedModelName, userMessages, [],
             systemPrompt, noopToolExecutor, abortController.signal,
             true,
+            this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
           );
         } else {
           // Fallback: try Gemini API key from settings
@@ -1060,7 +1062,7 @@ export class AIWorkflowModal extends Modal {
             new Notice(t("aiWorkflow.apiKeyNotConfigured"));
             return;
           }
-          const client = new GeminiClient(geminiApiKey, resolvedModelName as ModelType);
+          const client = new GeminiClient(geminiApiKey, resolvedModelName as ModelType, this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass);
           streamSource = client.generateWorkflowStream(userMessages, systemPrompt, traceId);
         }
 

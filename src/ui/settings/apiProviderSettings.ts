@@ -59,7 +59,7 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
               await plugin.saveSettings();
               display();
             }
-          }).open();
+          }, plugin.settings.proxyUrl, plugin.settings.proxyBypass).open();
         })
     );
 
@@ -98,7 +98,7 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
             plugin.settings.apiProviders.push(created);
             await plugin.saveSettings();
             display();
-          }).open();
+          }, plugin.settings.proxyUrl, plugin.settings.proxyBypass).open();
         })
     );
 }
@@ -106,11 +106,15 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
 class ApiProviderModal extends Modal {
   private config: ApiProviderConfig;
   private onSave: (config: ApiProviderConfig) => Promise<void>;
+  private proxyUrl?: string;
+  private proxyBypass?: string;
 
-  constructor(app: App, config: ApiProviderConfig, onSave: (config: ApiProviderConfig) => Promise<void>) {
+  constructor(app: App, config: ApiProviderConfig, onSave: (config: ApiProviderConfig) => Promise<void>, proxyUrl?: string, proxyBypass?: string) {
     super(app);
     this.config = { ...config };
     this.onSave = onSave;
+    this.proxyUrl = proxyUrl;
+    this.proxyBypass = proxyBypass;
   }
 
   onOpen() {
@@ -244,10 +248,10 @@ class ApiProviderModal extends Modal {
           btn.setButtonText(t("settings.cliVerifying"));
           try {
             const result = this.config.type === "gemini"
-              ? await verifyGeminiProvider(this.config.apiKey)
+              ? await verifyGeminiProvider(this.config.apiKey, this.proxyUrl, this.proxyBypass)
               : this.config.type === "anthropic"
-                ? await verifyAnthropicProvider(this.config.baseUrl, this.config.apiKey)
-                : await verifyApiProvider(this.config.baseUrl, this.config.apiKey);
+                ? await verifyAnthropicProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass)
+                : await verifyApiProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
             if (result.success) {
               this.config.verified = true;
               this.config.availableModels = result.models || [];

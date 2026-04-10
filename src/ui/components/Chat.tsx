@@ -1144,7 +1144,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					try {
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings)
+							ragSettingObj, getGeminiApiKey(plugin.settings),
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass
 						);
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
@@ -1383,7 +1384,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					try {
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings)
+							ragSettingObj, getGeminiApiKey(plugin.settings),
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass
 						);
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
@@ -1563,7 +1565,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					try {
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings)
+							ragSettingObj, getGeminiApiKey(plugin.settings),
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass
 						);
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
@@ -1903,6 +1906,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					providerConfig.baseUrl, providerConfig.apiKey,
 					resolvedModelName, resolvedContent,
 					abortController.signal,
+					plugin.settings.proxyUrl, plugin.settings.proxyBypass,
 				)
 				: providerConfig.type === "anthropic"
 					? anthropicChatWithToolsStream(
@@ -1910,12 +1914,14 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						resolvedModelName, allMessages, tools,
 						systemPrompt, executeToolCall, abortController.signal,
 						apiEnableThinking,
+						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
 					)
 					: openaiChatWithToolsStream(
 						providerConfig.baseUrl, providerConfig.apiKey,
 						resolvedModelName, allMessages, tools,
 						systemPrompt, executeToolCall, abortController.signal,
 						apiEnableThinking,
+						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
 					);
 
 			for await (const chunk of streamFn) {
@@ -2067,7 +2073,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 		// Initialize a GeminiClient with this provider's API key
 		const { GeminiClient } = await import("src/core/gemini");
 		const modelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "gemini-3-flash-preview";
-		const client = new GeminiClient(apiKey, modelName as ModelType);
+		const client = new GeminiClient(apiKey, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
 
 		let allowedModel = modelName as ModelType;
 
@@ -2571,7 +2577,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						try {
 							const localRag = await searchLocalRag(
 								selectedRagSetting, resolvedContent,
-								ragSettingObj, getGeminiApiKey(plugin.settings)
+								ragSettingObj, getGeminiApiKey(plugin.settings),
+								plugin.settings.proxyUrl, plugin.settings.proxyBypass
 							);
 							if (localRag.sources.length > 0) {
 								systemPrompt += localRag.context;

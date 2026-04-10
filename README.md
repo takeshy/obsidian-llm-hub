@@ -552,6 +552,10 @@ You can also add custom OpenAI-compatible endpoints.
 
 ![Basic Settings](docs/images/setting_basic.png)
 
+### Proxy
+
+Route all API requests through an HTTP CONNECT proxy for corporate gateway environments. See [Proxy Settings](docs/PROXY.md) for details.
+
 ### Local LLM
 
 Connect to locally running LLM servers:
