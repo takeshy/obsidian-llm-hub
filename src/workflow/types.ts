@@ -1,5 +1,6 @@
 import type { EditConfirmationResult } from "src/ui/components/workflow/EditConfirmationModal";
-import type { McpAppInfo, StreamChunkUsage } from "src/types";
+import type { McpAppInfo, StreamChunkUsage, ChatProvider } from "src/types";
+import type { PersistentCliSession } from "src/core/cliProvider";
 
 // Workflow node types
 export type WorkflowNodeType =
@@ -103,6 +104,8 @@ export interface ExecutionContext {
   logs: ExecutionLog[];
   lastCommandInfo?: LastCommandInfo;
   regenerateInfo?: RegenerateInfo;
+  /** Persistent CLI sessions keyed by provider name, shared across workflow nodes */
+  persistentCliSessions?: Map<ChatProvider, PersistentCliSession>;
 }
 
 export interface ExecutionLog {

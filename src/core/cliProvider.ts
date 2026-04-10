@@ -550,12 +550,13 @@ abstract class BaseCliProvider implements CliProviderInterface {
 /**
  * Gemini CLI provider
  * Uses: gemini -p "prompt"
- * Note: Gemini CLI does not support session resumption
+ * Session resumption: gemini --resume latest -p "prompt"
+ * (Gemini CLI uses "latest" or index number, not UUID)
  */
 export class GeminiCliProvider extends BaseCliProvider {
   name: ChatProvider = "gemini-cli";
   displayName = "Gemini CLI";
-  supportsSessionResumption = false;
+  supportsSessionResumption = true;
 
   protected resolveVersionCommand(): { command: string; args: string[] } {
     return resolveGeminiCommand(["--version"]);
@@ -566,14 +567,25 @@ export class GeminiCliProvider extends BaseCliProvider {
     systemPrompt: string,
     workingDirectory: string,
     signal?: AbortSignal,
-    _sessionId?: string  // Unused - Gemini CLI doesn't support session resumption
+    sessionId?: string  // "latest" to resume the most recent session
   ): AsyncGenerator<StreamChunk> {
     // Dynamically import child_process (not available on mobile)
     const { spawn } = getChildProcess();
 
-    const prompt = formatHistoryAsPrompt(messages, systemPrompt);
+    let cliArgs: string[];
 
-    const { command, args } = resolveGeminiCommand(["-p", prompt]);
+    if (sessionId) {
+      // Resume session — only send the latest user message
+      const lastMessage = messages[messages.length - 1];
+      const prompt = lastMessage?.role === "user" ? lastMessage.content : "";
+      cliArgs = ["--resume", sessionId, "-p", prompt];
+    } else {
+      // First message — send full history with system prompt
+      const prompt = formatHistoryAsPrompt(messages, systemPrompt);
+      cliArgs = ["-p", prompt];
+    }
+
+    const { command, args } = resolveGeminiCommand(cliArgs);
     const proc = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell: false,
@@ -910,6 +922,355 @@ export class CodexCliProvider extends BaseCliProvider {
     } catch {
       // Ignore JSON parse errors
     }
+  }
+}
+
+/**
+ * Persistent CLI session that maintains session state across messages.
+ *
+ * - Claude CLI: Keeps a single process alive using --input-format stream-json.
+ *   Messages are sent as JSON objects via stdin; newlines are preserved via
+ *   JSON string escaping. The process maintains full conversation context
+ *   internally so --resume is not needed.
+ * - Gemini CLI / Codex CLI: Per-message process spawning with --resume for
+ *   session continuity (these CLIs don't support stream-json input).
+ *
+ * Chat lifecycle:  create on first CLI message → reuse → terminate on provider change / new chat / unmount
+ * Workflow lifecycle: create at workflow start → pass through context → terminate at workflow end
+ */
+export class PersistentCliSession {
+  private proc: ChildProcessType | null = null;
+  private sessionId: string | null = null;
+  private _providerType: ChatProvider;
+  private workingDirectory: string;
+  private customPath?: string;
+  private _isAlive = false;
+  private systemPrompt: string | null = null;
+
+  // Async I/O for persistent mode (Claude CLI)
+  private stdoutBuffer = "";
+  private chunkQueue: StreamChunk[] = [];
+  private chunkWaiter: ((value: StreamChunk | null) => void) | null = null;
+  private closed = false;
+
+  constructor(
+    providerType: ChatProvider,
+    workingDirectory: string,
+    customPath?: string,
+    existingSessionId?: string
+  ) {
+    this._providerType = providerType;
+    this.workingDirectory = workingDirectory;
+    this.customPath = customPath;
+    this.sessionId = existingSessionId || null;
+  }
+
+  get isAlive(): boolean { return this._isAlive; }
+  get provider(): ChatProvider { return this._providerType; }
+  get currentSessionId(): string | null { return this.sessionId; }
+
+  /**
+   * Start the session. For Claude CLI without an existing session ID,
+   * spawns a persistent process. For others, marks as alive (processes
+   * spawned per-message).
+   */
+  start(): void {
+    this._isAlive = true;
+  }
+
+  /**
+   * Spawn the persistent Claude CLI process with stream-json input/output.
+   * Called lazily on first sendMessage so that systemPrompt is available.
+   */
+  private spawnPersistentClaude(systemPrompt: string): void {
+    const { spawn } = getChildProcess();
+    const cliArgs = [
+      "-p",
+      "--input-format", "stream-json",
+      "--output-format", "stream-json",
+      "--verbose",
+    ];
+    if (systemPrompt) {
+      cliArgs.push("--system-prompt", systemPrompt);
+    }
+    if (this.sessionId) {
+      cliArgs.push("--resume", this.sessionId);
+    }
+    const { command, args } = resolveClaudeCommand(cliArgs, this.customPath);
+
+    this.closed = false;
+    this.stdoutBuffer = "";
+    this.chunkQueue = [];
+    this.chunkWaiter = null;
+    this.systemPrompt = systemPrompt;
+
+    this.proc = spawn(command, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      shell: false,
+      cwd: this.workingDirectory,
+      env: typeof process !== "undefined" ? process.env : undefined,
+    });
+
+    this.proc.on("close", () => {
+      this.closed = true;
+      this.resolveWaiter(null);
+    });
+
+    this.proc.on("error", () => {
+      this.closed = true;
+      this.resolveWaiter(null);
+    });
+
+    if (this.proc.stdout) {
+      this.proc.stdout.setEncoding("utf8");
+      this.proc.stdout.on("data", (data: string) => {
+        this.onStdoutData(data);
+      });
+    }
+  }
+
+  /** Whether this session uses a persistent Claude CLI process */
+  private get isPersistentClaude(): boolean {
+    return this._providerType === "claude-cli";
+  }
+
+  // --- Stdout parsing ---
+
+  private onStdoutData(data: string): void {
+    this.stdoutBuffer += data;
+    const lines = this.stdoutBuffer.split("\n");
+    this.stdoutBuffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        this.handleJsonMessage(parsed);
+      } catch {
+        // Non-JSON output — ignore
+      }
+    }
+  }
+
+  private handleJsonMessage(parsed: Record<string, unknown>): void {
+    // Capture session_id from system init or result
+    if (typeof parsed.session_id === "string" && parsed.session_id) {
+      this.sessionId = parsed.session_id;
+      this.pushChunk({ type: "session_id", sessionId: parsed.session_id });
+    } else if (parsed.type === "result") {
+      const data = parsed.data as Record<string, unknown> | undefined;
+      const sid = data && typeof data.session_id === "string" ? data.session_id : null;
+      if (sid) {
+        this.sessionId = sid;
+        this.pushChunk({ type: "session_id", sessionId: sid });
+      }
+    }
+
+    if (parsed.type === "assistant") {
+      const message = parsed.message as Record<string, unknown> | undefined;
+      if (message && Array.isArray(message.content)) {
+        for (const block of message.content as Array<Record<string, unknown>>) {
+          if (block.type === "text" && typeof block.text === "string") {
+            this.pushChunk({ type: "text", content: block.text });
+          }
+        }
+      }
+    } else if (parsed.type === "content_block_delta") {
+      const delta = parsed.delta as Record<string, unknown> | undefined;
+      if (delta?.type === "text_delta" && typeof delta.text === "string") {
+        this.pushChunk({ type: "text", content: delta.text });
+      }
+    } else if (parsed.type === "error") {
+      const error = parsed.error as Record<string, unknown> | undefined;
+      const errorMsg = typeof error?.message === "string"
+        ? error.message
+        : (typeof parsed.message === "string" ? parsed.message : "Unknown error");
+      this.pushChunk({ type: "error", error: errorMsg });
+    } else if (parsed.type === "result") {
+      // End of turn — signal done but don't close (process stays alive)
+      this.pushChunk({ type: "done" });
+    }
+  }
+
+  // --- Chunk queue (producer/consumer between stdout handler and sendMessage iterator) ---
+
+  private pushChunk(chunk: StreamChunk): void {
+    if (this.chunkWaiter) {
+      const waiter = this.chunkWaiter;
+      this.chunkWaiter = null;
+      waiter(chunk);
+    } else {
+      this.chunkQueue.push(chunk);
+    }
+  }
+
+  private resolveWaiter(value: StreamChunk | null): void {
+    if (this.chunkWaiter) {
+      const waiter = this.chunkWaiter;
+      this.chunkWaiter = null;
+      waiter(value);
+    }
+  }
+
+  private nextChunk(): Promise<StreamChunk | null> {
+    if (this.chunkQueue.length > 0) {
+      return Promise.resolve(this.chunkQueue.shift()!);
+    }
+    if (this.closed) {
+      return Promise.resolve(null);
+    }
+    return new Promise<StreamChunk | null>(resolve => {
+      this.chunkWaiter = resolve;
+    });
+  }
+
+  // --- Public API ---
+
+  /**
+   * Send a message and stream the response.
+   * Claude CLI: writes JSON to stdin of persistent process.
+   * Others: spawns a new process with optional --resume.
+   * Throws on abort so callers can distinguish from normal completion.
+   */
+  async *sendMessage(
+    userMessage: string,
+    allMessages: Message[],
+    systemPrompt: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk> {
+    if (!this._isAlive) {
+      throw new Error("CLI session is not alive");
+    }
+
+    if (this.isPersistentClaude) {
+      yield* this.sendViaPersistentClaude(userMessage, systemPrompt, signal);
+    } else {
+      yield* this.sendViaNewProcess(allMessages, systemPrompt, signal);
+    }
+  }
+
+  /**
+   * Send a message to the persistent Claude CLI process.
+   * Spawns the process lazily on first call.
+   */
+  private async *sendViaPersistentClaude(
+    userMessage: string,
+    systemPrompt: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk> {
+    // Spawn process on first message, or restart if it died
+    if (!this.proc || this.closed) {
+      this.killProcess();
+      this.spawnPersistentClaude(systemPrompt);
+    }
+
+    if (!this.proc?.stdin) {
+      throw new Error("Claude CLI process stdin not available");
+    }
+
+    // Clear leftover chunks from any previous turn
+    this.chunkQueue = [];
+
+    // Write user message as stream-json input
+    const inputMsg = JSON.stringify({
+      type: "user",
+      message: { role: "user", content: userMessage },
+    });
+    this.proc.stdin.write(inputMsg + "\n");
+
+    // Create a single abort promise (resolves once, reusable across iterations)
+    const abortPromise = signal
+      ? new Promise<null>((resolve) => {
+          if (signal.aborted) { resolve(null); return; }
+          signal.addEventListener("abort", () => resolve(null), { once: true });
+        })
+      : null;
+
+    // Read response chunks until "done" (end of turn) or process dies
+    while (true) {
+      if (signal?.aborted) {
+        this.killProcess();
+        throw new Error("CLI session aborted");
+      }
+
+      const chunk = await (abortPromise
+        ? Promise.race([this.nextChunk(), abortPromise])
+        : this.nextChunk());
+
+      if (chunk === null) {
+        // Process died or aborted
+        if (signal?.aborted) {
+          throw new Error("CLI session aborted");
+        }
+        // Unexpected death — let caller handle as error
+        throw new Error("Claude CLI process terminated unexpectedly");
+      }
+
+      yield chunk;
+      if (chunk.type === "done") break;
+    }
+  }
+
+  /**
+   * Send via per-message process spawn (Gemini CLI / Codex CLI).
+   */
+  private async *sendViaNewProcess(
+    allMessages: Message[],
+    systemPrompt: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk> {
+    let provider: CliProviderInterface;
+    if (this._providerType === "codex-cli") {
+      provider = new CodexCliProvider();
+    } else {
+      provider = new GeminiCliProvider();
+    }
+
+    const sessionIdToUse = provider.supportsSessionResumption
+      ? this.sessionId || undefined
+      : undefined;
+
+    for await (const chunk of provider.chatStream(
+      allMessages, systemPrompt, this.workingDirectory, signal, sessionIdToUse
+    )) {
+      if (chunk.type === "session_id" && chunk.sessionId) {
+        this.sessionId = chunk.sessionId;
+      }
+      yield chunk;
+    }
+
+    // Gemini CLI doesn't emit session_id in plain text mode, but its
+    // --resume flag accepts "latest" to resume the most recent session.
+    // Set it after the first successful response so subsequent messages reuse the session.
+    if (this._providerType === "gemini-cli" && !this.sessionId) {
+      this.sessionId = "latest";
+    }
+
+    if (signal?.aborted) {
+      throw new Error("CLI session aborted");
+    }
+  }
+
+  // --- Lifecycle ---
+
+  /** Kill the persistent process without clearing session state */
+  private killProcess(): void {
+    if (this.proc && !this.proc.killed) {
+      this.proc.kill("SIGTERM");
+    }
+    this.proc = null;
+    this.closed = true;
+    this.chunkQueue = [];
+    this.resolveWaiter(null);
+  }
+
+  /** Terminate the entire session (process + state). */
+  terminate(): void {
+    this.killProcess();
+    this._isAlive = false;
+    this.sessionId = null;
+    this.stdoutBuffer = "";
+    this.systemPrompt = null;
   }
 }
 

@@ -263,6 +263,16 @@ export class WorkflowExecutor {
 
     let totalIterations = 0;
 
+    /** Terminate all persistent CLI sessions created during workflow execution */
+    const cleanupCliSessions = () => {
+      if (context.persistentCliSessions) {
+        for (const session of context.persistentCliSessions.values()) {
+          session.terminate();
+        }
+        context.persistentCliSessions = undefined;
+      }
+    };
+
     while (stack.length > 0 && totalIterations < MAX_ITERATIONS) {
       // Check for abort signal
       if (options?.abortSignal?.aborted) {
@@ -271,6 +281,7 @@ export class WorkflowExecutor {
           this.historyManager.completeRecord(historyRecord, "error");
           await this.historyManager.saveRecord(historyRecord);
         }
+        cleanupCliSessions();
         throw new Error(abortMsg);
       }
 
@@ -455,7 +466,7 @@ export class WorkflowExecutor {
               : promptTemplate;
             log(node.id, node.type, `Executing LLM: ${promptPreview}`, "info");
 
-            const cmdResult = await handleCommandNode(node, context, this.app, this.plugin, promptCallbacks, traceId);
+            const cmdResult = await handleCommandNode(node, context, this.app, this.plugin, promptCallbacks, traceId, options?.abortSignal);
 
             // Resolve actual RAG setting name
             let actualRagSetting = node.properties["ragSetting"];
@@ -1377,6 +1388,7 @@ export class WorkflowExecutor {
           value: 0,
           comment: formatError(error),
         });
+        cleanupCliSessions();
         throw error;
       }
     }
@@ -1397,6 +1409,7 @@ export class WorkflowExecutor {
         value: 0,
         comment: errorMsg,
       });
+      cleanupCliSessions();
       throw new Error(errorMsg);
     }
 
@@ -1422,6 +1435,7 @@ export class WorkflowExecutor {
       comment: "completed",
     });
 
+    cleanupCliSessions();
     return { context, historyRecord };
   }
 }

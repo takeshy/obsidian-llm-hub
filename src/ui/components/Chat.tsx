@@ -48,7 +48,7 @@ import { tracing } from "src/core/tracingHooks";
 import { getEnabledTools, skillWorkflowTool, skillScriptTool } from "src/core/tools";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "src/core/sandboxExecutor";
 import { fetchMcpTools, createMcpToolExecutor, isMcpTool, type McpToolDefinition, type McpToolExecutor } from "src/core/mcpTools";
-import { GeminiCliProvider, ClaudeCliProvider, CodexCliProvider } from "src/core/cliProvider";
+import { PersistentCliSession } from "src/core/cliProvider";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
@@ -205,6 +205,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	// so the mount-time restore effect can read it before sync-back starts.
 	const initialLastActiveChatIdRef = useRef<string | null>(plugin.lastActiveChatId);
 	const hasCompletedInitialRestoreRef = useRef(false);
+	const persistentCliRef = useRef<PersistentCliSession | null>(null);
 	const [vaultFiles, setVaultFiles] = useState<string[]>([]);
 	const [hasSelection, setHasSelection] = useState(false);
 	const [cliConfig, setCliConfig] = useState(plugin.settings.cliConfig || DEFAULT_CLI_CONFIG);
@@ -622,12 +623,16 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		};
 	}, [plugin, refreshSkills]);
 
-	// Cleanup MCP executor on unmount
+	// Cleanup MCP executor and persistent CLI session on unmount
 	useEffect(() => {
 		return () => {
 			if (mcpExecutorRef.current) {
 				void mcpExecutorRef.current.cleanup();
 				mcpExecutorRef.current = null;
+			}
+			if (persistentCliRef.current) {
+				persistentCliRef.current.terminate();
+				persistentCliRef.current = null;
 			}
 		};
 	}, []);
@@ -768,6 +773,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		const handleSettingsUpdated = () => {
 			setCurrentModel(plugin.getSelectedModel());
 			setCliConfig(plugin.settings.cliConfig || DEFAULT_CLI_CONFIG);
+			// Terminate persistent CLI session when settings change (model may have changed)
+			if (persistentCliRef.current) {
+				persistentCliRef.current.terminate();
+				persistentCliRef.current = null;
+			}
 			// Sync MCP servers from settings
 			setMcpServers([...plugin.settings.mcpServers]);
 		};
@@ -844,6 +854,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const handleModelChange = (model: ModelType) => {
 		setCurrentModel(model);
 		void plugin.selectModel(model);
+
+		// Terminate persistent CLI session when switching away from CLI model
+		if (persistentCliRef.current) {
+			persistentCliRef.current.terminate();
+			persistentCliRef.current = null;
+		}
 
 		const isNewModelCli = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli" || model === "local-llm";
 		const isNewModelApiProvider = isApiProviderModel(model);
@@ -1034,6 +1050,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		const nextModel = command.model ? command.model : currentModel;
 		if (nextModel !== currentModel) {
 			setCurrentModel(nextModel);
+			// Terminate persistent CLI session when model changes via slash command
+			if (persistentCliRef.current) {
+				persistentCliRef.current.terminate();
+				persistentCliRef.current = null;
+			}
 		}
 
 		// Optionally change search setting (null = keep current, "" = None, "__websearch__" = Web Search, other = RAG setting name)
@@ -1082,6 +1103,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		setActiveSkillPaths(DEFAULT_BUILTIN_SKILL_IDS.map(builtinFolderPath));
 		setCliSession(null);
 		setShowHistory(false);
+		// Cleanup persistent CLI session
+		if (persistentCliRef.current) {
+			persistentCliRef.current.terminate();
+			persistentCliRef.current = null;
+		}
 	};
 
 	// Decrypt and load encrypted chat
@@ -1123,6 +1149,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			setMessages(parsed.messages);
 			setCurrentChatId(chatId);
 			setCliSession(parsed.cliSession || null);
+			// Terminate persistent CLI session when loading a different chat
+			if (persistentCliRef.current) {
+				persistentCliRef.current.terminate();
+				persistentCliRef.current = null;
+			}
 			setStreamingContent("");
 			setStreamingThinking("");
 			setDecryptingChatId(null);
@@ -1157,6 +1188,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		setMessages(history.messages);
 		setCurrentChatId(history.id);
 		setCliSession(history.cliSession || null);  // Restore CLI session
+		// Terminate persistent CLI session when switching chats (will be recreated on next message)
+		if (persistentCliRef.current) {
+			persistentCliRef.current.terminate();
+			persistentCliRef.current = null;
+		}
 		setStreamingContent("");
 		setStreamingThinking("");
 		setShowHistory(false);
@@ -1196,11 +1232,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 		const isClaudeCli = currentModel === "claude-cli";
 		const isCodexCli = currentModel === "codex-cli";
-		const provider = isClaudeCli
-			? new ClaudeCliProvider()
-			: isCodexCli
-				? new CodexCliProvider()
-				: new GeminiCliProvider();
 
 		// Activate skill if invoked via slash command
 		let effectiveSkillPaths = activeSkillPaths;
@@ -1314,18 +1345,35 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			// Determine current provider name
 			const currentProvider: ChatProvider = isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "gemini-cli";
 
-			// Pass session ID only if provider supports it AND matches the stored session's provider
-			const sessionIdToUse = provider.supportsSessionResumption &&
-				cliSession?.provider === currentProvider
-				? cliSession.sessionId
-				: undefined;
+			// Get or create persistent CLI session
+			const existingSession = persistentCliRef.current;
+			let session: PersistentCliSession;
+			if (existingSession && existingSession.isAlive && existingSession.provider === currentProvider) {
+				// Reuse existing persistent session
+				session = existingSession;
+			} else {
+				// Terminate old session if provider changed or session died
+				existingSession?.terminate();
+				// Create new persistent session, passing stored session ID for --resume
+				const storedSessionId = cliSession?.provider === currentProvider
+					? cliSession.sessionId
+					: undefined;
+				session = new PersistentCliSession(
+					currentProvider, vaultBasePath,
+					undefined, storedSessionId
+				);
+				session.start();
+				persistentCliRef.current = session;
+			}
 
-			for await (const chunk of provider.chatStream(
+			const lastUserMessage = allMessages[allMessages.length - 1];
+			const userContent = lastUserMessage?.role === "user" ? lastUserMessage.content : "";
+
+			for await (const chunk of session.sendMessage(
+				userContent,
 				allMessages,
 				systemPrompt,
-				vaultBasePath,
-				abortController.signal,
-				sessionIdToUse
+				abortController.signal
 			)) {
 				if (abortController.signal.aborted) {
 					stopped = true;
@@ -1357,12 +1405,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				fullContent += `\n\n${t("chat.generationStopped")}`;
 			}
 
-			// Update session if we received a new one, or clear if provider changed
-			const newSession: CliSessionInfo | null = receivedSessionId
-				? { provider: currentProvider, sessionId: receivedSessionId }
+			// Update session state from persistent session
+			const effectiveSessionId = receivedSessionId || session.currentSessionId;
+			const newSession: CliSessionInfo | null = effectiveSessionId
+				? { provider: currentProvider, sessionId: effectiveSessionId }
 				: (cliSession?.provider === currentProvider ? cliSession : null);
 
-			if (isActive() && (receivedSessionId || cliSession?.provider !== currentProvider)) {
+			if (isActive() && (effectiveSessionId || cliSession?.provider !== currentProvider)) {
 				setCliSession(newSession);
 			}
 
@@ -2883,6 +2932,11 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					const saved = preSlashSettingsRef.current;
 					preSlashSettingsRef.current = null;
 					setCurrentModel(saved.model);
+					// Terminate persistent CLI session when restoring model after slash command
+					if (persistentCliRef.current) {
+						persistentCliRef.current.terminate();
+						persistentCliRef.current = null;
+					}
 					handleRagSettingChange(saved.ragSetting);
 					setVaultToolMode(saved.vaultToolMode);
 					setVaultToolNoneReason(saved.vaultToolNoneReason);
@@ -3090,6 +3144,11 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			const newChatId = generateChatId();
 			setCurrentChatId(newChatId);
 			setCliSession(null);
+			// Terminate persistent CLI session on compact (new chat context)
+			if (persistentCliRef.current) {
+				persistentCliRef.current.terminate();
+				persistentCliRef.current = null;
+			}
 			setMessages(newMessages);
 
 			// Save as a new chat with explicit new ID (avoids stale closure of currentChatId)

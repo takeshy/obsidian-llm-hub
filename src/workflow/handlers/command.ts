@@ -1,7 +1,7 @@
 import { App } from "obsidian";
 import type { LlmHubPlugin } from "../../plugin";
 import { GeminiClient, getGeminiClient } from "../../core/gemini";
-import { CliProviderManager } from "../../core/cliProvider";
+import { PersistentCliSession } from "../../core/cliProvider";
 import { isImageGenerationModel, isApiProviderModel, getApiProviderId, getApiProviderModelName, getGeminiApiKey, type ToolDefinition, type McpAppInfo, type StreamChunkUsage } from "../../types";
 import { getEnabledTools } from "../../core/tools";
 import { fetchMcpTools, createMcpToolExecutor, type McpToolDefinition } from "../../core/mcpTools";
@@ -138,7 +138,8 @@ export async function handleCommandNode(
   app: App,
   plugin: LlmHubPlugin,
   promptCallbacks?: PromptCallbacks,
-  traceId?: string | null
+  traceId?: string | null,
+  abortSignal?: AbortSignal
 ): Promise<CommandNodeResult> {
   // Track collected MCP App info from tool executions
   let collectedMcpAppInfo: McpAppInfo | undefined;
@@ -198,13 +199,19 @@ Please revise the output based on the user's feedback above.`;
   }
 
   if (isCliModel) {
-    // Use CLI provider for CLI models
-    const cliManager = new CliProviderManager();
-    const providerName = model === "claude-cli" ? "claude-cli" : model === "codex-cli" ? "codex-cli" : "gemini-cli";
-    const provider = cliManager.getProvider(providerName);
+    // Use persistent CLI session (shared across workflow nodes)
+    const providerName = (model === "claude-cli" ? "claude-cli" : model === "codex-cli" ? "codex-cli" : "gemini-cli") as import("../../types").ChatProvider;
 
-    if (!provider) {
-      throw new Error(`CLI provider ${providerName} not available`);
+    // Get or create persistent CLI session from context
+    if (!context.persistentCliSessions) {
+      context.persistentCliSessions = new Map();
+    }
+    let session = context.persistentCliSessions.get(providerName);
+    if (!session || !session.isAlive) {
+      const vaultPath = (app.vault.adapter as { basePath?: string }).basePath || "";
+      session = new PersistentCliSession(providerName, vaultPath);
+      session.start();
+      context.persistentCliSessions.set(providerName, session);
     }
 
     // Build messages
@@ -216,9 +223,6 @@ Please revise the output based on the user's feedback above.`;
       },
     ];
 
-    // Get vault path as working directory
-    const vaultPath = (app.vault.adapter as { basePath?: string }).basePath || "";
-
     // Execute CLI call
     const genId = tracing.generationStart(traceId ?? null, "cli-command", {
       model,
@@ -228,10 +232,9 @@ Please revise the output based on the user's feedback above.`;
 
     let fullResponse = "";
     const cliStartTime = Date.now();
-    const stream = provider.chatStream(messages, "", vaultPath);
 
     try {
-      for await (const chunk of stream) {
+      for await (const chunk of session.sendMessage(prompt, messages, "", abortSignal)) {
         if (chunk.type === "text") {
           fullResponse += chunk.content;
         } else if (chunk.type === "error") {
