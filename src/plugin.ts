@@ -48,6 +48,8 @@ export class LlmHubPlugin extends Plugin {
   private encryptionManager!: EncryptionManager;
   private lastActiveMarkdownView: MarkdownView | null = null;
   private workflowMgr!: WorkflowManager;
+  /** In-memory only – cleared on Obsidian restart */
+  lastActiveChatId: string | null = null;
 
   // Delegate workspaceState to the manager
   get workspaceState(): WorkspaceState {
