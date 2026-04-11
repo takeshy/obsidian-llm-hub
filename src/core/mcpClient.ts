@@ -96,6 +96,7 @@ export class McpHttpClient implements IMcpClient {
   private sessionId: string | null = null;
   private requestId = 0;
   private initialized = false;
+  private cachedInitResult: McpInitializeResult | null = null;
 
   constructor(config: McpServerConfig) {
     this.config = config;
@@ -191,12 +192,8 @@ export class McpHttpClient implements IMcpClient {
    * Initialize the MCP session
    */
   async initialize(): Promise<McpInitializeResult> {
-    if (this.initialized) {
-      return {
-        protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
-        serverInfo: { name: this.config.name, version: "unknown" },
-      };
+    if (this.initialized && this.cachedInitResult) {
+      return this.cachedInitResult;
     }
 
     const result = await this.sendRequest("initialize", {
@@ -212,6 +209,7 @@ export class McpHttpClient implements IMcpClient {
     await this.sendNotification("notifications/initialized");
 
     this.initialized = true;
+    this.cachedInitResult = result;
     return result;
   }
 
