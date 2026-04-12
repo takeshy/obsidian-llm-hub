@@ -1391,6 +1391,18 @@ ${newInstructions}
               {isSkillFile ? t("workflow.modifySkillWithAI") : t("workflow.modifyWithAI")}
             </span>
           </button>
+          {isSkillFile && (
+            <button
+              className="llm-hub-workflow-sidebar-ai-btn"
+              onClick={() => void handleCreateSkillWithAI()}
+              title={t("workflow.createSkillWithAI")}
+            >
+              <Sparkles size={14} />
+              <span className="llm-hub-workflow-btn-label">
+                {t("workflow.createSkillWithAI")}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 

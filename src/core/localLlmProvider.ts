@@ -467,7 +467,23 @@ async function* openaiChatStream(
                 finish_reason?: string | null;
               }[];
               usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+              error?: { message?: string } | string;
+              message?: string;
             };
+
+            // Some OpenAI-compatible servers (e.g. llama.cpp / LM Studio) report
+            // runtime errors like context-length overflow as HTTP 200 with an
+            // `error` field in the SSE payload. Surface those as error chunks.
+            if (parsed.error) {
+              const errMsg = typeof parsed.error === "string"
+                ? parsed.error
+                : parsed.error.message || parsed.message || "Unknown streaming error";
+              chunks.push({ type: "error", error: errMsg });
+              streamDone = true;
+              signal$.notify();
+              return;
+            }
+
             const choice = parsed.choices?.[0];
             const delta = choice?.delta;
 

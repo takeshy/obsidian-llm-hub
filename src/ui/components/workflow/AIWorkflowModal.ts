@@ -1119,11 +1119,60 @@ export class AIWorkflowModal extends Modal {
         return;
       }
 
-      // Parse the response
-      let result = this.parseResponse(response);
+      let parsed = parseWorkflowResponseWithError(response);
+      let result = parsed.result;
+
+      // Auto-repair: if parsing failed, re-prompt the LLM with the broken output
+      // and the specific error so it can fix its own YAML. Max 2 attempts.
+      const maxRepairAttempts = 2;
+      for (let attempt = 1; !result && attempt <= maxRepairAttempts; attempt++) {
+        if (isCancelled()) break;
+        const parseError = parsed.error ?? "unknown parse error";
+        console.warn(`[llm-hub] Parse failed (attempt ${attempt}/${maxRepairAttempts}): ${parseError}`);
+        generationModal.appendThinkingSeparator(`${t("workflow.generation.phaseGenerate")} (auto-repair ${attempt}/${maxRepairAttempts})`);
+        generationModal.setStatus(t("workflow.generation.reviewRefining"));
+
+        const repairPrompt = `Your previous output could not be parsed into a valid workflow.
+
+PARSE ERROR:
+${parseError}
+
+YOUR PREVIOUS OUTPUT:
+${response}
+
+Fix the problem and output ONLY the complete, valid YAML workflow starting with "name:". Do not include any prose, explanation, or commentary — just the YAML.`;
+
+        let repaired = "";
+        for await (const chunk of this.streamForWorkflow(
+          selectedModel, isCliModel, repairPrompt, systemPrompt,
+          abortController, traceId,
+        )) {
+          if (isCancelled()) break;
+          if (chunk.type === "thinking" && chunk.content) {
+            generationModal.appendThinking(chunk.content);
+          } else if (chunk.type === "text" && chunk.content) {
+            repaired += chunk.content;
+          } else if (chunk.type === "done") {
+            totalUsage = mergeUsage(totalUsage, chunk.usage);
+          } else if (chunk.type === "error") {
+            throw new Error(chunk.error || "Unknown error");
+          }
+        }
+
+        if (isCancelled()) {
+          generationModal.close();
+          tracing.traceEnd(traceId, { metadata: { status: "cancelled" } });
+          this.resolvePromise(null);
+          return;
+        }
+        response = repaired;
+        parsed = parseWorkflowResponseWithError(response);
+        result = parsed.result;
+      }
 
       if (!result) {
-        generationModal.close();
+        console.error("[llm-hub] Generation failed after auto-repair. Last error:", parsed.error, "Response:", response);
+        generationModal.showParseFailure(response, parsed.error);
         new Notice(t("workflow.generation.parseFailed"));
         this.resolvePromise(null);
         return;
@@ -2429,11 +2478,18 @@ export function promptForAIWorkflow(
  * Handles code-fenced YAML, raw YAML, and mixed text+YAML responses.
  */
 export function parseWorkflowResponse(response: string): AIWorkflowResult | null {
+  return parseWorkflowResponseWithError(response).result;
+}
+
+/**
+ * Same as parseWorkflowResponse but also returns a machine-readable error message
+ * describing why parsing failed — used to drive auto-repair by re-prompting the LLM.
+ */
+export function parseWorkflowResponseWithError(response: string): { result: AIWorkflowResult | null; error?: string } {
   try {
     let yaml = "";
     let yamlStartIdx = -1;
 
-    // Try to find a code block containing "name:" and "nodes:"
     const codeBlockRegex = /```\w*\s*([\s\S]*?)```/g;
     let match;
     while ((match = codeBlockRegex.exec(response)) !== null) {
@@ -2445,7 +2501,6 @@ export function parseWorkflowResponse(response: string): AIWorkflowResult | null
       }
     }
 
-    // If no valid code block found, try to find YAML directly in response
     if (!yaml) {
       const nameMatch = response.match(/(?:^|\n)(name:\s*\S+[\s\S]*?nodes:\s*[\s\S]*?)(?:\n```|$)/);
       if (nameMatch && nameMatch.index !== undefined) {
@@ -2454,33 +2509,27 @@ export function parseWorkflowResponse(response: string): AIWorkflowResult | null
       }
     }
 
-    // Final fallback: find "name:" and take everything from there
     if (!yaml) {
       const startIdx = response.indexOf("name:");
       if (startIdx >= 0) {
         yaml = response.substring(startIdx).trim();
-        // Remove trailing code fence if present
         yaml = yaml.replace(/\n```\s*$/, "").trim();
         yamlStartIdx = startIdx;
       }
     }
 
     if (!yaml) {
-      console.error("Could not find valid workflow YAML in response:", response);
-      return null;
+      return { result: null, error: "No workflow YAML found. The response must contain a YAML block starting with 'name:' and including 'nodes:'." };
     }
 
-    // Extract explanation (text before YAML)
     let explanation = "";
     if (yamlStartIdx > 0) {
       explanation = response.substring(0, yamlStartIdx).trim();
-      // Remove code fence markers from explanation
       explanation = explanation.replace(/```\w*\s*$/gm, "").trim();
     }
 
-    // Normalize and parse YAML (fix common LLM output issues like * markers, block scalar indentation)
     yaml = normalizeYamlText(yaml);
-    const parsed = parseYaml(yaml) as {
+    let parsed: {
       name?: string;
       nodes?: Array<{
         id?: string;
@@ -2491,17 +2540,22 @@ export function parseWorkflowResponse(response: string): AIWorkflowResult | null
         [key: string]: unknown;
       }>;
     };
-
-    if (!parsed || !Array.isArray(parsed.nodes)) {
-      console.error("Invalid workflow structure:", parsed);
-      return null;
+    try {
+      parsed = parseYaml(yaml);
+    } catch (yamlErr) {
+      return { result: null, error: `YAML syntax error: ${formatError(yamlErr)}` };
     }
 
-    // Convert to SidebarNode format
+    if (!parsed || typeof parsed !== "object") {
+      return { result: null, error: "Parsed YAML is not an object." };
+    }
+    if (!Array.isArray(parsed.nodes)) {
+      return { result: null, error: "Parsed YAML has no 'nodes' array at the top level." };
+    }
+
     const nodes: SidebarNode[] = parsed.nodes.map((node, index) => {
       const { id, type, next, trueNext, falseNext, ...properties } = node;
 
-      // Convert all properties to strings
       const stringProps: Record<string, string> = {};
       for (const [key, value] of Object.entries(properties)) {
         if (value === null || value === undefined) {
@@ -2521,29 +2575,23 @@ export function parseWorkflowResponse(response: string): AIWorkflowResult | null
         properties: stringProps,
       };
 
-      // Add connection properties
-      if (next) {
-        sidebarNode.next = String(next);
-      }
-      if (trueNext) {
-        sidebarNode.trueNext = String(trueNext);
-      }
-      if (falseNext) {
-        sidebarNode.falseNext = String(falseNext);
-      }
+      if (next) sidebarNode.next = String(next);
+      if (trueNext) sidebarNode.trueNext = String(trueNext);
+      if (falseNext) sidebarNode.falseNext = String(falseNext);
 
       return sidebarNode;
     });
 
     return {
-      yaml,
-      nodes,
-      name: parsed.name || "AI Generated Workflow",
-      explanation: explanation || undefined,
+      result: {
+        yaml,
+        nodes,
+        name: parsed.name || "AI Generated Workflow",
+        explanation: explanation || undefined,
+      },
     };
   } catch (error) {
-    console.error("Failed to parse AI workflow response:", formatError(error), response);
-    return null;
+    return { result: null, error: formatError(error) };
   }
 }
 
