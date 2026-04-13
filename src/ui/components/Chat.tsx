@@ -1379,6 +1379,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 			for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration++) {
 				let iterationContent = "";
+				const streamSep = fullContent ? "\n\n" : "";
 
 				for await (const chunk of session.sendMessage(
 					iterationUserContent,
@@ -1394,7 +1395,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					switch (chunk.type) {
 						case "text":
 							iterationContent += chunk.content || "";
-							if (isActive()) setStreamingContent(fullContent + iterationContent);
+							if (isActive()) setStreamingContent(fullContent + streamSep + iterationContent);
 							break;
 
 						case "session_id":
@@ -1415,13 +1416,16 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 				// Execute any skill markers in this iteration's output
 				const markerResult = cliLoadedSkills.length > 0
-					? await processSkillMarkers(plugin, iterationContent, cliLoadedSkills)
-					: { processedContent: iterationContent, followUpMessage: undefined };
+					? await processSkillMarkers(plugin, iterationContent, cliLoadedSkills, abortController.signal)
+					: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
 
 				// Append this iteration's processed content to accumulated display
 				fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
 				processedContent = fullContent;
 				if (isActive()) setStreamingContent(fullContent);
+
+				// User cancelled mid-marker execution — stop the agent loop.
+				if (markerResult.aborted) { stopped = true; break; }
 
 				// If no markers were executed, the turn is complete
 				if (!markerResult.followUpMessage) break;
@@ -1611,6 +1615,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 			for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration++) {
 				let iterationContent = "";
+				const streamSep = fullContent ? "\n\n" : "";
 
 				for await (const chunk of localLlmChatStream(
 					llmConfig,
@@ -1627,7 +1632,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					switch (chunk.type) {
 						case "text":
 							iterationContent += chunk.content || "";
-							if (isActive()) setStreamingContent(fullContent + iterationContent);
+							if (isActive()) setStreamingContent(fullContent + streamSep + iterationContent);
 							break;
 
 						case "thinking":
@@ -1646,13 +1651,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				if (stopped) break;
 
 				const markerResult = llmLoadedSkills.length > 0
-					? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills)
-					: { processedContent: iterationContent, followUpMessage: undefined };
+					? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills, abortController.signal)
+					: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
 
 				fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
 				processedContent = fullContent;
 				if (isActive()) setStreamingContent(fullContent);
 
+				if (markerResult.aborted) { stopped = true; break; }
 				if (!markerResult.followUpMessage) break;
 
 				conversationHistory = [
@@ -3443,7 +3449,8 @@ async function processSkillMarkers(
 	plugin: LlmHubPlugin,
 	content: string,
 	skills: LoadedSkill[],
-): Promise<{ processedContent: string; followUpMessage?: string }> {
+	signal?: AbortSignal,
+): Promise<{ processedContent: string; followUpMessage?: string; aborted?: boolean }> {
 	if (skills.length === 0) return { processedContent: content };
 
 	let processedContent = content;
@@ -3457,6 +3464,7 @@ async function processSkillMarkers(
 		workflowMatches.push(wm);
 	}
 	for (const match of workflowMatches) {
+		if (signal?.aborted) return { processedContent, aborted: true };
 		const workflowId = match[1].trim();
 		const variablesJson = match[2] || undefined;
 		const result = await executeSkillWorkflow(plugin, workflowId, variablesJson, skillWorkflowMap);
@@ -3475,6 +3483,7 @@ async function processSkillMarkers(
 		scriptMatches.push(sm);
 	}
 	for (const match of scriptMatches) {
+		if (signal?.aborted) return { processedContent, aborted: true };
 		const scriptId = match[1].trim();
 		const argsJson = match[2] || undefined;
 		const result = await executeSkillScript(plugin, scriptId, argsJson, skillScriptMap);
