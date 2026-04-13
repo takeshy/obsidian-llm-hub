@@ -216,7 +216,7 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], options?: { cliMod
     }
     if (skill.workflows.length > 0) {
       if (isCli) {
-        section += `\n\n### Available Workflows\nTo execute a workflow, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_WORKFLOW: workflowId]({"key": "value"})\nThe JSON part is optional variables to pass. Available workflows:`;
+        section += `\n\n### Available Workflows\nTo execute a workflow, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_WORKFLOW: workflowId]({"key": "value"})\nThe JSON part is optional variables to pass.\n\nAfter you emit one or more markers, the system will execute each workflow and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further workflows or give the final answer. Available workflows:`;
       } else {
         section += `\n\n### Available Workflows\nUse the run_skill_workflow tool to execute these workflows:`;
       }
@@ -230,7 +230,7 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], options?: { cliMod
     }
     if (skill.scripts.length > 0) {
       if (isCli) {
-        section += `\n\n### Available Scripts\nTo execute a script, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_SCRIPT: scriptId](["arg1", "arg2"])\nThe JSON array part is optional arguments to pass. Available scripts (desktop only):`;
+        section += `\n\n### Available Scripts\nTo execute a script, output the following marker on its own line (do NOT wrap it in backticks or code blocks):\n[RUN_SCRIPT: scriptId](["arg1", "arg2"])\nThe JSON array part is optional arguments to pass.\n\nAfter you emit one or more markers, the system will execute each script and feed the results back to you as a follow-up user message, so you can continue reasoning based on the outputs and call further scripts or give the final answer. Available scripts (desktop only):`;
       } else {
         section += `\n\n### Available Scripts\nUse the run_skill_script tool to execute these scripts (desktop only):`;
       }

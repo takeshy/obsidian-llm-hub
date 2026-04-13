@@ -1366,43 +1366,78 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				persistentCliRef.current = session;
 			}
 
-			const lastUserMessage = allMessages[allMessages.length - 1];
-			const userContent = lastUserMessage?.role === "user" ? lastUserMessage.content : "";
+			// === Agent loop ===
+			// Each iteration: stream CLI → detect skill markers → execute → feed
+			// results back as a follow-up user message → loop until no markers
+			// or MAX_MARKER_AGENT_ITERATIONS reached. Uses the persistent /
+			// --resume session so the CLI preserves context across iterations.
+			let processedContent = "";
+			let conversationHistory: Message[] = allMessages;
+			let iterationUserContent = allMessages[allMessages.length - 1]?.role === "user"
+				? allMessages[allMessages.length - 1].content
+				: "";
 
-			for await (const chunk of session.sendMessage(
-				userContent,
-				allMessages,
-				systemPrompt,
-				abortController.signal
-			)) {
-				if (abortController.signal.aborted) {
-					stopped = true;
-					break;
+			for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration++) {
+				let iterationContent = "";
+
+				for await (const chunk of session.sendMessage(
+					iterationUserContent,
+					conversationHistory,
+					systemPrompt,
+					abortController.signal
+				)) {
+					if (abortController.signal.aborted) {
+						stopped = true;
+						break;
+					}
+
+					switch (chunk.type) {
+						case "text":
+							iterationContent += chunk.content || "";
+							if (isActive()) setStreamingContent(fullContent + iterationContent);
+							break;
+
+						case "session_id":
+							if (chunk.sessionId) {
+								receivedSessionId = chunk.sessionId;
+							}
+							break;
+
+						case "error":
+							throw new Error(chunk.error || "Unknown error");
+
+						case "done":
+							break;
+					}
 				}
 
-				switch (chunk.type) {
-					case "text":
-						fullContent += chunk.content || "";
-						if (isActive()) setStreamingContent(fullContent);
-						break;
+				if (stopped) break;
 
-					case "session_id":
-						// Capture session ID from CLI response
-						if (chunk.sessionId) {
-							receivedSessionId = chunk.sessionId;
-						}
-						break;
+				// Execute any skill markers in this iteration's output
+				const markerResult = cliLoadedSkills.length > 0
+					? await processSkillMarkers(plugin, iterationContent, cliLoadedSkills)
+					: { processedContent: iterationContent, followUpMessage: undefined };
 
-					case "error":
-						throw new Error(chunk.error || "Unknown error");
+				// Append this iteration's processed content to accumulated display
+				fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
+				processedContent = fullContent;
+				if (isActive()) setStreamingContent(fullContent);
 
-					case "done":
-						break;
-				}
+				// If no markers were executed, the turn is complete
+				if (!markerResult.followUpMessage) break;
+
+				// Feed results back to the CLI on the next iteration
+				conversationHistory = [
+					...conversationHistory,
+					{ role: "assistant", content: iterationContent, timestamp: Date.now() } as Message,
+					{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() } as Message,
+				];
+				iterationUserContent = markerResult.followUpMessage;
 			}
 
 			if (stopped && fullContent) {
 				fullContent += `\n\n${t("chat.generationStopped")}`;
+				processedContent = fullContent;
 			}
 
 			// Update session state from persistent session
@@ -1413,35 +1448,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 			if (isActive() && (effectiveSessionId || cliSession?.provider !== currentProvider)) {
 				setCliSession(newSession);
-			}
-
-			// Detect and execute [RUN_WORKFLOW: id](variables) markers from skill workflows
-			const workflowMarkerRegex = /\[RUN_WORKFLOW:\s*(.+?)\](?:\((\{[\s\S]*?\})\))?/g;
-			let workflowMatch: RegExpExecArray | null;
-			let processedContent = fullContent;
-			if (cliLoadedSkills.length > 0 && (workflowMatch = workflowMarkerRegex.exec(fullContent)) !== null) {
-				const workflowId = workflowMatch[1].trim();
-				const variablesJson = workflowMatch[2] || undefined;
-				const skillWorkflowMap = collectSkillWorkflows(cliLoadedSkills);
-				const workflowResult = await executeSkillWorkflow(plugin, workflowId, variablesJson, skillWorkflowMap);
-				const resultText = JSON.stringify(workflowResult, null, 2);
-				processedContent = processedContent.replace(workflowMatch[0],
-					`**Workflow executed: ${workflowId}**\n\`\`\`json\n${resultText}\n\`\`\``
-				);
-			}
-
-			// Detect and execute [RUN_SCRIPT: id](args) markers from skill scripts
-			const scriptMarkerRegex = /\[RUN_SCRIPT:\s*(.+?)\](?:\(([\s\S]*?)\))?/g;
-			let scriptMatch: RegExpExecArray | null;
-			if (cliLoadedSkills.length > 0 && (scriptMatch = scriptMarkerRegex.exec(processedContent)) !== null) {
-				const scriptId = scriptMatch[1].trim();
-				const argsJson = scriptMatch[2] || undefined;
-				const cliScriptMap = collectSkillScripts(cliLoadedSkills);
-				const scriptResult = await executeSkillScript(plugin, scriptId, argsJson, cliScriptMap);
-				const resultText = JSON.stringify(scriptResult, null, 2);
-				processedContent = processedContent.replace(scriptMatch[0],
-					`**Script executed: ${scriptId}**\n\`\`\`json\n${resultText}\n\`\`\``
-				);
 			}
 
 			// Add assistant message with CLI model info
@@ -1594,68 +1600,71 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			let fullThinking = "";
 			let stopped = false;
 
-			for await (const chunk of localLlmChatStream(
-				llmConfig,
-				allMessages,
-				systemPrompt,
-				abortController.signal,
-				imageAttachments.length > 0 ? imageAttachments : undefined,
-			)) {
-				if (abortController.signal.aborted) {
-					stopped = true;
-					break;
+			// === Agent loop ===
+			// Local LLMs rely on text markers rather than function calls for skill
+			// workflow/script invocation. Each iteration streams → detects markers
+			// → executes → feeds results back as a follow-up user message. The
+			// local LLM is re-prompted with updated history so it can continue
+			// reasoning on tool outputs. Bounded by MAX_MARKER_AGENT_ITERATIONS.
+			let processedContent = "";
+			let conversationHistory: Message[] = allMessages;
+
+			for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration++) {
+				let iterationContent = "";
+
+				for await (const chunk of localLlmChatStream(
+					llmConfig,
+					conversationHistory,
+					systemPrompt,
+					abortController.signal,
+					imageAttachments.length > 0 ? imageAttachments : undefined,
+				)) {
+					if (abortController.signal.aborted) {
+						stopped = true;
+						break;
+					}
+
+					switch (chunk.type) {
+						case "text":
+							iterationContent += chunk.content || "";
+							if (isActive()) setStreamingContent(fullContent + iterationContent);
+							break;
+
+						case "thinking":
+							fullThinking += chunk.content || "";
+							if (isActive()) setStreamingThinking(fullThinking);
+							break;
+
+						case "error":
+							throw new Error(chunk.error || "Unknown error");
+
+						case "done":
+							break;
+					}
 				}
 
-				switch (chunk.type) {
-					case "text":
-						fullContent += chunk.content || "";
-						if (isActive()) setStreamingContent(fullContent);
-						break;
+				if (stopped) break;
 
-					case "thinking":
-						fullThinking += chunk.content || "";
-						if (isActive()) setStreamingThinking(fullThinking);
-						break;
+				const markerResult = llmLoadedSkills.length > 0
+					? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills)
+					: { processedContent: iterationContent, followUpMessage: undefined };
 
-					case "error":
-						throw new Error(chunk.error || "Unknown error");
+				fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
+				processedContent = fullContent;
+				if (isActive()) setStreamingContent(fullContent);
 
-					case "done":
-						break;
-				}
+				if (!markerResult.followUpMessage) break;
+
+				conversationHistory = [
+					...conversationHistory,
+					{ role: "assistant", content: iterationContent, timestamp: Date.now() } as Message,
+					{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() } as Message,
+				];
 			}
 
 			if (stopped && fullContent) {
 				fullContent += `\n\n${t("chat.generationStopped")}`;
-			}
-
-			// Detect and execute [RUN_WORKFLOW: id](variables) markers from skill workflows
-			const workflowMarkerRegex = /\[RUN_WORKFLOW:\s*(.+?)\](?:\((\{[\s\S]*?\})\))?/g;
-			let workflowMatch: RegExpExecArray | null;
-			let processedContent = fullContent;
-			if (llmLoadedSkills.length > 0 && (workflowMatch = workflowMarkerRegex.exec(fullContent)) !== null) {
-				const workflowId = workflowMatch[1].trim();
-				const variablesJson = workflowMatch[2] || undefined;
-				const skillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
-				const workflowResult = await executeSkillWorkflow(plugin, workflowId, variablesJson, skillWorkflowMap);
-				const resultText = JSON.stringify(workflowResult, null, 2);
-				processedContent = processedContent.replace(workflowMatch[0],
-					`**Workflow executed: ${workflowId}**\n\`\`\`json\n${resultText}\n\`\`\``
-				);
-			}
-
-			// Detect and execute [RUN_SCRIPT: id](args) markers from skill scripts
-			const scriptMarkerRegex = /\[RUN_SCRIPT:\s*(.+?)\](?:\(([\s\S]*?)\))?/g;
-			let scriptMatch: RegExpExecArray | null;
-			if (llmLoadedSkills.length > 0 && (scriptMatch = scriptMarkerRegex.exec(processedContent)) !== null) {
-				const scriptId = scriptMatch[1].trim();
-				const argsJson = scriptMatch[2] || undefined;
-				const llmScriptMap = collectSkillScripts(llmLoadedSkills);
-				const scriptResult = await executeSkillScript(plugin, scriptId, argsJson, llmScriptMap);
-				const resultText = JSON.stringify(scriptResult, null, 2);
-				processedContent = processedContent.replace(scriptMatch[0],
-					`**Script executed: ${scriptId}**\n\`\`\`json\n${resultText}\n\`\`\``
-				);
+				processedContent = fullContent;
 			}
 
 			// Add assistant message
@@ -3413,6 +3422,74 @@ Always be helpful and provide clear, concise responses. When working with notes,
 });
 
 Chat.displayName = "Chat";
+
+/**
+ * Maximum number of marker-driven agent iterations for CLI / Local-LLM paths.
+ * Protects against infinite loops where the model keeps emitting markers.
+ */
+const MAX_MARKER_AGENT_ITERATIONS = 5;
+
+/**
+ * Detect [RUN_WORKFLOW] / [RUN_SCRIPT] markers in an LLM response, execute
+ * each matched workflow/script, and return both:
+ *   - processedContent: the response with markers replaced by result blocks
+ *     (for display in the assistant message), and
+ *   - followUpMessage: a user-style message containing the results that can
+ *     be fed back to the LLM so it can continue based on tool outputs.
+ *     Undefined when no markers were matched — the agent loop should then
+ *     terminate.
+ */
+async function processSkillMarkers(
+	plugin: LlmHubPlugin,
+	content: string,
+	skills: LoadedSkill[],
+): Promise<{ processedContent: string; followUpMessage?: string }> {
+	if (skills.length === 0) return { processedContent: content };
+
+	let processedContent = content;
+	const resultSections: string[] = [];
+
+	const workflowMarkerRegex = /\[RUN_WORKFLOW:\s*(.+?)\](?:\((\{[\s\S]*?\})\))?/g;
+	const skillWorkflowMap = collectSkillWorkflows(skills);
+	const workflowMatches: RegExpExecArray[] = [];
+	let wm: RegExpExecArray | null;
+	while ((wm = workflowMarkerRegex.exec(content)) !== null) {
+		workflowMatches.push(wm);
+	}
+	for (const match of workflowMatches) {
+		const workflowId = match[1].trim();
+		const variablesJson = match[2] || undefined;
+		const result = await executeSkillWorkflow(plugin, workflowId, variablesJson, skillWorkflowMap);
+		const resultText = JSON.stringify(result, null, 2);
+		processedContent = processedContent.replace(match[0],
+			`**Workflow executed: ${workflowId}**\n\`\`\`json\n${resultText}\n\`\`\``
+		);
+		resultSections.push(`Workflow "${workflowId}" result:\n\`\`\`json\n${resultText}\n\`\`\``);
+	}
+
+	const scriptMarkerRegex = /\[RUN_SCRIPT:\s*(.+?)\](?:\(([\s\S]*?)\))?/g;
+	const skillScriptMap = collectSkillScripts(skills);
+	const scriptMatches: RegExpExecArray[] = [];
+	let sm: RegExpExecArray | null;
+	while ((sm = scriptMarkerRegex.exec(content)) !== null) {
+		scriptMatches.push(sm);
+	}
+	for (const match of scriptMatches) {
+		const scriptId = match[1].trim();
+		const argsJson = match[2] || undefined;
+		const result = await executeSkillScript(plugin, scriptId, argsJson, skillScriptMap);
+		const resultText = JSON.stringify(result, null, 2);
+		processedContent = processedContent.replace(match[0],
+			`**Script executed: ${scriptId}**\n\`\`\`json\n${resultText}\n\`\`\``
+		);
+		resultSections.push(`Script "${scriptId}" result:\n\`\`\`json\n${resultText}\n\`\`\``);
+	}
+
+	if (resultSections.length === 0) return { processedContent };
+
+	const followUpMessage = `Tool execution results:\n\n${resultSections.join("\n\n")}\n\nPlease continue based on these results. You may call more tools if needed, or give the user your final answer.`;
+	return { processedContent, followUpMessage };
+}
 
 /**
  * Execute a skill script via child_process.spawn and return results.
