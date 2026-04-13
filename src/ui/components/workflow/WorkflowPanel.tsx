@@ -1330,15 +1330,13 @@ ${newInstructions}
               <Sparkles size={14} />
               <span>{t("workflow.createWithAI")}</span>
             </button>
-            {!isSkillFile && (
-              <button
-                className="workflow-sidebar-ai-btn"
-                onClick={() => void handleCreateSkillWithAI()}
-              >
-                <Sparkles size={14} />
-                <span>{t("workflow.createSkillWithAI")}</span>
-              </button>
-            )}
+            <button
+              className="workflow-sidebar-ai-btn"
+              onClick={() => void handleCreateSkillWithAI()}
+            >
+              <Sparkles size={14} />
+              <span>{t("workflow.createSkillWithAI")}</span>
+            </button>
             {!isSkillFile && createHint}
           </div>
         </div>
@@ -1387,18 +1385,18 @@ ${newInstructions}
             title={isSkillFile ? t("workflow.modifySkillWithAI") : t("workflow.modifyWithAI")}
           >
             <Sparkles size={14} />
-            <span className="llm-hub-workflow-btn-label">
+            <span className="workflow-btn-label">
               {isSkillFile ? t("workflow.modifySkillWithAI") : t("workflow.modifyWithAI")}
             </span>
           </button>
           {isSkillFile && (
             <button
-              className="llm-hub-workflow-sidebar-ai-btn"
+              className="workflow-sidebar-ai-btn"
               onClick={() => void handleCreateSkillWithAI()}
               title={t("workflow.createSkillWithAI")}
             >
               <Sparkles size={14} />
-              <span className="llm-hub-workflow-btn-label">
+              <span className="workflow-btn-label">
                 {t("workflow.createSkillWithAI")}
               </span>
             </button>
