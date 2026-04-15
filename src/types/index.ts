@@ -74,7 +74,7 @@ export type ObsidianEventType =
 
 // Event trigger configuration for workflows
 export interface WorkflowEventTrigger {
-  workflowId: string;        // Format: "path#name" (e.g., "folder/file.md#MyWorkflow")
+  workflowId: string;        // Vault path to the workflow file (e.g., "folder/file.md"). Each file holds exactly one workflow.
   events: ObsidianEventType[]; // Which events trigger this workflow
   filePattern?: string;       // Optional glob pattern to filter files (e.g., "*.md", "folder/**")
 }
@@ -121,7 +121,7 @@ export interface LlmHubSettings {
   slashCommands: SlashCommand[];
 
   // Workflow hotkeys
-  enabledWorkflowHotkeys: string[];  // Workflow identifiers in format "path#name" (e.g., "folder/file.md#MyWorkflow")
+  enabledWorkflowHotkeys: string[];  // Vault paths to workflow files (e.g., "folder/file.md"). Each file holds exactly one workflow.
 
   // Workflow event triggers
   enabledWorkflowEventTriggers: WorkflowEventTrigger[];  // Event-triggered workflows

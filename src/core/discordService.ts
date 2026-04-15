@@ -1475,7 +1475,7 @@ export class DiscordService {
 
     let workflow;
     try {
-      workflow = parseWorkflowFromMarkdown(content, entry.workflowRef.name);
+      workflow = parseWorkflowFromMarkdown(content);
     } catch (e) {
       return { error: `Failed to parse workflow: ${e instanceof Error ? e.message : String(e)}` };
     }
@@ -1507,7 +1507,7 @@ export class DiscordService {
         workflow,
         { variables },
         undefined,
-        { workflowName: entry.workflowRef.name || workflowId },
+        { workflowName: entry.vaultPath.substring(entry.vaultPath.lastIndexOf("/") + 1).replace(/\.md$/, "") || workflowId },
         callbacks,
       );
 

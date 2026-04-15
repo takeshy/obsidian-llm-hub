@@ -4,7 +4,6 @@ import { getBuiltinSkillMetadata, isBuiltinSkillPath, loadBuiltinSkill } from ".
 
 export interface SkillWorkflowRef {
   path: string;              // relative path from skill folder (e.g. "workflows/lint.md")
-  name?: string;             // workflow name within the file (if multiple)
   description: string;       // description for function calling tool
   inputVariables?: string[]; // declared by skill author in SKILL.md frontmatter
 }
@@ -56,9 +55,15 @@ const CAPABILITIES_FENCE_RE = new RegExp(
  * Extract the embedded `skill-capabilities` YAML fence from SKILL.md's body.
  * The fence is the single source of truth for a skill's workflow / script
  * definitions; frontmatter holds only user-facing metadata (name, description).
- * Returns null when the block is absent or not valid YAML.
+ * Returns null when the block is absent or not valid YAML. When `warnContext`
+ * is provided (a stable key like the skill file path), YAML parse errors are
+ * logged once per context so a typo in the fenced block is visible to the
+ * author instead of being silently ignored.
  */
-export function extractCapabilitiesBlock(body: string): Record<string, unknown> | null {
+export function extractCapabilitiesBlock(
+  body: string,
+  warnContext?: string,
+): Record<string, unknown> | null {
   const match = body.match(CAPABILITIES_FENCE_RE);
   if (!match) return null;
   try {
@@ -66,8 +71,13 @@ export function extractCapabilitiesBlock(body: string): Record<string, unknown> 
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }
-  } catch {
-    // fall through
+  } catch (e) {
+    if (warnContext) {
+      warnOnce(
+        `capabilities-parse:${warnContext}`,
+        `[skills] ${warnContext}: failed to parse \`skill-capabilities\` YAML block — ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
   return null;
 }
@@ -140,7 +150,7 @@ export async function discoverSkills(app: App): Promise<SkillMetadata[]> {
       const { frontmatter, body } = parseFrontmatter(content);
       const skillLabel = (frontmatter.name as string) || child.name;
 
-      let capabilities = extractCapabilitiesBlock(body);
+      let capabilities = extractCapabilitiesBlock(body, skillFilePath);
       if (!capabilities && (Array.isArray(frontmatter.workflows) || Array.isArray(frontmatter.scripts))) {
         warnOnce(skillFilePath, `[skills] ${skillLabel}: declares workflows/scripts in frontmatter — please migrate to a \`\`\`skill-capabilities fenced block in SKILL.md body. Falling back to the frontmatter declaration for now.`);
         capabilities = { workflows: frontmatter.workflows, scripts: frontmatter.scripts };
@@ -166,7 +176,6 @@ export async function discoverSkills(app: App): Promise<SkillMetadata[]> {
           }
           workflows.push({
             path: wf.path,
-            name: typeof wf.name === "string" ? wf.name : undefined,
             description: typeof wf.description === "string" ? wf.description : wf.path,
             inputVariables,
           });
@@ -345,10 +354,12 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], options?: { cliMod
 }
 
 /**
- * Build a stable workflow tool ID from skill name and workflow ref.
+ * Build a stable workflow tool ID from skill name and workflow path.
+ * Each SKILL.md capability entry now points at exactly one workflow file, so
+ * the path alone is a unique identifier within a skill.
  */
 function buildWorkflowToolId(skillName: string, wf: SkillWorkflowRef): string {
-  const base = wf.name || wf.path.replace(/\.md$/, "").replace(/\//g, "_");
+  const base = wf.path.replace(/\.md$/, "").replace(/\//g, "_");
   return `${skillName}/${base}`;
 }
 

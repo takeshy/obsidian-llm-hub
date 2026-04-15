@@ -404,11 +404,10 @@ Build automated multi-step workflows directly in Markdown files. **No programmin
 
 Assign keyboard shortcuts to run workflows instantly:
 
-1. Add a `name:` field to your workflow
-2. Open the workflow file and select the workflow from dropdown
-3. Click the keyboard icon (⌨️) in the Workflow panel footer
-4. Go to Settings → Hotkeys → search "Workflow: [Your Workflow Name]"
-5. Assign a hotkey (e.g., `Ctrl+Shift+T`)
+1. Open the workflow file (the filename becomes the hotkey's display name)
+2. Click the keyboard icon (⌨️) in the Workflow panel footer
+3. Go to Settings → Hotkeys → search "Workflow: [filename]"
+4. Assign a hotkey (e.g., `Ctrl+Shift+T`)
 
 When triggered by hotkey:
 - `prompt-file` uses the active file automatically (no dialog)
@@ -429,11 +428,10 @@ Workflows can be automatically triggered by Obsidian events:
 | File Opened | Triggered when a file is opened |
 
 **Event trigger setup:**
-1. Add a `name:` field to your workflow
-2. Open the workflow file and select the workflow from dropdown
-3. Click the zap icon (⚡) in the Workflow panel footer
-4. Select which events should trigger the workflow
-5. Optionally add a file pattern filter
+1. Open the workflow file (the filename is used as the trigger's display name)
+2. Click the zap icon (⚡) in the Workflow panel footer
+3. Select which events should trigger the workflow
+4. Optionally add a file pattern filter
 
 **File pattern examples:**
 - `**/*.md` - All Markdown files in any folder

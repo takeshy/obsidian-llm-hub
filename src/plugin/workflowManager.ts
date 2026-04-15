@@ -17,6 +17,7 @@ import { isEncryptedFile } from "src/core/crypto";
 import { cryptoCache } from "src/core/cryptoCache";
 import { formatError } from "src/utils/error";
 import { t } from "src/i18n";
+import { computeLegacyWorkflowIdMigration } from "./workflowMigration";
 import type { LlmHubPlugin } from "src/plugin";
 
 export class WorkflowManager {
@@ -46,45 +47,76 @@ export class WorkflowManager {
   }
 
   /**
+   * Strip the legacy `#workflowName` suffix from persisted IDs so "1 file =
+   * 1 workflow" callers can treat the ID as a bare file path. Runs once per
+   * plugin load before registerHotkeys / registerEventListeners.
+   */
+  private async migrateLegacyWorkflowIds(): Promise<void> {
+    const settings = this.plugin.settings;
+    const { hotkeys, triggers, hotkeysChanged, triggersChanged } =
+      computeLegacyWorkflowIdMigration({
+        enabledWorkflowHotkeys: settings.enabledWorkflowHotkeys,
+        enabledWorkflowEventTriggers: settings.enabledWorkflowEventTriggers,
+      });
+
+    if (hotkeysChanged || triggersChanged) {
+      settings.enabledWorkflowHotkeys = hotkeys;
+      settings.enabledWorkflowEventTriggers = triggers;
+      await this.plugin.saveSettings();
+    }
+  }
+
+  private workflowNameFromPath(filePath: string): string {
+    const base = filePath.substring(filePath.lastIndexOf("/") + 1);
+    return base.replace(/\.md$/, "") || filePath;
+  }
+
+  /**
    * Register workflows as Obsidian commands for hotkey support.
    * Note: Obsidian doesn't support unregistering commands, so once registered,
    * commands remain until plugin reload. We track all registered identifiers to avoid
    * duplicate registration errors.
    */
   registerHotkeys(): void {
-    for (const workflowId of this.plugin.settings.enabledWorkflowHotkeys) {
+    // Fire-and-forget, but make sure a migration failure (e.g. saveSettings
+    // rejecting) doesn't silently skip hotkey registration. Log the error
+    // and register hotkeys anyway so the user's existing commands still work.
+    void this.migrateLegacyWorkflowIds()
+      .catch((err) => {
+        console.error("[LlmHub] workflow ID migration failed:", err);
+      })
+      .then(() => this.doRegisterHotkeys());
+  }
+
+  private doRegisterHotkeys(): void {
+    for (const filePath of this.plugin.settings.enabledWorkflowHotkeys) {
       // Skip if already registered in this session (prevents duplicate registration error)
-      if (this.registeredWorkflowPaths.includes(workflowId)) {
+      if (this.registeredWorkflowPaths.includes(filePath)) {
         continue;
       }
 
-      // Parse path#name format
-      const hashIndex = workflowId.lastIndexOf("#");
-      if (hashIndex === -1) continue;
-
-      const filePath = workflowId.substring(0, hashIndex);
-      const workflowName = workflowId.substring(hashIndex + 1);
-
-      const obsidianCommandId = `workflow-${workflowId.replace(/[^a-zA-Z0-9]/g, "-")}`;
+      const workflowName = this.workflowNameFromPath(filePath);
+      const obsidianCommandId = `workflow-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
 
       // Register new command
       this.plugin.addCommand({
         id: obsidianCommandId,
         name: `Workflow: ${workflowName}`,
         callback: () => {
-          void this.executeFromHotkey(filePath, workflowName);
+          void this.executeFromHotkey(filePath);
         },
       });
 
       // Track as registered (never re-register in this session)
-      this.registeredWorkflowPaths.push(workflowId);
+      this.registeredWorkflowPaths.push(filePath);
     }
   }
 
   /**
    * Execute workflow from hotkey
    */
-  async executeFromHotkey(filePath: string, workflowName: string): Promise<void> {
+  async executeFromHotkey(filePath: string): Promise<void> {
+    const workflowName = this.workflowNameFromPath(filePath);
     // Capture selection before execution
     this.plugin.captureSelection();
     const selection = this.plugin.getLastSelection();
@@ -110,7 +142,7 @@ export class WorkflowManager {
 
     try {
       const fileContent = await this.app.vault.read(file);
-      const workflow = parseWorkflowFromMarkdown(fileContent, workflowName);
+      const workflow = parseWorkflowFromMarkdown(fileContent);
 
       // Check if progress modal should be shown (default: true)
       const showProgress = workflow.options?.showProgress !== false;
@@ -301,13 +333,12 @@ export class WorkflowManager {
    */
   private async cleanupDeletedWorkflow(deletedPath: string): Promise<void> {
     const settings = this.plugin.settings;
-    const prefix = deletedPath + "#";
 
     const newTriggers = settings.enabledWorkflowEventTriggers.filter(
-      (t) => !t.workflowId.startsWith(prefix)
+      (t) => t.workflowId !== deletedPath
     );
     const newHotkeys = settings.enabledWorkflowHotkeys.filter(
-      (id) => !id.startsWith(prefix)
+      (id) => id !== deletedPath
     );
 
     if (
@@ -403,7 +434,7 @@ export class WorkflowManager {
     results.forEach((result, index) => {
       if (result.status === "rejected") {
         const trigger = matchingTriggers[index];
-        const workflowName = trigger.workflowId.split("#").pop() || trigger.workflowId;
+        const workflowName = this.workflowNameFromPath(trigger.workflowId);
         console.error(
           `Workflow (${workflowName}) triggered by ${eventType} failed:`,
           formatError(result.reason)
@@ -422,12 +453,8 @@ export class WorkflowManager {
     filePath: string,
     eventData: { file?: TFile; oldPath?: string }
   ): Promise<void> {
-    // Parse path#name format
-    const hashIndex = trigger.workflowId.lastIndexOf("#");
-    if (hashIndex === -1) return;
-
-    const workflowFilePath = trigger.workflowId.substring(0, hashIndex);
-    const workflowName = trigger.workflowId.substring(hashIndex + 1);
+    const workflowFilePath = trigger.workflowId;
+    const workflowName = this.workflowNameFromPath(workflowFilePath);
 
     // Get the workflow file
     const workflowFile = this.app.vault.getAbstractFileByPath(workflowFilePath);
@@ -451,7 +478,7 @@ export class WorkflowManager {
 
     try {
       const fileContent = await this.app.vault.read(workflowFile);
-      const workflow = parseWorkflowFromMarkdown(fileContent, workflowName);
+      const workflow = parseWorkflowFromMarkdown(fileContent);
 
       const executor = new WorkflowExecutor(this.app, this.plugin);
 

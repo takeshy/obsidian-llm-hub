@@ -6,6 +6,7 @@ import {
   serializeWorkflowBlock,
 } from "./parser";
 import { getEditHistoryManager } from "../core/editHistory";
+import { t } from "src/i18n";
 
 interface WorkflowBlockNode {
   id?: unknown;
@@ -27,28 +28,20 @@ export interface LoadResult {
   error?: string;
 }
 
-export function loadFromCodeBlock(
-  content: string,
-  workflowName?: string,
-  index?: number
-): LoadResult {
+export function loadFromCodeBlock(content: string): LoadResult {
   const blocks = findWorkflowBlocks(content);
   if (blocks.length === 0) {
     return { data: null };
   }
-
-  let block = blocks[0];
-  if (workflowName) {
-    const match = blocks.find((b) => b.name === workflowName);
-    if (!match) {
-      return { data: null };
-    }
-    block = match;
-  } else if (index !== undefined) {
-    if (index < 0 || index >= blocks.length) {
-      return { data: null };
-    }
-    block = blocks[index];
+  if (blocks.length > 1) {
+    return {
+      data: null,
+      error: t("workflow.multipleBlocksInFile"),
+    };
+  }
+  const block = blocks[0];
+  if (block.parseError) {
+    return { data: null, error: block.parseError };
   }
   const workflowContainer =
     block.yaml.workflow && typeof block.yaml.workflow === "object"
@@ -145,11 +138,15 @@ export function loadFromCodeBlock(
 export async function saveToCodeBlock(
   app: App,
   file: TFile,
-  data: WorkflowBlockData,
-  targetIndex?: number
+  data: WorkflowBlockData
 ): Promise<void> {
   const content = await app.vault.read(file);
   const blocks = findWorkflowBlocks(content);
+  if (blocks.length > 1) {
+    throw new Error(
+      "Refusing to save: file contains multiple workflow blocks. Split the file first."
+    );
+  }
 
   // Ensure snapshot exists before modification (for edit history)
   const historyManager = getEditHistoryManager();
@@ -191,14 +188,8 @@ export async function saveToCodeBlock(
   };
 
   let newContent: string;
-  if (blocks.length > 0) {
-    const indexToUse =
-      targetIndex !== undefined &&
-      targetIndex >= 0 &&
-      targetIndex < blocks.length
-        ? targetIndex
-        : 0;
-    newContent = replaceWorkflowBlock(content, blocks[indexToUse], blockData);
+  if (blocks.length === 1) {
+    newContent = replaceWorkflowBlock(content, blocks[0], blockData);
   } else {
     const block = serializeWorkflowBlock(blockData);
     newContent = content.trimEnd()

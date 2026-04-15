@@ -314,8 +314,8 @@ export class LlmHubPlugin extends Plugin {
       id: "run-workflow",
       name: t("command.runWorkflow"),
       callback: () => {
-        new WorkflowSelectorModal(this.app, this, (filePath, workflowName) => {
-          void this.executeWorkflowFromHotkey(filePath, workflowName);
+        new WorkflowSelectorModal(this.app, this, (filePath) => {
+          void this.executeWorkflowFromHotkey(filePath);
         }).open();
       },
     });
@@ -545,8 +545,8 @@ export class LlmHubPlugin extends Plugin {
     this.workflowMgr.registerHotkeys();
   }
 
-  async executeWorkflowFromHotkey(filePath: string, workflowName: string): Promise<void> {
-    return this.workflowMgr.executeFromHotkey(filePath, workflowName);
+  async executeWorkflowFromHotkey(filePath: string): Promise<void> {
+    return this.workflowMgr.executeFromHotkey(filePath);
   }
 
   registerWorkflowEventListeners(): void {
