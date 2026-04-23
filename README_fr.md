@@ -585,18 +585,15 @@ Connectez-vous à des serveurs LLM exécutés localement :
 <details>
 <summary><b>Windows : Comment trouver le chemin du CLI</b></summary>
 
-1. Ouvrez PowerShell et exécutez :
-   ```powershell
-   Get-Command gemini
-   ```
-2. Cela affiche le chemin du script (ex : `C:\Users\YourName\AppData\Roaming\npm\gemini.ps1`)
-3. Naviguez depuis le dossier `npm` vers le véritable `index.js` :
-   ```
-   C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js
-   ```
-4. Entrez ce chemin complet dans les paramètres du chemin CLI
+Laissez le champ Chemin CLI vide et cliquez sur **Verify** — le plugin détecte automatiquement l'installation npm-global (vérifie `%APPDATA%\npm\node_modules`, `%PROGRAMFILES%\nodejs\node_modules` et les emplacements basés sur PATH) et exécute le vrai point d'entrée `.js` via `node`. L'installation autonome de Claude dans `%LOCALAPPDATA%\Programs\claude\claude.exe` est également détectée.
 
-Pour Claude CLI, utilisez `Get-Command claude` et naviguez vers `node_modules\@anthropic-ai\claude-code\dist\index.js`.
+Ne définissez un chemin CLI personnalisé que si la détection automatique échoue. Les options suivantes fonctionnent toutes (de la plus sûre à la moins sûre) :
+
+1. **Script `.js` (recommandé)** — ex. `C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js`. Exécuté via `node` (sans passer par `cmd.exe`).
+2. **Exécutable `.exe`** — ex. `C:\Users\YourName\AppData\Local\Programs\claude\claude.exe`. Exécuté directement.
+3. **Wrapper `.cmd` / `.bat`** — ex. `C:\Users\YourName\AppData\Roaming\npm\gemini.cmd`. Doit passer par `cmd.exe`, donc les prompts contenant `&`, `|`, `>`, `^` ou `%VAR%` peuvent poser problème.
+
+Utilisez `Get-Command gemini` / `Get-Command claude` / `Get-Command codex` dans PowerShell pour trouver le chemin du wrapper ; saisissez-le directement (option 3) ou naviguez vers le `.js` / `.exe` adjacent pour les options plus sûres.
 </details>
 
 <details>

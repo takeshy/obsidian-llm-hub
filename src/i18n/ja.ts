@@ -39,7 +39,7 @@ export const ja: Record<string, string> = {
   "settings.cliPathModal.title": "CLIパス設定",
   "settings.cliPathModal.desc": "CLIが自動検出されない場合、ここにフルパスを指定してください。プラグインはバージョンマネージャー（nodenv、nvm、volta、fnm、asdf、mise）を含む一般的なインストールパスを自動検索します。",
   "settings.cliPathModal.placeholder": "CLIの実行ファイルまたはスクリプトへのパス",
-  "settings.cliPathModal.windowsNote": "PowerShellで実行:\nGet-Command gemini\n表示されたパス（例: ...\\npm\\gemini.ps1）から\nnode_modulesに移動:\n...\\npm\\node_modules\\@google\\gemini-cli\\dist\\index.js",
+  "settings.cliPathModal.windowsNote": "自動検出優先（npm グローバルインストールまたは PATH のラッパーを検出）。上書き指定する場合は以下のいずれか:\n• `...\\npm\\node_modules\\@google\\gemini-cli\\dist\\index.js` — node 経由で実行（最も安全）\n• `...\\claude.exe` — スタンドアロン実行ファイル\n• `...\\npm\\gemini.cmd` — cmd.exe 経由で実行（プロンプト中の特殊文字で誤動作の可能性）",
   "settings.cliPathModal.unixNote": "ターミナルで以下を実行してパスを確認:\nwhich gemini（または which claude / which codex）",
   "settings.cliPathModal.versionManagerNote": "Node.js バージョンマネージャー（nodenv、nvm、volta、fnm、asdf、mise）は自動検出されます。検出に失敗した場合は、CLIスクリプトのパスを直接指定してください（例: ~/.npm-global/lib/node_modules/@google/gemini-cli/dist/index.js）。",
   "settings.cliPathModal.clear": "クリア",
@@ -454,6 +454,13 @@ export const ja: Record<string, string> = {
 
   // Workflow Panel - UI Strings
   "workflow.reloaded": "ワークフローをファイルから再読み込みしました",
+  "workflow.generation.outputPathTaken": "{{path}} には既にワークフローが存在します。別の出力先を指定してください。",
+  "workflow.multipleBlocksInFile": "1つのファイルに複数のワークフローブロックが見つかりました。1ファイルにつき1ワークフローのみ許可されています。手動で分割するか、マイグレーション機能を使用してください。",
+  "workflow.noCodeBlockFound": "ワークフローコードブロックが見つかりません",
+  "workflow.migrate": "個別ファイルに分割",
+  "workflow.migrateConfirm": "このファイルには複数のワークフローブロックが含まれています。{{count}}個を隣接する新しいファイルに分割しますか？\n\n{{files}}\n\n元のファイルには最初のワークフローが残ります。元のファイルパスを参照していたスキル機能、ホットキー、イベントトリガーは最初のワークフローに紐付いたままになります。必要に応じて新しいファイルへ手動で貼り替えてください。",
+  "workflow.migrateNothingToDo": "このファイルには複数のワークフローブロックは含まれていません。",
+  "workflow.migrateSuccess": "マイグレーション完了: {{count}}個のワークフローを隣接ファイルへ分割しました。",
   "workflow.appendedTo": "ワークフロー「{{name}}」を{{path}}に追加しました",
   "workflow.createdAt": "ワークフロー「{{name}}」を{{path}}に作成しました",
   "workflow.noWorkflowToModify": "修正するワークフローがありません",

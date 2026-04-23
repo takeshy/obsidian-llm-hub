@@ -585,18 +585,15 @@ npm run build
 <details>
 <summary><b>Windows: CLI 경로 찾는 방법</b></summary>
 
-1. PowerShell을 열고 실행:
-   ```powershell
-   Get-Command gemini
-   ```
-2. 스크립트 경로가 표시됩니다 (예: `C:\Users\YourName\AppData\Roaming\npm\gemini.ps1`)
-3. `npm` 폴더에서 실제 `index.js`로 이동:
-   ```
-   C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js
-   ```
-4. CLI 경로 설정에 이 전체 경로를 입력
+CLI 경로는 비워둔 채 **Verify**를 클릭하세요. 플러그인은 npm 전역 설치(`%APPDATA%\npm\node_modules`, `%PROGRAMFILES%\nodejs\node_modules`, PATH 기반 위치)를 자동 감지하여 실제 `.js` 진입점을 `node`를 통해 실행합니다. Claude의 독립 실행형 설치(`%LOCALAPPDATA%\Programs\claude\claude.exe`)도 자동으로 감지됩니다.
 
-Claude CLI의 경우, `Get-Command claude`를 사용하고 `node_modules\@anthropic-ai\claude-code\dist\index.js`로 이동하세요.
+자동 감지에 실패할 때만 커스텀 CLI 경로를 설정하세요. 아래 중 어느 것이든 작동합니다 (가장 안전한 것부터):
+
+1. **`.js` 스크립트 (권장)** — 예: `C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js`. `node`를 통해 실행 (`cmd.exe` 경유 없음).
+2. **`.exe` 실행 파일** — 예: `C:\Users\YourName\AppData\Local\Programs\claude\claude.exe`. 직접 실행.
+3. **`.cmd` / `.bat` 래퍼** — 예: `C:\Users\YourName\AppData\Roaming\npm\gemini.cmd`. `cmd.exe`를 거쳐야 하므로 프롬프트의 `&`, `|`, `>`, `^`, `%VAR%` 등이 오작동할 수 있습니다.
+
+PowerShell에서 `Get-Command gemini` / `Get-Command claude` / `Get-Command codex`를 실행하여 래퍼 경로를 확인한 뒤, 이를 직접 입력(옵션 3)하거나 인접한 `.js` / `.exe`로 이동해 더 안전한 옵션을 선택하세요.
 </details>
 
 <details>

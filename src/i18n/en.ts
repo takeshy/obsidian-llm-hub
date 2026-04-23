@@ -39,7 +39,7 @@ export const en = {
   "settings.cliPathModal.title": "CLI path settings",
   "settings.cliPathModal.desc": "If the CLI is not detected automatically, specify the full path here. The plugin automatically searches common installation paths including version managers (nodenv, nvm, volta, fnm, asdf, mise).",
   "settings.cliPathModal.placeholder": "Path to CLI executable or script",
-  "settings.cliPathModal.windowsNote": "Run in PowerShell:\nGet-Command gemini\nFrom the displayed path (e.g. ...\\npm\\gemini.ps1),\nnavigate to node_modules:\n...\\npm\\node_modules\\@google\\gemini-cli\\dist\\index.js",
+  "settings.cliPathModal.windowsNote": "Leave empty for auto-detection (npm-global install or PATH wrapper). To override, point to any of:\n• `...\\npm\\node_modules\\@google\\gemini-cli\\dist\\index.js` — run via node (safest)\n• `...\\claude.exe` — standalone executable\n• `...\\npm\\gemini.cmd` — runs through cmd.exe (metacharacters in prompts may misbehave)",
   "settings.cliPathModal.unixNote": "Run in terminal to find the path:\nwhich gemini (or which claude / which codex)",
   "settings.cliPathModal.versionManagerNote": "Node.js version managers (nodenv, nvm, volta, fnm, asdf, mise) are automatically detected. If detection fails, specify the CLI script path directly (e.g. ~/.npm-global/lib/node_modules/@google/gemini-cli/dist/index.js).",
   "settings.cliPathModal.clear": "Clear",

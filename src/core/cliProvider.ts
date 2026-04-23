@@ -2,12 +2,22 @@
  * CLI Provider abstraction layer
  * Allows using Gemini CLI, Claude CLI, or Codex CLI as chat backend
  *
- * Requirements:
- * - Non-Windows: CLI commands (`gemini`, `claude`, `codex`) must be in PATH
- * - Windows: The actual .js script must be found in npm global node_modules
- *   (searches %APPDATA%\npm, %PROGRAMFILES%\nodejs, and PATH-based locations)
- *   Note: On Windows, we run scripts with `node` directly because npm creates
- *   .cmd wrapper scripts that require shell: true, which is a security risk.
+ * Resolution strategy (Windows):
+ * 1. If a custom path is configured, dispatch by extension:
+ *      .js  → run via `node`  (shell: false)
+ *      .exe → run directly    (shell: false)
+ *      else → run via shell   (shell: true) — for `.cmd`/`.bat` wrappers
+ * 2. Otherwise auto-detect the npm-global `.js` script and run with `node` (shell: false).
+ * 3. Also auto-detect standalone Claude at `%LOCALAPPDATA%\Programs\claude\claude.exe`.
+ * 4. Fall back to `shell: true` + command name (`gemini`/`claude`/`codex`) so a
+ *    `.cmd` wrapper in PATH still works.
+ *
+ * We prefer `shell: false` whenever possible because `shell: true` on Windows
+ * routes arguments through cmd.exe, where metacharacters in user prompts
+ * (`&`, `|`, `>`, `^`, `%VAR%`) can cause misbehavior or command injection.
+ *
+ * Non-Windows always uses `shell: false`; `.js` custom paths run through the
+ * resolved `node` binary to sidestep shebang/PATH issues.
  *
  * Note: child_process is dynamically imported to avoid loading on mobile
  */
@@ -17,6 +27,9 @@ import type { Message, StreamChunk, ChatProvider } from "../types";
 
 // Type for ChildProcess (avoid static import)
 export type ChildProcessType = import("child_process").ChildProcess;
+
+/** Resolved CLI invocation — command, args, and whether to use a shell */
+type ResolvedCommand = { command: string; args: string[]; shell: boolean };
 
 /**
  * Load child_process on desktop only.
@@ -122,35 +135,48 @@ export function findNodeBinary(): string {
 }
 
 /**
- * Resolve the Gemini CLI command and arguments
- * Always uses shell: false for security
- *
- * On Windows, we must find the actual .js script and run it with node,
- * because npm creates .cmd wrapper scripts that require shell: true.
+ * Dispatch a custom CLI path on Windows by extension.
+ * `.js` runs via node, `.exe` runs directly, everything else (e.g. `.cmd`/`.bat`)
+ * goes through the shell. Keeps `shell: false` whenever possible.
+ */
+function resolveWindowsCustomPath(customPath: string, args: string[]): ResolvedCommand {
+  const lower = customPath.toLowerCase();
+  if (lower.endsWith(".js")) {
+    // Preserve backwards compatibility with existing `...\dist\index.js` settings
+    return { command: "node", args: [customPath, ...args], shell: false };
+  }
+  if (lower.endsWith(".exe")) {
+    return { command: customPath, args, shell: false };
+  }
+  // `.cmd` / `.bat` / unknown — must go through cmd.exe
+  return { command: customPath, args, shell: true };
+}
+
+/**
+ * Resolve the Gemini CLI command and arguments.
  *
  * @param args - Command line arguments to pass to the CLI
  * @param customPath - Optional custom path to the CLI script/executable
  */
-function resolveGeminiCommand(args: string[], customPath?: string): { command: string; args: string[] } {
+function resolveGeminiCommand(args: string[], customPath?: string): ResolvedCommand {
   // If custom path is specified, validate and use it
   if (customPath && validateCustomPath(customPath)) {
-    // Run with node to avoid shebang/PATH issues (same approach on all platforms)
-    const node = isWindows() ? "node" : findNodeBinary();
-    return { command: node, args: [customPath, ...args] };
+    if (isWindows()) {
+      return resolveWindowsCustomPath(customPath, args);
+    }
+    const node = findNodeBinary();
+    return { command: node, args: [customPath, ...args], shell: false };
   }
 
-  // On Windows, find the npm package script (required because .cmd scripts need shell: true)
   if (isWindows()) {
+    // Prefer the npm-global `index.js` so we stay on shell: false
     const scriptPath = findWindowsNpmScript("@google\\gemini-cli\\dist\\index.js");
     if (scriptPath) {
-      return { command: "node", args: [scriptPath, ...args] };
+      return { command: "node", args: [scriptPath, ...args], shell: false };
     }
-    // If not found, return node with the expected path (will fail with helpful error)
-    const appdata = process.env?.APPDATA;
-    const fallbackPath = appdata
-      ? `${appdata}\\npm\\node_modules\\@google\\gemini-cli\\dist\\index.js`
-      : "@google\\gemini-cli\\dist\\index.js";
-    return { command: "node", args: [fallbackPath, ...args] };
+    // Fallback: rely on PATH via cmd.exe so `gemini.cmd` wrappers still work.
+    // cmd.exe interpretation of arg metacharacters is a known tradeoff — see header comment.
+    return { command: "gemini", args, shell: true };
   }
 
   // Non-Windows: check common installation paths first (Obsidian may not have full PATH)
@@ -173,27 +199,28 @@ function resolveGeminiCommand(args: string[], customPath?: string): { command: s
 
     for (const path of candidatePaths) {
       if (fileExistsSync(path)) {
-        return { command: path, args };
+        return { command: path, args, shell: false };
       }
     }
   }
 
   // Fallback: use gemini command directly (must be in PATH)
-  return { command: "gemini", args };
+  return { command: "gemini", args, shell: false };
 }
 
 function formatWindowsCliError(message: string | undefined): string | undefined {
   if (!isWindows()) return message;
-  if (!message) {
-    return "Gemini CLI not found. Install it with `npm install -g @google/gemini-cli` and ensure it is in your PATH.";
-  }
+  const installHint = "Gemini CLI not found. Install it with `npm install -g @google/gemini-cli` and ensure it is in your PATH.";
+  if (!message) return installHint;
   if (
     message.includes("Cannot find module") ||
     message.includes("MODULE_NOT_FOUND") ||
+    message.includes("not recognized") ||
+    message.includes("cannot find the path") ||
     message.includes("@google\\gemini-cli") ||
     message.includes("ENOENT")
   ) {
-    return "Gemini CLI not found. Install it with `npm install -g @google/gemini-cli` and ensure it is in your PATH.";
+    return installHint;
   }
   return message;
 }
@@ -215,8 +242,8 @@ function fileExistsSync(path: string): boolean {
 }
 
 /**
- * Get candidate Windows npm global node_modules paths
- * Returns paths where npm packages might be installed globally
+ * Get candidate Windows npm global `node_modules` directories.
+ * Used to find the real `.js` entry point so we can avoid `shell: true`.
  */
 function getWindowsNpmPaths(): string[] {
   if (!isWindows() || typeof process === "undefined") return [];
@@ -224,50 +251,41 @@ function getWindowsNpmPaths(): string[] {
   const paths: string[] = [];
   const env = process.env;
 
-  // 1. Default npm global prefix: %APPDATA%\npm
+  // Default npm global prefix
   if (env?.APPDATA) {
     paths.push(`${env.APPDATA}\\npm\\node_modules`);
   }
-
-  // 2. Node.js installation directory (all users): %PROGRAMFILES%\nodejs
+  // Node.js installation directory
   if (env?.PROGRAMFILES) {
     paths.push(`${env.PROGRAMFILES}\\nodejs\\node_modules`);
   }
-
-  // 3. Node.js x86 on 64-bit Windows: %PROGRAMFILES(X86)%\nodejs
   const programFilesX86 = env?.["PROGRAMFILES(X86)"];
   if (programFilesX86) {
     paths.push(`${programFilesX86}\\nodejs\\node_modules`);
   }
-
-  // 4. Custom npm prefix from PATH - look for node.exe location
+  // Custom npm prefix from PATH — look for node.exe location
   if (env?.PATH) {
     const pathDirs = env.PATH.split(";");
     for (const dir of pathDirs) {
       if (!dir) continue;
-      // Check if this directory contains node.exe (indicates Node.js installation)
       if (fileExistsSync(`${dir}\\node.exe`)) {
-        // npm global packages are typically in node_modules sibling to node.exe
         paths.push(`${dir}\\node_modules`);
       }
-      // Also check for npm directory (npm global prefix)
       if (dir.toLowerCase().includes("npm") && fileExistsSync(`${dir}\\node_modules`)) {
         paths.push(`${dir}\\node_modules`);
       }
     }
   }
 
-  // Remove duplicates
   return [...new Set(paths)];
 }
 
 /**
- * Find a Windows npm package script by checking multiple locations
- * Returns the full path to the script if found, undefined otherwise
+ * Locate an npm-installed `.js` script inside a Windows npm global node_modules.
+ * Returns the full path if found, otherwise undefined.
  */
 function findWindowsNpmScript(packagePath: string): string | undefined {
-  const npmPaths = getWindowsNpmPaths();
-  for (const npmPath of npmPaths) {
+  for (const npmPath of getWindowsNpmPaths()) {
     const scriptPath = `${npmPath}\\${packagePath}`;
     if (fileExistsSync(scriptPath)) {
       return scriptPath;
@@ -277,50 +295,37 @@ function findWindowsNpmScript(packagePath: string): string | undefined {
 }
 
 /**
- * Resolve the Claude CLI command and arguments
- * Always uses shell: false for security
- *
- * On Windows, we must find the actual .js script and run it with node,
- * because npm creates .cmd wrapper scripts that require shell: true.
+ * Resolve the Claude CLI command and arguments.
  *
  * @param args - Command line arguments to pass to the CLI
  * @param customPath - Optional custom path to the CLI script/executable
  */
-function resolveClaudeCommand(args: string[], customPath?: string): { command: string; args: string[] } {
+function resolveClaudeCommand(args: string[], customPath?: string): ResolvedCommand {
   // If custom path is specified, validate and use it
   if (customPath && validateCustomPath(customPath)) {
-    // Check if it's a native executable (.exe on Windows, ELF binary detection not needed)
-    if (isWindows() && customPath.toLowerCase().endsWith(".exe")) {
-      return { command: customPath, args };
+    if (isWindows()) {
+      return resolveWindowsCustomPath(customPath, args);
     }
-    // Run with node to avoid shebang/PATH issues (same approach on all platforms)
-    const node = isWindows() ? "node" : findNodeBinary();
-    return { command: node, args: [customPath, ...args] };
+    const node = findNodeBinary();
+    return { command: node, args: [customPath, ...args], shell: false };
   }
 
-  // On Windows, find the npm package script or standalone exe
   if (isWindows() && typeof process !== "undefined") {
-    // First, try to find the npm package script
+    // 1. npm-global `.js` script (preferred — keeps shell: false)
     const scriptPath = findWindowsNpmScript("@anthropic-ai\\claude-code\\cli.js");
     if (scriptPath) {
-      return { command: "node", args: [scriptPath, ...args] };
+      return { command: "node", args: [scriptPath, ...args], shell: false };
     }
-
-    // Try standalone Claude installation at LOCALAPPDATA
+    // 2. Standalone Claude installer
     const localAppdata = process.env?.LOCALAPPDATA;
     if (localAppdata) {
       const exePath = `${localAppdata}\\Programs\\claude\\claude.exe`;
       if (fileExistsSync(exePath)) {
-        return { command: exePath, args };
+        return { command: exePath, args, shell: false };
       }
     }
-
-    // If not found, return node with the expected path (will fail with helpful error)
-    const appdata = process.env?.APPDATA;
-    const fallbackPath = appdata
-      ? `${appdata}\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js`
-      : "@anthropic-ai\\claude-code\\cli.js";
-    return { command: "node", args: [fallbackPath, ...args] };
+    // 3. Fallback: rely on PATH via cmd.exe so `claude.cmd` wrappers still work.
+    return { command: "claude", args, shell: true };
   }
 
   // Non-Windows: check common installation paths first (Obsidian may not have full PATH)
@@ -343,61 +348,56 @@ function resolveClaudeCommand(args: string[], customPath?: string): { command: s
 
     for (const path of candidatePaths) {
       if (fileExistsSync(path)) {
-        return { command: path, args };
+        return { command: path, args, shell: false };
       }
     }
   }
 
   // Fallback: use claude command directly (must be in PATH)
-  return { command: "claude", args };
+  return { command: "claude", args, shell: false };
 }
 
 function formatWindowsClaudeCliError(message: string | undefined): string | undefined {
   if (!isWindows()) return message;
-  if (!message) {
-    return "Claude CLI not found. Install it with `npm install -g @anthropic-ai/claude-code` and ensure it is in your PATH.";
-  }
+  const installHint = "Claude CLI not found. Install it with `npm install -g @anthropic-ai/claude-code` and ensure it is in your PATH.";
+  if (!message) return installHint;
   if (
     message.includes("Cannot find module") ||
     message.includes("MODULE_NOT_FOUND") ||
+    message.includes("not recognized") ||
+    message.includes("cannot find the path") ||
     message.includes("@anthropic-ai\\claude-code") ||
     message.includes("ENOENT")
   ) {
-    return "Claude CLI not found. Install it with `npm install -g @anthropic-ai/claude-code` and ensure it is in your PATH.";
+    return installHint;
   }
   return message;
 }
 
 /**
- * Resolve the Codex CLI command and arguments
- * Always uses shell: false for security
- *
- * On Windows, we must find the actual .js script and run it with node,
- * because npm creates .cmd wrapper scripts that require shell: true.
+ * Resolve the Codex CLI command and arguments.
  *
  * @param args - Command line arguments to pass to the CLI
  * @param customPath - Optional custom path to the CLI script/executable
  */
-function resolveCodexCommand(args: string[], customPath?: string): { command: string; args: string[] } {
+function resolveCodexCommand(args: string[], customPath?: string): ResolvedCommand {
   // If custom path is specified, validate and use it
   if (customPath && validateCustomPath(customPath)) {
-    // Run with node to avoid shebang/PATH issues (same approach on all platforms)
-    const node = isWindows() ? "node" : findNodeBinary();
-    return { command: node, args: [customPath, ...args] };
+    if (isWindows()) {
+      return resolveWindowsCustomPath(customPath, args);
+    }
+    const node = findNodeBinary();
+    return { command: node, args: [customPath, ...args], shell: false };
   }
 
-  // On Windows, find the npm package script (required because .cmd scripts need shell: true)
   if (isWindows()) {
+    // Prefer the npm-global `.js` script so we stay on shell: false
     const scriptPath = findWindowsNpmScript("@openai\\codex\\bin\\codex.js");
     if (scriptPath) {
-      return { command: "node", args: [scriptPath, ...args] };
+      return { command: "node", args: [scriptPath, ...args], shell: false };
     }
-    // If not found, return node with the expected path (will fail with helpful error)
-    const appdata = process.env?.APPDATA;
-    const fallbackPath = appdata
-      ? `${appdata}\\npm\\node_modules\\@openai\\codex\\bin\\codex.js`
-      : "@openai\\codex\\bin\\codex.js";
-    return { command: "node", args: [fallbackPath, ...args] };
+    // Fallback: rely on PATH via cmd.exe so `codex.cmd` wrappers still work.
+    return { command: "codex", args, shell: true };
   }
 
   // Non-Windows: check common installation paths first (Obsidian may not have full PATH)
@@ -420,27 +420,28 @@ function resolveCodexCommand(args: string[], customPath?: string): { command: st
 
     for (const path of candidatePaths) {
       if (fileExistsSync(path)) {
-        return { command: path, args };
+        return { command: path, args, shell: false };
       }
     }
   }
 
   // Fallback: use codex command directly (must be in PATH)
-  return { command: "codex", args };
+  return { command: "codex", args, shell: false };
 }
 
 function formatWindowsCodexCliError(message: string | undefined): string | undefined {
   if (!isWindows()) return message;
-  if (!message) {
-    return "Codex CLI not found. Install it with `npm install -g @openai/codex` and ensure it is in your PATH.";
-  }
+  const installHint = "Codex CLI not found. Install it with `npm install -g @openai/codex` and ensure it is in your PATH.";
+  if (!message) return installHint;
   if (
     message.includes("Cannot find module") ||
     message.includes("MODULE_NOT_FOUND") ||
+    message.includes("not recognized") ||
+    message.includes("cannot find the path") ||
     message.includes("@openai\\codex") ||
     message.includes("ENOENT")
   ) {
-    return "Codex CLI not found. Install it with `npm install -g @openai/codex` and ensure it is in your PATH.";
+    return installHint;
   }
   return message;
 }
@@ -496,7 +497,7 @@ abstract class BaseCliProvider implements CliProviderInterface {
   /**
    * Resolve the CLI command for version check
    */
-  protected abstract resolveVersionCommand(): { command: string; args: string[] };
+  protected abstract resolveVersionCommand(): ResolvedCommand;
 
   async isAvailable(): Promise<boolean> {
     // CLI is not available on mobile
@@ -506,13 +507,13 @@ abstract class BaseCliProvider implements CliProviderInterface {
 
     try {
       const { spawn } = getChildProcess();
-      const { command, args } = this.resolveVersionCommand();
+      const { command, args, shell } = this.resolveVersionCommand();
 
       return new Promise((resolve) => {
         try {
           const proc = spawn(command, args, {
             stdio: ["pipe", "pipe", "pipe"],
-            shell: false,
+            shell,
             env: typeof process !== "undefined" ? process.env : undefined,
           });
 
@@ -558,7 +559,7 @@ export class GeminiCliProvider extends BaseCliProvider {
   displayName = "Gemini CLI";
   supportsSessionResumption = true;
 
-  protected resolveVersionCommand(): { command: string; args: string[] } {
+  protected resolveVersionCommand(): ResolvedCommand {
     return resolveGeminiCommand(["--version"]);
   }
 
@@ -585,10 +586,10 @@ export class GeminiCliProvider extends BaseCliProvider {
       cliArgs = ["-p", prompt];
     }
 
-    const { command, args } = resolveGeminiCommand(cliArgs);
+    const { command, args, shell } = resolveGeminiCommand(cliArgs);
     const proc = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
-      shell: false,
+      shell,
       cwd: workingDirectory,
       env: typeof process !== "undefined" ? process.env : undefined,
     });
@@ -651,7 +652,7 @@ export class ClaudeCliProvider extends BaseCliProvider {
   displayName = "Claude CLI";
   supportsSessionResumption = true;
 
-  protected resolveVersionCommand(): { command: string; args: string[] } {
+  protected resolveVersionCommand(): ResolvedCommand {
     return resolveClaudeCommand(["--version"]);
   }
 
@@ -690,10 +691,10 @@ export class ClaudeCliProvider extends BaseCliProvider {
       ];
     }
 
-    const { command, args } = resolveClaudeCommand(cliArgs);
+    const { command, args, shell } = resolveClaudeCommand(cliArgs);
     const proc = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
-      shell: false,
+      shell,
       cwd: workingDirectory,
       env: typeof process !== "undefined" ? process.env : undefined,
     });
@@ -811,7 +812,7 @@ export class CodexCliProvider extends BaseCliProvider {
   displayName = "Codex CLI";
   supportsSessionResumption = true;
 
-  protected resolveVersionCommand(): { command: string; args: string[] } {
+  protected resolveVersionCommand(): ResolvedCommand {
     return resolveCodexCommand(["--version"]);
   }
 
@@ -842,10 +843,10 @@ export class CodexCliProvider extends BaseCliProvider {
       cliArgs = ["exec", "--json", "--skip-git-repo-check", prompt];
     }
 
-    const { command, args } = resolveCodexCommand(cliArgs);
+    const { command, args, shell } = resolveCodexCommand(cliArgs);
     const proc = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
-      shell: false,
+      shell,
       cwd: workingDirectory,
       env: typeof process !== "undefined" ? process.env : undefined,
     });
@@ -996,7 +997,7 @@ export class PersistentCliSession {
     if (this.sessionId) {
       cliArgs.push("--resume", this.sessionId);
     }
-    const { command, args } = resolveClaudeCommand(cliArgs, this.customPath);
+    const { command, args, shell } = resolveClaudeCommand(cliArgs, this.customPath);
 
     this.closed = false;
     this.stdoutBuffer = "";
@@ -1006,7 +1007,7 @@ export class PersistentCliSession {
 
     this.proc = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
-      shell: false,
+      shell,
       cwd: this.workingDirectory,
       env: typeof process !== "undefined" ? process.env : undefined,
     });
@@ -1350,10 +1351,10 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
   // Step 1: Check if CLI exists (--version)
   const versionCheck = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      const { command, args } = resolveGeminiCommand(["--version"], customPath);
+      const { command, args, shell } = resolveGeminiCommand(["--version"], customPath);
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: false,
+        shell,
         env: typeof process !== "undefined" ? process.env : undefined,
       });
 
@@ -1390,10 +1391,10 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
   // Step 2: Check if logged in (run a simple prompt)
   const loginCheck = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      const { command, args } = resolveGeminiCommand(["-p", "Hello"], customPath);
+      const { command, args, shell } = resolveGeminiCommand(["-p", "Hello"], customPath);
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: false,
+        shell,
         env: typeof process !== "undefined" ? process.env : undefined,
       });
 
@@ -1445,10 +1446,10 @@ export async function verifyClaudeCli(customPath?: string): Promise<CliVerifyRes
   // Step 1: Check if CLI exists (--version)
   const versionCheck = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      const { command, args } = resolveClaudeCommand(["--version"], customPath);
+      const { command, args, shell } = resolveClaudeCommand(["--version"], customPath);
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: false,
+        shell,
         env: typeof process !== "undefined" ? process.env : undefined,
       });
 
@@ -1488,10 +1489,10 @@ export async function verifyClaudeCli(customPath?: string): Promise<CliVerifyRes
   // Step 2: Check if logged in (run a simple prompt)
   const loginCheck = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      const { command, args } = resolveClaudeCommand(["-p", "Hello", "--output-format", "text"], customPath);
+      const { command, args, shell } = resolveClaudeCommand(["-p", "Hello", "--output-format", "text"], customPath);
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: false,
+        shell,
         env: typeof process !== "undefined" ? process.env : undefined,
       });
 
@@ -1551,10 +1552,10 @@ export async function verifyCodexCli(customPath?: string): Promise<CliVerifyResu
   // Step 1: Check if CLI exists (--version)
   const versionCheck = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      const { command, args } = resolveCodexCommand(["--version"], customPath);
+      const { command, args, shell } = resolveCodexCommand(["--version"], customPath);
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: false,
+        shell,
         env: typeof process !== "undefined" ? process.env : undefined,
       });
 
@@ -1594,10 +1595,10 @@ export async function verifyCodexCli(customPath?: string): Promise<CliVerifyResu
   // Step 2: Check if logged in (run a simple prompt)
   const loginCheck = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      const { command, args } = resolveCodexCommand(["exec", "Hello", "--json", "--skip-git-repo-check"], customPath);
+      const { command, args, shell } = resolveCodexCommand(["exec", "Hello", "--json", "--skip-git-repo-check"], customPath);
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: false,
+        shell,
         env: typeof process !== "undefined" ? process.env : undefined,
       });
 

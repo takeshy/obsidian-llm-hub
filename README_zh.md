@@ -585,18 +585,15 @@ npm run build
 <details>
 <summary><b>Windows：如何查找 CLI 路径</b></summary>
 
-1. 打开 PowerShell 并运行：
-   ```powershell
-   Get-Command gemini
-   ```
-2. 这会显示脚本路径（例如：`C:\Users\YourName\AppData\Roaming\npm\gemini.ps1`）
-3. 从 `npm` 文件夹导航到实际的 `index.js`：
-   ```
-   C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js
-   ```
-4. 在 CLI 路径设置中输入此完整路径
+将 CLI 路径留空并点击 **Verify** — 插件会自动检测 npm 全局安装（检查 `%APPDATA%\npm\node_modules`、`%PROGRAMFILES%\nodejs\node_modules` 及 PATH 中的位置），并通过 `node` 运行真正的 `.js` 入口点。Claude 的独立安装程序位置 `%LOCALAPPDATA%\Programs\claude\claude.exe` 也会被自动识别。
 
-对于 Claude CLI，使用 `Get-Command claude` 并导航到 `node_modules\@anthropic-ai\claude-code\dist\index.js`。
+仅在自动检测失败时才设置自定义 CLI 路径。以下任一方式均可（按安全性从高到低）：
+
+1. **`.js` 脚本（推荐）** — 如 `C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js`。通过 `node` 运行（不经过 `cmd.exe`）。
+2. **`.exe` 可执行文件** — 如 `C:\Users\YourName\AppData\Local\Programs\claude\claude.exe`。直接运行。
+3. **`.cmd` / `.bat` 包装脚本** — 如 `C:\Users\YourName\AppData\Roaming\npm\gemini.cmd`。必须经过 `cmd.exe`，提示词中的 `&`、`|`、`>`、`^`、`%VAR%` 等可能导致异常。
+
+在 PowerShell 中运行 `Get-Command gemini` / `Get-Command claude` / `Get-Command codex` 可查看包装脚本路径；可直接填入（方式 3），或定位到相邻的 `.js` / `.exe` 以获得更安全的方式。
 </details>
 
 <details>

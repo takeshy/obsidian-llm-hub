@@ -23,7 +23,14 @@
   display: none !important;
 }
 
-/* Hide workspace folder in file explorer — handled dynamically in plugin.ts */
+/* Hide workspace folder in file explorer.
+   plugin.ts toggles the `llm-hub-hide-workspace-folder` class on document.body.
+   Hardcoded for the default folder name "LLMHub" — the selector covers both
+   the nav-folder itself and a parent nav-folder whose child carries data-path. */
+body.llm-hub-hide-workspace-folder .nav-folder[data-path="LLMHub"],
+body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
+  display: none !important;
+}
 
 /* Folder icons in file explorer */
 .nav-folder[data-path="skills"] > .nav-folder-title > .nav-folder-title-content::before,

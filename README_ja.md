@@ -599,18 +599,15 @@ npm run build
 <details>
 <summary><b>Windows: CLI パスの確認方法</b></summary>
 
-1. PowerShell を開いて以下を実行：
-   ```powershell
-   Get-Command gemini
-   ```
-2. スクリプトのパスが表示されます（例: `C:\Users\YourName\AppData\Roaming\npm\gemini.ps1`）
-3. `npm` フォルダから実際の `index.js` へのパスに変換：
-   ```
-   C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js
-   ```
-4. このフルパスを CLI パス設定に入力
+CLI パスは空欄のまま「Verify」をクリックしてください。プラグインが npm グローバルインストール（`%APPDATA%\npm\node_modules`、`%PROGRAMFILES%\nodejs\node_modules`、および PATH 上の候補）を自動検出し、`.js` エントリポイントを `node` 経由で実行します。Claude のスタンドアロンインストール（`%LOCALAPPDATA%\Programs\claude\claude.exe`）も自動的に検出されます。
 
-Claude CLI の場合は `Get-Command claude` を実行し、`node_modules\@anthropic-ai\claude-code\dist\index.js` に移動してください。
+自動検出に失敗した場合のみ、カスタム CLI パスを指定してください。以下のいずれでも動作します（上が最も安全）:
+
+1. **`.js` スクリプト（推奨）** — 例: `C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js`。`node` 経由で実行（`cmd.exe` を通さない）。
+2. **`.exe` 実行ファイル** — 例: `C:\Users\YourName\AppData\Local\Programs\claude\claude.exe`。直接実行。
+3. **`.cmd` / `.bat` ラッパー** — 例: `C:\Users\YourName\AppData\Roaming\npm\gemini.cmd`。`cmd.exe` 経由での実行が必須となるため、プロンプト内の `&`、`|`、`>`、`^`、`%VAR%` 等が誤動作する可能性があります。
+
+PowerShell で `Get-Command gemini` / `Get-Command claude` / `Get-Command codex` を実行するとラッパーのパスが表示されます。それを直接指定する（選択肢 3）か、隣接する `.js` / `.exe` に辿ってより安全な選択肢を選んでください。
 </details>
 
 <details>

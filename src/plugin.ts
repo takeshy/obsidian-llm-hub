@@ -448,8 +448,7 @@ export class LlmHubPlugin extends Plugin {
     resetDiscordService();
 
     // Restore workspace folder visibility on unload
-    this.settings.hideWorkspaceFolder = false;
-    this.updateWorkspaceFolderVisibility();
+    document.body.classList.remove("llm-hub-hide-workspace-folder");
 
     // Clean up workflow timers
     this.workflowMgr.cleanup();
@@ -574,14 +573,23 @@ export class LlmHubPlugin extends Plugin {
     return this.wsManager.saveWorkspaceState();
   }
 
-  /** Show or hide the workspace folder in the file explorer. */
+  /**
+   * Show or hide the workspace folder in the file explorer.
+   *
+   * Toggles a body class; the actual `display: none` lives in styles.css and
+   * targets the default folder name (`LLMHub`) via an attribute selector. A
+   * pure-CSS rule on `document.body` survives file-explorer re-renders without
+   * any DOM observer dance.
+   *
+   * Limitation: only hides the default workspace folder path. Custom paths
+   * (`workspaceFolder` renamed away from `LLMHub`) are not covered — the
+   * workspace folder UI can always be used to revert the rename.
+   */
   updateWorkspaceFolderVisibility(): void {
-    const wsFolder = this.settings.workspaceFolder || DEFAULT_WORKSPACE_FOLDER;
-    const hide = this.settings.hideWorkspaceFolder;
-    // Find and toggle visibility on the exact matching nav-folder element
-    document.querySelectorAll(`.nav-folder[data-path="${CSS.escape(wsFolder)}"]`).forEach((el) => {
-      (el as HTMLElement).style.display = hide ? "none" : "";
-    });
+    document.body.classList.toggle(
+      "llm-hub-hide-workspace-folder",
+      this.settings.hideWorkspaceFolder
+    );
   }
 
   getSelectedRagSetting(): RagSetting | null {

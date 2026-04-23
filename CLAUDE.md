@@ -48,9 +48,9 @@ This runs `version-bump.mjs` which updates `package.json`, `manifest.json`, and 
 - **tools.ts** - Function calling tool definitions (15 tools for vault operations)
 - **cliProvider.ts** - CLI backend abstraction for Gemini/Claude/Codex CLIs
   - `CliProviderManager` - Manages CLI provider instances
-  - Uses `child_process.spawn` with `shell: false` for security
+  - Prefers `child_process.spawn` with `shell: false` everywhere. On Windows, auto-detects the npm-global `.js` script (via `findWindowsNpmScript`) and runs it through `node`, or the standalone `claude.exe`. Only falls back to `shell: true` + command name when no `.js`/`.exe` is found, so `.cmd` wrappers from PATH still work (with the documented cmd.exe-metacharacter caveat for user prompts).
   - `findNodeBinary()` - Resolves node path from version managers (nodenv, nvm, volta, fnm, asdf, mise)
-  - Custom CLI paths execute via `node <path>` to avoid shebang/PATH issues
+  - Custom CLI paths dispatch by extension on Windows (`.js` → node, `.exe` → direct, `.cmd`/`.bat` → shell). On macOS/Linux always run via `node <path>`.
 - **mcpClient.ts** - MCP (Model Context Protocol) client for external tool servers
   - Implements Streamable HTTP transport with JSON-RPC
 
