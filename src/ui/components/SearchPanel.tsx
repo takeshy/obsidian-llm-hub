@@ -17,7 +17,7 @@ import { Modal, Notice, Platform } from "obsidian";
 import { RagChunkEditModal } from "./RagChunkEditModal";
 import type { LlmHubPlugin } from "src/plugin";
 import type { Attachment, ModelType, ModelInfo, Message } from "src/types";
-import { getGeminiApiKey, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, LOCAL_LLM_MODEL } from "src/types";
+import { getGeminiApiKey, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, localLlmDisplayName } from "src/types";
 import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
 import { extractPdfText } from "src/vault/search";
@@ -71,7 +71,21 @@ function getAvailableModels(plugin: LlmHubPlugin): ModelInfo[] {
     ...(!Platform.isMobile && cliConfig.cliVerified ? [CLI_MODEL] : []),
     ...(!Platform.isMobile && cliConfig.claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
     ...(!Platform.isMobile && cliConfig.codexCliVerified ? [CODEX_CLI_MODEL] : []),
-    ...(!Platform.isMobile && plugin.settings.localLlmVerified ? [LOCAL_LLM_MODEL] : []),
+    ...(!Platform.isMobile
+      ? (plugin.settings.localLlmConfigs ?? [])
+          .filter(c => c.verified && c.enabled !== false)
+          .flatMap(c => {
+            const models = (c.enabledModels && c.enabledModels.length > 0)
+              ? c.enabledModels
+              : (c.model ? [c.model] : []);
+            return models.map(m => ({
+              name: `local-llm:${c.id}:${m}` as ModelType,
+              displayName: localLlmDisplayName(c, m),
+              description: `Local LLM (${c.framework})`,
+              isCliModel: true,
+            }));
+          })
+      : []),
   ];
 }
 

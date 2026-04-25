@@ -25,6 +25,8 @@ import {
   isApiProviderModel,
   getApiProviderId,
   getApiProviderModelName,
+  isLocalLlmModel,
+  getLocalLlmConfig,
   DEFAULT_DISCUSSION_SETTINGS,
 } from "../types";
 import { t } from "../i18n";
@@ -127,9 +129,13 @@ export async function* streamChatForModel(
         settings.proxyUrl, settings.proxyBypass,
       );
     }
-  } else if (model === "local-llm" && !Platform.isMobile) {
+  } else if (isLocalLlmModel(model) && !Platform.isMobile) {
+    const llmConfig = getLocalLlmConfig(model, settings);
+    if (!llmConfig) {
+      throw new Error(`Local LLM "${model}" is not configured`);
+    }
     const { localLlmChatStream } = await import("./localLlmProvider");
-    yield* localLlmChatStream(settings.localLlmConfig, messages, systemPrompt, signal);
+    yield* localLlmChatStream(llmConfig, messages, systemPrompt, signal);
   } else if (!Platform.isMobile) {
     // CLI models
     const { GeminiCliProvider, ClaudeCliProvider, CodexCliProvider } = await import("./cliProvider");

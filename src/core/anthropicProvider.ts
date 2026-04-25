@@ -9,7 +9,19 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Message, StreamChunk, ToolDefinition } from "../types";
 import { calculateCost } from "./modelPricing";
-import { createProxyFetch } from "./proxyFetch";
+import { createProxyFetch, createNodeFetch } from "./proxyFetch";
+
+// Match openaiProvider.buildSdkFetch — see that file for rationale. Routes
+// through Node http on desktop to bypass CORS for Anthropic-compatible
+// gateways that don't set Access-Control-Allow-Origin.
+function buildSdkFetch(proxyUrl?: string, proxyBypass?: string): typeof fetch | undefined {
+  if (proxyUrl) return createProxyFetch(proxyUrl, proxyBypass);
+  try {
+    return createNodeFetch();
+  } catch {
+    return undefined;
+  }
+}
 
 function isThinkingParameterError(message: string): boolean {
   const lower = message.toLowerCase();
@@ -30,11 +42,12 @@ export async function verifyAnthropicProvider(
   proxyBypass?: string,
 ): Promise<{ success: boolean; error?: string; models?: string[] }> {
   try {
+    const sdkFetch = buildSdkFetch(proxyUrl, proxyBypass);
     const client = new Anthropic({
       apiKey,
       baseURL: baseUrl.replace(/\/+$/, ""),
       dangerouslyAllowBrowser: true,
-      ...(proxyUrl ? { fetch: createProxyFetch(proxyUrl, proxyBypass) } : {}),
+      ...(sdkFetch ? { fetch: sdkFetch } : {}),
     });
 
     const response = await client.models.list();
@@ -131,11 +144,12 @@ export async function* anthropicChatWithToolsStream(
   proxyUrl?: string,
   proxyBypass?: string,
 ): AsyncGenerator<StreamChunk> {
+  const sdkFetch = buildSdkFetch(proxyUrl, proxyBypass);
   const client = new Anthropic({
     apiKey,
     baseURL: baseUrl.replace(/\/+$/, ""),
     dangerouslyAllowBrowser: true,
-    ...(proxyUrl ? { fetch: createProxyFetch(proxyUrl, proxyBypass) } : {}),
+    ...(sdkFetch ? { fetch: sdkFetch } : {}),
   });
 
   const anthropicTools = tools.length > 0 ? toAnthropicTools(tools) : undefined;

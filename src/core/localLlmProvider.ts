@@ -13,6 +13,7 @@
 import { requestUrl } from "obsidian";
 import type { Message, StreamChunk, LocalLlmConfig, Attachment } from "../types";
 import { parseThinkTags } from "./thinkTagParser";
+import { verifyOpencodeLocal, opencodeLocalChatStream } from "./opencodeLocalProvider";
 
 // OpenAI-compatible multimodal content part
 type OpenAiContentPart =
@@ -82,6 +83,10 @@ export async function verifyLocalLlm(config: LocalLlmConfig): Promise<{
       }
     }
 
+    if (config.framework === "opencode") {
+      return await verifyOpencodeLocal(config);
+    }
+
     // OpenAI-compatible /v1/models (LM Studio, AnythingLLM, vLLM, etc.)
     try {
       const response = await requestUrl({
@@ -137,6 +142,8 @@ export async function* localLlmChatStream(
 ): AsyncGenerator<StreamChunk> {
   if (config.framework === "ollama") {
     yield* ollamaChatStream(config, messages, systemPrompt, signal, attachments);
+  } else if (config.framework === "opencode") {
+    yield* opencodeLocalChatStream(config, messages, systemPrompt, signal, attachments);
   } else {
     yield* openaiChatStream(config, messages, systemPrompt, signal, attachments);
   }
@@ -588,12 +595,12 @@ async function* openaiChatStream(
 }
 
 /** Idle timeout for stream chunks (ms). */
-const STREAM_IDLE_TIMEOUT_MS = 120_000;
+export const STREAM_IDLE_TIMEOUT_MS = 120_000;
 
 /**
  * Robust signaling queue for bridging Node.js event callbacks to an async generator.
  */
-class StreamSignal {
+export class StreamSignal {
   private version = 0;
   private resolve: (() => void) | null = null;
 
@@ -615,7 +622,7 @@ class StreamSignal {
 }
 
 /** Load Node.js http or https module (desktop only, bypasses CORS). */
-function getHttpModule(protocol: string): typeof import("http") {
+export function getHttpModule(protocol: string): typeof import("http") {
   const loader =
     (globalThis as unknown as { require?: (id: string) => unknown }).require ||
     (globalThis as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;

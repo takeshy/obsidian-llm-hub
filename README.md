@@ -4,12 +4,12 @@
 
 **Free and open-source** AI assistant for Obsidian with **Chat**, **Workflow Automation**, and **Semantic Search (RAG)**. Supports multiple LLM providers — use whichever AI fits your needs.
 
-> **Use any LLM provider:** [Gemini](https://ai.google.dev), [OpenAI](https://platform.openai.com), [Anthropic](https://console.anthropic.com), [OpenRouter](https://openrouter.ai), [Grok](https://console.x.ai), local LLMs ([Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [vLLM](https://docs.vllm.ai)), or CLI tools ([Gemini CLI](https://github.com/google-gemini/gemini-cli), [Claude Code](https://github.com/anthropics/claude-code), [Codex CLI](https://github.com/openai/codex)).
+> **Use any LLM provider:** [Gemini](https://ai.google.dev), [OpenAI](https://platform.openai.com), [Anthropic](https://console.anthropic.com), [OpenRouter](https://openrouter.ai), [Grok](https://console.x.ai), [OpenCode Zen / Go](https://opencode.ai), local LLMs ([Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [vLLM](https://docs.vllm.ai), [OpenCode](https://opencode.ai)), or CLI tools ([Gemini CLI](https://github.com/google-gemini/gemini-cli), [Claude Code](https://github.com/anthropics/claude-code), [Codex CLI](https://github.com/openai/codex)).
 
 ## Highlights
 
-- **Multi-Provider LLM Chat** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, local LLMs, or CLI backends
-- **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic)
+- **Multi-Provider LLM Chat** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, local LLMs, or CLI backends
+- **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, and tools-capable local LLMs via LM Studio / vLLM / AnythingLLM)
 - **Workflow Builder** - Automate multi-step tasks with visual node editor and 25 node types
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
 - **AI Discussion** - Multi-model debate arena with parallel responses, voting, and winner determination
@@ -44,7 +44,7 @@
 ### Gemini Free API Key Tips
 
 - **Rate limits** are per-model and reset daily. Switch models to continue working.
-- **Gemma 4** cannot combine function calling with RAG/Web Search in a single request. When RAG or Web Search is active, vault tools are automatically disabled. **CLI models** and **Local LLMs** don't support vault operations at all, but **Workflows can still read/write notes** using `note`, `note-read`, and other node types. `{content}` and `{selection}` variables also work.
+- **Gemma 4** cannot combine function calling with RAG/Web Search in a single request. When RAG or Web Search is active, vault tools are automatically disabled. **CLI models**, **Ollama**, and the **OpenCode local server** don't support vault tools (use **Workflows** with `note`, `note-read`, etc., or `{content}` / `{selection}` variables). **LM Studio / vLLM / AnythingLLM** local LLMs DO support vault tools when the underlying model supports OpenAI-style function calling — incompatible models are auto-detected on first use and downgraded to marker-based skill mode.
 
 ---
 
@@ -145,7 +145,7 @@ When the AI handles notes in Chat, it uses Vault tools. Control which vault tool
 
 **Why some modes are forced:**
 
-- **CLI/Local LLM models**: These models do not support function calling, so Vault tools cannot be used.
+- **CLI models, Ollama, OpenCode (Local)**: These do not expose OpenAI-style function calling, so Vault tools cannot be used. **LM Studio / vLLM / AnythingLLM** local LLMs CAN use Vault tools when the loaded model supports tool calling; if a model rejects the first tools request, it is auto-flagged and falls back to marker mode for subsequent turns (clear the flag in **Settings → Local LLM → Re-enable tools**).
 - **Gemma 4**: Function calling and RAG/Web Search cannot be combined in a single request. When one is active, the other is automatically disabled.
 
 ## Safe Editing
@@ -507,9 +507,16 @@ When a toggle is ON, thinking is always active for that model family regardless 
 
 Configure any OpenAI-compatible endpoint with custom base URL and models. OpenRouter provides access to hundreds of models from various providers.
 
+### OpenCode Zen / Go
+
+OpenCode offers two hosted gateways from the same account, both selectable from the provider dropdown:
+
+- **OpenCode Zen** (`https://opencode.ai/zen`) — pay-per-use, includes several free models (Big Pickle, MiniMax M2.5 Free, etc.) and a broad model catalog (Claude, GPT-5.x, and more). Exposes OpenAI-compatible `/v1/models` + `/v1/chat/completions`, so models are listed automatically.
+- **OpenCode Go** (`https://opencode.ai/zen/go`) — $5/first month, $10/month subscription with curated coding models (GLM, Kimi, DeepSeek, MiMo, MiniMax, Qwen). It exposes only `/v1/chat/completions`, so the plugin falls back to a documented model list during Verify.
+
 ### Local LLM
 
-Connect to locally running models via Ollama, LM Studio, vLLM, or AnythingLLM. Models are auto-detected from the running server.
+Connect to locally running models via Ollama, LM Studio, vLLM, AnythingLLM, or the OpenCode local server. Models are auto-detected from the running server.
 
 ## Installation
 
@@ -545,6 +552,8 @@ Add one or more API providers in plugin settings. Each provider has its own API 
 | Anthropic | [console.anthropic.com](https://console.anthropic.com) |
 | OpenRouter | [openrouter.ai](https://openrouter.ai) |
 | Grok | [console.x.ai](https://console.x.ai) |
+| OpenCode Zen | [opencode.ai](https://opencode.ai) |
+| OpenCode Go | [opencode.ai](https://opencode.ai) |
 
 You can also add custom OpenAI-compatible endpoints.
 
@@ -558,12 +567,53 @@ Route all API requests through an HTTP CONNECT proxy for corporate gateway envir
 
 Connect to locally running LLM servers:
 
-1. Start your local server (Ollama, LM Studio, vLLM, or AnythingLLM)
+1. Start your local server (Ollama, LM Studio, vLLM, AnythingLLM, or OpenCode)
 2. Enter the server URL in plugin settings
 3. Click "Verify" to detect available models
 
 > [!NOTE]
-> Local LLMs do not support function calling (vault tools). Use workflows for note operations.
+> **LM Studio / vLLM / AnythingLLM** local LLMs use OpenAI-style function calling for vault tools — enabled by default for tools-capable models. If a model rejects the first tools request it is auto-flagged and downgraded to marker-based skill mode for subsequent turns; clear the flag in **Settings → Local LLM → Re-enable tools** to retry.
+>
+> **Ollama** and **OpenCode (Local)** still use marker mode only. Use workflows or RAG for note operations with those frameworks.
+
+#### OpenCode Local Server
+
+The OpenCode framework connects to a local `opencode serve` instance, which exposes its own HTTP API instead of the OpenAI-compatible `/v1/chat/completions` shape. Streaming uses the server's `/global/event` SSE endpoint.
+
+##### macOS / Linux
+
+1. Install the OpenCode CLI:
+   ```bash
+   curl -fsSL https://opencode.ai/install | bash
+   ```
+2. Start the server:
+   ```bash
+   opencode serve
+   ```
+   It listens on `http://localhost:4096` by default.
+3. In plugin settings → **Local LLM**, select **OpenCode (Local)**, keep the default URL (`http://localhost:4096`), and click **Fetch models**.
+4. Models are listed as `<providerID>/<modelID>` (e.g. `google/gemini-flash-lite-latest`). Pick one and save.
+
+##### Windows (WSL)
+
+OpenCode [recommends WSL](https://opencode.ai/docs/ja/windows-wsl) on Windows for file-system performance and tool compatibility. Since Obsidian runs on the Windows host, the server must be bound to a reachable interface and — because it becomes accessible from outside WSL — **protected with a password**.
+
+1. Install WSL (Microsoft's [official guide](https://learn.microsoft.com/windows/wsl/install)) and open a WSL terminal.
+2. Inside WSL, install OpenCode:
+   ```bash
+   curl -fsSL https://opencode.ai/install | bash
+   ```
+3. Start the server bound to all interfaces, with a password:
+   ```bash
+   OPENCODE_SERVER_PASSWORD='your-password' opencode serve --hostname 0.0.0.0 --port 4096
+   ```
+   WSL2 forwards `localhost` to the Windows host automatically, so from Obsidian the URL is `http://localhost:4096`. If that doesn't resolve, run `hostname -I` in WSL and use `http://<wsl-ip>:4096` instead.
+4. In plugin settings → **Local LLM** → **OpenCode (Local)**:
+   - **Base URL**: `http://localhost:4096` (or the WSL IP)
+   - **Username**: `opencode` (default; override with `OPENCODE_SERVER_USERNAME` if you set one)
+   - **Password**: the value of `OPENCODE_SERVER_PASSWORD`
+
+   Click **Fetch models**, pick a `<providerID>/<modelID>` model, and save.
 
 ### CLI Mode (Gemini / Claude / Codex)
 

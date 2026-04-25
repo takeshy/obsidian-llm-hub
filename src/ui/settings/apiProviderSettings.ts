@@ -2,10 +2,10 @@ import { Setting, Notice, Modal, App, Platform } from "obsidian";
 import { t } from "src/i18n";
 import type { ApiProviderConfig, ApiProviderType } from "src/types";
 import { KNOWN_PROVIDER_DEFAULTS } from "src/types";
-import { verifyApiProvider } from "src/core/openaiProvider";
+import { verifyApiProvider, verifyOpencodeGo } from "src/core/openaiProvider";
 import { verifyAnthropicProvider } from "src/core/anthropicProvider";
 import { verifyGeminiProvider } from "src/core/gemini";
-import { getKnownModels } from "src/core/modelPricing";
+import { getKnownModels, OPENCODE_GO_FALLBACK_MODELS } from "src/core/modelPricing";
 import type { SettingsContext } from "./settingsContext";
 
 export function displayApiProviderSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
@@ -131,6 +131,8 @@ class ApiProviderModal extends Modal {
         dropdown.addOption("anthropic", "Anthropic");
         dropdown.addOption("openrouter", "OpenRouter");
         dropdown.addOption("grok", "Grok");
+        dropdown.addOption("opencodego", "OpenCode Go");
+        dropdown.addOption("opencodezen", "OpenCode Zen");
         dropdown.addOption("custom", t("settings.apiProviderCustom"));
         dropdown.setValue(this.config.type);
         dropdown.onChange((value) => {
@@ -247,11 +249,24 @@ class ApiProviderModal extends Modal {
           btn.setDisabled(true);
           btn.setButtonText(t("settings.cliVerifying"));
           try {
-            const result = this.config.type === "gemini"
-              ? await verifyGeminiProvider(this.config.apiKey, this.proxyUrl, this.proxyBypass)
-              : this.config.type === "anthropic"
-                ? await verifyAnthropicProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass)
-                : await verifyApiProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
+            // OpenCode Go has no `/v1/models`, so it uses a dedicated
+            // reachability probe on `/v1/chat/completions`. Any HTTP
+            // response (even 401/404) means the URL is live; DNS /
+            // connection errors fail verify so a typo'd baseUrl or missing
+            // API key surface here instead of at chat time. See issue #37.
+            let result: { success: boolean; error?: string; models?: string[] };
+            if (this.config.type === "opencodego") {
+              const probe = await verifyOpencodeGo(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
+              result = probe.success
+                ? { success: true, models: OPENCODE_GO_FALLBACK_MODELS }
+                : { success: false, error: probe.error };
+            } else if (this.config.type === "gemini") {
+              result = await verifyGeminiProvider(this.config.apiKey, this.proxyUrl, this.proxyBypass);
+            } else if (this.config.type === "anthropic") {
+              result = await verifyAnthropicProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
+            } else {
+              result = await verifyApiProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
+            }
             if (result.success) {
               this.config.verified = true;
               this.config.availableModels = result.models || [];

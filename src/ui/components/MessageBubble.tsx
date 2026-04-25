@@ -6,8 +6,8 @@ import CheckCircle from "lucide-react/dist/esm/icons/check-circle";
 import XCircle from "lucide-react/dist/esm/icons/x-circle";
 import Download from "lucide-react/dist/esm/icons/download";
 import Eye from "lucide-react/dist/esm/icons/eye";
-import type { Message, ToolCall, ToolResult } from "src/types";
-import { isApiProviderModel } from "src/types";
+import type { Message, ToolCall, ToolResult, LocalLlmConfig } from "src/types";
+import { isApiProviderModel, isLocalLlmModel, getLocalLlmId, getLocalLlmModelName, localLlmDisplayName } from "src/types";
 import { HTMLPreviewModal, extractHtmlFromCodeBlock } from "./HTMLPreviewModal";
 import { McpAppRenderer } from "./McpAppRenderer";
 import { discoverSkills } from "src/core/skillsLoader";
@@ -23,6 +23,7 @@ interface MessageBubbleProps {
   onApplyEdit?: () => Promise<void>;
   onDiscardEdit?: () => void;
   app: App;
+  localLlmConfigs?: LocalLlmConfig[];
 }
 
 export default function MessageBubble({
@@ -32,6 +33,7 @@ export default function MessageBubble({
   onApplyEdit,
   onDiscardEdit,
   app,
+  localLlmConfigs,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
@@ -118,6 +120,18 @@ export default function MessageBubble({
     // Strip "api:" prefix for display
     if (isApiProviderModel(message.model)) {
       return message.model.slice(4); // Remove "api:" prefix
+    }
+    // For "local-llm:<id>:<model>" resolve the saved config (incl. disabled
+    // ones, so history of a config the user has since toggled off still
+    // renders with its real label) and overlay the specific model name so
+    // each chat dropdown entry stays distinguishable in history.
+    if (isLocalLlmModel(message.model)) {
+      const id = getLocalLlmId(message.model);
+      const modelName = getLocalLlmModelName(message.model);
+      const config = id && localLlmConfigs ? localLlmConfigs.find(c => c.id === id) : null;
+      if (config) return localLlmDisplayName(config, modelName);
+      if (modelName) return `Local LLM (${modelName})`;
+      return id ? `Local LLM (${id})` : "Local LLM";
     }
     return message.model;
   };

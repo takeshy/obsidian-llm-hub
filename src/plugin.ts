@@ -14,6 +14,7 @@ import {
   type RagSetting,
   type ModelType,
   type SlashCommand,
+  type LocalLlmConfig,
   DEFAULT_SETTINGS,
   DEFAULT_LOCAL_LLM_CONFIG,
   getGeminiApiKey,
@@ -39,6 +40,84 @@ import { initLocale, t } from "src/i18n";
 import { registerWorkflowCodeBlockProcessor } from "src/ui/workflowCodeBlock";
 import { initDiscordService, resetDiscordService } from "src/core/discordService";
 
+/**
+ * Normalise the Local LLM config stored on disk into the modern array form.
+ * Handles three shapes:
+ *   1. New:   `localLlmConfigs: LocalLlmConfig[]` — used as-is (with id fill-in)
+ *   2. Mixed: array plus legacy fields — array wins, legacy ignored
+ *   3. Legacy: `localLlmConfig: {...}` + top-level verified/availableModels —
+ *      converted into a single entry in the array.
+ * Always returns an array (possibly empty).
+ */
+/**
+ * Seed `enabledModels` from the legacy `model` field when the stored config
+ * predates multi-model support, so existing saved selections keep working
+ * without the user having to re-pick anything.
+ */
+function fillEnabledModels(c: Partial<LocalLlmConfig>): string[] {
+  if (Array.isArray(c.enabledModels) && c.enabledModels.length > 0) {
+    return c.enabledModels;
+  }
+  return c.model ? [c.model] : [];
+}
+
+function normaliseLocalLlmConfigs(loaded: Record<string, unknown>): LocalLlmConfig[] {
+  const warnIfEmpty = (entry: LocalLlmConfig, source: string): void => {
+    if (entry.verified && entry.enabledModels?.length === 0) {
+      // Verified-but-modelless entries get filtered out of the chat dropdown
+      // (flatMap returns []), making them invisibly broken. Surface the
+      // condition so users / bug reports can correlate.
+      console.warn(
+        `[llm-hub] Local LLM "${entry.id}" (${source}) has no enabled models; ` +
+        `it will not appear in the chat dropdown until a model is selected.`,
+      );
+    }
+  };
+
+  const rawArray = loaded.localLlmConfigs;
+  if (Array.isArray(rawArray)) {
+    return rawArray.map((entry, i) => {
+      const e = entry as Partial<LocalLlmConfig>;
+      const normalised: LocalLlmConfig = {
+        ...DEFAULT_LOCAL_LLM_CONFIG,
+        ...e,
+        // Recovery path: a stored array entry without an id. Use a stable
+        // index-based id so the same load produces the same id on every
+        // restart — references saved against it stay valid.
+        id: e.id || `local_recovered_${i}`,
+        enabled: e.enabled !== false,
+        enabledModels: fillEnabledModels(e),
+      };
+      warnIfEmpty(normalised, "stored");
+      return normalised;
+    });
+  }
+
+  const legacy = loaded.localLlmConfig as Partial<LocalLlmConfig> | undefined;
+  if (legacy && typeof legacy === "object") {
+    const verified = Boolean(loaded.localLlmVerified);
+    const availableModels = Array.isArray(loaded.localLlmAvailableModels)
+      ? (loaded.localLlmAvailableModels as string[])
+      : [];
+    const migrated: LocalLlmConfig = {
+      ...DEFAULT_LOCAL_LLM_CONFIG,
+      ...legacy,
+      // Use a deterministic id so workspace state / discussion participants
+      // / Discord conversations that get saved against this migrated entry
+      // keep resolving across restarts. Without this, every loadSettings()
+      // would mint a new `Date.now()` id and orphan those saved references.
+      id: legacy.id || "local_legacy",
+      verified,
+      availableModels,
+      enabled: true,
+      enabledModels: fillEnabledModels(legacy),
+    };
+    warnIfEmpty(migrated, "legacy migration");
+    return [migrated];
+  }
+
+  return [];
+}
 
 export class LlmHubPlugin extends Plugin {
   settings: LlmHubSettings = { ...DEFAULT_SETTINGS };
@@ -116,7 +195,8 @@ export class LlmHubPlugin extends Plugin {
       // Initialize clients if any CLI is verified or any API provider is configured
       try {
         const cliConfig = this.settings.cliConfig || DEFAULT_CLI_CONFIG;
-        if (hasVerifiedCli(cliConfig) || this.settings.localLlmVerified || this.settings.apiProviders?.some(p => p.enabled && p.verified)) {
+        const anyLocalLlmVerified = this.settings.localLlmConfigs?.some(c => c.verified) ?? false;
+        if (hasVerifiedCli(cliConfig) || anyLocalLlmVerified || this.settings.apiProviders?.some(p => p.enabled && p.verified)) {
           this.initializeClients();
         }
       } catch (e) {
@@ -501,11 +581,14 @@ export class LlmHubPlugin extends Plugin {
         ...DEFAULT_LANGFUSE_SETTINGS,
         ...(loaded.langfuse ?? {}),
       },
-      // Deep merge local LLM settings
-      localLlmConfig: {
-        ...DEFAULT_LOCAL_LLM_CONFIG,
-        ...(loaded.localLlmConfig ?? {}),
-      },
+      // Local LLM settings — normalised to an array of entries. Legacy
+      // singleton (`localLlmConfig`) is migrated into the array on first load.
+      localLlmConfigs: normaliseLocalLlmConfigs(loaded),
+      // Explicitly clear the pre-migration keys so they don't get persisted
+      // back by saveSettings (which diffs against DEFAULT_SETTINGS).
+      localLlmConfig: undefined,
+      localLlmVerified: undefined,
+      localLlmAvailableModels: undefined,
       // Deep merge Discord settings
       discord: {
         ...DEFAULT_DISCORD_SETTINGS,

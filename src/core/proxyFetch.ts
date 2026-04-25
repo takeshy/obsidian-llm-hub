@@ -115,6 +115,130 @@ export function buildHostHeader(hostname: string, protocol: string, port: number
 }
 
 /**
+ * Create a fetch-compatible function that issues requests directly through
+ * Node's http/https module — bypassing the renderer's CORS enforcement.
+ *
+ * Use this for OpenAI-compatible endpoints that don't set
+ * `Access-Control-Allow-Origin` (e.g. OpenCode Zen / Go, self-hosted
+ * gateways behind reverse proxies). The renderer's `fetch` would fail the
+ * preflight; Node's http isn't subject to CORS at all.
+ *
+ * Desktop only — `nodeRequire` throws on mobile.
+ */
+export function createNodeFetch(): typeof fetch {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const http = nodeRequire<typeof import("http")>("http");
+    const https = nodeRequire<typeof import("https")>("https");
+
+    const inputReq: Request | null = (typeof input !== "string" && !(input instanceof URL) && "url" in input)
+      ? input
+      : null;
+
+    const reqUrl = new URL(
+      typeof input === "string" ? input
+        : input instanceof URL ? input.href
+        : input.url,
+    );
+
+    const isHttps = reqUrl.protocol === "https:";
+    const mod = isHttps ? https : http;
+
+    const reqHeaders = new Headers(inputReq?.headers);
+    if (init?.headers) {
+      new Headers(init.headers).forEach((v, k) => reqHeaders.set(k, v));
+    }
+    const headerObj: Record<string, string> = {};
+    reqHeaders.forEach((v, k) => { headerObj[k] = v; });
+
+    const method = init?.method || inputReq?.method || "GET";
+    const resolvedBody = init?.body !== undefined ? init.body : inputReq?.body ?? null;
+    const signal = init?.signal || inputReq?.signal || null;
+
+    return new Promise<Response>((resolve, reject) => {
+      const req = mod.request(
+        {
+          method,
+          hostname: reqUrl.hostname,
+          port: reqUrl.port || (isHttps ? 443 : 80),
+          path: reqUrl.pathname + reqUrl.search,
+          headers: headerObj,
+        },
+        (res) => {
+          const respHeaders = new Headers();
+          for (const [key, value] of Object.entries(res.headers)) {
+            if (value == null) continue;
+            if (Array.isArray(value)) {
+              for (const v of value) respHeaders.append(key, v);
+            } else {
+              respHeaders.set(key, value);
+            }
+          }
+
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              res.on("data", (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
+              res.on("end", () => controller.close());
+              res.on("error", (err) => controller.error(err));
+            },
+            cancel() {
+              res.destroy();
+            },
+          });
+
+          resolve(new Response(body, {
+            status: res.statusCode || 200,
+            statusText: res.statusMessage || "",
+            headers: respHeaders,
+          }));
+        },
+      );
+
+      req.on("error", (err) => reject(err));
+
+      if (signal) {
+        if (signal.aborted) {
+          req.destroy();
+          reject(new DOMException("The operation was aborted", "AbortError"));
+          return;
+        }
+        signal.addEventListener("abort", () => {
+          req.destroy();
+          reject(new DOMException("The operation was aborted", "AbortError"));
+        }, { once: true });
+      }
+
+      if (resolvedBody == null) {
+        req.end();
+      } else if (typeof resolvedBody === "string") {
+        req.end(resolvedBody);
+      } else if (resolvedBody instanceof ArrayBuffer) {
+        req.end(Buffer.from(resolvedBody));
+      } else if (resolvedBody instanceof Uint8Array) {
+        req.end(resolvedBody);
+      } else if (typeof (resolvedBody as ReadableStream).getReader === "function") {
+        const reader = (resolvedBody as ReadableStream<Uint8Array>).getReader();
+        (async () => {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            req.write(value);
+          }
+          req.end();
+        })().catch((err) => {
+          req.destroy(err instanceof Error ? err : new Error(String(err)));
+        });
+      } else {
+        req.destroy();
+        reject(new TypeError(
+          `Unsupported request body type: ${Object.prototype.toString.call(resolvedBody)}. ` +
+          `Node fetch supports string, ArrayBuffer, Uint8Array, and ReadableStream.`
+        ));
+      }
+    });
+  };
+}
+
+/**
  * Create a fetch function that tunnels requests through an HTTP(S) proxy
  * using the CONNECT method.
  *

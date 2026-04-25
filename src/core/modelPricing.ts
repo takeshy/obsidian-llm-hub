@@ -39,11 +39,40 @@ export const MODEL_PRICING: Record<string, TokenPricing> = {
   "claude-haiku-4-5":  { input: 1.00 / 1e6, output:  5.00 / 1e6 },
 };
 
+/**
+ * Fallback model list for OpenCode Go.
+ * Used because OpenCode Go does not expose `/v1/models`.
+ * Source: https://opencode.ai/docs/ja/go/ (14 models listed).
+ * Snapshot as of 2026-04-24 — refresh when OpenCode Go adds/renames models.
+ *
+ * NOTE: The OpenCode TUI config uses an `opencode-go/<model-id>` namespace,
+ * but the `/v1/chat/completions` API takes the BARE model id only. Sending
+ * `opencode-go/kimi-k2.6` gets rejected with `ModelError: Model ... not
+ * supported`. These entries therefore intentionally omit the prefix.
+ */
+export const OPENCODE_GO_FALLBACK_MODELS: string[] = [
+  "glm-5",
+  "glm-5.1",
+  "kimi-k2.5",
+  "kimi-k2.6",
+  "deepseek-v4-pro",
+  "deepseek-v4-flash",
+  "mimo-v2-pro",
+  "mimo-v2-omni",
+  "mimo-v2.5-pro",
+  "mimo-v2.5",
+  "minimax-m2.7",
+  "minimax-m2.5",
+  "qwen3.6-plus",
+  "qwen3.5-plus",
+];
+
 /** Provider type → known model names from the pricing table */
 const KNOWN_MODELS_BY_PROVIDER: Record<string, string[]> = {
   gemini: Object.keys(MODEL_PRICING).filter(k => k.startsWith("gemini-")),
   openai: Object.keys(MODEL_PRICING).filter(k => k.startsWith("gpt-") || /^o\d/.test(k)),
   anthropic: Object.keys(MODEL_PRICING).filter(k => k.startsWith("claude-")),
+  opencodego: OPENCODE_GO_FALLBACK_MODELS,
 };
 
 /**

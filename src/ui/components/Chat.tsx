@@ -17,14 +17,16 @@ import Check from "lucide-react/dist/esm/icons/check";
 import type { LlmHubPlugin } from "src/plugin";
 import {
 	DEFAULT_CLI_CONFIG,
-	DEFAULT_LOCAL_LLM_CONFIG,
 	CLI_MODEL,
 	CLAUDE_CLI_MODEL,
 	CODEX_CLI_MODEL,
-	LOCAL_LLM_MODEL,
 	isApiProviderModel,
 	getApiProviderId,
 	getApiProviderModelName,
+	isLocalLlmModel,
+	getLocalLlmConfig,
+	localLlmDisplayName,
+	isLocalLlmToolsEnabled,
 	getGeminiApiKey,
 	type Message,
 	type ApiProviderConfig,
@@ -131,6 +133,229 @@ function didToolCallFail(result: Record<string, unknown>): boolean {
 	return result.error !== undefined || result.success === false;
 }
 
+/**
+ * Heuristic: does this error message indicate the local LLM (or its gateway)
+ * rejected a tools / function-calling payload? Used to decide whether to
+ * auto-disable tools for that model and fall back to the marker-based skill
+ * flow. Matches phrases seen across LM Studio, vLLM, llama.cpp, and OpenAI-
+ * compatible gateways.
+ *
+ * Conservative: requires both a "request was rejected" cue (4xx / schema
+ * / "unsupported") AND a tools/function keyword, so a generic 400 caused by
+ * a malformed user prompt — or a network error that happens to mention
+ * "tools" — won't disable tools for the whole model.
+ */
+function looksLikeToolsRejection(msg: string): boolean {
+	if (!msg) return false;
+	const lower = msg.toLowerCase();
+	// Match "tool", "tools", "tool_call", "tool_calls", "function call",
+	// "function_call". Underscore-suffixed forms need an explicit branch
+	// because \b can't span an underscore boundary.
+	const mentionsTools = /\btools?\b|\btool_calls?\b|\bfunction[_ ]?calls?\b/.test(lower);
+	if (!mentionsTools) return false;
+	// Rejection cues: HTTP status, request-shape complaints. Avoided generic
+	// words like "cannot" that match transient network failures (e.g.
+	// "cannot connect to host while loading tools").
+	return /\b4\d\d\b|invalid|unsupported|not supported|don'?t support|unknown|missing|rejected|schema|expected/.test(lower);
+}
+
+/**
+ * Heuristic: is this an authentication failure (401/403)? Used to skip the
+ * tools auto-disable path on auth errors that would otherwise false-match
+ * `looksLikeToolsRejection` (e.g. "Bearer no-key" responses that mention
+ * "function calling not allowed for this key").
+ */
+function looksLikeAuthError(msg: string): boolean {
+	if (!msg) return false;
+	return /\b401\b|\b403\b|unauthorized|forbidden|authentication|invalid api[_ ]?key/i.test(msg);
+}
+
+/**
+ * Wrap a base tool executor to handle the propose_edit / propose_delete /
+ * rename_note / bulk_* tools — these need synchronous user confirmation in
+ * the chat UI before the change applies. The wrapper:
+ *   - Detects newly created pending edits/deletes/renames after each call
+ *   - Drives the appropriate confirmation modal
+ *   - Applies or discards based on the user's choice
+ *   - Records the disposition in processedEdits/Deletes/Renames so the
+ *     final assistant message can show inline status badges
+ *
+ * Used by both the API provider chat path and the Local-LLM-with-tools
+ * path so behaviour stays identical between providers.
+ */
+function createConfirmingToolExecutor(
+	baseExecuteToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+	app: import("obsidian").App,
+	currentSlashCommandRef: { current: SlashCommand | null },
+): {
+	executeToolCall: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+	processedEdits: PendingEditInfo[];
+	processedDeletes: PendingDeleteInfo[];
+	processedRenames: PendingRenameInfo[];
+} {
+	const processedEdits: PendingEditInfo[] = [];
+	const processedDeletes: PendingDeleteInfo[] = [];
+	const processedRenames: PendingRenameInfo[] = [];
+
+	const executeToolCall = async (name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+		const prevPendingEdit = getPendingEdit();
+		const prevPendingDelete = getPendingDelete();
+		const prevPendingRename = getPendingRename();
+		const prevPendingBulkEdit = getPendingBulkEdit();
+		const prevPendingBulkDelete = getPendingBulkDelete();
+		const prevPendingBulkRename = getPendingBulkRename();
+		const result = await baseExecuteToolCall(name, args) as Record<string, unknown>;
+		const toolCallFailed = didToolCallFail(result);
+
+		if (name === "propose_edit") {
+			const pending = getPendingEdit();
+			const hasNewPending = pending && pending.createdAt !== prevPendingEdit?.createdAt;
+			if (hasNewPending && !toolCallFailed) {
+				const slashCommand = currentSlashCommandRef.current;
+				const shouldAutoApply = slashCommand && slashCommand.confirmEdits === false;
+
+				if (shouldAutoApply) {
+					const applyResult = await applyEdit(app);
+					if (applyResult.success) {
+						processedEdits.push({ originalPath: pending.originalPath, status: "applied" });
+						return { ...result, applied: true, message: `Applied changes to "${pending.originalPath}"` };
+					}
+					discardEdit(app);
+					processedEdits.push({ originalPath: pending.originalPath, status: "failed" });
+					return { ...result, applied: false, error: applyResult.error };
+				}
+
+				const confirmResult = await promptForConfirmation(
+					app, pending.originalPath, pending.newContent, "overwrite", pending.originalContent,
+				);
+				if (confirmResult.confirmed) {
+					const applyResult = await applyEdit(app);
+					if (applyResult.success) {
+						processedEdits.push({ originalPath: pending.originalPath, status: "applied" });
+						return { ...result, applied: true, message: `Applied changes to "${pending.originalPath}"` };
+					}
+					discardEdit(app);
+					processedEdits.push({ originalPath: pending.originalPath, status: "failed" });
+					return { ...result, applied: false, error: applyResult.error };
+				}
+				if (confirmResult.additionalRequest !== undefined) {
+					discardEdit(app);
+					processedEdits.push({ originalPath: pending.originalPath, status: "discarded" });
+					return { ...result, applied: false, message: "User requested changes" };
+				}
+				discardEdit(app);
+				processedEdits.push({ originalPath: pending.originalPath, status: "discarded" });
+				return { ...result, applied: false, message: "User cancelled the edit" };
+			}
+		}
+
+		if (name === "propose_delete") {
+			const pending = getPendingDelete();
+			const hasNewPending = pending && pending.createdAt !== prevPendingDelete?.createdAt;
+			if (hasNewPending && !toolCallFailed) {
+				const confirmed = await promptForDeleteConfirmation(app, pending.path, pending.content);
+				if (confirmed) {
+					const deleteResult = await applyDelete(app);
+					if (deleteResult.success) {
+						processedDeletes.push({ path: pending.path, status: "deleted" });
+						return { ...result, deleted: true, message: `Deleted "${pending.path}"` };
+					}
+					discardDelete(app);
+					processedDeletes.push({ path: pending.path, status: "failed" });
+					return { ...result, deleted: false, error: deleteResult.error };
+				}
+				discardDelete(app);
+				processedDeletes.push({ path: pending.path, status: "cancelled" });
+				return { ...result, deleted: false, message: "User cancelled the deletion" };
+			}
+		}
+
+		if (name === "rename_note") {
+			const pendingRn = getPendingRename();
+			const hasNewPending = pendingRn && pendingRn.createdAt !== prevPendingRename?.createdAt;
+			if (hasNewPending && !toolCallFailed) {
+				const confirmed = await promptForRenameConfirmation(app, pendingRn.originalPath, pendingRn.newPath);
+				if (confirmed) {
+					const renameResult = await applyRename(app);
+					if (renameResult.success) {
+						processedRenames.push({ originalPath: pendingRn.originalPath, newPath: pendingRn.newPath, status: "applied" });
+						return { ...result, applied: true, message: `Renamed "${pendingRn.originalPath}" to "${pendingRn.newPath}"` };
+					}
+					discardRename(app);
+					processedRenames.push({ originalPath: pendingRn.originalPath, newPath: pendingRn.newPath, status: "failed" });
+					return { ...result, applied: false, error: renameResult.error };
+				}
+				discardRename(app);
+				processedRenames.push({ originalPath: pendingRn.originalPath, newPath: pendingRn.newPath, status: "discarded" });
+				return { ...result, applied: false, message: "User cancelled the rename" };
+			}
+		}
+
+		if (name === "bulk_propose_edit") {
+			const pendingBulk = getPendingBulkEdit();
+			const hasNewPending = pendingBulk && pendingBulk.createdAt !== prevPendingBulkEdit?.createdAt;
+			if (hasNewPending && !toolCallFailed && pendingBulk.items.length > 0) {
+				const selectedPaths = await promptForBulkEditConfirmation(app, pendingBulk.items);
+				if (selectedPaths.length > 0) {
+					const applyResult = await applyBulkEdit(app, selectedPaths);
+					for (const path of applyResult.applied) processedEdits.push({ originalPath: path, status: "applied" });
+					for (const path of applyResult.failed) processedEdits.push({ originalPath: path, status: "failed" });
+					return { ...result, applied: applyResult.applied, failed: applyResult.failed, message: applyResult.message };
+				}
+				discardBulkEdit();
+				for (const item of pendingBulk.items) processedEdits.push({ originalPath: item.path, status: "discarded" });
+				return { ...result, applied: [], message: "User cancelled all edits" };
+			}
+		}
+
+		if (name === "bulk_propose_delete") {
+			const pendingBulk = getPendingBulkDelete();
+			const hasNewPending = pendingBulk && pendingBulk.createdAt !== prevPendingBulkDelete?.createdAt;
+			if (hasNewPending && !toolCallFailed && pendingBulk.items.length > 0) {
+				const selectedPaths = await promptForBulkDeleteConfirmation(app, pendingBulk.items);
+				if (selectedPaths.length > 0) {
+					const deleteResult = await applyBulkDelete(app, selectedPaths);
+					for (const path of deleteResult.deleted) processedDeletes.push({ path, status: "deleted" });
+					for (const path of deleteResult.failed) processedDeletes.push({ path, status: "failed" });
+					return { ...result, deleted: deleteResult.deleted, failed: deleteResult.failed, message: deleteResult.message };
+				}
+				discardBulkDelete();
+				for (const item of pendingBulk.items) processedDeletes.push({ path: item.path, status: "cancelled" });
+				return { ...result, deleted: [], message: "User cancelled all deletions" };
+			}
+		}
+
+		if (name === "bulk_propose_rename") {
+			const pendingBulk = getPendingBulkRename();
+			const hasNewPending = pendingBulk && pendingBulk.createdAt !== prevPendingBulkRename?.createdAt;
+			if (hasNewPending && !toolCallFailed && pendingBulk.items.length > 0) {
+				const selectedPaths = await promptForBulkRenameConfirmation(app, pendingBulk.items);
+				if (selectedPaths.length > 0) {
+					const renameResult = await applyBulkRename(app, selectedPaths);
+					for (const path of renameResult.applied) {
+						const item = pendingBulk.items.find(i => i.originalPath === path);
+						if (item) processedRenames.push({ originalPath: item.originalPath, newPath: item.newPath, status: "applied" });
+					}
+					for (const path of renameResult.failed) {
+						const item = pendingBulk.items.find(i => i.originalPath === path);
+						if (item) processedRenames.push({ originalPath: item.originalPath, newPath: item.newPath, status: "failed" });
+					}
+					return { ...result, applied: renameResult.applied, failed: renameResult.failed, message: renameResult.message };
+				}
+				discardBulkRename();
+				for (const item of pendingBulk.items) {
+					processedRenames.push({ originalPath: item.originalPath, newPath: item.newPath, status: "discarded" });
+				}
+				return { ...result, applied: [], message: "User cancelled all renames" };
+			}
+		}
+
+		return result;
+	};
+
+	return { executeToolCall, processedEdits, processedDeletes, processedRenames };
+}
+
 function getLatestPendingInfo<T>(items: T[]): T | undefined {
 	return items.length > 0 ? items[items.length - 1] : undefined;
 }
@@ -167,7 +392,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	// Vault tool mode: "all" = use all tools, "noSearch" = exclude search_notes/list_notes, "none" = no vault tools
 	// Gemma 4 + RAG/Web Search: must disable function calling tools (mutually exclusive)
 	const initialModel = plugin.getSelectedModel();
-	const isInitialCli = initialModel === "gemini-cli" || initialModel === "claude-cli" || initialModel === "codex-cli" || initialModel === "local-llm";
+	// Mirror isCliMode's exception for tools-capable Local LLMs: they should
+	// boot with vaultToolMode "all", not "none" — same default as API providers.
+	const initialLocalLlmConfig = isLocalLlmModel(initialModel)
+		? getLocalLlmConfig(initialModel, plugin.settings)
+		: null;
+	const initialLocalLlmToolsCapable = !!(initialLocalLlmConfig
+		&& isLocalLlmToolsEnabled(initialLocalLlmConfig, initialLocalLlmConfig.model));
+	const isInitialCli = initialModel === "gemini-cli"
+		|| initialModel === "claude-cli"
+		|| initialModel === "codex-cli"
+		|| (isLocalLlmModel(initialModel) && !initialLocalLlmToolsCapable);
 	const initialGemma4Rag = initialModel.toLowerCase().includes("gemma-4")
 		&& plugin.workspaceState.selectedRagSetting != null;
 	const [vaultToolMode, setVaultToolMode] = useState<"all" | "noSearch" | "none">(
@@ -246,16 +481,26 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const geminiCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
 	const claudeCliVerified = !Platform.isMobile && cliConfig.claudeCliVerified === true;
 	const codexCliVerified = !Platform.isMobile && cliConfig.codexCliVerified === true;
-	const localLlmVerified = !Platform.isMobile && plugin.settings.localLlmVerified === true;
+	const activeLocalLlmConfigs = !Platform.isMobile
+		? (plugin.settings.localLlmConfigs ?? []).filter(c => c.verified && c.enabled !== false)
+		: [];
+	const localLlmVerified = activeLocalLlmConfigs.length > 0;
 	const enabledApiProviders = !Platform.isMobile ? plugin.settings.apiProviders.filter(p => p.enabled && p.verified) : [];
 	const hasEnabledApiProvider = enabledApiProviders.length > 0;
 	const anyCliVerified = geminiCliVerified || claudeCliVerified || codexCliVerified || localLlmVerified;
 	const isGeminiCliMode = !Platform.isMobile && currentModel === "gemini-cli";
 	const isClaudeCliMode = !Platform.isMobile && currentModel === "claude-cli";
 	const isCodexCliMode = !Platform.isMobile && currentModel === "codex-cli";
-	const isLocalLlmMode = !Platform.isMobile && currentModel === "local-llm";
+	const isLocalLlmMode = !Platform.isMobile && isLocalLlmModel(currentModel);
 	const isApiProviderMode = !Platform.isMobile && isApiProviderModel(currentModel);
-	const isCliMode = isGeminiCliMode || isClaudeCliMode || isCodexCliMode || isLocalLlmMode;
+	// Local LLMs with an OpenAI-compatible framework + a tools-capable model
+	// can use vault tools just like API providers. Exclude them from the
+	// "CLI mode" lockdown that forces vaultToolMode to "none" and hides MCP.
+	const currentLocalLlmConfig = isLocalLlmMode ? getLocalLlmConfig(currentModel, plugin.settings) : null;
+	const isLocalLlmToolsCapable = !!(currentLocalLlmConfig
+		&& isLocalLlmToolsEnabled(currentLocalLlmConfig, currentLocalLlmConfig.model));
+	const isCliMode = isGeminiCliMode || isClaudeCliMode || isCodexCliMode
+		|| (isLocalLlmMode && !isLocalLlmToolsCapable);
 
 	// Resolve API provider config from current model name ("api:{providerId}")
 	const getActiveApiProvider = (): ApiProviderConfig | null => {
@@ -297,7 +542,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		...(geminiCliVerified ? [CLI_MODEL] : []),
 		...(claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
 		...(codexCliVerified ? [CODEX_CLI_MODEL] : []),
-		...(localLlmVerified ? [LOCAL_LLM_MODEL] : []),
+		...activeLocalLlmConfigs.flatMap(c => {
+			const models = (c.enabledModels && c.enabledModels.length > 0)
+				? c.enabledModels
+				: (c.model ? [c.model] : []);
+			return models.map(m => ({
+				name: `local-llm:${c.id}:${m}` as ModelType,
+				displayName: localLlmDisplayName(c, m),
+				description: `Local LLM (${c.framework})`,
+				isCliModel: true,
+			}));
+		}),
 	];
 
 	useImperativeHandle(ref, () => ({
@@ -863,7 +1118,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			persistentCliRef.current = null;
 		}
 
-		const isNewModelCli = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli" || model === "local-llm";
+		// Local LLMs with tools-capable framework + model behave like API
+		// providers for vault tool / MCP availability — not like CLIs.
+		const newLocalLlmConfig = isLocalLlmModel(model) ? getLocalLlmConfig(model, plugin.settings) : null;
+		const isNewLocalLlmToolsCapable = !!(newLocalLlmConfig
+			&& isLocalLlmToolsEnabled(newLocalLlmConfig, newLocalLlmConfig.model));
+		const isNewModelCli = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli"
+			|| (isLocalLlmModel(model) && !isNewLocalLlmToolsCapable);
 		const isNewModelApiProvider = isApiProviderModel(model);
 
 		// Check if new model is a Gemini provider (for Web Search availability)
@@ -1512,7 +1773,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const sendMessageViaLocalLlm = async (content: string, attachments?: Attachment[], skillPath?: string) => {
 		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
 
-		const llmConfig = plugin.settings.localLlmConfig || DEFAULT_LOCAL_LLM_CONFIG;
+		const llmConfig = getLocalLlmConfig(currentModel, plugin.settings);
+		if (!llmConfig) {
+			new Notice(t("chat.localLlmNotConfigured"));
+			return;
+		}
 
 		// Activate skill if invoked via slash command
 		let effectiveSkillPaths = activeSkillPaths;
@@ -1557,20 +1822,34 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			sessionId: currentChatId ?? undefined,
 			input: localLlmContent,
 			metadata: {
-				model: `local-llm:${llmConfig.model}`,
+				model: `local-llm:${llmConfig.id}:${llmConfig.model}`,
 				isLocalLlm: true,
 				pluginVersion: plugin.manifest.version,
 			},
 		});
 
+		// Decide whether to try OpenAI-style function calling for this model.
+		// Default ON for OpenAI-compatible frameworks; auto-disabled if the
+		// model previously rejected tools (tracked in toolsUnsupportedModels).
+		// vault tool mode "none" honors the user's per-chat opt-out.
+		const wantsTools = vaultToolMode !== "none"
+			&& isLocalLlmToolsEnabled(llmConfig, llmConfig.model);
+
 		try {
 			const allMessages = [...messages, userMessage];
 
-			// Build system prompt for local LLM
+			// Build system prompt for local LLM. Tools-mode and marker-mode
+			// have different framing — tools-mode tells the model to use
+			// function calling; marker-mode tells it to use text markers and
+			// warns it has no direct vault access.
 			let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
-			systemPrompt += `\n\nNote: You are running in Local LLM mode with limited capabilities. You do not have direct vault tool access in this mode.`;
-			systemPrompt += `\n\nUse only information already present in the conversation, text attachments inlined into the prompt, and any local RAG context that may be added below.`;
-			systemPrompt += `\n\nIMPORTANT: Do not claim that you can open, search, or modify vault files unless their contents are already included in the prompt.`;
+			if (wantsTools) {
+				systemPrompt += `\n\nYou have access to function-calling tools for reading, searching, and editing the user's vault. Prefer calling a tool over describing what you would do.`;
+			} else {
+				systemPrompt += `\n\nNote: You are running in Local LLM mode with limited capabilities. You do not have direct vault tool access in this mode.`;
+				systemPrompt += `\n\nUse only information already present in the conversation, text attachments inlined into the prompt, and any local RAG context that may be added below.`;
+				systemPrompt += `\n\nIMPORTANT: Do not claim that you can open, search, or modify vault files unless their contents are already included in the prompt.`;
+			}
 			systemPrompt += `\n\nVault location: ${(plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || "."}`;
 
 			if (plugin.settings.systemPrompt) {
@@ -1623,7 +1902,211 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			let fullThinking = "";
 			let stopped = false;
 
-			// === Agent loop ===
+			// === Tools-enabled flow (OpenAI-compat function calling) ===
+			// Modern Local LLMs (LM Studio / vLLM / AnythingLLM with recent
+			// models) speak the OpenAI tools API. Try that first; on a
+			// tools-related rejection mark the model unsupported, persist,
+			// and fall through to the marker-based flow below for this turn.
+			if (wantsTools) {
+				const settings = plugin.settings;
+
+				// Build vault tools (same shape as API provider path: always
+				// include write/delete; vaultToolMode-based name filtering happens
+				// after MCP merge so the modal toggle stays a UI-only affordance
+				// and doesn't accidentally drop propose_edit etc. in noSearch mode).
+				const vaultTools = getEnabledTools({
+					allowWrite: true,
+					allowDelete: true,
+					ragEnabled: false,
+				});
+				const obsidianToolExecutor = createToolExecutor(plugin.app, {
+					listNotesLimit: settings.listNotesLimit,
+					maxNoteChars: settings.maxNoteChars,
+				});
+
+				// Fetch MCP tools if any servers are enabled
+				let toolsBundle = [...vaultTools];
+				let mcpToolExecutor: McpToolExecutor | null = null;
+				const enabledMcpServers = settings.mcpServers.filter(s => s.enabled);
+				if (enabledMcpServers.length > 0) {
+					try {
+						const mcpTools = await fetchMcpTools(enabledMcpServers);
+						toolsBundle = [...toolsBundle, ...mcpTools];
+						mcpToolExecutor = createMcpToolExecutor(mcpTools, llmTraceId);
+					} catch (e) {
+						console.error("Failed to fetch MCP tools:", e);
+					}
+				}
+				toolsBundle.push(EXECUTE_JAVASCRIPT_TOOL);
+				toolsBundle.push(GET_WORKFLOW_SPEC_TOOL);
+
+				// Skill workflow / script tools
+				const llmSkillWorkflowMap = llmLoadedSkills.length > 0 ? collectSkillWorkflows(llmLoadedSkills) : new Map();
+				const llmSkillScriptMap = llmLoadedSkills.length > 0 ? collectSkillScripts(llmLoadedSkills) : new Map();
+				if (llmLoadedSkills.some(s => s.workflows.length > 0)) toolsBundle.push(skillWorkflowTool);
+				if (llmLoadedSkills.some(s => s.scripts.length > 0)) toolsBundle.push(skillScriptTool);
+
+				// vaultToolMode name filter — mirrors the Gemini chat path (line ~2604).
+				// "noSearch" only strips search/list, not write/delete. MCP and skill
+				// tools are always preserved. ("none" never reaches here because
+				// `wantsTools` already false-gates the whole branch in that mode.)
+				if (vaultToolMode === "noSearch") {
+					const SEARCH_NAMES = new Set(["search_notes", "list_notes"]);
+					toolsBundle = toolsBundle.filter(t => !SEARCH_NAMES.has(t.name));
+				}
+
+				const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
+					if (name.startsWith("mcp_") && mcpToolExecutor) {
+						const mcpResult = await mcpToolExecutor.execute(name, args);
+						if (mcpResult.error) return { error: mcpResult.error };
+						return { result: mcpResult.result };
+					}
+					if (name === "run_skill_workflow" && llmSkillWorkflowMap.size > 0) {
+						return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, llmSkillWorkflowMap);
+					}
+					if (name === "run_skill_script" && llmSkillScriptMap.size > 0) {
+						return await executeSkillScript(plugin, args.scriptId as string, args.args as string | undefined, llmSkillScriptMap);
+					}
+					if (name === "execute_javascript") {
+						return await handleExecuteJavascriptTool(args);
+					}
+					if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
+						return handleGetWorkflowSpec(args, plugin);
+					}
+					return await obsidianToolExecutor(name, args);
+				};
+
+				const { executeToolCall, processedEdits, processedDeletes, processedRenames } =
+					createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef);
+
+				const toolsUsed: string[] = [];
+				let toolsFlowError: string | null = null;
+				let toolsFlowAborted = false;
+				let toolsFullContent = "";
+				let toolsThinking = "";
+
+				try {
+					for await (const chunk of openaiChatWithToolsStream(
+						llmConfig.baseUrl,
+						llmConfig.apiKey || "no-key",
+						llmConfig.model,
+						allMessages, toolsBundle,
+						systemPrompt, executeToolCall, abortController.signal,
+						false, // local LLMs: don't request reasoning_effort
+						undefined, undefined, // proxy already handled by createNodeFetch
+					)) {
+						if (abortController.signal.aborted) { toolsFlowAborted = true; break; }
+						switch (chunk.type) {
+							case "text":
+								toolsFullContent += chunk.content || "";
+								if (isActive()) setStreamingContent(toolsFullContent);
+								break;
+							case "thinking":
+								toolsThinking += chunk.content || "";
+								if (isActive()) setStreamingThinking(toolsThinking);
+								break;
+							case "tool_call":
+								if (chunk.toolCall) toolsUsed.push(chunk.toolCall.name);
+								break;
+							case "error":
+								toolsFlowError = chunk.error || "Unknown error";
+								break;
+							case "done":
+								break;
+						}
+						if (toolsFlowError) break;
+					}
+				} catch (err) {
+					toolsFlowError = err instanceof Error ? err.message : String(err);
+				} finally {
+					if (mcpToolExecutor) {
+						try { await mcpToolExecutor.cleanup(); } catch (e) { console.warn("MCP cleanup failed:", e); }
+					}
+				}
+
+				// User-stop has priority over everything else: don't auto-disable,
+				// don't throw, just finalize whatever buffered content we have.
+				const wasAborted = toolsFlowAborted || abortController.signal.aborted;
+				// Don't fall through to marker mode if the tools attempt already
+				// mutated vault state (edits/deletes/renames committed via user
+				// confirmation). Marker mode would generate a fresh assistant
+				// turn that doesn't reference those mutations, leaving the user
+				// confused about what happened. Surface the error and keep the
+				// pending* badges instead.
+				const hasMutations = processedEdits.length > 0
+					|| processedDeletes.length > 0
+					|| processedRenames.length > 0;
+
+				const shouldAutoDisable = !wasAborted
+					&& !!toolsFlowError
+					&& !toolsFullContent
+					&& !hasMutations
+					&& looksLikeToolsRejection(toolsFlowError)
+					&& !looksLikeAuthError(toolsFlowError);
+
+				if (shouldAutoDisable && toolsFlowError) {
+					const idx = plugin.settings.localLlmConfigs.findIndex(c => c.id === llmConfig.id);
+					if (idx >= 0) {
+						const cfg = plugin.settings.localLlmConfigs[idx];
+						const list = cfg.toolsUnsupportedModels ?? [];
+						if (!list.includes(llmConfig.model)) {
+							plugin.settings.localLlmConfigs[idx] = {
+								...cfg,
+								toolsUnsupportedModels: [...list, llmConfig.model],
+							};
+							await plugin.saveSettings();
+						}
+					}
+					new Notice(`${llmConfig.model}: tools rejected, falling back to marker mode for this and future turns.`);
+					// Reset streaming UI so the marker flow starts clean
+					setStreamingContent("");
+					setStreamingThinking("");
+					// Fall through to marker loop below
+				} else if (!wasAborted && toolsFlowError && !toolsFullContent && !hasMutations) {
+					// Non-tools error with no output and no committed changes →
+					// surface to user via outer catch.
+					throw new Error(toolsFlowError);
+				} else {
+					// Tools flow produced output, OR was aborted by the user, OR
+					// already mutated vault state. Finalize and return without
+					// running marker loop. Append an error notice inline only when
+					// the failure isn't an aborted stop (which has its own marker)
+					// — we don't want to overwrite "stopped" with a confusing
+					// "AbortError" message.
+					if (toolsFlowError && !wasAborted) {
+						toolsFullContent += `\n\n${t("chat.errorOccurred", { message: toolsFlowError })}`;
+					}
+					if (wasAborted && toolsFullContent) toolsFullContent += `\n\n${t("chat.generationStopped")}`;
+
+					const assistantMessage: Message = {
+						role: "assistant",
+						content: toolsFullContent,
+						timestamp: Date.now(),
+						model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
+						toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
+						thinking: toolsThinking || undefined,
+						pendingEdit: processedEdits[processedEdits.length - 1],
+						pendingEdits: processedEdits.length > 0 ? processedEdits : undefined,
+						pendingDelete: processedDeletes[processedDeletes.length - 1],
+						pendingDeletes: processedDeletes.length > 0 ? processedDeletes : undefined,
+						pendingRename: processedRenames[processedRenames.length - 1],
+						pendingRenames: processedRenames.length > 0 ? processedRenames : undefined,
+						ragUsed: localRagSources.length > 0,
+						ragSources: localRagSources.length > 0 ? localRagSources : undefined,
+					};
+					const newMessages = [...messages, userMessage, assistantMessage];
+					await saveResult(newMessages, null);
+					tracing.traceEnd(llmTraceId, { output: toolsFullContent });
+					tracing.score(llmTraceId, {
+						name: "status",
+						value: wasAborted ? 0.5 : (toolsFlowError ? 0 : 1),
+						comment: wasAborted ? "stopped by user" : (toolsFlowError ?? "completed"),
+					});
+					return;
+				}
+			}
+
+			// === Marker-based agent loop (fallback for tools-incompatible models) ===
 			// Local LLMs rely on text markers rather than function calls for skill
 			// workflow/script invocation. Each iteration streams → detects markers
 			// → executes → feeds results back as a follow-up user message. The
@@ -1697,7 +2180,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				role: "assistant",
 				content: processedContent,
 				timestamp: Date.now(),
-				model: "local-llm",
+				model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
 				...(fullThinking ? { thinking: fullThinking } : {}),
 				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
 			};
@@ -1855,11 +2338,6 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			const apiSkillWorkflowMap = apiLoadedSkills.length > 0 ? collectSkillWorkflows(apiLoadedSkills) : new Map();
 			const apiSkillScriptMap = apiLoadedSkills.length > 0 ? collectSkillScripts(apiLoadedSkills) : new Map();
 
-			// Track processed edits/deletes/renames for message display
-			const processedEdits: PendingEditInfo[] = [];
-			const processedDeletes: PendingDeleteInfo[] = [];
-			const processedRenames: PendingRenameInfo[] = [];
-
 			const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
 				if (name.startsWith("mcp_") && mcpToolExecutor) {
 					const mcpResult = await mcpToolExecutor.execute(name, args);
@@ -1881,235 +2359,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				return await obsidianToolExecutor(name, args);
 			};
 
-			// Wrap tool executor to handle propose_edit/propose_delete/rename with immediate confirmation
-			const executeToolCall = async (name: string, args: Record<string, unknown>) => {
-				const prevPendingEdit = getPendingEdit();
-				const prevPendingDelete = getPendingDelete();
-				const prevPendingRename = getPendingRename();
-				const prevPendingBulkEdit = getPendingBulkEdit();
-				const prevPendingBulkDelete = getPendingBulkDelete();
-				const prevPendingBulkRename = getPendingBulkRename();
-				const result = await baseExecuteToolCall(name, args) as Record<string, unknown>;
-				const toolCallFailed = didToolCallFail(result);
-
-				// Handle propose_edit with immediate confirmation
-				if (name === "propose_edit") {
-					const pending = getPendingEdit();
-					const hasNewPending = pending && pending.createdAt !== prevPendingEdit?.createdAt;
-					if (hasNewPending && !toolCallFailed) {
-						const slashCommand = currentSlashCommandRef.current;
-						const shouldAutoApply = slashCommand && slashCommand.confirmEdits === false;
-
-						if (shouldAutoApply) {
-							const applyResult = await applyEdit(plugin.app);
-							if (applyResult.success) {
-								processedEdits.push({ originalPath: pending.originalPath, status: "applied" });
-								return { ...result, applied: true, message: `Applied changes to "${pending.originalPath}"` };
-							} else {
-								discardEdit(plugin.app);
-								processedEdits.push({ originalPath: pending.originalPath, status: "failed" });
-								return { ...result, applied: false, error: applyResult.error };
-							}
-						} else {
-							const confirmResult = await promptForConfirmation(
-								plugin.app,
-								pending.originalPath,
-								pending.newContent,
-								"overwrite",
-								pending.originalContent
-							);
-
-							if (confirmResult.confirmed) {
-								const applyResult = await applyEdit(plugin.app);
-								if (applyResult.success) {
-									processedEdits.push({ originalPath: pending.originalPath, status: "applied" });
-									return { ...result, applied: true, message: `Applied changes to "${pending.originalPath}"` };
-								} else {
-									discardEdit(plugin.app);
-									processedEdits.push({ originalPath: pending.originalPath, status: "failed" });
-									return { ...result, applied: false, error: applyResult.error };
-								}
-							} else if (confirmResult.additionalRequest !== undefined) {
-								discardEdit(plugin.app);
-								processedEdits.push({ originalPath: pending.originalPath, status: "discarded" });
-								return { ...result, applied: false, message: "User requested changes" };
-							} else {
-								discardEdit(plugin.app);
-								processedEdits.push({ originalPath: pending.originalPath, status: "discarded" });
-								return { ...result, applied: false, message: "User cancelled the edit" };
-							}
-						}
-					}
-				}
-
-				// Handle propose_delete with immediate confirmation
-				if (name === "propose_delete") {
-					const pending = getPendingDelete();
-					const hasNewPending = pending && pending.createdAt !== prevPendingDelete?.createdAt;
-					if (hasNewPending && !toolCallFailed) {
-						const confirmed = await promptForDeleteConfirmation(
-							plugin.app,
-							pending.path,
-							pending.content
-						);
-
-						if (confirmed) {
-							const deleteResult = await applyDelete(plugin.app);
-							if (deleteResult.success) {
-								processedDeletes.push({ path: pending.path, status: "deleted" });
-								return { ...result, deleted: true, message: `Deleted "${pending.path}"` };
-							} else {
-								discardDelete(plugin.app);
-								processedDeletes.push({ path: pending.path, status: "failed" });
-								return { ...result, deleted: false, error: deleteResult.error };
-							}
-						} else {
-							discardDelete(plugin.app);
-							processedDeletes.push({ path: pending.path, status: "cancelled" });
-							return { ...result, deleted: false, message: "User cancelled the deletion" };
-						}
-					}
-				}
-
-				// Handle rename_note with confirmation
-				if (name === "rename_note") {
-					const pendingRn = getPendingRename();
-					const hasNewPending = pendingRn && pendingRn.createdAt !== prevPendingRename?.createdAt;
-					if (hasNewPending && !toolCallFailed) {
-						const confirmed = await promptForRenameConfirmation(
-							plugin.app,
-							pendingRn.originalPath,
-							pendingRn.newPath
-						);
-
-						if (confirmed) {
-							const renameResult = await applyRename(plugin.app);
-							if (renameResult.success) {
-								processedRenames.push({ originalPath: pendingRn.originalPath, newPath: pendingRn.newPath, status: "applied" });
-								return { ...result, applied: true, message: `Renamed "${pendingRn.originalPath}" to "${pendingRn.newPath}"` };
-							} else {
-								discardRename(plugin.app);
-								processedRenames.push({ originalPath: pendingRn.originalPath, newPath: pendingRn.newPath, status: "failed" });
-								return { ...result, applied: false, error: renameResult.error };
-							}
-						} else {
-							discardRename(plugin.app);
-							processedRenames.push({ originalPath: pendingRn.originalPath, newPath: pendingRn.newPath, status: "discarded" });
-							return { ...result, applied: false, message: "User cancelled the rename" };
-						}
-					}
-				}
-
-				// Handle bulk_propose_edit with immediate confirmation
-				if (name === "bulk_propose_edit") {
-					const pendingBulk = getPendingBulkEdit();
-					const hasNewPending = pendingBulk && pendingBulk.createdAt !== prevPendingBulkEdit?.createdAt;
-					if (hasNewPending && !toolCallFailed && pendingBulk.items.length > 0) {
-						const selectedPaths = await promptForBulkEditConfirmation(
-							plugin.app,
-							pendingBulk.items
-						);
-
-						if (selectedPaths.length > 0) {
-							const applyResult = await applyBulkEdit(plugin.app, selectedPaths);
-							for (const path of applyResult.applied) {
-								processedEdits.push({ originalPath: path, status: "applied" });
-							}
-							for (const path of applyResult.failed) {
-								processedEdits.push({ originalPath: path, status: "failed" });
-							}
-							return {
-								...result,
-								applied: applyResult.applied,
-								failed: applyResult.failed,
-								message: applyResult.message,
-							};
-						} else {
-							discardBulkEdit();
-							for (const item of pendingBulk.items) {
-								processedEdits.push({ originalPath: item.path, status: "discarded" });
-							}
-							return { ...result, applied: [], message: "User cancelled all edits" };
-						}
-					}
-				}
-
-				// Handle bulk_propose_delete with immediate confirmation
-				if (name === "bulk_propose_delete") {
-					const pendingBulk = getPendingBulkDelete();
-					const hasNewPending = pendingBulk && pendingBulk.createdAt !== prevPendingBulkDelete?.createdAt;
-					if (hasNewPending && !toolCallFailed && pendingBulk.items.length > 0) {
-						const selectedPaths = await promptForBulkDeleteConfirmation(
-							plugin.app,
-							pendingBulk.items
-						);
-
-						if (selectedPaths.length > 0) {
-							const deleteResult = await applyBulkDelete(plugin.app, selectedPaths);
-							for (const path of deleteResult.deleted) {
-								processedDeletes.push({ path, status: "deleted" });
-							}
-							for (const path of deleteResult.failed) {
-								processedDeletes.push({ path, status: "failed" });
-							}
-							return {
-								...result,
-								deleted: deleteResult.deleted,
-								failed: deleteResult.failed,
-								message: deleteResult.message,
-							};
-						} else {
-							discardBulkDelete();
-							for (const item of pendingBulk.items) {
-								processedDeletes.push({ path: item.path, status: "cancelled" });
-							}
-							return { ...result, deleted: [], message: "User cancelled all deletions" };
-						}
-					}
-				}
-
-				// Handle bulk_propose_rename with immediate confirmation
-				if (name === "bulk_propose_rename") {
-					const pendingBulk = getPendingBulkRename();
-					const hasNewPending = pendingBulk && pendingBulk.createdAt !== prevPendingBulkRename?.createdAt;
-					if (hasNewPending && !toolCallFailed && pendingBulk.items.length > 0) {
-						const selectedPaths = await promptForBulkRenameConfirmation(
-							plugin.app,
-							pendingBulk.items
-						);
-
-						if (selectedPaths.length > 0) {
-							const renameResult = await applyBulkRename(plugin.app, selectedPaths);
-							for (const path of renameResult.applied) {
-								const item = pendingBulk.items.find(i => i.originalPath === path);
-								if (item) {
-									processedRenames.push({ originalPath: item.originalPath, newPath: item.newPath, status: "applied" });
-								}
-							}
-							for (const path of renameResult.failed) {
-								const item = pendingBulk.items.find(i => i.originalPath === path);
-								if (item) {
-									processedRenames.push({ originalPath: item.originalPath, newPath: item.newPath, status: "failed" });
-								}
-							}
-							return {
-								...result,
-								applied: renameResult.applied,
-								failed: renameResult.failed,
-								message: renameResult.message,
-							};
-						} else {
-							discardBulkRename();
-							for (const item of pendingBulk.items) {
-								processedRenames.push({ originalPath: item.originalPath, newPath: item.newPath, status: "discarded" });
-							}
-							return { ...result, applied: [], message: "User cancelled all renames" };
-						}
-					}
-				}
-
-				return result;
-			};
+			const { executeToolCall, processedEdits, processedDeletes, processedRenames } =
+				createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef);
 
 			let fullContent = "";
 			let thinkingContent = "";
@@ -3126,8 +3377,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 	const handleCompact = async () => {
 		if (messages.length < 2 || isLoading || isCompacting) return;
 
-		// CLI mode does not support compact
-		if (isCliMode) {
+		// CLI mode and Local LLM mode do not support compact (requires Gemini).
+		// `isCliMode` excludes tools-capable Local LLMs now, so check the
+		// underlying mode flags directly to keep compact blocked for them too.
+		if (isCliMode || isLocalLlmMode) {
 			new Notice(t("chat.compactNotAvailable"));
 			return;
 		}
@@ -3389,6 +3642,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						onDiscardEdit={handleDiscardEdit}
 						alwaysThink={getThinkingToggle() === true}
 						app={plugin.app}
+						localLlmConfigs={plugin.settings.localLlmConfigs}
 					/>
 
 					<InputArea

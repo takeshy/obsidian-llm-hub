@@ -11,6 +11,9 @@ import {
   getDefaultModel,
   isApiProviderModel,
   getApiProviderId,
+  isLocalLlmModel,
+  getLocalLlmId,
+  getLocalLlmModelName,
 } from "../types";
 import { formatError } from "../utils/error";
 
@@ -165,9 +168,43 @@ export class WorkspaceStateManager {
       if (Platform.isMobile || !cliConfig?.codexCliVerified) return fallback;
       return selected;
     }
-    if (selected === "local-llm") {
-      if (Platform.isMobile || !this.settings.localLlmVerified) return fallback;
-      return selected;
+    if (isLocalLlmModel(selected)) {
+      if (Platform.isMobile) return fallback;
+      const configs = this.settings.localLlmConfigs ?? [];
+      const id = getLocalLlmId(selected);
+      if (id) {
+        const match = configs.find(c => c.id === id && c.verified && c.enabled !== false);
+        if (!match) return fallback;
+        const enabled = (match.enabledModels && match.enabledModels.length > 0)
+          ? match.enabledModels
+          : (match.model ? [match.model] : []);
+        const requested = getLocalLlmModelName(selected);
+        if (requested) {
+          // Stored selection still names a model the user enabled — keep it.
+          if (enabled.includes(requested)) return selected;
+          // Stale: model was disabled or removed. Fall back to the config's
+          // first enabled model so the user lands on a runnable selection.
+          if (enabled.length > 0) {
+            return `local-llm:${match.id}:${enabled[0]}` as ModelType;
+          }
+          return fallback;
+        }
+        // Legacy `local-llm:{id}` (no model suffix) — pin it to a concrete
+        // model so the new dropdown can find a matching <option>.
+        if (enabled.length > 0) {
+          return `local-llm:${match.id}:${enabled[0]}` as ModelType;
+        }
+        return fallback;
+      }
+      // Legacy bare "local-llm" — upgrade to the first verified entry's
+      // first enabled model so the dropdown selection is well-formed.
+      const first = configs.find(c => c.verified && c.enabled !== false);
+      if (!first) return fallback;
+      const enabled = (first.enabledModels && first.enabledModels.length > 0)
+        ? first.enabledModels
+        : (first.model ? [first.model] : []);
+      if (enabled.length === 0) return fallback;
+      return `local-llm:${first.id}:${enabled[0]}` as ModelType;
     }
 
     // Validate api:* models against provider list

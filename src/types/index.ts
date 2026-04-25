@@ -106,10 +106,13 @@ export interface LlmHubSettings {
   // CLI provider settings
   cliConfig: CliProviderConfig;
 
-  // Local LLM settings
-  localLlmConfig: LocalLlmConfig;
-  localLlmVerified: boolean;
-  localLlmAvailableModels: string[];
+  // Local LLM settings (one or more configurations)
+  localLlmConfigs: LocalLlmConfig[];
+  // Legacy fields — populated only for backward-compat during migration. They
+  // are converted to `localLlmConfigs[0]` at load time and then dropped.
+  localLlmConfig?: LocalLlmConfig;
+  localLlmVerified?: boolean;
+  localLlmAvailableModels?: string[];
 
   // Workspace settings
   workspaceFolder: string;
@@ -423,29 +426,83 @@ export interface DiscussionState {
 // ==================== End Discussion types ====================
 
 // Supported local LLM frameworks
-export type LlmFramework = "ollama" | "lm-studio" | "anythingllm" | "vllm";
+export type LlmFramework = "ollama" | "lm-studio" | "anythingllm" | "vllm" | "opencode";
 
 // Local LLM configuration (OpenAI-compatible API)
 export interface LocalLlmConfig {
+  id: string;                   // Stable per-entry id (used in `local-llm:${id}:${model}` names)
+  name?: string;                // Optional display name; defaults to framework + model
   framework: LlmFramework;     // Which LLM framework is being used
   baseUrl: string;              // e.g. "http://localhost:11434" (Ollama) or "http://localhost:1234" (LM Studio)
-  model: string;                // e.g. "llama3", "mistral", "gemma2"
+  /**
+   * Default / single model. Kept for backward compatibility with the original
+   * one-model-per-config schema; new code should prefer `enabledModels` and
+   * resolve the requested model from the identifier instead.
+   */
+  model: string;
+  /** Models the user has selected for this config (one dropdown entry each). */
+  enabledModels?: string[];
   apiKey?: string;              // Optional API key (for services that require it)
   temperature?: number;         // 0.0-2.0 (undefined = server default)
   maxTokens?: number;           // Max response tokens (undefined = server default)
+  username?: string;            // Basic Auth username (e.g. OpenCode local server)
+  password?: string;            // Basic Auth password (e.g. OpenCode local server)
+  verified?: boolean;           // Whether this entry has been verified
+  enabled?: boolean;            // Whether this entry appears in the chat dropdown
+  availableModels?: string[];   // Models discovered during verify
+  /**
+   * Models that returned a tools-related error and have been auto-downgraded
+   * to the marker-based skill flow. Vault tools / function calling are not
+   * sent to these models on subsequent requests until the user clears the
+   * list from settings. Empty / unset means tools are attempted by default.
+   */
+  toolsUnsupportedModels?: string[];
+}
+
+/**
+ * Frameworks whose endpoints accept the OpenAI `/v1/chat/completions` shape
+ * (and therefore can route through `openaiChatWithToolsStream` for native
+ * function-calling support). Ollama is intentionally excluded because the
+ * existing path uses Ollama's native `/api/chat` and a separate tool format;
+ * users wanting tools with Ollama can point the entry at the `/v1` endpoint
+ * via the lm-studio framework. OpenCode local has its own session API.
+ */
+export function isToolsCompatibleFramework(framework: LlmFramework): boolean {
+  return framework === "lm-studio" || framework === "anythingllm" || framework === "vllm";
+}
+
+/** True if the user's vault tools should be attempted for this config + model. */
+export function isLocalLlmToolsEnabled(config: LocalLlmConfig, modelName: string): boolean {
+  if (!isToolsCompatibleFramework(config.framework)) return false;
+  return !(config.toolsUnsupportedModels?.includes(modelName));
 }
 
 export const DEFAULT_LOCAL_LLM_CONFIG: LocalLlmConfig = {
+  id: "",
   framework: "ollama",
   baseUrl: "http://localhost:11434",
   model: "",
 };
 
+/** Human-readable label for a local LLM entry — used in dropdowns and messages. */
+export function localLlmDisplayName(config: LocalLlmConfig, modelOverride?: string): string {
+  const trimmedName = config.name?.trim() ?? "";
+  // For named entries, only append a model when one is actually known so we
+  // don't fall back to "(ollama)"-style framework labels that look like real
+  // model ids. For unnamed entries, the framework is the most informative
+  // last-resort label.
+  const modelPart = modelOverride || config.model || config.enabledModels?.[0] || "";
+  if (trimmedName) {
+    return modelPart ? `${trimmedName} (${modelPart})` : trimmedName;
+  }
+  return `Local LLM (${modelPart || config.framework})`;
+}
+
 // Chat provider types
 export type ChatProvider = "api" | "gemini-cli" | "claude-cli" | "codex-cli" | "local-llm" | "api-provider";  // "api-provider" kept for legacy; new code uses isApiProviderModel()
 
 // API provider types for multi-provider support
-export type ApiProviderType = "gemini" | "openai" | "anthropic" | "openrouter" | "grok" | "custom";
+export type ApiProviderType = "gemini" | "openai" | "anthropic" | "openrouter" | "grok" | "opencodego" | "opencodezen" | "custom";
 
 export interface ApiProviderConfig {
   id: string;
@@ -465,6 +522,8 @@ export const KNOWN_PROVIDER_DEFAULTS: Record<string, { baseUrl: string; displayN
   anthropic: { baseUrl: "https://api.anthropic.com", displayName: "Anthropic" },
   openrouter: { baseUrl: "https://openrouter.ai/api", displayName: "OpenRouter" },
   grok: { baseUrl: "https://api.x.ai", displayName: "Grok" },
+  opencodego: { baseUrl: "https://opencode.ai/zen/go", displayName: "OpenCode Go" },
+  opencodezen: { baseUrl: "https://opencode.ai/zen", displayName: "OpenCode Zen" },
 };
 
 export interface CliProviderConfig {
@@ -487,13 +546,16 @@ export function hasVerifiedCli(config: CliProviderConfig): boolean {
   return !!(config.cliVerified || config.claudeCliVerified || config.codexCliVerified);
 }
 
-// Model types: CLI backends + API provider models
+// Model types: CLI backends + Local LLM entries + API provider models
 // API format: "api:{providerId}:{modelName}"
+// Local LLM format: "local-llm:{configId}"  (bare "local-llm" is accepted
+// for backward-compat and resolves to the first verified entry.)
 export type ModelType =
   | "gemini-cli"
   | "claude-cli"
   | "codex-cli"
   | "local-llm"
+  | `local-llm:${string}`
   | `api:${string}`;
 
 // Helper: get API key from first enabled Gemini provider
@@ -518,6 +580,111 @@ export function getApiProviderModelName(model: string): string {
   const rest = model.slice(4);
   const colonIdx = rest.indexOf(":");
   return colonIdx >= 0 ? rest.slice(colonIdx + 1) : "";
+}
+
+// Helper functions for local LLM model detection
+export function isLocalLlmModel(model: string): boolean {
+  return model === "local-llm" || model.startsWith("local-llm:");
+}
+
+/**
+ * Extract config id from a local LLM identifier.
+ *
+ * - `"local-llm"`              → `""` (legacy bare form)
+ * - `"local-llm:{id}"`         → `"{id}"`
+ * - `"local-llm:{id}:{model}"` → `"{id}"` (id stops at the first colon)
+ */
+export function getLocalLlmId(model: string): string {
+  if (model === "local-llm") return "";
+  if (!model.startsWith("local-llm:")) return "";
+  const rest = model.slice("local-llm:".length);
+  const colonIdx = rest.indexOf(":");
+  return colonIdx >= 0 ? rest.slice(0, colonIdx) : rest;
+}
+
+/**
+ * Extract the explicit model name from `local-llm:{id}:{model}`. Model names
+ * may themselves contain `:` or `/`, so we stop only at the first colon
+ * (which separates id from model). Returns `""` when the identifier has no
+ * model suffix.
+ */
+export function getLocalLlmModelName(model: string): string {
+  if (!model.startsWith("local-llm:")) return "";
+  const rest = model.slice("local-llm:".length);
+  const colonIdx = rest.indexOf(":");
+  return colonIdx >= 0 ? rest.slice(colonIdx + 1) : "";
+}
+
+/**
+ * Resolve the LocalLlmConfig that should back a `local-llm:{id}:{model}`
+ * (or legacy `local-llm:{id}` / `local-llm`) name for chat / discussion /
+ * discord — i.e. paths that actually run inference.
+ *
+ * Returns only configs that are both `verified` and not `enabled === false`
+ * so a stale reference (from saved workspace state, a discussion participant,
+ * or a Discord conversation) can't accidentally route to a disabled entry.
+ *
+ * The returned config has `model` overlaid with the model name from the
+ * identifier when it is present and listed in `enabledModels` (or in
+ * `availableModels` as a fallback). This lets one config back several
+ * dropdown entries — one per selected model.
+ *
+ * Use {@link findLocalLlmConfigById} for settings UI / display lookups that
+ * should still resolve disabled entries.
+ */
+export function getLocalLlmConfig(
+  model: string,
+  settings: LlmHubSettings,
+): LocalLlmConfig | null {
+  if (!isLocalLlmModel(model)) return null;
+  const configs = settings.localLlmConfigs ?? [];
+  const isActive = (c: LocalLlmConfig) => c.verified === true && c.enabled !== false;
+  const id = getLocalLlmId(model);
+
+  let base: LocalLlmConfig | null = null;
+  if (id) {
+    const match = configs.find(c => c.id === id);
+    base = match && isActive(match) ? match : null;
+  } else {
+    base = configs.find(isActive) ?? null;
+  }
+  if (!base) return null;
+
+  // Overlay the requested model name so the same config can back multiple
+  // dropdown entries (one per enabledModel). If the identifier omits the
+  // model suffix we fall back to the config's first enabled model, then to
+  // its legacy single `model` field.
+  const requested = getLocalLlmModelName(model);
+  const candidates = base.enabledModels && base.enabledModels.length > 0
+    ? base.enabledModels
+    : (base.availableModels ?? []);
+  let resolvedModel = base.model;
+  if (requested) {
+    if (candidates.includes(requested)) {
+      resolvedModel = requested;
+    } else {
+      // Identifier names a model the config no longer offers — refuse rather
+      // than silently substituting a different one.
+      return null;
+    }
+  } else if (!resolvedModel && candidates.length > 0) {
+    resolvedModel = candidates[0];
+  }
+  return { ...base, model: resolvedModel };
+}
+
+/**
+ * Look up a Local LLM entry by id without filtering on verified/enabled.
+ * Useful for rendering history (where the message was produced by what was
+ * a valid config at the time) and for settings UIs that need to show
+ * disabled entries.
+ */
+export function findLocalLlmConfigById(
+  id: string,
+  settings: LlmHubSettings,
+): LocalLlmConfig | null {
+  if (!id) return null;
+  return (settings.localLlmConfigs ?? []).find(c => c.id === id) ?? null;
 }
 
 export interface ModelInfo {
@@ -548,13 +715,6 @@ export const CODEX_CLI_MODEL: ModelInfo = {
   name: "codex-cli",
   displayName: "Codex CLI",
   description: "OpenAI Codex via command line (requires OpenAI account)",
-  isCliModel: true,
-};
-
-export const LOCAL_LLM_MODEL: ModelInfo = {
-  name: "local-llm",
-  displayName: "Local LLM",
-  description: "Local LLM server (Ollama, LM Studio, vLLM, etc.)",
   isCliModel: true,
 };
 
@@ -708,7 +868,18 @@ export function getDefaultModel(settings: LlmHubSettings): ModelType {
   if (cli?.cliVerified) return "gemini-cli";
   if (cli?.claudeCliVerified) return "claude-cli";
   if (cli?.codexCliVerified) return "codex-cli";
-  if (settings.localLlmVerified) return "local-llm";
+  const localLlm = (settings.localLlmConfigs ?? []).find(c => c.verified && c.enabled !== false);
+  if (localLlm) {
+    // Emit the same `local-llm:{id}:{model}` identifier shape that the Chat
+    // dropdown produces, so the initial selection actually matches a visible
+    // <option>.
+    const firstModel = (localLlm.enabledModels && localLlm.enabledModels.length > 0)
+      ? localLlm.enabledModels[0]
+      : localLlm.model;
+    if (firstModel) {
+      return `local-llm:${localLlm.id}:${firstModel}` as ModelType;
+    }
+  }
   return "gemini-cli";
 }
 
@@ -734,9 +905,7 @@ export const WORKFLOWS_FOLDER = "workflows";
 // Default settings
 export const DEFAULT_SETTINGS: LlmHubSettings = {
   cliConfig: DEFAULT_CLI_CONFIG,
-  localLlmConfig: DEFAULT_LOCAL_LLM_CONFIG,
-  localLlmVerified: false,
-  localLlmAvailableModels: [],
+  localLlmConfigs: [],
   workspaceFolder: DEFAULT_WORKSPACE_FOLDER,
   hideWorkspaceFolder: true,
   saveChatHistory: true,

@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import type { App } from "obsidian";
-import type { Message } from "src/types";
+import type { Message, LocalLlmConfig } from "src/types";
 import MessageBubble from "./MessageBubble";
 import { t } from "src/i18n";
 
@@ -13,6 +13,7 @@ interface MessageListProps {
   onDiscardEdit?: (messageIndex: number) => void;
   alwaysThink?: boolean;
   app: App;
+  localLlmConfigs?: LocalLlmConfig[];
 }
 
 // Extract source file name from user message (e.g., From "xxx.md":)
@@ -36,6 +37,7 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
   onDiscardEdit,
   alwaysThink,
   app,
+  localLlmConfigs,
 }, ref) => {
   // Get source file name for assistant message (from previous user message)
   const getSourceFileForIndex = (index: number): string | null => {
@@ -88,6 +90,7 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
           onApplyEdit={onApplyEdit ? () => onApplyEdit(index) : undefined}
           onDiscardEdit={onDiscardEdit ? () => onDiscardEdit(index) : undefined}
           app={app}
+          localLlmConfigs={localLlmConfigs}
         />
       ))}
 
@@ -101,6 +104,7 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
           }}
           isStreaming
           app={app}
+          localLlmConfigs={localLlmConfigs}
         />
       )}
 

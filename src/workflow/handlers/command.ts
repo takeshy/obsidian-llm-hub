@@ -2,7 +2,7 @@ import { App } from "obsidian";
 import type { LlmHubPlugin } from "../../plugin";
 import { GeminiClient, getGeminiClient } from "../../core/gemini";
 import { PersistentCliSession } from "../../core/cliProvider";
-import { isImageGenerationModel, isApiProviderModel, getApiProviderId, getApiProviderModelName, getGeminiApiKey, type ToolDefinition, type McpAppInfo, type StreamChunkUsage } from "../../types";
+import { isImageGenerationModel, isApiProviderModel, getApiProviderId, getApiProviderModelName, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, type ToolDefinition, type McpAppInfo, type StreamChunkUsage } from "../../types";
 import { getEnabledTools } from "../../core/tools";
 import { fetchMcpTools, createMcpToolExecutor, type McpToolDefinition } from "../../core/mcpTools";
 import { createToolExecutor } from "../../vault/toolExecutor";
@@ -14,6 +14,7 @@ import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "../../core
 import { searchLocalRag, loadRagMediaAttachments } from "../../core/localRagStore";
 import { openaiChatWithToolsStream } from "../../core/openaiProvider";
 import { anthropicChatWithToolsStream } from "../../core/anthropicProvider";
+import { localLlmChatStream } from "../../core/localLlmProvider";
 import {
 	getPendingEdit,
 	applyEdit,
@@ -173,28 +174,37 @@ Please revise the output based on the user's feedback above.`;
   let model = (modelName || plugin.getSelectedModel()) as import("../../types").ModelType;
   let geminiProviderConfig: typeof plugin.settings.apiProviders[number] | null = null;
 
-  // Check if this is a CLI model or API provider
+  // Check if this is a CLI model, Local LLM, or API provider
   let isCliModel = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli";
+  let isLocalLlm = isLocalLlmModel(model);
 
-  // If resolved model requires API key but none is configured, fall back to a verified CLI or API provider
-  // Only when the node didn't explicitly specify a non-CLI model
-  if (!isCliModel && !isApiProviderModel(model) && !getGeminiApiKey(plugin.settings) && !modelName) {
+  // If resolved model requires API key but none is configured, fall back to a
+  // verified API provider, Local LLM, or CLI. Only when the node didn't
+  // explicitly specify a non-fallback model.
+  if (!isCliModel && !isLocalLlm && !isApiProviderModel(model) && !getGeminiApiKey(plugin.settings) && !modelName) {
     // Try API provider first
     const activeProvider = plugin.settings.apiProviders.find(p => p.enabled && p.verified && p.enabledModels.length > 0);
     if (activeProvider) {
       model = `api:${activeProvider.id}:${activeProvider.enabledModels[0]}` as import("../../types").ModelType;
     } else {
-      const cliConfig = plugin.settings.cliConfig;
-      if (cliConfig?.cliVerified) {
-        model = "gemini-cli";
-      } else if (cliConfig?.claudeCliVerified) {
-        model = "claude-cli";
-      } else if (cliConfig?.codexCliVerified) {
-        model = "codex-cli";
+      const activeLocal = (plugin.settings.localLlmConfigs ?? []).find(c => c.verified && c.enabled !== false);
+      const localFirstModel = activeLocal && (activeLocal.enabledModels?.[0] ?? activeLocal.model);
+      if (activeLocal && localFirstModel) {
+        model = `local-llm:${activeLocal.id}:${localFirstModel}` as import("../../types").ModelType;
+        isLocalLlm = true;
       } else {
-        throw new Error("No API key, API provider, or verified CLI configured. Please set up a Google API key, add an API provider, or verify a CLI provider in settings.");
+        const cliConfig = plugin.settings.cliConfig;
+        if (cliConfig?.cliVerified) {
+          model = "gemini-cli";
+        } else if (cliConfig?.claudeCliVerified) {
+          model = "claude-cli";
+        } else if (cliConfig?.codexCliVerified) {
+          model = "codex-cli";
+        } else {
+          throw new Error("No API key, API provider, Local LLM, or verified CLI configured. Please set one up in settings.");
+        }
+        isCliModel = true;
       }
-      isCliModel = true;
     }
   }
 
@@ -269,6 +279,66 @@ Please revise the output based on the user's feedback above.`;
     }
     setSystemVariable(context, "_lastModel", model);
     return { usedModel: model, elapsedMs: Date.now() - cliStartTime };
+  }
+
+  // Local LLM model: route through localLlmChatStream (no tools/RAG —
+  // workflow command nodes only need plain text generation, mirroring CLI).
+  if (isLocalLlm) {
+    const llmConfig = getLocalLlmConfig(model, plugin.settings);
+    if (!llmConfig) {
+      throw new Error(`Local LLM "${model}" is not configured or not verified. Set it up in settings.`);
+    }
+
+    const messages = [
+      {
+        role: "user" as const,
+        content: prompt,
+        timestamp: Date.now(),
+      },
+    ];
+
+    const genId = tracing.generationStart(traceId ?? null, "local-llm-command", {
+      model,
+      input: prompt,
+      metadata: { framework: llmConfig.framework, baseUrl: llmConfig.baseUrl, modelId: llmConfig.model },
+    });
+
+    const localStartTime = Date.now();
+    let fullResponse = "";
+    try {
+      for await (const chunk of localLlmChatStream(llmConfig, messages, "", abortSignal)) {
+        if (chunk.type === "text") {
+          fullResponse += chunk.content ?? "";
+        } else if (chunk.type === "error") {
+          throw new Error(chunk.error || "Local LLM error");
+        } else if (chunk.type === "done") {
+          break;
+        }
+      }
+      tracing.generationEnd(genId, { output: fullResponse });
+    } catch (error) {
+      tracing.generationEnd(genId, { error: formatError(error) });
+      throw error;
+    }
+
+    // Save response to variable if specified (matches CLI branch semantics).
+    const saveTo = node.properties["saveTo"];
+    if (saveTo) {
+      let responseToSave = fullResponse;
+      const trimmed = fullResponse.trim();
+      const fenceMatch = trimmed.match(/^```\w*\r?\n([\s\S]+?)\r?\n```$/);
+      if (fenceMatch && !fenceMatch[1].includes("```")) {
+        responseToSave = fenceMatch[1];
+      }
+      context.variables.set(saveTo, responseToSave);
+      context.lastCommandInfo = {
+        nodeId: node.id,
+        originalPrompt,
+        saveTo,
+      };
+    }
+    setSystemVariable(context, "_lastModel", model);
+    return { usedModel: model, elapsedMs: Date.now() - localStartTime };
   }
 
   // API provider model: route to correct provider implementation

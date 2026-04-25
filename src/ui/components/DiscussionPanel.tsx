@@ -19,9 +19,9 @@ import {
   CLI_MODEL,
   CLAUDE_CLI_MODEL,
   CODEX_CLI_MODEL,
-  LOCAL_LLM_MODEL,
   DEFAULT_DISCUSSION_SETTINGS,
   getGeminiApiKey,
+  localLlmDisplayName,
 } from "src/types";
 import { DiscussionEngine, DiscussionUserInputRequest, DiscussionUserInputResponse } from "src/core/discussionEngine";
 import { searchLocalRag, loadRagMediaAttachments } from "src/core/localRagStore";
@@ -107,7 +107,9 @@ function getAvailableModels(plugin: LlmHubPlugin): ModelInfo[] {
   const geminiCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
   const claudeCliVerified = !Platform.isMobile && cliConfig.claudeCliVerified === true;
   const codexCliVerified = !Platform.isMobile && cliConfig.codexCliVerified === true;
-  const localLlmVerified = !Platform.isMobile && plugin.settings.localLlmVerified === true;
+  const activeLocalLlmConfigs = !Platform.isMobile
+    ? (plugin.settings.localLlmConfigs ?? []).filter(c => c.verified && c.enabled !== false)
+    : [];
   const enabledApiProviders = !Platform.isMobile ? plugin.settings.apiProviders.filter(p => p.enabled && p.verified) : [];
 
   return [
@@ -123,7 +125,17 @@ function getAvailableModels(plugin: LlmHubPlugin): ModelInfo[] {
     ...(geminiCliVerified ? [CLI_MODEL] : []),
     ...(claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
     ...(codexCliVerified ? [CODEX_CLI_MODEL] : []),
-    ...(localLlmVerified ? [LOCAL_LLM_MODEL] : []),
+    ...activeLocalLlmConfigs.flatMap(c => {
+      const models = (c.enabledModels && c.enabledModels.length > 0)
+        ? c.enabledModels
+        : (c.model ? [c.model] : []);
+      return models.map(m => ({
+        name: `local-llm:${c.id}:${m}` as ModelType,
+        displayName: localLlmDisplayName(c, m),
+        description: `Local LLM (${c.framework})`,
+        isCliModel: true,
+      }));
+    }),
   ];
 }
 

@@ -4,12 +4,12 @@
 
 **免费开源的** Obsidian AI 助手，提供**聊天**、**工作流自动化**和**语义搜索（RAG）**功能。支持多种 LLM 提供商 — 使用最适合您需求的 AI。
 
-> **使用任何 LLM 提供商：** [Gemini](https://ai.google.dev)、[OpenAI](https://platform.openai.com)、[Anthropic](https://console.anthropic.com)、[OpenRouter](https://openrouter.ai)、[Grok](https://console.x.ai)、本地 LLM（[Ollama](https://ollama.com)、[LM Studio](https://lmstudio.ai)、[vLLM](https://docs.vllm.ai)），或 CLI 工具（[Gemini CLI](https://github.com/google-gemini/gemini-cli)、[Claude Code](https://github.com/anthropics/claude-code)、[Codex CLI](https://github.com/openai/codex)）。
+> **使用任何 LLM 提供商：** [Gemini](https://ai.google.dev)、[OpenAI](https://platform.openai.com)、[Anthropic](https://console.anthropic.com)、[OpenRouter](https://openrouter.ai)、[Grok](https://console.x.ai)、[OpenCode Zen / Go](https://opencode.ai)、本地 LLM（[Ollama](https://ollama.com)、[LM Studio](https://lmstudio.ai)、[vLLM](https://docs.vllm.ai)、[OpenCode](https://opencode.ai)），或 CLI 工具（[Gemini CLI](https://github.com/google-gemini/gemini-cli)、[Claude Code](https://github.com/anthropics/claude-code)、[Codex CLI](https://github.com/openai/codex)）。
 
 ## 主要特性
 
-- **多提供商 LLM 聊天** - 使用 Gemini、OpenAI、Anthropic、OpenRouter、Grok、本地 LLM 或 CLI 后端
-- **仓库操作** - AI 通过函数调用（Gemini、OpenAI、Anthropic）读取、写入、搜索和编辑您的笔记
+- **多提供商 LLM 聊天** - 使用 Gemini、OpenAI、Anthropic、OpenRouter、Grok、OpenCode Zen/Go、本地 LLM 或 CLI 后端
+- **仓库操作** - AI 通过函数调用读取、写入、搜索和编辑您的笔记（Gemini、OpenAI、Anthropic、OpenCode Zen/Go，以及通过 LM Studio / vLLM / AnythingLLM 的支持工具的本地 LLM）
 - **工作流构建器** - 使用可视化节点编辑器和 25 种节点类型自动化多步骤任务
 - **语义搜索（RAG）** - 本地向量搜索，提供专用搜索标签页、PDF 预览和结果发送至聊天功能
 - **AI Discussion** - 多模型辩论竞技场，支持并行回复、投票和获胜者裁定
@@ -44,7 +44,7 @@
 ### Gemini 免费 API 密钥使用技巧
 
 - **速率限制** 按模型计算，每日重置。切换模型可继续使用。
-- **Gemma 4** 无法在单个请求中同时使用函数调用和 RAG/Web Search。当 RAG 或 Web Search 启用时，Vault 工具会自动禁用。**CLI 模型**和**本地 LLM** 完全不支持仓库操作，但**工作流仍可使用 `note`、`note-read` 等节点类型读写笔记**。`{content}` 和 `{selection}` 变量同样有效。
+- **Gemma 4** 无法在单个请求中同时使用函数调用和 RAG/Web Search。当 RAG 或 Web Search 启用时，Vault 工具会自动禁用。**CLI 模型**、**Ollama** 和 **OpenCode (Local)** 不支持 Vault 工具（请使用 **工作流**（`note`、`note-read` 等）或 `{content}` / `{selection}` 变量进行笔记操作）。**LM Studio / vLLM / AnythingLLM** 本地 LLM 在底层模型支持 OpenAI 风格函数调用时支持 Vault 工具 — 不兼容的模型会在首次使用时自动检测并降级到基于标记的 skill 模式。
 
 ---
 
@@ -92,7 +92,7 @@ AI 聊天功能提供与您所选 LLM 提供商的交互式对话界面，与您
 > `{selection}` 和 `{content}` 都**故意不在输入区域展开**——由于聊天输入框较小，展开长文本会使输入变得困难。内容会在您发送消息时展开，您可以通过查看聊天中已发送的消息来验证这一点。
 
 > [!NOTE]
-> 仓库文件的 @ 提及仅插入文件路径 - AI 通过工具读取内容。这在 CLI 模型或本地 LLM 中不可用（不支持仓库工具）。Gemini CLI 可通过 shell 读取文件，但响应格式可能有所不同。
+> 仓库文件的 @ 提及仅插入文件路径 - AI 通过工具读取内容。这在 CLI 模型、Ollama 或 OpenCode (Local) 中不可用（不支持仓库工具）；Gemini CLI 可通过 shell 读取文件，但响应格式可能有所不同。**LM Studio / vLLM / AnythingLLM** 本地 LLM 在加载的模型支持 tool calling 时可正常工作。
 
 ## 文件附件
 
@@ -145,7 +145,7 @@ AI 可以使用以下工具与您的仓库交互：
 
 **为什么某些模式是强制的：**
 
-- **CLI/本地 LLM 模型**：这些模型不支持函数调用，因此无法使用 Vault 工具。
+- **CLI 模型、Ollama、OpenCode (Local)**：不公开 OpenAI 风格的函数调用，因此无法使用 Vault 工具。**LM Studio / vLLM / AnythingLLM** 本地 LLM 在加载的模型支持 tool calling 时**可以**使用 Vault 工具；如果模型拒绝首次 tools 请求，会自动设置标记并在后续轮次回退到标记模式（在 **设置 → Local LLM → Re-enable tools** 中可清除该标记）。
 - **Gemma 4**：函数调用和 RAG/Web Search 无法在单个请求中同时使用。当一个启用时，另一个会自动禁用。
 
 ## 安全编辑
@@ -504,9 +504,16 @@ MCP（Model Context Protocol）服务器提供额外的工具，扩展 AI 在 Va
 
 使用自定义 Base URL 和模型配置任何 OpenAI 兼容端点。OpenRouter 提供来自各种提供商的数百个模型。
 
+### OpenCode Zen / Go
+
+OpenCode 通过同一账户提供两种托管网关，均可在提供商下拉菜单中选择：
+
+- **OpenCode Zen** (`https://opencode.ai/zen`) — 按使用量付费，包含多个免费模型（Big Pickle、MiniMax M2.5 Free 等）和广泛的模型目录（Claude、GPT-5.x 等）。公开 OpenAI 兼容的 `/v1/models` + `/v1/chat/completions`，因此模型会自动列出。
+- **OpenCode Go** (`https://opencode.ai/zen/go`) — 首月 $5，之后每月 $10 的订阅，提供精选编程模型（GLM、Kimi、DeepSeek、MiMo、MiniMax、Qwen）。仅公开 `/v1/chat/completions`，因此插件在 Verify 时回退到内置模型列表。
+
 ### 本地 LLM
 
-通过 Ollama、LM Studio、vLLM 或 AnythingLLM 连接本地运行的模型。模型会从运行的服务器自动检测。
+通过 Ollama、LM Studio、vLLM、AnythingLLM 或 OpenCode 本地服务器连接本地运行的模型。模型会从运行的服务器自动检测。
 
 ## 安装
 
@@ -542,6 +549,8 @@ npm run build
 | Anthropic | [console.anthropic.com](https://console.anthropic.com) |
 | OpenRouter | [openrouter.ai](https://openrouter.ai) |
 | Grok | [console.x.ai](https://console.x.ai) |
+| OpenCode Zen | [opencode.ai](https://opencode.ai) |
+| OpenCode Go | [opencode.ai](https://opencode.ai) |
 
 您也可以添加自定义的 OpenAI 兼容端点。
 
@@ -551,12 +560,53 @@ npm run build
 
 连接本地运行的 LLM 服务器：
 
-1. 启动您的本地服务器（Ollama、LM Studio、vLLM 或 AnythingLLM）
+1. 启动您的本地服务器（Ollama、LM Studio、vLLM、AnythingLLM 或 OpenCode）
 2. 在插件设置中输入服务器 URL
 3. 点击"Verify"以检测可用模型
 
 > [!NOTE]
-> 本地 LLM 不支持函数调用（Vault 工具）。请使用工作流进行笔记操作。
+> **LM Studio / vLLM / AnythingLLM** 本地 LLM 对 vault 工具使用 OpenAI 风格的函数调用 — 在支持 tools 的模型上默认启用。如果模型拒绝首次 tools 请求，会自动设置标记并在后续轮次降级到基于标记的 skill 模式；在 **设置 → Local LLM → Re-enable tools** 中清除标记可重试。
+>
+> **Ollama** 和 **OpenCode (Local)** 仍仅使用标记模式。请对这些框架使用工作流或 RAG 进行笔记操作。
+
+#### OpenCode 本地服务器
+
+OpenCode 框架连接到本地的 `opencode serve` 实例，该实例公开自己的 HTTP API，而不是 OpenAI 兼容的 `/v1/chat/completions` 形式。流式传输使用服务器的 `/global/event` SSE 端点。
+
+##### macOS / Linux
+
+1. 安装 OpenCode CLI：
+   ```bash
+   curl -fsSL https://opencode.ai/install | bash
+   ```
+2. 启动服务器：
+   ```bash
+   opencode serve
+   ```
+   默认监听 `http://localhost:4096`。
+3. 在插件设置 → **本地 LLM** 中选择 **OpenCode (Local)**，保持默认 URL（`http://localhost:4096`），然后点击 **Fetch models**。
+4. 模型以 `<providerID>/<modelID>` 格式列出（例如 `google/gemini-flash-lite-latest`）。选择一个并保存。
+
+##### Windows (WSL)
+
+OpenCode 在 Windows 上[推荐使用 WSL](https://opencode.ai/docs/ja/windows-wsl)，以获得文件系统性能和工具兼容性。由于 Obsidian 在 Windows 主机上运行，服务器必须绑定到可访问的接口，并且 — 因为它会从 WSL 外部可访问 — **必须用密码保护**。
+
+1. 安装 WSL（Microsoft [官方指南](https://learn.microsoft.com/windows/wsl/install)），打开 WSL 终端。
+2. 在 WSL 内安装 OpenCode：
+   ```bash
+   curl -fsSL https://opencode.ai/install | bash
+   ```
+3. 使用密码并绑定到所有接口启动服务器：
+   ```bash
+   OPENCODE_SERVER_PASSWORD='your-password' opencode serve --hostname 0.0.0.0 --port 4096
+   ```
+   WSL2 会自动将 `localhost` 转发到 Windows 主机，因此从 Obsidian 中 URL 是 `http://localhost:4096`。如果无法解析，请在 WSL 中运行 `hostname -I` 并改用 `http://<wsl-ip>:4096`。
+4. 在插件设置 → **本地 LLM** → **OpenCode (Local)**：
+   - **Base URL**：`http://localhost:4096`（或 WSL 的 IP）
+   - **Username**：`opencode`（默认值；如设置了 `OPENCODE_SERVER_USERNAME` 则使用该值）
+   - **Password**：`OPENCODE_SERVER_PASSWORD` 设置的值
+
+   点击 **Fetch models**，选择一个 `<providerID>/<modelID>` 格式的模型并保存。
 
 ### CLI 模式（Gemini / Claude / Codex）
 

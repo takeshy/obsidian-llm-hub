@@ -44,6 +44,7 @@ export class LocalLlmModal extends Modal {
       "lm-studio": "http://localhost:1234",
       anythingllm: "http://localhost:3001/api",
       vllm: "http://localhost:8000",
+      opencode: "http://localhost:4096",
     };
 
     new Setting(contentEl)
@@ -55,6 +56,7 @@ export class LocalLlmModal extends Modal {
           .addOption("lm-studio", "LM Studio (OpenAI compatible)")
           .addOption("anythingllm", "AnythingLLM")
           .addOption("vllm", "vLLM")
+          .addOption("opencode", "OpenCode (Local)")
           .setValue(this.config.framework)
           .onChange((value) => {
             const fw = value as LlmFramework;
@@ -99,7 +101,35 @@ export class LocalLlmModal extends Modal {
         text.inputEl.type = "password";
       });
 
-    // Fetch models + model selector
+    // Basic Auth (OpenCode local server may set OPENCODE_SERVER_USERNAME / PASSWORD)
+    if (this.config.framework === "opencode") {
+      new Setting(contentEl)
+        .setName(t("settings.localLlmModal.username"))
+        .setDesc(t("settings.localLlmModal.usernameDesc"))
+        .addText((text) => {
+          text
+            .setPlaceholder(t("settings.localLlmModal.usernamePlaceholder"))
+            .setValue(this.config.username || "")
+            .onChange((value) => {
+              this.config.username = value || undefined;
+            });
+        });
+
+      new Setting(contentEl)
+        .setName(t("settings.localLlmModal.password"))
+        .setDesc(t("settings.localLlmModal.passwordDesc"))
+        .addText((text) => {
+          text
+            .setPlaceholder(t("settings.localLlmModal.passwordPlaceholder"))
+            .setValue(this.config.password || "")
+            .onChange((value) => {
+              this.config.password = value || undefined;
+            });
+          text.inputEl.type = "password";
+        });
+    }
+
+    // Fetch models + multi-select checklist (mirrors API Provider settings)
     const fetchSetting = new Setting(contentEl)
       .setName(t("settings.localLlmModal.model"))
       .setDesc(t("settings.localLlmModal.modelDesc"));
@@ -127,9 +157,21 @@ export class LocalLlmModal extends Modal {
             }
             this.fetchedModels = models;
             this.modelsFetched = true;
-            if (!this.config.model || !models.includes(this.config.model)) {
-              this.config.model = models[0];
+            // Pre-select sensibly: if the user already chose models, keep the
+            // ones that still exist. Otherwise fall back to the legacy single
+            // `model` field, or the first fetched model when even that is empty.
+            const previouslyEnabled = this.config.enabledModels ?? [];
+            const stillValid = previouslyEnabled.filter(m => models.includes(m));
+            if (stillValid.length > 0) {
+              this.config.enabledModels = stillValid;
+            } else if (this.config.model && models.includes(this.config.model)) {
+              this.config.enabledModels = [this.config.model];
+            } else {
+              this.config.enabledModels = [models[0]];
             }
+            // Keep config.model in sync with the first enabled model so legacy
+            // code paths that still read it work without surprise.
+            this.config.model = this.config.enabledModels[0];
             this.updateSaveButton();
             this.display();
           } catch (err) {
@@ -142,19 +184,47 @@ export class LocalLlmModal extends Modal {
         })
     );
 
-    // Model dropdown (only shown after fetch)
+    // Multi-select checklist (only shown after fetch)
     if (this.modelsFetched && this.fetchedModels.length > 0) {
-      new Setting(contentEl)
-        .addDropdown((dropdown) => {
-          for (const model of this.fetchedModels) {
-            dropdown.addOption(model, model);
-          }
-          dropdown
-            .setValue(this.config.model || this.fetchedModels[0])
-            .onChange((value) => {
-              this.config.model = value;
-            });
+      const modelSetting = new Setting(contentEl).setDesc(t("settings.localLlmModal.modelMultiDesc"));
+
+      const items: HTMLElement[] = [];
+      if (this.fetchedModels.length > 20) {
+        const filterInput = modelSetting.controlEl.createEl("input", {
+          type: "text",
+          placeholder: t("settings.apiProviderModelFilter"),
+          cls: "llm-hub-model-filter",
         });
+        filterInput.addEventListener("input", () => {
+          const query = filterInput.value.toLowerCase();
+          for (const item of items) {
+            const name = item.textContent?.toLowerCase() ?? "";
+            item.toggleClass("llm-hub-hidden", !name.includes(query));
+          }
+        });
+      }
+
+      const listEl = modelSetting.controlEl.createDiv({ cls: "llm-hub-model-checklist" });
+      for (const m of this.fetchedModels) {
+        const label = listEl.createEl("label", { cls: "llm-hub-model-check-item" });
+        const cb = label.createEl("input", { type: "checkbox" });
+        cb.checked = (this.config.enabledModels ?? []).includes(m);
+        cb.addEventListener("change", () => {
+          const current = this.config.enabledModels ?? [];
+          if (cb.checked) {
+            if (!current.includes(m)) {
+              this.config.enabledModels = [...current, m];
+            }
+          } else {
+            this.config.enabledModels = current.filter(x => x !== m);
+          }
+          // Keep `model` aligned with the first enabled selection.
+          this.config.model = (this.config.enabledModels ?? [])[0] ?? "";
+          this.updateSaveButton();
+        });
+        label.createSpan({ text: m });
+        items.push(label);
+      }
     }
 
     // Temperature
@@ -211,6 +281,10 @@ export class LocalLlmModal extends Modal {
             }
             if (!this.modelsFetched) {
               new Notice(t("settings.localLlmModal.fetchRequired"));
+              return;
+            }
+            if (!this.config.enabledModels || this.config.enabledModels.length === 0) {
+              new Notice(t("settings.localLlmModal.modelRequired"));
               return;
             }
             void this.onSave(this.config, this.fetchedModels);

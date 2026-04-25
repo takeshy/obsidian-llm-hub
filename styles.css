@@ -8900,3 +8900,10 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   word-break: break-word;
   user-select: text;
 }
+
+/* Indent sub-rows nested under a Local LLM entry (e.g. "Tools auto-disabled"). */
+.llm-hub-sub-setting {
+  padding-left: 32px;
+  border-top: none;
+  opacity: 0.85;
+}

@@ -14,7 +14,28 @@ import OpenAI from "openai";
 import type { Message, StreamChunk, ToolDefinition, GeneratedImage } from "../types";
 import { calculateCost } from "./modelPricing";
 import { parseThinkTags } from "./thinkTagParser";
-import { createProxyFetch } from "./proxyFetch";
+import { createProxyFetch, createNodeFetch } from "./proxyFetch";
+
+/**
+ * Build the fetch implementation to hand to the OpenAI SDK. We can't rely on
+ * the renderer's built-in fetch because many OpenAI-compatible gateways
+ * (OpenCode Zen / Go, self-hosted reverse proxies, etc.) don't set
+ * `Access-Control-Allow-Origin`, and CORS preflight then blocks the request.
+ * Routing through Node's http/https module bypasses that entirely.
+ *
+ * - With a proxy configured → tunnel via `createProxyFetch`.
+ * - Otherwise on desktop  → direct Node fetch via `createNodeFetch`.
+ * - On mobile (no Node)   → fall back to the renderer's fetch and accept
+ *   that CORS-blocked endpoints won't work.
+ */
+function buildSdkFetch(proxyUrl?: string, proxyBypass?: string): typeof fetch | undefined {
+  if (proxyUrl) return createProxyFetch(proxyUrl, proxyBypass);
+  try {
+    return createNodeFetch();
+  } catch {
+    return undefined;
+  }
+}
 
 /** DALL-E model name patterns */
 const DALLE_PATTERN = /^dall-e/i;
@@ -22,6 +43,87 @@ const DALLE_PATTERN = /^dall-e/i;
 /** Check if a model name is a DALL-E image generation model */
 export function isOpenAiImageModel(model: string): boolean {
   return DALLE_PATTERN.test(model);
+}
+
+/**
+ * Verify an OpenCode Go provider. Go does not expose `/v1/models`, so this
+ * probes `/v1/chat/completions` with a known-valid model name and an empty
+ * `messages` array. The server validates the API key first when the model
+ * name is recognised, so an `AuthError` indicates the key is wrong.
+ *
+ *   - 401 or 403                 → fail (treat as authentication failure
+ *                                  regardless of the response body — empty
+ *                                  bodies, unexpected wrappers, etc. should
+ *                                  never silently pass)
+ *   - 200 / any other HTTP code  → success (server is reachable; chat-time
+ *                                  errors are surfaced through normal flow)
+ *   - DNS / connection failure   → fail (URL unreachable)
+ *
+ * `probeModel` is one of the documented OpenCode Go model ids so that auth
+ * checking happens before model validation. If the fallback list ever drifts
+ * out of sync, the worst case is the verifier degrades to "any non-401/403
+ * HTTP response = success".
+ */
+const OPENCODE_GO_VERIFY_PROBE_MODEL = "kimi-k2.6";
+
+export async function verifyOpencodeGo(
+  baseUrl: string,
+  apiKey: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
+): Promise<{ success: boolean; error?: string }> {
+  if (!apiKey) {
+    return { success: false, error: "API key required" };
+  }
+  const url = `${baseUrl.replace(/\/+$/, "")}/v1/chat/completions`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${apiKey}`,
+  };
+  const body = JSON.stringify({
+    model: OPENCODE_GO_VERIFY_PROBE_MODEL,
+    messages: [],
+  });
+
+  // Pull a short detail snippet out of the response body for the error
+  // message. The status code drives the success/fail decision either way.
+  const extractDetail = (text: string | undefined): string => {
+    if (!text) return "";
+    try {
+      const parsed = JSON.parse(text) as { error?: { message?: string } };
+      return parsed.error?.message ?? "";
+    } catch {
+      return text.trim().slice(0, 200);
+    }
+  };
+
+  try {
+    if (proxyUrl) {
+      const proxyFetch = createProxyFetch(proxyUrl, proxyBypass);
+      const res = await proxyFetch(url, { method: "POST", headers, body });
+      const text = await res.text().catch(() => "");
+      if (res.status === 401 || res.status === 403) {
+        const detail = extractDetail(text);
+        return {
+          success: false,
+          error: `Authentication failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
+        };
+      }
+      return { success: res.status > 0 };
+    }
+    const res = await requestUrl({ url, method: "POST", headers, body, throw: false });
+    if (res.status === 401 || res.status === 403) {
+      const detail = extractDetail(res.text);
+      return {
+        success: false,
+        error: `Authentication failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
+      };
+    }
+    return { success: res.status > 0 };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Cannot reach ${baseUrl}: ${message}` };
+  }
 }
 
 /**
@@ -66,11 +168,12 @@ export async function verifyApiProvider(
 }
 
 function createClient(baseUrl: string, apiKey: string, proxyUrl?: string, proxyBypass?: string): OpenAI {
+  const sdkFetch = buildSdkFetch(proxyUrl, proxyBypass);
   return new OpenAI({
     apiKey,
     baseURL: `${baseUrl.replace(/\/+$/, "")}/v1`,
     dangerouslyAllowBrowser: true,
-    ...(proxyUrl ? { fetch: createProxyFetch(proxyUrl, proxyBypass) } : {}),
+    ...(sdkFetch ? { fetch: sdkFetch } : {}),
   });
 }
 
@@ -90,13 +193,20 @@ function buildMessages(
   for (const msg of messages) {
     const role = msg.role === "user" ? "user" as const : "assistant" as const;
 
+    // Prefer `llmContent` (carries inlined non-image attachment text /
+    // workspace context built by Local LLM senders) over the bare display
+    // `content`. The display content is for the chat UI; the LLM needs the
+    // full prompt body. Other paths (API provider) don't set llmContent so
+    // this is a no-op for them.
+    const textBody = (role === "user" && msg.llmContent) ? msg.llmContent : msg.content;
+
     if (role === "user" && msg.attachments && msg.attachments.length > 0) {
       const multimodalAttachments = msg.attachments.filter(
         a => a.type === "image" || a.type === "pdf"
       );
       if (multimodalAttachments.length > 0) {
         const parts: OpenAI.ChatCompletionContentPart[] = [
-          { type: "text", text: msg.content },
+          { type: "text", text: textBody },
         ];
         for (const att of multimodalAttachments) {
           if (att.type === "image") {
@@ -121,7 +231,7 @@ function buildMessages(
       }
     }
 
-    result.push({ role, content: msg.content });
+    result.push({ role, content: textBody });
   }
 
   return result;
@@ -377,6 +487,7 @@ export async function* openaiChatWithToolsStream(
   const MAX_TOOL_ROUNDS = 20;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     let textContent = "";
+    let reasoningContent = "";
     let hasToolCalls = false;
     const toolCallAccum = new Map<number, { id: string; name: string; arguments: string }>();
 
@@ -394,12 +505,17 @@ export async function* openaiChatWithToolsStream(
         const choice = chunk.choices?.[0];
         const delta = choice?.delta;
 
-        // Native reasoning fields (reasoning_content for DeepSeek, reasoning for OpenRouter)
+        // Native reasoning fields (reasoning_content for DeepSeek/Moonshot/Kimi,
+        // reasoning for OpenRouter). Accumulate locally so we can echo it back
+        // on the assistant message — Moonshot/Kimi rejects round 2+ with
+        // "thinking is enabled but reasoning_content is missing in assistant
+        // tool call message" otherwise.
         const deltaRecord = delta as Record<string, unknown> | undefined;
         if (deltaRecord && ("reasoning_content" in deltaRecord || "reasoning" in deltaRecord)) {
           hasNativeReasoning = true;
           const reasoningText = (deltaRecord.reasoning_content ?? deltaRecord.reasoning) as string | undefined;
           if (reasoningText) {
+            reasoningContent += reasoningText;
             yield { type: "thinking", content: reasoningText };
           }
         }
@@ -488,7 +604,11 @@ export async function* openaiChatWithToolsStream(
     // Execute tool calls
     const toolCallEntries = [...toolCallAccum.values()];
 
-    conversationMessages.push({
+    // Echo reasoning_content back when the model emitted any. Required by
+    // Moonshot/Kimi K2.x via OpenCode Zen Go (which validates that thinking
+    // models include reasoning_content on every assistant tool-call turn);
+    // ignored by OpenAI/OpenRouter/etc. that don't read the field.
+    const assistantMsg: Record<string, unknown> = {
       role: "assistant",
       content: textContent || null,
       tool_calls: toolCallEntries.map(tc => ({
@@ -496,7 +616,11 @@ export async function* openaiChatWithToolsStream(
         type: "function" as const,
         function: { name: tc.name, arguments: tc.arguments },
       })),
-    });
+    };
+    if (reasoningContent) {
+      assistantMsg.reasoning_content = reasoningContent;
+    }
+    conversationMessages.push(assistantMsg as unknown as OpenAI.ChatCompletionMessageParam);
 
     for (const tc of toolCallEntries) {
       try {

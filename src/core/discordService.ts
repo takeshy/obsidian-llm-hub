@@ -11,7 +11,7 @@
 import { App, Notice, requestUrl } from "obsidian";
 import type { LlmHubPlugin } from "../plugin";
 import type { DiscordSettings, Message, ToolDefinition, ModelType, SlashCommand } from "../types";
-import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey } from "../types";
+import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, localLlmDisplayName } from "../types";
 import { getEnabledTools, skillScriptTool, skillWorkflowTool } from "./tools";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "../workflow/workflowSpec";
 import { createToolExecutor } from "../vault/toolExecutor";
@@ -932,8 +932,19 @@ export class DiscordService {
     if (cli?.claudeCliVerified) models.push({ name: "claude-cli", displayName: "Claude CLI" });
     if (cli?.codexCliVerified) models.push({ name: "codex-cli", displayName: "Codex CLI" });
 
-    // Local LLM
-    if (settings.localLlmVerified) models.push({ name: "local-llm", displayName: "Local LLM" });
+    // Local LLM — one entry per (verified config × enabled model)
+    const localConfigs = (settings.localLlmConfigs ?? []).filter(c => c.verified && c.enabled !== false);
+    for (const config of localConfigs) {
+      const localModels = (config.enabledModels && config.enabledModels.length > 0)
+        ? config.enabledModels
+        : (config.model ? [config.model] : []);
+      for (const m of localModels) {
+        models.push({
+          name: `local-llm:${config.id}:${m}`,
+          displayName: localLlmDisplayName(config, m),
+        });
+      }
+    }
 
     return models;
   }
@@ -1038,7 +1049,7 @@ export class DiscordService {
 
     // Inject skill system prompt
     if (loadedSkills.length > 0) {
-      systemPrompt += buildSkillSystemPrompt(loadedSkills, { cliMode: isCliModel || model === "local-llm" });
+      systemPrompt += buildSkillSystemPrompt(loadedSkills, { cliMode: isCliModel || isLocalLlmModel(model) });
     }
 
     // Build vault tools
@@ -1170,9 +1181,9 @@ export class DiscordService {
       return await this.generateViaCli(model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath);
     }
 
-    if (model === "local-llm") {
+    if (isLocalLlmModel(model)) {
       conversation.lastInteractionId = undefined;
-      return await this.generateViaLocalLlm(messages, systemPrompt, scriptMap, workflowMap, vaultBasePath);
+      return await this.generateViaLocalLlm(model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath);
     }
 
     const webSearchEnabled = conversation.webSearch;
@@ -1289,15 +1300,16 @@ export class DiscordService {
   }
 
   private async generateViaLocalLlm(
+    model: string,
     messages: Message[],
     systemPrompt: string,
     scriptMap: Map<string, { skill: LoadedSkill; scriptRef: SkillScriptRef; vaultPath: string }>,
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
     vaultBasePath: string,
   ): Promise<string> {
-    const llmConfig = this.plugin.settings.localLlmConfig;
-    if (!this.plugin.settings.localLlmVerified || !llmConfig?.model) {
-      throw new Error("Local LLM is not configured");
+    const llmConfig = getLocalLlmConfig(model, this.plugin.settings);
+    if (!llmConfig || !llmConfig.verified || !llmConfig.model) {
+      throw new Error(`Local LLM "${model}" is not configured or not verified`);
     }
 
     const localSystemPrompt = [
