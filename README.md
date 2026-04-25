@@ -9,7 +9,7 @@
 ## Highlights
 
 - **Multi-Provider LLM Chat** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, local LLMs, or CLI backends
-- **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic)
+- **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, and tools-capable local LLMs via LM Studio / vLLM / AnythingLLM)
 - **Workflow Builder** - Automate multi-step tasks with visual node editor and 25 node types
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
 - **AI Discussion** - Multi-model debate arena with parallel responses, voting, and winner determination
@@ -44,7 +44,7 @@
 ### Gemini Free API Key Tips
 
 - **Rate limits** are per-model and reset daily. Switch models to continue working.
-- **Gemma 4** cannot combine function calling with RAG/Web Search in a single request. When RAG or Web Search is active, vault tools are automatically disabled. **CLI models** and **Local LLMs** don't support vault operations at all, but **Workflows can still read/write notes** using `note`, `note-read`, and other node types. `{content}` and `{selection}` variables also work.
+- **Gemma 4** cannot combine function calling with RAG/Web Search in a single request. When RAG or Web Search is active, vault tools are automatically disabled. **CLI models**, **Ollama**, and the **OpenCode local server** don't support vault tools (use **Workflows** with `note`, `note-read`, etc., or `{content}` / `{selection}` variables). **LM Studio / vLLM / AnythingLLM** local LLMs DO support vault tools when the underlying model supports OpenAI-style function calling — incompatible models are auto-detected on first use and downgraded to marker-based skill mode.
 
 ---
 
@@ -145,7 +145,7 @@ When the AI handles notes in Chat, it uses Vault tools. Control which vault tool
 
 **Why some modes are forced:**
 
-- **CLI/Local LLM models**: These models do not support function calling, so Vault tools cannot be used.
+- **CLI models, Ollama, OpenCode (Local)**: These do not expose OpenAI-style function calling, so Vault tools cannot be used. **LM Studio / vLLM / AnythingLLM** local LLMs CAN use Vault tools when the loaded model supports tool calling; if a model rejects the first tools request, it is auto-flagged and falls back to marker mode for subsequent turns (clear the flag in **Settings → Local LLM → Re-enable tools**).
 - **Gemma 4**: Function calling and RAG/Web Search cannot be combined in a single request. When one is active, the other is automatically disabled.
 
 ## Safe Editing
@@ -572,7 +572,9 @@ Connect to locally running LLM servers:
 3. Click "Verify" to detect available models
 
 > [!NOTE]
-> Local LLMs do not support function calling (vault tools). Use workflows for note operations.
+> **LM Studio / vLLM / AnythingLLM** local LLMs use OpenAI-style function calling for vault tools — enabled by default for tools-capable models. If a model rejects the first tools request it is auto-flagged and downgraded to marker-based skill mode for subsequent turns; clear the flag in **Settings → Local LLM → Re-enable tools** to retry.
+>
+> **Ollama** and **OpenCode (Local)** still use marker mode only. Use workflows or RAG for note operations with those frameworks.
 
 #### OpenCode Local Server
 
