@@ -83,6 +83,34 @@ export function displayLocalLlmSettings(containerEl: HTMLElement, ctx: SettingsC
           display();
         })
     );
+
+    // Tools auto-disabled list — shown only when the chat path has flagged
+    // a model as rejecting OpenAI tool-calls. Lets the user re-enable retries
+    // (e.g. after upgrading the model server or switching to a tools-capable
+    // build of the same model).
+    const disabledModels = config.toolsUnsupportedModels ?? [];
+    if (disabledModels.length > 0) {
+      const subRow = new Setting(containerEl)
+        .setName(t("settings.localLlmToolsDisabled"))
+        .setDesc(disabledModels.join(", "));
+      subRow.settingEl.addClass("llm-hub-sub-setting");
+      subRow.addButton((btn) =>
+        btn
+          .setButtonText(t("settings.localLlmToolsClear"))
+          .onClick(async () => {
+            const idx = plugin.settings.localLlmConfigs.findIndex(c => c.id === config.id);
+            if (idx >= 0) {
+              const cfg = plugin.settings.localLlmConfigs[idx];
+              plugin.settings.localLlmConfigs[idx] = {
+                ...cfg,
+                toolsUnsupportedModels: [],
+              };
+              await plugin.saveSettings();
+              display();
+            }
+          })
+      );
+    }
   }
 
   new Setting(containerEl)

@@ -450,6 +450,31 @@ export interface LocalLlmConfig {
   verified?: boolean;           // Whether this entry has been verified
   enabled?: boolean;            // Whether this entry appears in the chat dropdown
   availableModels?: string[];   // Models discovered during verify
+  /**
+   * Models that returned a tools-related error and have been auto-downgraded
+   * to the marker-based skill flow. Vault tools / function calling are not
+   * sent to these models on subsequent requests until the user clears the
+   * list from settings. Empty / unset means tools are attempted by default.
+   */
+  toolsUnsupportedModels?: string[];
+}
+
+/**
+ * Frameworks whose endpoints accept the OpenAI `/v1/chat/completions` shape
+ * (and therefore can route through `openaiChatWithToolsStream` for native
+ * function-calling support). Ollama is intentionally excluded because the
+ * existing path uses Ollama's native `/api/chat` and a separate tool format;
+ * users wanting tools with Ollama can point the entry at the `/v1` endpoint
+ * via the lm-studio framework. OpenCode local has its own session API.
+ */
+export function isToolsCompatibleFramework(framework: LlmFramework): boolean {
+  return framework === "lm-studio" || framework === "anythingllm" || framework === "vllm";
+}
+
+/** True if the user's vault tools should be attempted for this config + model. */
+export function isLocalLlmToolsEnabled(config: LocalLlmConfig, modelName: string): boolean {
+  if (!isToolsCompatibleFramework(config.framework)) return false;
+  return !(config.toolsUnsupportedModels?.includes(modelName));
 }
 
 export const DEFAULT_LOCAL_LLM_CONFIG: LocalLlmConfig = {

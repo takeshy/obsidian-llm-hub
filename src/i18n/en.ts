@@ -52,6 +52,8 @@ export const en = {
   "settings.localLlm": "Local LLM",
   "settings.localLlmDesc": "Connect to local LLM servers (Ollama, LM Studio, vLLM, etc.)",
   "settings.localLlmAdd": "Add Local LLM",
+  "settings.localLlmToolsDisabled": "Tools auto-disabled (model rejected function calling)",
+  "settings.localLlmToolsClear": "Re-enable tools",
   "settings.localLlmVerified": "Local LLM verified",
   "settings.localLlmDisabled": "Local LLM disabled",
   "settings.localLlmConfigure": "Configure local LLM",

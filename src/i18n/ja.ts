@@ -52,6 +52,8 @@ export const ja: Record<string, string> = {
   "settings.localLlm": "ローカルLLM",
   "settings.localLlmDesc": "ローカルLLMサーバーに接続（Ollama、LM Studio、vLLMなど）",
   "settings.localLlmAdd": "ローカルLLMを追加",
+  "settings.localLlmToolsDisabled": "ツール自動無効（モデルが function calling を拒否）",
+  "settings.localLlmToolsClear": "ツールを再有効化",
   "settings.localLlmVerified": "ローカルLLMが検証されました",
   "settings.localLlmDisabled": "ローカルLLMが無効化されました",
   "settings.localLlmConfigure": "ローカルLLMを設定",

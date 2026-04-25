@@ -18,6 +18,7 @@ import { displayDiscordSettings } from "src/ui/settings/discordSettings";
 export class SettingsTab extends PluginSettingTab {
   plugin: LlmHubPlugin;
   private syncCancelRef = { value: false };
+  private settingsListener: ((s: unknown) => void) | null = null;
 
   constructor(app: App, plugin: LlmHubPlugin) {
     super(app, plugin);
@@ -46,5 +47,24 @@ export class SettingsTab extends PluginSettingTab {
     displayRagSettings(containerEl, ctx);
     displayMcpServersSettings(containerEl, ctx);
     displayDiscordSettings(containerEl, ctx);
+
+    // Refresh the tab when settings change elsewhere (e.g. chat-side
+    // auto-disable of tools for a Local LLM model). Without this, the
+    // user could open the tab, edit a config, and unknowingly clobber
+    // the chat-side update on save. Re-register on every display() so
+    // we use the freshest closure; deregister the previous listener
+    // first to avoid leaks when display() is called repeatedly.
+    if (this.settingsListener) {
+      this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
+    }
+    this.settingsListener = () => this.display();
+    this.plugin.settingsEmitter.on("settings-updated", this.settingsListener);
+  }
+
+  hide(): void {
+    if (this.settingsListener) {
+      this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
+      this.settingsListener = null;
+    }
   }
 }

@@ -193,13 +193,20 @@ function buildMessages(
   for (const msg of messages) {
     const role = msg.role === "user" ? "user" as const : "assistant" as const;
 
+    // Prefer `llmContent` (carries inlined non-image attachment text /
+    // workspace context built by Local LLM senders) over the bare display
+    // `content`. The display content is for the chat UI; the LLM needs the
+    // full prompt body. Other paths (API provider) don't set llmContent so
+    // this is a no-op for them.
+    const textBody = (role === "user" && msg.llmContent) ? msg.llmContent : msg.content;
+
     if (role === "user" && msg.attachments && msg.attachments.length > 0) {
       const multimodalAttachments = msg.attachments.filter(
         a => a.type === "image" || a.type === "pdf"
       );
       if (multimodalAttachments.length > 0) {
         const parts: OpenAI.ChatCompletionContentPart[] = [
-          { type: "text", text: msg.content },
+          { type: "text", text: textBody },
         ];
         for (const att of multimodalAttachments) {
           if (att.type === "image") {
@@ -224,7 +231,7 @@ function buildMessages(
       }
     }
 
-    result.push({ role, content: msg.content });
+    result.push({ role, content: textBody });
   }
 
   return result;
