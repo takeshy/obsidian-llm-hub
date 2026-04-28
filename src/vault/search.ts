@@ -1,6 +1,7 @@
 import { TFolder, TFile, type App, loadPdfJs } from "obsidian";
 import { formatError } from "src/utils/error";
 import { DEFAULT_SETTINGS } from "src/types";
+import { getSearchableVaultFiles, getVaultTextFiles } from "./fileTypes";
 
 // In-memory cache for extracted PDF text, keyed by "path:startPage-endPage"
 const pdfTextCache = new Map<string, { mtime: number; size: number; text: string | null }>();
@@ -75,7 +76,7 @@ export function searchByName(
   query: string,
   limit = 10
 ): SearchResult[] {
-  const files = app.vault.getFiles().filter(f => f.extension === "md" || f.extension === "pdf");
+  const files = getSearchableVaultFiles(app);
   const searchTerm = query.toLowerCase().trim();
 
   const results: SearchResult[] = [];
@@ -119,7 +120,7 @@ export async function searchByContent(
   query: string,
   limit = 10
 ): Promise<SearchResult[]> {
-  const files = app.vault.getFiles().filter(f => f.extension === "md" || f.extension === "pdf");
+  const files = getSearchableVaultFiles(app);
   const searchTerm = query.toLowerCase().trim();
 
   const results: SearchResult[] = [];
@@ -168,7 +169,7 @@ export function listNotes(
   recursive = false,
   limit = DEFAULT_SETTINGS.listNotesLimit
 ): { results: SearchResult[]; totalCount: number; hasMore: boolean } {
-  let files = app.vault.getMarkdownFiles();
+  let files = getVaultTextFiles(app);
 
   if (folder) {
     const normalizedFolder = folder.toLowerCase().replace(/\/$/, "");

@@ -2,6 +2,15 @@ import { TFile, TFolder, type App } from "obsidian";
 import { formatError } from "src/utils/error";
 import { DEFAULT_SETTINGS } from "src/types";
 import { getEditHistoryManager } from "src/core/editHistory";
+import {
+  compareFileLookupPriority,
+  ensureMarkdownExtensionIfMissing,
+  getVaultTextFiles,
+  hasExplicitExtension,
+  isMarkdownPath,
+  normalizeLookupTerm,
+  splitFileName,
+} from "./fileTypes";
 
 export interface NoteInfo {
   path: string;
@@ -15,33 +24,46 @@ export interface NoteInfo {
 
 // Find a file by name (fuzzy matching)
 export function findFileByName(app: App, fileName: string): TFile | null {
-  const files = app.vault.getMarkdownFiles();
+  const files = getVaultTextFiles(app);
+  const explicitSearchTerm = fileName.toLowerCase().trim();
+  const preferMarkdown = !hasExplicitExtension(fileName);
+  const orderedFiles = [...files].sort((a, b) => compareFileLookupPriority(a, b, preferMarkdown));
 
   // Normalize the search term
-  const searchTerm = fileName
-    .toLowerCase()
-    .replace(/\.md$/, "")
-    .trim();
+  const searchTerm = normalizeLookupTerm(fileName);
+
+  const explicitMatch = orderedFiles.find((f) => {
+    const fullPath = f.path.toLowerCase();
+    const fullName = f.name.toLowerCase();
+    return fullPath === explicitSearchTerm || fullName === explicitSearchTerm;
+  });
+
+  if (explicitMatch) return explicitMatch;
 
   // Exact match first
-  const exactMatch = files.find((f) => {
-    const baseName = f.basename.toLowerCase();
-    const fullPath = f.path.toLowerCase().replace(/\.md$/, "");
+  const exactMatch = orderedFiles.find((f) => {
+    const baseName = normalizeLookupTerm(f.basename);
+    const fullPath = normalizeLookupTerm(f.path);
     return baseName === searchTerm || fullPath === searchTerm;
   });
 
   if (exactMatch) return exactMatch;
 
   // Fuzzy match
-  const fuzzyMatches = files.filter((f) => {
-    const baseName = f.basename.toLowerCase();
+  const fuzzyMatches = orderedFiles.filter((f) => {
+    const baseName = normalizeLookupTerm(f.basename);
     const fullPath = f.path.toLowerCase();
-    return baseName.includes(searchTerm) || fullPath.includes(searchTerm);
+    const normalizedPath = normalizeLookupTerm(f.path);
+    return (
+      baseName.includes(searchTerm) ||
+      fullPath.includes(explicitSearchTerm) ||
+      normalizedPath.includes(searchTerm)
+    );
   });
 
   // Return the best match (shortest path that matches)
   if (fuzzyMatches.length > 0) {
-    return fuzzyMatches.sort((a, b) => a.path.length - b.path.length)[0];
+    return fuzzyMatches.sort((a, b) => compareFileLookupPriority(a, b, preferMarkdown))[0];
   }
 
   return null;
@@ -128,10 +150,7 @@ export async function createNote(
   folder?: string,
   tags?: string
 ): Promise<{ success: boolean; path?: string; error?: string }> {
-  // Ensure .md extension
-  if (!name.endsWith(".md")) {
-    name += ".md";
-  }
+  name = ensureMarkdownExtensionIfMissing(name);
 
   // Build full path
   let fullPath = name;
@@ -148,7 +167,7 @@ export async function createNote(
 
   // Add tags if provided
   let finalContent = content;
-  if (tags) {
+  if (tags && isMarkdownPath(name)) {
     const tagList = tags
       .split(",")
       .map((t) => `#${t.trim().replace(/^#/, "")}`)
@@ -160,12 +179,12 @@ export async function createNote(
   const existingFile = app.vault.getAbstractFileByPath(fullPath);
   if (existingFile) {
     // Generate unique name
-    const baseName = name.replace(/\.md$/, "");
+    const { stem, extension } = splitFileName(name);
     let counter = 1;
     while (app.vault.getAbstractFileByPath(fullPath)) {
       fullPath = folder
-        ? `${folder}/${baseName} ${counter}.md`
-        : `${baseName} ${counter}.md`;
+        ? `${folder}/${stem} ${counter}${extension}`
+        : `${stem} ${counter}${extension}`;
       counter++;
     }
   }
@@ -269,7 +288,7 @@ export async function deleteNote(
 // Pending rename info stored globally
 export interface PendingRename {
   originalPath: string;  // Resolved file path
-  newPath: string;       // Target path (with .md extension)
+  newPath: string;       // Target path
   createdAt: number;
 }
 
@@ -294,10 +313,7 @@ export function proposeRename(
     };
   }
 
-  // Ensure .md extension
-  if (!newPath.endsWith(".md")) {
-    newPath += ".md";
-  }
+  newPath = ensureMarkdownExtensionIfMissing(newPath);
 
   // Check if target already exists
   const existing = app.vault.getAbstractFileByPath(newPath);
@@ -1051,9 +1067,7 @@ export function proposeBulkRename(
     }
 
     let newPath = rename.newPath;
-    if (!newPath.endsWith(".md")) {
-      newPath += ".md";
-    }
+    newPath = ensureMarkdownExtensionIfMissing(newPath);
 
     const existing = app.vault.getAbstractFileByPath(newPath);
     if (existing) {
