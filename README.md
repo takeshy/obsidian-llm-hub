@@ -4,7 +4,7 @@
 
 **Free and open-source** AI assistant for Obsidian with **Chat**, **Workflow Automation**, and **Semantic Search (RAG)**. Supports multiple LLM providers — use whichever AI fits your needs.
 
-> **Use any LLM provider:** [Gemini](https://ai.google.dev), [OpenAI](https://platform.openai.com), [Anthropic](https://console.anthropic.com), [OpenRouter](https://openrouter.ai), [Grok](https://console.x.ai), [OpenCode Zen / Go](https://opencode.ai), local LLMs ([Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [vLLM](https://docs.vllm.ai), [OpenCode](https://opencode.ai)), or CLI tools ([Gemini CLI](https://github.com/google-gemini/gemini-cli), [Claude Code](https://github.com/anthropics/claude-code), [Codex CLI](https://github.com/openai/codex)).
+> **Use any LLM provider:** [Gemini](https://ai.google.dev), [OpenAI](https://platform.openai.com), [Anthropic](https://console.anthropic.com), [OpenRouter](https://openrouter.ai), [Grok](https://console.x.ai), [OpenCode Zen / Go](https://opencode.ai), local LLMs ([Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [vLLM](https://docs.vllm.ai), [OpenCode](https://opencode.ai)), or CLI tools ([Antigravity CLI](https://antigravity.google), [Claude Code](https://github.com/anthropics/claude-code), [Codex CLI](https://github.com/openai/codex)).
 
 ## Highlights
 
@@ -32,14 +32,14 @@
 | **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **Local LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling (auto-fallback) | ❌ | ❌ | ✅ |
 | **Local LLM** (Ollama, OpenCode) | ✅ Streaming | ❌ (marker mode) | ❌ | ❌ | ✅ |
-| **CLI** (Gemini, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
+| **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
 > [!TIP]
 > **Multiple providers can be configured simultaneously.** Switch models freely during chat — each provider has its own API key and settings.
 
 > [!TIP]
 > **CLI Options** let you use flagship models with just an account - no API key needed!
-> - **Gemini CLI**: Install [Gemini CLI](https://github.com/google-gemini/gemini-cli), run `gemini` and authenticate with `/auth`
+> - **Antigravity CLI**: Install [Antigravity CLI](https://antigravity.google), run `agy` and authenticate
 > - **Claude CLI**: Install [Claude Code](https://github.com/anthropics/claude-code) (`npm install -g @anthropic-ai/claude-code`), run `claude` and authenticate
 > - **Codex CLI**: Install [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`), run `codex` and authenticate
 
@@ -94,7 +94,7 @@ Reference files and variables by typing `@`:
 > Both `{selection}` and `{content}` are intentionally **not expanded** in the input area—since the chat input is compact, expanding long text would make typing difficult. The content is expanded when you send the message, which you can verify by checking your sent message in the chat.
 
 > [!NOTE]
-> Vault file @mentions insert only the file path - the AI reads content via tools. This doesn't work with CLI models or Local LLMs (no vault tool support). Gemini CLI can read files via shell, but response format may differ.
+> Vault file @mentions insert only the file path - the AI reads content via tools. This doesn't work with CLI models or Local LLMs (no vault tool support). Antigravity CLI can read files via shell, but response format may differ.
 
 ## File Attachments
 
@@ -140,7 +140,7 @@ When the AI handles notes in Chat, it uses Vault tools. Control which vault tool
 
 | Condition | Default Mode | Changeable |
 |-----------|--------------|------------|
-| CLI models (Gemini/Claude/Codex CLI) | Vault: Off | No |
+| CLI models (Antigravity/Claude/Codex CLI) | Vault: Off | No |
 | Local LLM | Vault: Off | No |
 | Gemma 4 + RAG/Web Search | Vault: Off | Yes (disabling RAG/Web Search re-enables tools) |
 | Normal | Vault: All | Yes |
@@ -264,7 +264,7 @@ Extend the AI with custom instructions, reference materials, and executable work
 - **Workflow integration** - Skills can expose workflows as function calling tools
 - **Script execution** - Skills can expose scripts (`.sh`, `.py`, `.js`, `.ts`, `.rb`) as function calling tools (desktop only)
 - **Slash command** - Type `/folder-name` to instantly invoke a skill and send
-- **CLI mode support** - Skills work with Gemini CLI, Claude CLI, and Codex CLI backends
+- **CLI mode support** - Skills work with Antigravity CLI, Claude CLI, and Codex CLI backends
 - **Selective activation** - Choose which skills are active per conversation
 
 Create skills the same way as workflows — select **+ New (AI)**, check **"Create as agent skill"**, and describe what you want. The AI generates both the `SKILL.md` instructions and the workflow.
@@ -617,12 +617,12 @@ OpenCode [recommends WSL](https://opencode.ai/docs/ja/windows-wsl) on Windows fo
 
    Click **Fetch models**, pick a `<providerID>/<modelID>` model, and save.
 
-### CLI Mode (Gemini / Claude / Codex)
+### CLI Mode (Antigravity / Claude / Codex)
 
-**Gemini CLI:**
-1. Install [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-2. Authenticate with `gemini` → `/auth`
-3. Click "Verify" in Gemini CLI section
+**Antigravity CLI:**
+1. Install [Antigravity CLI](https://antigravity.google)
+2. Authenticate with `agy`
+3. Click "Verify" in Antigravity CLI section
 
 **Claude CLI:**
 1. Install [Claude Code](https://github.com/anthropics/claude-code): `npm install -g @anthropic-ai/claude-code`
@@ -644,15 +644,14 @@ OpenCode [recommends WSL](https://opencode.ai/docs/ja/windows-wsl) on Windows fo
 <details>
 <summary><b>Windows: How to find the CLI path</b></summary>
 
-Leave the CLI path empty and click **Verify** — the plugin auto-detects the npm-global installation (checks `%APPDATA%\npm\node_modules`, `%PROGRAMFILES%\nodejs\node_modules`, and PATH-based locations) and runs the real `.js` entry point through `node`. Claude's standalone installer at `%LOCALAPPDATA%\Programs\claude\claude.exe` is also picked up automatically.
+Leave the CLI path empty and click **Verify** — the plugin looks for `agy` on PATH. Claude's standalone installer at `%LOCALAPPDATA%\Programs\claude\claude.exe` is also picked up automatically.
 
 Only set a custom CLI path if auto-detection fails. Any of the following works, listed from safest to most permissive:
 
-1. **`.js` script (recommended)** — e.g. `C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js`. Runs via `node` (no `cmd.exe` involvement).
-2. **`.exe` executable** — e.g. `C:\Users\YourName\AppData\Local\Programs\claude\claude.exe`. Runs directly.
-3. **`.cmd` / `.bat` wrapper** — e.g. `C:\Users\YourName\AppData\Roaming\npm\gemini.cmd`. Must go through `cmd.exe`, so prompts containing `&`, `|`, `>`, `^`, or `%VAR%` may misbehave.
+1. **`.exe` executable** — e.g. `C:\Users\YourName\AppData\Local\Programs\Antigravity\agy.exe`. Runs directly.
+2. **`.cmd` / `.bat` wrapper** — e.g. an `agy.cmd` wrapper on PATH. Must go through `cmd.exe`, so prompts containing `&`, `|`, `>`, `^`, or `%VAR%` may misbehave.
 
-Use `Get-Command gemini` / `Get-Command claude` / `Get-Command codex` in PowerShell to find the wrapper path; then either enter it directly (option 3) or navigate to the sibling `.js` / `.exe` for the safer options.
+Use `Get-Command agy` / `Get-Command claude` / `Get-Command codex` in PowerShell to find the wrapper path; then either enter it directly or navigate to the sibling `.exe` when available.
 </details>
 
 <details>
@@ -660,13 +659,13 @@ Use `Get-Command gemini` / `Get-Command claude` / `Get-Command codex` in PowerSh
 
 1. Open a terminal and run:
    ```bash
-   which gemini
+   which agy
    ```
-2. Enter the displayed path (e.g., `/home/user/.local/bin/gemini`) in the CLI path settings
+2. Enter the displayed path (e.g., `/home/user/.local/bin/agy`) in the CLI path settings
 
 For Claude CLI, use `which claude`. For Codex CLI, use `which codex`.
 
-**Node.js version managers:** If you use nodenv, nvm, volta, fnm, asdf, or mise, the plugin automatically detects the node binary from common locations. If detection fails, specify the CLI script path directly (e.g., `~/.npm-global/lib/node_modules/@google/gemini-cli/dist/index.js`).
+If detection fails, specify the CLI executable path directly (e.g., `~/.local/bin/agy`).
 </details>
 
 > [!TIP]

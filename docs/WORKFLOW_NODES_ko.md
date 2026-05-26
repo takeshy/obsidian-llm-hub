@@ -103,7 +103,7 @@ nodes:
 
 **CLI 모델:**
 
-플러그인 설정에서 CLI가 구성된 경우 워크플로우에서 CLI 모델(`gemini-cli`, `claude-cli`, `codex-cli`)을 사용할 수 있습니다. CLI 모델은 API 비용 없이 플래그십 모델에 액세스하는 데 유용합니다.
+플러그인 설정에서 CLI가 구성된 경우 워크플로우에서 CLI 모델(`antigravity-cli`, `claude-cli`, `codex-cli`)을 사용할 수 있습니다. CLI 모델은 API 비용 없이 플래그십 모델에 액세스하는 데 유용합니다.
 
 ```yaml
 - id: analyze

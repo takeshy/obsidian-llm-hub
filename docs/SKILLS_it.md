@@ -193,7 +193,7 @@ Il nome della cartella (non il nome visualizzato dello skill) viene usato come c
 
 ### Supporto Modalità CLI
 
-Gli skill funzionano anche con i backend CLI (Gemini CLI, Claude CLI, Codex CLI). Poiché i provider CLI non supportano il Function Calling, i workflow degli skill utilizzano una convenzione testuale: l'IA emette un marcatore `[RUN_WORKFLOW: workflowId]`, e il plugin esegue automaticamente il workflow e mostra il risultato.
+Gli skill funzionano anche con i backend CLI (Antigravity CLI, Claude CLI, Codex CLI). Poiché i provider CLI non supportano il Function Calling, i workflow degli skill utilizzano una convenzione testuale: l'IA emette un marcatore `[RUN_WORKFLOW: workflowId]`, e il plugin esegue automaticamente il workflow e mostra il risultato.
 
 ### Esempio: Creare uno Skill
 

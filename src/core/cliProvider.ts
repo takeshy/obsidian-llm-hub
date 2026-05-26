@@ -1,15 +1,15 @@
 /**
  * CLI Provider abstraction layer
- * Allows using Gemini CLI, Claude CLI, or Codex CLI as chat backend
+ * Allows using Antigravity CLI, Claude CLI, or Codex CLI as chat backend
  *
  * Resolution strategy (Windows):
  * 1. If a custom path is configured, dispatch by extension:
  *      .js  → run via `node`  (shell: false)
  *      .exe → run directly    (shell: false)
  *      else → run via shell   (shell: true) — for `.cmd`/`.bat` wrappers
- * 2. Otherwise auto-detect the npm-global `.js` script and run with `node` (shell: false).
+ * 2. Otherwise auto-detect common executable locations (shell: false).
  * 3. Also auto-detect standalone Claude at `%LOCALAPPDATA%\Programs\claude\claude.exe`.
- * 4. Fall back to `shell: true` + command name (`gemini`/`claude`/`codex`) so a
+ * 4. Fall back to `shell: true` + command name (`agy`/`claude`/`codex`) so a
  *    `.cmd` wrapper in PATH still works.
  *
  * We prefer `shell: false` whenever possible because `shell: true` on Windows
@@ -152,31 +152,33 @@ function resolveWindowsCustomPath(customPath: string, args: string[]): ResolvedC
   return { command: customPath, args, shell: true };
 }
 
+function resolveNonWindowsCustomPath(customPath: string, args: string[]): ResolvedCommand {
+  if (customPath.toLowerCase().endsWith(".js")) {
+    const node = findNodeBinary();
+    return { command: node, args: [customPath, ...args], shell: false };
+  }
+  return { command: customPath, args, shell: false };
+}
+
 /**
- * Resolve the Gemini CLI command and arguments.
+ * Resolve the Antigravity CLI command and arguments.
  *
  * @param args - Command line arguments to pass to the CLI
  * @param customPath - Optional custom path to the CLI script/executable
  */
-function resolveGeminiCommand(args: string[], customPath?: string): ResolvedCommand {
+function resolveAntigravityCommand(args: string[], customPath?: string): ResolvedCommand {
   // If custom path is specified, validate and use it
   if (customPath && validateCustomPath(customPath)) {
     if (isWindows()) {
       return resolveWindowsCustomPath(customPath, args);
     }
-    const node = findNodeBinary();
-    return { command: node, args: [customPath, ...args], shell: false };
+    return resolveNonWindowsCustomPath(customPath, args);
   }
 
   if (isWindows()) {
-    // Prefer the npm-global `index.js` so we stay on shell: false
-    const scriptPath = findWindowsNpmScript("@google\\gemini-cli\\dist\\index.js");
-    if (scriptPath) {
-      return { command: "node", args: [scriptPath, ...args], shell: false };
-    }
-    // Fallback: rely on PATH via cmd.exe so `gemini.cmd` wrappers still work.
+    // Fallback: rely on PATH via cmd.exe so `agy.exe` / wrappers still work.
     // cmd.exe interpretation of arg metacharacters is a known tradeoff — see header comment.
-    return { command: "gemini", args, shell: true };
+    return { command: "agy", args, shell: true };
   }
 
   // Non-Windows: check common installation paths first (Obsidian may not have full PATH)
@@ -185,17 +187,17 @@ function resolveGeminiCommand(args: string[], customPath?: string): ResolvedComm
     const candidatePaths: string[] = [];
 
     if (home) {
-      // Linux/Mac: ~/.local/bin/gemini
-      candidatePaths.push(`${home}/.local/bin/gemini`);
-      // npm global with custom prefix: ~/.npm-global/bin/gemini
-      candidatePaths.push(`${home}/.npm-global/bin/gemini`);
+      // Linux/Mac: ~/.local/bin/agy
+      candidatePaths.push(`${home}/.local/bin/agy`);
+      // npm/global custom prefixes if users symlink there
+      candidatePaths.push(`${home}/.npm-global/bin/agy`);
     }
 
     // Mac: Homebrew paths
     // Apple Silicon
-    candidatePaths.push("/opt/homebrew/bin/gemini");
+    candidatePaths.push("/opt/homebrew/bin/agy");
     // Intel Mac
-    candidatePaths.push("/usr/local/bin/gemini");
+    candidatePaths.push("/usr/local/bin/agy");
 
     for (const path of candidatePaths) {
       if (fileExistsSync(path)) {
@@ -204,20 +206,20 @@ function resolveGeminiCommand(args: string[], customPath?: string): ResolvedComm
     }
   }
 
-  // Fallback: use gemini command directly (must be in PATH)
-  return { command: "gemini", args, shell: false };
+  // Fallback: use agy command directly (must be in PATH)
+  return { command: "agy", args, shell: false };
 }
 
 function formatWindowsCliError(message: string | undefined): string | undefined {
   if (!isWindows()) return message;
-  const installHint = "Gemini CLI not found. Install it with `npm install -g @google/gemini-cli` and ensure it is in your PATH.";
+  const installHint = "Antigravity CLI not found. Install Antigravity CLI and ensure `agy` is in your PATH.";
   if (!message) return installHint;
   if (
     message.includes("Cannot find module") ||
     message.includes("MODULE_NOT_FOUND") ||
     message.includes("not recognized") ||
     message.includes("cannot find the path") ||
-    message.includes("@google\\gemini-cli") ||
+    message.includes("agy") ||
     message.includes("ENOENT")
   ) {
     return installHint;
@@ -549,18 +551,21 @@ abstract class BaseCliProvider implements CliProviderInterface {
 }
 
 /**
- * Gemini CLI provider
- * Uses: gemini -p "prompt"
- * Session resumption: gemini --resume latest -p "prompt"
- * (Gemini CLI uses "latest" or index number, not UUID)
+ * Antigravity CLI provider
+ * Uses: agy --print "prompt"
+ * Session resumption: agy --continue --print "prompt"
  */
-export class GeminiCliProvider extends BaseCliProvider {
-  name: ChatProvider = "gemini-cli";
-  displayName = "Gemini CLI";
+export class AntigravityCliProvider extends BaseCliProvider {
+  name: ChatProvider = "antigravity-cli";
+  displayName = "Antigravity CLI";
   supportsSessionResumption = true;
 
+  constructor(private customPath?: string) {
+    super();
+  }
+
   protected resolveVersionCommand(): ResolvedCommand {
-    return resolveGeminiCommand(["--version"]);
+    return resolveAntigravityCommand(["--version"], this.customPath);
   }
 
   async *chatStream(
@@ -568,7 +573,7 @@ export class GeminiCliProvider extends BaseCliProvider {
     systemPrompt: string,
     workingDirectory: string,
     signal?: AbortSignal,
-    sessionId?: string  // "latest" to resume the most recent session
+    sessionId?: string
   ): AsyncGenerator<StreamChunk> {
     // Dynamically import child_process (not available on mobile)
     const { spawn } = getChildProcess();
@@ -579,14 +584,14 @@ export class GeminiCliProvider extends BaseCliProvider {
       // Resume session — only send the latest user message
       const lastMessage = messages[messages.length - 1];
       const prompt = lastMessage?.role === "user" ? lastMessage.content : "";
-      cliArgs = ["--resume", sessionId, "-p", prompt];
+      cliArgs = ["--continue", "--print", prompt];
     } else {
       // First message — send full history with system prompt
       const prompt = formatHistoryAsPrompt(messages, systemPrompt);
-      cliArgs = ["-p", prompt];
+      cliArgs = ["--print", prompt];
     }
 
-    const { command, args, shell } = resolveGeminiCommand(cliArgs);
+    const { command, args, shell } = resolveAntigravityCommand(cliArgs, this.customPath);
     const proc = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell,
@@ -620,7 +625,7 @@ export class GeminiCliProvider extends BaseCliProvider {
         if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`Gemini CLI exited with code ${code}`));
+          reject(new Error(`Antigravity CLI exited with code ${code}`));
         }
       });
       proc.on("error", reject);
@@ -933,8 +938,8 @@ export class CodexCliProvider extends BaseCliProvider {
  *   Messages are sent as JSON objects via stdin; newlines are preserved via
  *   JSON string escaping. The process maintains full conversation context
  *   internally so --resume is not needed.
- * - Gemini CLI / Codex CLI: Per-message process spawning with --resume for
- *   session continuity (these CLIs don't support stream-json input).
+ * - Antigravity CLI / Codex CLI: Per-message process spawning with CLI-native
+ *   resume flags for session continuity (these CLIs don't support stream-json input).
  *
  * Chat lifecycle:  create on first CLI message → reuse → terminate on provider change / new chat / unmount
  * Workflow lifecycle: create at workflow start → pass through context → terminate at workflow end
@@ -1130,7 +1135,7 @@ export class PersistentCliSession {
   /**
    * Send a message and stream the response.
    * Claude CLI: writes JSON to stdin of persistent process.
-   * Others: spawns a new process with optional --resume.
+   * Others: spawns a new process with optional CLI-native resume.
    * Throws on abort so callers can distinguish from normal completion.
    */
   async *sendMessage(
@@ -1213,7 +1218,7 @@ export class PersistentCliSession {
   }
 
   /**
-   * Send via per-message process spawn (Gemini CLI / Codex CLI).
+   * Send via per-message process spawn (Antigravity CLI / Codex CLI).
    */
   private async *sendViaNewProcess(
     allMessages: Message[],
@@ -1224,7 +1229,7 @@ export class PersistentCliSession {
     if (this._providerType === "codex-cli") {
       provider = new CodexCliProvider();
     } else {
-      provider = new GeminiCliProvider();
+      provider = new AntigravityCliProvider(this.customPath);
     }
 
     const sessionIdToUse = provider.supportsSessionResumption
@@ -1240,11 +1245,10 @@ export class PersistentCliSession {
       yield chunk;
     }
 
-    // Gemini CLI doesn't emit session_id in plain text mode, but its
-    // --resume flag accepts "latest" to resume the most recent session.
-    // Set it after the first successful response so subsequent messages reuse the session.
-    if (this._providerType === "gemini-cli" && !this.sessionId) {
-      this.sessionId = "latest";
+    // Antigravity CLI doesn't emit session_id in print mode, so store a sentinel.
+    // Subsequent messages use `--continue` to resume the most recent conversation.
+    if (this._providerType === "antigravity-cli" && !this.sessionId) {
+      this.sessionId = "__continue__";
     }
 
     if (signal?.aborted) {
@@ -1283,7 +1287,7 @@ export class CliProviderManager {
   private providers: Map<ChatProvider, CliProviderInterface> = new Map();
 
   constructor() {
-    this.providers.set("gemini-cli", new GeminiCliProvider());
+    this.providers.set("antigravity-cli", new AntigravityCliProvider());
     this.providers.set("claude-cli", new ClaudeCliProvider());
     this.providers.set("codex-cli", new CodexCliProvider());
   }
@@ -1337,7 +1341,7 @@ export interface CliVerifyResult {
 }
 
 /**
- * Verify Gemini CLI installation and login status
+ * Verify Antigravity CLI installation and login status
  * @param customPath - Optional custom path to the CLI script/executable
  */
 export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
@@ -1351,7 +1355,7 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
   // Step 1: Check if CLI exists (--version)
   const versionCheck = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      const { command, args, shell } = resolveGeminiCommand(["--version"], customPath);
+      const { command, args, shell } = resolveAntigravityCommand(["--version"], customPath);
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
         shell,
@@ -1385,13 +1389,13 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
   });
 
   if (!versionCheck.success) {
-    return { success: false, stage: "version", error: versionCheck.error || "Gemini CLI not found" };
+    return { success: false, stage: "version", error: versionCheck.error || "Antigravity CLI not found" };
   }
 
   // Step 2: Check if logged in (run a simple prompt)
   const loginCheck = await new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      const { command, args, shell } = resolveGeminiCommand(["-p", "Hello"], customPath);
+      const { command, args, shell } = resolveAntigravityCommand(["--print", "Hello"], customPath);
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
         shell,
@@ -1425,7 +1429,7 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
   });
 
   if (!loginCheck.success) {
-    return { success: false, stage: "login", error: loginCheck.error || "Please run 'gemini' in terminal to log in" };
+    return { success: false, stage: "login", error: loginCheck.error || "Please run 'agy' in terminal to log in" };
   }
 
   return { success: true, stage: "login" };

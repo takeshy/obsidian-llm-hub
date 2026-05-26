@@ -103,7 +103,7 @@ Ejecuta un prompt de LLM con configuraciones opcionales de modelo, busqueda, her
 
 **Modelos CLI:**
 
-Puedes usar modelos CLI (`gemini-cli`, `claude-cli`, `codex-cli`) en workflows si el CLI esta configurado en los ajustes del plugin. Los modelos CLI son utiles para acceder a modelos insignia sin costos de API.
+Puedes usar modelos CLI (`antigravity-cli`, `claude-cli`, `codex-cli`) en workflows si el CLI esta configurado en los ajustes del plugin. Los modelos CLI son utiles para acceder a modelos insignia sin costos de API.
 
 ```yaml
 - id: analyze

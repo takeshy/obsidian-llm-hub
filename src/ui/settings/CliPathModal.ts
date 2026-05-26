@@ -30,7 +30,7 @@ export class CliPathModal extends Modal {
     const descEl = contentEl.createDiv({ cls: "llm-hub-cli-path-desc" });
     descEl.textContent = t("settings.cliPathModal.desc");
 
-    const cliName = this.cliType === "gemini" ? "Gemini" : this.cliType === "claude" ? "Claude" : "Codex";
+    const cliName = this.cliType === "gemini" ? "Antigravity" : this.cliType === "claude" ? "Claude" : "Codex";
 
     new Setting(contentEl)
       .setName(cliName + " CLI")

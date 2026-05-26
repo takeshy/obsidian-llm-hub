@@ -103,7 +103,7 @@ nodes:
 
 **CLI モデル:**
 
-プラグイン設定で CLI が構成されている場合、ワークフローで CLI モデル（`gemini-cli`、`claude-cli`、`codex-cli`）を使用できます。CLI モデルは API コストなしでフラッグシップモデルにアクセスするのに便利です。
+プラグイン設定で CLI が構成されている場合、ワークフローで CLI モデル（`antigravity-cli`、`claude-cli`、`codex-cli`）を使用できます。CLI モデルは API コストなしでフラッグシップモデルにアクセスするのに便利です。
 
 ```yaml
 - id: analyze

@@ -1,6 +1,6 @@
 import { App, Modal, Notice, Platform, parseYaml, TFile, setIcon, MarkdownRenderer, Component } from "obsidian";
 import type { LlmHubPlugin } from "src/plugin";
-import { GeminiCliProvider, ClaudeCliProvider, CodexCliProvider } from "src/core/cliProvider";
+import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "src/core/cliProvider";
 import { GeminiClient } from "src/core/gemini";
 import { openaiChatWithToolsStream } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
@@ -614,7 +614,7 @@ export class AIWorkflowModal extends Modal {
     });
 
     const cliConfig = this.plugin.settings.cliConfig || DEFAULT_CLI_CONFIG;
-    const geminiCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
+    const antigravityCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
     const claudeCliVerified = !Platform.isMobile && cliConfig.claudeCliVerified === true;
     const codexCliVerified = !Platform.isMobile && cliConfig.codexCliVerified === true;
     const enabledProviders = this.plugin.settings.apiProviders.filter(
@@ -629,7 +629,7 @@ export class AIWorkflowModal extends Modal {
       }))
     );
     const cliModels = [
-      ...(geminiCliVerified ? [CLI_MODEL] : []),
+      ...(antigravityCliVerified ? [CLI_MODEL] : []),
       ...(claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
       ...(codexCliVerified ? [CODEX_CLI_MODEL] : []),
     ];
@@ -1005,10 +1005,10 @@ export class AIWorkflowModal extends Modal {
       return;
     }
 
-    const isGeminiCli = selectedModel === "gemini-cli";
+    const isAntigravityCli = selectedModel === "antigravity-cli";
     const isClaudeCli = selectedModel === "claude-cli";
     const isCodexCli = selectedModel === "codex-cli";
-    const isCliModel = isGeminiCli || isClaudeCli || isCodexCli;
+    const isCliModel = isAntigravityCli || isClaudeCli || isCodexCli;
 
     // Check API provider (skip for CLI model)
     if (!isCliModel && isApiProviderModel(selectedModel)) {
@@ -1173,7 +1173,7 @@ export class AIWorkflowModal extends Modal {
       if (isCliModel) {
         const isClaudeCli = selectedModel === "claude-cli";
         const isCodexCli = selectedModel === "codex-cli";
-        const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Gemini CLI";
+        const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Antigravity CLI";
         generationModal.setStatus(t("workflow.generation.generatingWithCli", { cli: cliName }));
       }
 
@@ -1520,7 +1520,7 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
       const isClaudeCli = selectedModel === "claude-cli";
       const isCodexCli = selectedModel === "codex-cli";
 
-      let provider: GeminiCliProvider | ClaudeCliProvider | CodexCliProvider;
+      let provider: AntigravityCliProvider | ClaudeCliProvider | CodexCliProvider;
       if (isClaudeCli) {
         if (!cliConfig.claudeCliVerified) {
           throw new Error("Claude CLI is not available. Please verify it in settings.");
@@ -1533,9 +1533,9 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
         provider = new CodexCliProvider();
       } else {
         if (!cliConfig.cliVerified) {
-          throw new Error("Gemini CLI is not available. Please verify it in settings.");
+          throw new Error("Antigravity CLI is not available. Please verify it in settings.");
         }
-        provider = new GeminiCliProvider();
+        provider = new AntigravityCliProvider(cliConfig.geminiCliPath);
       }
 
       const vaultBasePath =

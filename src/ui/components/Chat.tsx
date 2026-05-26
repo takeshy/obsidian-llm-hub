@@ -399,7 +399,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		: null;
 	const initialLocalLlmToolsCapable = !!(initialLocalLlmConfig
 		&& isLocalLlmToolsEnabled(initialLocalLlmConfig, initialLocalLlmConfig.model));
-	const isInitialCli = initialModel === "gemini-cli"
+	const isInitialCli = initialModel === "antigravity-cli"
 		|| initialModel === "claude-cli"
 		|| initialModel === "codex-cli"
 		|| (isLocalLlmModel(initialModel) && !initialLocalLlmToolsCapable);
@@ -478,7 +478,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	);
 
 	// CLI provider state (CLI not available on mobile)
-	const geminiCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
+	const antigravityCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
 	const claudeCliVerified = !Platform.isMobile && cliConfig.claudeCliVerified === true;
 	const codexCliVerified = !Platform.isMobile && cliConfig.codexCliVerified === true;
 	const activeLocalLlmConfigs = !Platform.isMobile
@@ -487,8 +487,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const localLlmVerified = activeLocalLlmConfigs.length > 0;
 	const enabledApiProviders = !Platform.isMobile ? plugin.settings.apiProviders.filter(p => p.enabled && p.verified) : [];
 	const hasEnabledApiProvider = enabledApiProviders.length > 0;
-	const anyCliVerified = geminiCliVerified || claudeCliVerified || codexCliVerified || localLlmVerified;
-	const isGeminiCliMode = !Platform.isMobile && currentModel === "gemini-cli";
+	const anyCliVerified = antigravityCliVerified || claudeCliVerified || codexCliVerified || localLlmVerified;
+	const isAntigravityCliMode = !Platform.isMobile && currentModel === "antigravity-cli";
 	const isClaudeCliMode = !Platform.isMobile && currentModel === "claude-cli";
 	const isCodexCliMode = !Platform.isMobile && currentModel === "codex-cli";
 	const isLocalLlmMode = !Platform.isMobile && isLocalLlmModel(currentModel);
@@ -499,7 +499,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const currentLocalLlmConfig = isLocalLlmMode ? getLocalLlmConfig(currentModel, plugin.settings) : null;
 	const isLocalLlmToolsCapable = !!(currentLocalLlmConfig
 		&& isLocalLlmToolsEnabled(currentLocalLlmConfig, currentLocalLlmConfig.model));
-	const isCliMode = isGeminiCliMode || isClaudeCliMode || isCodexCliMode
+	const isCliMode = isAntigravityCliMode || isClaudeCliMode || isCodexCliMode
 		|| (isLocalLlmMode && !isLocalLlmToolsCapable);
 
 	// Resolve API provider config from current model name ("api:{providerId}")
@@ -514,7 +514,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 	// Web Search is only available for Gemini providers (uses Gemini's grounding with Google Search)
 	const isGeminiProvider = (() => {
-		if (isGeminiCliMode) return true;
+		if (isAntigravityCliMode) return false;
 		const provider = getActiveApiProvider();
 		return provider?.type === "gemini";
 	})();
@@ -539,7 +539,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				providerName: p.name,
 			}))
 		),
-		...(geminiCliVerified ? [CLI_MODEL] : []),
+		...(antigravityCliVerified ? [CLI_MODEL] : []),
 		...(claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
 		...(codexCliVerified ? [CODEX_CLI_MODEL] : []),
 		...activeLocalLlmConfigs.flatMap(c => {
@@ -1123,13 +1123,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		const newLocalLlmConfig = isLocalLlmModel(model) ? getLocalLlmConfig(model, plugin.settings) : null;
 		const isNewLocalLlmToolsCapable = !!(newLocalLlmConfig
 			&& isLocalLlmToolsEnabled(newLocalLlmConfig, newLocalLlmConfig.model));
-		const isNewModelCli = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli"
+		const isNewModelCli = model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli"
 			|| (isLocalLlmModel(model) && !isNewLocalLlmToolsCapable);
 		const isNewModelApiProvider = isApiProviderModel(model);
 
 		// Check if new model is a Gemini provider (for Web Search availability)
 		const isNewModelGemini = (() => {
-			if (model === "gemini-cli") return true;
+			if (model === "antigravity-cli") return false;
 			if (!isNewModelApiProvider) return false;
 			const providerId = getApiProviderId(model);
 			const provider = plugin.settings.apiProviders.find(p => p.id === providerId && p.enabled && p.verified);
@@ -1565,7 +1565,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			const allMessages = [...messages, userMessage];
 
 			// Build system prompt for CLI (read-only mode)
-			const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Gemini CLI";
+			const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Antigravity CLI";
 			let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
 			systemPrompt += `\n\nNote: You are running in ${cliName} mode with limited capabilities. You can read and search vault files, but cannot modify them.`;
 			systemPrompt += `\n\nIMPORTANT: File writing operations may fail in this environment. Always output results directly to standard output instead of attempting to write to files.`;
@@ -1625,7 +1625,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			const vaultBasePath = (plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || ".";
 
 			// Determine current provider name
-			const currentProvider: ChatProvider = isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "gemini-cli";
+			const currentProvider: ChatProvider = isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "antigravity-cli";
 
 			// Get or create persistent CLI session
 			const existingSession = persistentCliRef.current;
@@ -1636,13 +1636,18 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			} else {
 				// Terminate old session if provider changed or session died
 				existingSession?.terminate();
-				// Create new persistent session, passing stored session ID for --resume
+				// Create new persistent session, passing stored session ID for CLI resume.
 				const storedSessionId = cliSession?.provider === currentProvider
 					? cliSession.sessionId
 					: undefined;
+				const customCliPath = currentProvider === "antigravity-cli"
+					? cliConfig.geminiCliPath
+					: currentProvider === "claude-cli"
+						? cliConfig.claudeCliPath
+						: cliConfig.codexCliPath;
 				session = new PersistentCliSession(
 					currentProvider, vaultBasePath,
-					undefined, storedSessionId
+					customCliPath, storedSessionId
 				);
 				session.start();
 				persistentCliRef.current = session;
@@ -1652,7 +1657,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			// Each iteration: stream CLI → detect skill markers → execute → feed
 			// results back as a follow-up user message → loop until no markers
 			// or MAX_MARKER_AGENT_ITERATIONS reached. Uses the persistent /
-			// --resume session so the CLI preserves context across iterations.
+			// resume session so the CLI preserves context across iterations.
 			let processedContent = "";
 			let conversationHistory: Message[] = allMessages;
 			let iterationUserContent = allMessages[allMessages.length - 1]?.role === "user"

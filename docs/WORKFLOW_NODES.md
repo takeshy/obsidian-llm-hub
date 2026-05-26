@@ -85,7 +85,7 @@ Execute an LLM prompt with optional model, search, vault tools, and MCP settings
 
 **CLI models:**
 
-You can use CLI models (`gemini-cli`, `claude-cli`, `codex-cli`) in workflows if the CLI is configured in plugin settings. CLI models are useful for accessing flagship models without API costs.
+You can use CLI models (`antigravity-cli`, `claude-cli`, `codex-cli`) in workflows if the CLI is configured in plugin settings. CLI models are useful for accessing flagship models without API costs.
 
 ```yaml
 - id: analyze

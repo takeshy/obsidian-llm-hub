@@ -104,7 +104,7 @@ interface DiscussionPanelProps {
 
 function getAvailableModels(plugin: LlmHubPlugin): ModelInfo[] {
   const cliConfig = plugin.settings.cliConfig;
-  const geminiCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
+  const antigravityCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
   const claudeCliVerified = !Platform.isMobile && cliConfig.claudeCliVerified === true;
   const codexCliVerified = !Platform.isMobile && cliConfig.codexCliVerified === true;
   const activeLocalLlmConfigs = !Platform.isMobile
@@ -122,7 +122,7 @@ function getAvailableModels(plugin: LlmHubPlugin): ModelInfo[] {
         providerName: p.name,
       }))
     ),
-    ...(geminiCliVerified ? [CLI_MODEL] : []),
+    ...(antigravityCliVerified ? [CLI_MODEL] : []),
     ...(claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
     ...(codexCliVerified ? [CODEX_CLI_MODEL] : []),
     ...activeLocalLlmConfigs.flatMap(c => {

@@ -193,7 +193,7 @@ nodes:
 
 ### CLI 模式支持
 
-技能也可在 CLI 后端（Gemini CLI、Claude CLI、Codex CLI）中使用。由于 CLI 提供程序不支持 Function Calling，技能工作流使用基于文本的约定：AI 输出 `[RUN_WORKFLOW: workflowId]` 标记，插件会自动执行工作流并显示结果。
+技能也可在 CLI 后端（Antigravity CLI、Claude CLI、Codex CLI）中使用。由于 CLI 提供程序不支持 Function Calling，技能工作流使用基于文本的约定：AI 输出 `[RUN_WORKFLOW: workflowId]` 标记，插件会自动执行工作流并显示结果。
 
 ### 示例：创建技能
 

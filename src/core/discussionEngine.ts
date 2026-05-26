@@ -138,23 +138,19 @@ export async function* streamChatForModel(
     yield* localLlmChatStream(llmConfig, messages, systemPrompt, signal);
   } else if (!Platform.isMobile) {
     // CLI models
-    const { GeminiCliProvider, ClaudeCliProvider, CodexCliProvider } = await import("./cliProvider");
-    const provider = model === "claude-cli"
-      ? new ClaudeCliProvider()
-      : model === "codex-cli"
-        ? new CodexCliProvider()
-        : new GeminiCliProvider();
-
+    const { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } = await import("./cliProvider");
     // Resolve working directory
     const cliPaths: Record<string, string | undefined> = {
-      "gemini-cli": settings.cliConfig.geminiCliPath,
+      "antigravity-cli": settings.cliConfig.geminiCliPath,
       "claude-cli": settings.cliConfig.claudeCliPath,
       "codex-cli": settings.cliConfig.codexCliPath,
     };
     const customPath = cliPaths[model];
-    if (customPath) {
-      (provider as unknown as { customCliPath?: string }).customCliPath = customPath;
-    }
+    const provider = model === "claude-cli"
+      ? new ClaudeCliProvider()
+      : model === "codex-cli"
+        ? new CodexCliProvider()
+        : new AntigravityCliProvider(customPath);
     yield* provider.chatStream(messages, systemPrompt, "", signal);
   } else {
     yield { type: "error", error: `Unsupported model: ${model}` };

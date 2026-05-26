@@ -2,7 +2,7 @@ import { App } from "obsidian";
 import type { LlmHubPlugin } from "../../plugin";
 import { GeminiClient, getGeminiClient } from "../../core/gemini";
 import { PersistentCliSession } from "../../core/cliProvider";
-import { isImageGenerationModel, isApiProviderModel, getApiProviderId, getApiProviderModelName, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, type ToolDefinition, type McpAppInfo, type StreamChunkUsage } from "../../types";
+import { isImageGenerationModel, isApiProviderModel, getApiProviderId, getApiProviderModelName, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, normalizeDeprecatedModelIdentifier, type ToolDefinition, type McpAppInfo, type StreamChunkUsage } from "../../types";
 import { getEnabledTools } from "../../core/tools";
 import { fetchMcpTools, createMcpToolExecutor, type McpToolDefinition } from "../../core/mcpTools";
 import { createToolExecutor } from "../../vault/toolExecutor";
@@ -171,11 +171,11 @@ Please revise the output based on the user's feedback above.`;
 
   // Get model (use node's model or current selection)
   const modelName = node.properties["model"] || "";
-  let model = (modelName || plugin.getSelectedModel()) as import("../../types").ModelType;
+  let model = normalizeDeprecatedModelIdentifier(modelName || plugin.getSelectedModel()) as import("../../types").ModelType;
   let geminiProviderConfig: typeof plugin.settings.apiProviders[number] | null = null;
 
   // Check if this is a CLI model, Local LLM, or API provider
-  let isCliModel = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli";
+  let isCliModel = model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli";
   let isLocalLlm = isLocalLlmModel(model);
 
   // If resolved model requires API key but none is configured, fall back to a
@@ -195,7 +195,7 @@ Please revise the output based on the user's feedback above.`;
       } else {
         const cliConfig = plugin.settings.cliConfig;
         if (cliConfig?.cliVerified) {
-          model = "gemini-cli";
+          model = "antigravity-cli";
         } else if (cliConfig?.claudeCliVerified) {
           model = "claude-cli";
         } else if (cliConfig?.codexCliVerified) {
@@ -210,7 +210,7 @@ Please revise the output based on the user's feedback above.`;
 
   if (isCliModel) {
     // Use persistent CLI session (shared across workflow nodes)
-    const providerName = (model === "claude-cli" ? "claude-cli" : model === "codex-cli" ? "codex-cli" : "gemini-cli") as import("../../types").ChatProvider;
+    const providerName = (model === "claude-cli" ? "claude-cli" : model === "codex-cli" ? "codex-cli" : "antigravity-cli") as import("../../types").ChatProvider;
 
     // Get or create persistent CLI session from context
     if (!context.persistentCliSessions) {
@@ -219,7 +219,13 @@ Please revise the output based on the user's feedback above.`;
     let session = context.persistentCliSessions.get(providerName);
     if (!session || !session.isAlive) {
       const vaultPath = (app.vault.adapter as { basePath?: string }).basePath || "";
-      session = new PersistentCliSession(providerName, vaultPath);
+      const cliConfig = plugin.settings.cliConfig;
+      const customCliPath = providerName === "antigravity-cli"
+        ? cliConfig?.geminiCliPath
+        : providerName === "claude-cli"
+          ? cliConfig?.claudeCliPath
+          : cliConfig?.codexCliPath;
+      session = new PersistentCliSession(providerName, vaultPath, customCliPath);
       session.start();
       context.persistentCliSessions.set(providerName, session);
     }

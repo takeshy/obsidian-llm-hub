@@ -193,7 +193,7 @@ Der Ordnername (nicht der Anzeigename des Skills) wird als Befehl verwendet — 
 
 ### CLI-Modus-Unterstützung
 
-Skills funktionieren auch mit CLI-Backends (Gemini CLI, Claude CLI, Codex CLI). Da CLI-Anbieter kein Function Calling unterstützen, verwenden Skill-Workflows eine textbasierte Konvention: Die KI gibt einen `[RUN_WORKFLOW: workflowId]`-Marker aus, und das Plugin führt den Workflow automatisch aus und zeigt das Ergebnis an.
+Skills funktionieren auch mit CLI-Backends (Antigravity CLI, Claude CLI, Codex CLI). Da CLI-Anbieter kein Function Calling unterstützen, verwenden Skill-Workflows eine textbasierte Konvention: Die KI gibt einen `[RUN_WORKFLOW: workflowId]`-Marker aus, und das Plugin führt den Workflow automatisch aus und zeigt das Ergebnis an.
 
 ### Beispiel: Einen Skill erstellen
 

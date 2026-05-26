@@ -103,7 +103,7 @@ Fuehrt einen LLM-Prompt mit optionalen Modell-, Such-, Vault-Tools- und MCP-Eins
 
 **CLI-Modelle:**
 
-Sie koennen CLI-Modelle (`gemini-cli`, `claude-cli`, `codex-cli`) in Workflows verwenden, wenn die CLI in den Plugin-Einstellungen konfiguriert ist. CLI-Modelle sind nuetzlich, um auf Flagship-Modelle ohne API-Kosten zuzugreifen.
+Sie koennen CLI-Modelle (`antigravity-cli`, `claude-cli`, `codex-cli`) in Workflows verwenden, wenn die CLI in den Plugin-Einstellungen konfiguriert ist. CLI-Modelle sind nuetzlich, um auf Flagship-Modelle ohne API-Kosten zuzugreifen.
 
 ```yaml
 - id: analyze

@@ -103,7 +103,7 @@ nodes:
 
 **CLI 模型：**
 
-如果在插件设置中配置了 CLI，您可以在工作流中使用 CLI 模型（`gemini-cli`、`claude-cli`、`codex-cli`）。CLI 模型适用于无需 API 费用即可访问旗舰模型。
+如果在插件设置中配置了 CLI，您可以在工作流中使用 CLI 模型（`antigravity-cli`、`claude-cli`、`codex-cli`）。CLI 模型适用于无需 API 费用即可访问旗舰模型。
 
 ```yaml
 - id: analyze

@@ -18,13 +18,13 @@ export function displayCliSettings(containerEl: HTMLElement, ctx: SettingsContex
   const introEl = containerEl.createDiv({ cls: "setting-item-description llm-hub-cli-intro" });
   introEl.textContent = t("settings.cliIntro");
 
-  // Gemini CLI row
+  // Antigravity CLI row
   createCliVerifyRow(containerEl, {
-    name: "Gemini CLI",
+    name: "Antigravity CLI",
     cliType: "gemini",
     isVerified: !!cliConfig.cliVerified,
     customPath: cliConfig.geminiCliPath,
-    installCmd: "npm install -g @google/gemini-cli",
+    installCmd: "Install Google Antigravity CLI (`agy`)",
     onVerify: (statusEl) => handleVerifyCli(statusEl, plugin, display, "gemini"),
     onDisable: async () => {
       plugin.settings.cliConfig = { ...cliConfig, cliVerified: false };
@@ -174,7 +174,7 @@ async function handleVerifyCli(
   const verifyingText = cliType === "gemini" ? t("settings.cliVerifyingCli") : t("settings.cliVerifying");
   statusEl.setText(verifyingText);
 
-  const notFoundFallback = cliType === "gemini" ? "Gemini CLI not found" :
+  const notFoundFallback = cliType === "gemini" ? "Antigravity CLI not found" :
                            cliType === "claude" ? "Claude CLI not found" : "Codex CLI not found";
   const loginText = cliType === "gemini" ? t("settings.cliRunGeminiLogin") :
                     cliType === "claude" ? t("settings.cliRunClaudeLogin") : t("settings.cliRunCodexLogin");

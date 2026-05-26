@@ -74,7 +74,7 @@ export interface CliSessionInfo {
 }
 
 // Valid CLI providers that support session resumption
-export const VALID_CLI_PROVIDERS: ChatProvider[] = ["gemini-cli", "claude-cli", "codex-cli"];
+export const VALID_CLI_PROVIDERS: ChatProvider[] = ["antigravity-cli", "claude-cli", "codex-cli"];
 
 export function isValidCliProvider(provider: string): provider is ChatProvider {
 	return VALID_CLI_PROVIDERS.includes(provider as ChatProvider);

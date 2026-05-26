@@ -257,7 +257,7 @@ export class NodeEditorModal extends Modal {
           { value: "none", label: t("nodeEditor.vaultToolsNone") },
         ];
 
-        const isCliModel = (model: string) => model === "gemini-cli" || model === "claude-cli" || model === "codex-cli";
+        const isCliModel = (model: string) => model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli";
 
         let searchDropdown: HTMLSelectElement | null = null;
         let vaultToolDropdown: HTMLSelectElement | null = null;

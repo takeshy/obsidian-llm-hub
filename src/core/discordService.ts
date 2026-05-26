@@ -928,7 +928,7 @@ export class DiscordService {
 
     // CLI models
     const cli = settings.cliConfig;
-    if (cli?.cliVerified) models.push({ name: "gemini-cli", displayName: "Gemini CLI" });
+    if (cli?.cliVerified) models.push({ name: "antigravity-cli", displayName: "Antigravity CLI" });
     if (cli?.claudeCliVerified) models.push({ name: "claude-cli", displayName: "Claude CLI" });
     if (cli?.codexCliVerified) models.push({ name: "codex-cli", displayName: "Codex CLI" });
 
@@ -980,7 +980,7 @@ export class DiscordService {
   }
 
   private isGeminiApiModel(model: ModelType): boolean {
-    if (model === "gemini-cli") return false;
+    if (model === "antigravity-cli") return false;
     if (!isApiProviderModel(model)) return false;
     const providerId = getApiProviderId(model);
     const provider = this.plugin.settings.apiProviders.find(
@@ -1045,7 +1045,7 @@ export class DiscordService {
     }
 
     // Route to correct provider
-    const isCliModel = model === "gemini-cli" || model === "claude-cli" || model === "codex-cli";
+    const isCliModel = model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli";
 
     // Inject skill system prompt
     if (loadedSkills.length > 0) {
@@ -1231,7 +1231,7 @@ export class DiscordService {
     vaultBasePath: string,
   ): Promise<string> {
     const cliManager = new CliProviderManager();
-    const providerName = model === "claude-cli" ? "claude-cli" : model === "codex-cli" ? "codex-cli" : "gemini-cli";
+    const providerName = model === "claude-cli" ? "claude-cli" : model === "codex-cli" ? "codex-cli" : "antigravity-cli";
     const provider = cliManager.getProvider(providerName);
     if (!provider) throw new Error(`CLI provider ${providerName} not available`);
 

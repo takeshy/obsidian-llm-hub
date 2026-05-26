@@ -193,7 +193,7 @@ The folder name (not the skill display name) is used as the command — e.g., a 
 
 ### CLI Mode Support
 
-Skills also work with CLI backends (Gemini CLI, Claude CLI, Codex CLI). Since CLI providers do not support function calling, skill workflows use a text-based convention: the AI outputs a `[RUN_WORKFLOW: workflowId]` marker, and the plugin automatically executes the workflow and displays the result.
+Skills also work with CLI backends (Antigravity CLI, Claude CLI, Codex CLI). Since CLI providers do not support function calling, skill workflows use a text-based convention: the AI outputs a `[RUN_WORKFLOW: workflowId]` marker, and the plugin automatically executes the workflow and displays the result.
 
 ### Example: Creating a Skill
 

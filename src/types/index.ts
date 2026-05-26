@@ -499,7 +499,7 @@ export function localLlmDisplayName(config: LocalLlmConfig, modelOverride?: stri
 }
 
 // Chat provider types
-export type ChatProvider = "api" | "gemini-cli" | "claude-cli" | "codex-cli" | "local-llm" | "api-provider";  // "api-provider" kept for legacy; new code uses isApiProviderModel()
+export type ChatProvider = "api" | "antigravity-cli" | "claude-cli" | "codex-cli" | "local-llm" | "api-provider";  // "api-provider" kept for legacy; new code uses isApiProviderModel()
 
 // API provider types for multi-provider support
 export type ApiProviderType = "gemini" | "openai" | "anthropic" | "openrouter" | "grok" | "opencodego" | "opencodezen" | "custom";
@@ -527,10 +527,10 @@ export const KNOWN_PROVIDER_DEFAULTS: Record<string, { baseUrl: string; displayN
 };
 
 export interface CliProviderConfig {
-  cliVerified?: boolean;        // Whether Gemini CLI has been verified
+  cliVerified?: boolean;        // Whether Antigravity CLI has been verified
   claudeCliVerified?: boolean;  // Whether Claude CLI has been verified
   codexCliVerified?: boolean;   // Whether Codex CLI has been verified
-  geminiCliPath?: string;       // Custom path for Gemini CLI
+  geminiCliPath?: string;       // Custom path for Antigravity CLI
   claudeCliPath?: string;       // Custom path for Claude CLI
   codexCliPath?: string;        // Custom path for Codex CLI
 }
@@ -551,7 +551,7 @@ export function hasVerifiedCli(config: CliProviderConfig): boolean {
 // Local LLM format: "local-llm:{configId}"  (bare "local-llm" is accepted
 // for backward-compat and resolves to the first verified entry.)
 export type ModelType =
-  | "gemini-cli"
+  | "antigravity-cli"
   | "claude-cli"
   | "codex-cli"
   | "local-llm"
@@ -589,6 +589,9 @@ export function normalizeDeprecatedGeminiModelName(model: string): string {
 }
 
 export function normalizeDeprecatedModelIdentifier(model: string): string {
+  if (model === "gemini-cli") {
+    return "antigravity-cli";
+  }
   if (!isApiProviderModel(model)) {
     return normalizeDeprecatedGeminiModelName(model);
   }
@@ -715,8 +718,8 @@ export interface ModelInfo {
 
 // CLI model definitions
 export const CLI_MODEL: ModelInfo = {
-  name: "gemini-cli",
-  displayName: "Gemini CLI",
+  name: "antigravity-cli",
+  displayName: "Antigravity CLI",
   description: "Google Gemini via command line (requires Google account)",
   isCliModel: true,
 };
@@ -882,7 +885,7 @@ export function getDefaultModel(settings: LlmHubSettings): ModelType {
   const provider = settings.apiProviders.find(p => p.enabled && p.verified && p.enabledModels?.length > 0);
   if (provider) return `api:${provider.id}:${provider.enabledModels[0]}`;
   const cli = settings.cliConfig;
-  if (cli?.cliVerified) return "gemini-cli";
+  if (cli?.cliVerified) return "antigravity-cli";
   if (cli?.claudeCliVerified) return "claude-cli";
   if (cli?.codexCliVerified) return "codex-cli";
   const localLlm = (settings.localLlmConfigs ?? []).find(c => c.verified && c.enabled !== false);
@@ -897,7 +900,7 @@ export function getDefaultModel(settings: LlmHubSettings): ModelType {
       return `local-llm:${localLlm.id}:${firstModel}` as ModelType;
     }
   }
-  return "gemini-cli";
+  return "antigravity-cli";
 }
 
 // Default slash commands

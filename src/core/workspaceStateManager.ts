@@ -160,7 +160,7 @@ export class WorkspaceStateManager {
 
     // CLI models are only allowed on desktop if verified
     const cliConfig = this.settings.cliConfig;
-    if (selected === "gemini-cli") {
+    if (selected === "antigravity-cli") {
       if (Platform.isMobile || !cliConfig?.cliVerified) return fallback;
       return selected;
     }
