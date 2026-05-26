@@ -138,6 +138,17 @@ export const en = {
   "settings.systemPrompt.desc": "Additional instructions for the AI assistant",
   "settings.systemPrompt.placeholder": "Respond in the same language as the question.",
 
+  // Settings - Privacy
+  "settings.privacy": "Privacy",
+  "settings.privacyEnabled": "Enable privacy filtering for cloud providers",
+  "settings.privacyEnabled.desc": "When enabled, notes tagged as private and notes in private folders are blocked from cloud/API models. Local LLMs retain full access.",
+  "settings.privateTag": "Private tag",
+  "settings.privateTag.desc": "Frontmatter tag that marks a note as private (e.g. add tags: [private] to a note)",
+  "settings.privateTag.placeholder": "private",
+  "settings.privateFolders": "Private folders",
+  "settings.privateFolders.desc": "Comma-separated folder paths fully blocked for cloud providers",
+  "settings.privateFolders.placeholder": "e.g. Personal, Journals, Finance",
+
   // Settings - Tool limits
   "settings.maxToolCalls": "Max tool calls per request",
   "settings.maxToolCalls.desc": "Upper limit for function calls during a single response",

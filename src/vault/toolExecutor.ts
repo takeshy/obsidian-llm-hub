@@ -1,4 +1,4 @@
-import type { App } from "obsidian";
+import { TFile, type App } from "obsidian";
 import {
   readNote,
   createNote,
@@ -15,6 +15,7 @@ import {
   proposeBulkEdit,
   proposeBulkDelete,
   proposeBulkRename,
+  findFileByName,
 } from "./notes";
 import {
   searchByName,
@@ -23,7 +24,7 @@ import {
   listFolders,
   createFolder,
 } from "./search";
-import { DEFAULT_SETTINGS } from "src/types";
+import { DEFAULT_SETTINGS, type PrivacySettings } from "src/types";
 import { formatError } from "src/utils/error";
 
 export type ToolResult = Record<string, unknown>;
@@ -32,6 +33,54 @@ export type ToolResult = Record<string, unknown>;
 export interface ToolExecutionContext {
   listNotesLimit?: number;
   maxNoteChars?: number;
+  isCloudProvider?: boolean;
+  privacySettings?: PrivacySettings;
+}
+
+const PRIVACY_DENIED_MSG = "Access denied: this note is marked as private and cannot be accessed by cloud providers.";
+
+export function isFilePrivate(app: App, filePath: string, settings: PrivacySettings): boolean {
+  if (!settings.enabled) return false;
+
+  let resolvedPath = filePath;
+  let resolvedFile = app.vault.getAbstractFileByPath(filePath);
+  if (!resolvedFile || !(resolvedFile instanceof TFile)) {
+    const found = findFileByName(app, filePath);
+    if (found) {
+      resolvedPath = found.path;
+      resolvedFile = found;
+    }
+  }
+
+  const normalizedPath = resolvedPath.toLowerCase();
+  for (const folder of settings.privateFolders) {
+    const normalizedFolder = folder.toLowerCase().replace(/\/$/, "");
+    if (normalizedPath.startsWith(normalizedFolder + "/") || normalizedPath === normalizedFolder) {
+      return true;
+    }
+  }
+
+  if (resolvedFile instanceof TFile) {
+    const cache = app.metadataCache.getFileCache(resolvedFile);
+    const tags: unknown = cache?.frontmatter?.tags;
+    if (Array.isArray(tags) && tags.includes(settings.privateTag)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function privacyBlocked(context: ToolExecutionContext | undefined): boolean {
+  return !!(context?.isCloudProvider && context?.privacySettings?.enabled);
+}
+
+function checkFilePrivacy(app: App, filePath: string, context: ToolExecutionContext | undefined): ToolResult | null {
+  if (!privacyBlocked(context)) return null;
+  if (isFilePrivate(app, filePath, context!.privacySettings!)) {
+    return { success: false, error: PRIVACY_DENIED_MSG };
+  }
+  return null;
 }
 
 // Execute a tool call and return the result
@@ -69,19 +118,30 @@ async function executeToolCallInternal(
   context?: ToolExecutionContext
 ): Promise<ToolResult> {
   switch (toolName) {
-    case "read_note":
+    case "read_note": {
+      const fileName = asString(args.fileName);
+      if (fileName) {
+        const denied = checkFilePrivacy(app, fileName, context);
+        if (denied) return denied;
+      }
+      if (args.activeNote && privacyBlocked(context)) {
+        const activeFile = app.workspace.getActiveFile();
+        if (activeFile && isFilePrivate(app, activeFile.path, context!.privacySettings!)) {
+          return { success: false, error: PRIVACY_DENIED_MSG };
+        }
+      }
       return readNote(
         app,
-        asString(args.fileName),
+        fileName,
         args.activeNote as boolean | undefined,
         context?.maxNoteChars ?? DEFAULT_SETTINGS.maxNoteChars
       );
+    }
 
     case "create_note": {
       let name = asString(args.name);
       let folder = asString(args.folder);
       if (!name && args.path) {
-        // Fallback: extract name and folder from path argument
         const pathStr = asString(args.path) || "";
         const lastSlash = pathStr.lastIndexOf("/");
         if (lastSlash >= 0) {
@@ -97,6 +157,10 @@ async function executeToolCallInternal(
       if (args.content == null) {
         return { success: false, error: "Required parameter 'content' is missing" };
       }
+      if (folder) {
+        const denied = checkFilePrivacy(app, folder + "/", context);
+        if (denied) return denied;
+      }
       return createNote(
         app,
         name,
@@ -106,21 +170,35 @@ async function executeToolCallInternal(
       );
     }
 
-    case "update_note":
+    case "update_note": {
+      const updateFileName = asString(args.fileName);
+      if (updateFileName) {
+        const denied = checkFilePrivacy(app, updateFileName, context);
+        if (denied) return denied;
+      }
+      if (args.activeNote && privacyBlocked(context)) {
+        const activeFile = app.workspace.getActiveFile();
+        if (activeFile && isFilePrivate(app, activeFile.path, context!.privacySettings!)) {
+          return { success: false, error: PRIVACY_DENIED_MSG };
+        }
+      }
       return updateNote(
         app,
-        asString(args.fileName),
+        updateFileName,
         args.activeNote as boolean | undefined,
         asString(args.newContent),
         (asString(args.mode) as "replace" | "append" | "prepend") || "replace"
       );
+    }
 
     case "delete_note": {
-      const fileName = asString(args.fileName);
-      if (!fileName) {
+      const deleteFileName = asString(args.fileName);
+      if (!deleteFileName) {
         return { success: false, error: "Required parameter 'fileName' is missing" };
       }
-      return deleteNote(app, fileName);
+      const denied = checkFilePrivacy(app, deleteFileName, context);
+      if (denied) return denied;
+      return deleteNote(app, deleteFileName);
     }
 
     case "rename_note": {
@@ -132,6 +210,8 @@ async function executeToolCallInternal(
       if (!newPath) {
         return { success: false, error: "Required parameter 'newPath' is missing" };
       }
+      const denied = checkFilePrivacy(app, oldPath, context);
+      if (denied) return denied;
       return proposeRename(app, oldPath, newPath);
     }
 
@@ -143,9 +223,12 @@ async function executeToolCallInternal(
       const searchContent = args.searchContent as boolean | undefined;
       const parsedLimit = args.limit ? parseInt(asString(args.limit) || "10", 10) : 10;
       const limit = Number.isNaN(parsedLimit) || parsedLimit <= 0 ? 10 : parsedLimit;
+      const privacyFilter = privacyBlocked(context)
+        ? (f: TFile) => isFilePrivate(app, f.path, context!.privacySettings!)
+        : undefined;
 
       if (searchContent) {
-        const results = await searchByContent(app, query, limit);
+        const results = await searchByContent(app, query, limit, privacyFilter);
         return {
           success: true,
           results: results.map((r) => ({
@@ -156,7 +239,7 @@ async function executeToolCallInternal(
           count: results.length,
         };
       } else {
-        const results = searchByName(app, query, limit);
+        const results = searchByName(app, query, limit, privacyFilter);
         return {
           success: true,
           results: results.map((r) => ({ name: r.name, path: r.path })),
@@ -171,7 +254,10 @@ async function executeToolCallInternal(
       const defaultLimit = context?.listNotesLimit ?? DEFAULT_SETTINGS.listNotesLimit;
       const parsedLimit = args.limit ? parseInt(asString(args.limit) || String(defaultLimit), 10) : defaultLimit;
       const limit = Number.isNaN(parsedLimit) || parsedLimit <= 0 ? defaultLimit : parsedLimit;
-      const { results, totalCount, hasMore } = listNotes(app, folder, recursive, limit);
+      const privacyFilter = privacyBlocked(context)
+        ? (f: TFile) => isFilePrivate(app, f.path, context!.privacySettings!)
+        : undefined;
+      const { results, totalCount, hasMore } = listNotes(app, folder, recursive, limit, privacyFilter);
       return {
         success: true,
         notes: results.map((r) => ({ name: r.name, path: r.path })),
@@ -203,6 +289,12 @@ async function executeToolCallInternal(
     }
 
     case "get_active_note_info": {
+      if (privacyBlocked(context)) {
+        const activeFile = app.workspace.getActiveFile();
+        if (activeFile && isFilePrivate(app, activeFile.path, context!.privacySettings!)) {
+          return { success: false, error: PRIVACY_DENIED_MSG };
+        }
+      }
       const info = getActiveNoteInfo(app);
       if (info) {
         return { success: true, ...info };
@@ -213,16 +305,28 @@ async function executeToolCallInternal(
       };
     }
 
-    case "propose_edit":
+    case "propose_edit": {
+      const editFileName = asString(args.fileName);
+      if (editFileName) {
+        const denied = checkFilePrivacy(app, editFileName, context);
+        if (denied) return denied;
+      }
+      if (args.activeNote && privacyBlocked(context)) {
+        const activeFile = app.workspace.getActiveFile();
+        if (activeFile && isFilePrivate(app, activeFile.path, context!.privacySettings!)) {
+          return { success: false, error: PRIVACY_DENIED_MSG };
+        }
+      }
       return proposeEdit(
         app,
-        asString(args.fileName),
+        editFileName,
         args.activeNote as boolean | undefined,
         asString(args.newContent),
         (asString(args.mode) as "replace" | "append" | "prepend" | "patch") || "replace",
         undefined,
         args.patches as Array<{ search: string; replace: string }> | undefined
       );
+    }
 
     case "apply_edit":
       return applyEdit(app);
@@ -231,11 +335,13 @@ async function executeToolCallInternal(
       return discardEdit(app);
 
     case "propose_delete": {
-      const fileName = asString(args.fileName);
-      if (!fileName) {
+      const proposeDeleteFileName = asString(args.fileName);
+      if (!proposeDeleteFileName) {
         return { success: false, error: "Required parameter 'fileName' is missing" };
       }
-      return proposeDelete(app, fileName);
+      const denied = checkFilePrivacy(app, proposeDeleteFileName, context);
+      if (denied) return denied;
+      return proposeDelete(app, proposeDeleteFileName);
     }
 
     case "apply_delete":
@@ -245,7 +351,7 @@ async function executeToolCallInternal(
       return discardDelete(app);
 
     case "bulk_propose_edit": {
-      const edits = args.edits as Array<{
+      let edits = args.edits as Array<{
         fileName: string;
         newContent: string;
         mode?: "replace" | "append" | "prepend";
@@ -256,27 +362,39 @@ async function executeToolCallInternal(
           error: "No edits provided. The 'edits' array is required.",
         };
       }
+      if (privacyBlocked(context)) {
+        edits = edits.filter(e => !isFilePrivate(app, e.fileName, context!.privacySettings!));
+        if (edits.length === 0) return { success: false, error: PRIVACY_DENIED_MSG };
+      }
       return proposeBulkEdit(app, edits);
     }
 
     case "bulk_propose_rename": {
-      const renames = args.renames as Array<{ oldPath: string; newPath: string }>;
+      let renames = args.renames as Array<{ oldPath: string; newPath: string }>;
       if (!renames || !Array.isArray(renames) || renames.length === 0) {
         return {
           success: false,
           error: "No renames provided. The 'renames' array is required.",
         };
       }
+      if (privacyBlocked(context)) {
+        renames = renames.filter(r => !isFilePrivate(app, r.oldPath, context!.privacySettings!));
+        if (renames.length === 0) return { success: false, error: PRIVACY_DENIED_MSG };
+      }
       return proposeBulkRename(app, renames);
     }
 
     case "bulk_propose_delete": {
-      const fileNames = args.fileNames as string[];
+      let fileNames = args.fileNames as string[];
       if (!fileNames || !Array.isArray(fileNames) || fileNames.length === 0) {
         return {
           success: false,
           error: "No files provided. The 'fileNames' array is required.",
         };
+      }
+      if (privacyBlocked(context)) {
+        fileNames = fileNames.filter(f => !isFilePrivate(app, f, context!.privacySettings!));
+        if (fileNames.length === 0) return { success: false, error: PRIVACY_DENIED_MSG };
       }
       return proposeBulkDelete(app, fileNames);
     }

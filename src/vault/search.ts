@@ -74,9 +74,11 @@ export interface SearchResult {
 export function searchByName(
   app: App,
   query: string,
-  limit = 10
+  limit = 10,
+  excludeFilter?: (file: TFile) => boolean,
 ): SearchResult[] {
-  const files = getSearchableVaultFiles(app);
+  let files = getSearchableVaultFiles(app);
+  if (excludeFilter) files = files.filter(f => !excludeFilter(f));
   const searchTerm = query.toLowerCase().trim();
 
   const results: SearchResult[] = [];
@@ -85,10 +87,8 @@ export function searchByName(
     const fileName = file.basename.toLowerCase();
     const filePath = file.path.toLowerCase();
 
-    // Calculate relevance score
     let score = 0;
 
-    // Exact match gets highest score
     if (fileName === searchTerm) {
       score = 100;
     } else if (fileName.startsWith(searchTerm)) {
@@ -108,7 +108,6 @@ export function searchByName(
     }
   }
 
-  // Sort by score (descending) and limit results
   return results
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
@@ -118,9 +117,11 @@ export function searchByName(
 export async function searchByContent(
   app: App,
   query: string,
-  limit = 10
+  limit = 10,
+  excludeFilter?: (file: TFile) => boolean,
 ): Promise<SearchResult[]> {
-  const files = getSearchableVaultFiles(app);
+  let files = getSearchableVaultFiles(app);
+  if (excludeFilter) files = files.filter(f => !excludeFilter(f));
   const searchTerm = query.toLowerCase().trim();
 
   const results: SearchResult[] = [];
@@ -167,9 +168,11 @@ export function listNotes(
   app: App,
   folder?: string,
   recursive = false,
-  limit = DEFAULT_SETTINGS.listNotesLimit
+  limit = DEFAULT_SETTINGS.listNotesLimit,
+  excludeFilter?: (file: TFile) => boolean,
 ): { results: SearchResult[]; totalCount: number; hasMore: boolean } {
   let files = getVaultTextFiles(app);
+  if (excludeFilter) files = files.filter(f => !excludeFilter(f));
 
   if (folder) {
     const normalizedFolder = folder.toLowerCase().replace(/\/$/, "");

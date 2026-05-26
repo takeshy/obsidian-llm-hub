@@ -141,6 +141,9 @@ export interface LlmHubSettings {
   listNotesLimit: number;             // listNotesのデフォルト件数制限
   maxNoteChars: number;               // ノート読み込み時の最大文字数
 
+  // Privacy ACL
+  privacy: PrivacySettings;
+
   // Edit history settings
   editHistory: EditHistorySettings;
 
@@ -163,6 +166,19 @@ export interface LlmHubSettings {
   proxyUrl?: string;              // HTTP(S) proxy URL (e.g. http://proxy:8080)
   proxyBypass?: string;           // Comma-separated hosts to bypass proxy (e.g. api.openai.com,localhost)
 }
+
+// Privacy ACL settings — restrict cloud providers from accessing private notes
+export interface PrivacySettings {
+  enabled: boolean;
+  privateTag: string;
+  privateFolders: string[];
+}
+
+export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
+  enabled: false,
+  privateTag: "private",
+  privateFolders: [],
+};
 
 // Edit history settings
 export interface EditHistorySettings {
@@ -920,6 +936,8 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   functionCallWarningThreshold: 5,
   listNotesLimit: 50,
   maxNoteChars: 20000,
+  // Privacy
+  privacy: DEFAULT_PRIVACY_SETTINGS,
   // Edit history
   editHistory: DEFAULT_EDIT_HISTORY_SETTINGS,
   // Encryption

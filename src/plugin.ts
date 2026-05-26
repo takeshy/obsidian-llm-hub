@@ -35,7 +35,7 @@ import {
 } from "src/core/editHistory";
 import { EditHistoryModal } from "src/ui/components/EditHistoryModal";
 import { formatError } from "src/utils/error";
-import { DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETTINGS, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_LANGFUSE_SETTINGS, DEFAULT_WORKSPACE_FOLDER, hasVerifiedCli } from "src/types";
+import { DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETTINGS, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_LANGFUSE_SETTINGS, DEFAULT_PRIVACY_SETTINGS, DEFAULT_WORKSPACE_FOLDER, hasVerifiedCli } from "src/types";
 import { initLocale, t } from "src/i18n";
 import { registerWorkflowCodeBlockProcessor } from "src/ui/workflowCodeBlock";
 import { initDiscordService, resetDiscordService } from "src/core/discordService";
@@ -589,6 +589,11 @@ export class LlmHubPlugin extends Plugin {
       localLlmConfig: undefined,
       localLlmVerified: undefined,
       localLlmAvailableModels: undefined,
+      // Deep merge privacy settings
+      privacy: {
+        ...DEFAULT_PRIVACY_SETTINGS,
+        ...(loaded.privacy ?? {}),
+      },
       // Deep merge Discord settings
       discord: {
         ...DEFAULT_DISCORD_SETTINGS,

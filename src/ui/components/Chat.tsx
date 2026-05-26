@@ -56,7 +56,7 @@ import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { searchLocalRag, loadRagMediaAttachments } from "src/core/localRagStore";
-import { createToolExecutor } from "src/vault/toolExecutor";
+import { createToolExecutor, isFilePrivate } from "src/vault/toolExecutor";
 import {
 	getPendingEdit,
 	applyEdit,
@@ -1594,10 +1594,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
+						const ragPrivacyFilter = isApiProviderModel(currentModel) && plugin.settings.privacy?.enabled
+							? (fp: string) => !isFilePrivate(plugin.app, fp, plugin.settings.privacy)
+							: undefined;
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
 							ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+							ragPrivacyFilter,
 						);
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
@@ -1875,10 +1879,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
+						const ragPrivacyFilter = isApiProviderModel(currentModel) && plugin.settings.privacy?.enabled
+							? (fp: string) => !isFilePrivate(plugin.app, fp, plugin.settings.privacy)
+							: undefined;
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
 							ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+							ragPrivacyFilter,
 						);
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
@@ -1919,10 +1927,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					allowDelete: true,
 					ragEnabled: false,
 				});
-				const obsidianToolExecutor = createToolExecutor(plugin.app, {
-					listNotesLimit: settings.listNotesLimit,
-					maxNoteChars: settings.maxNoteChars,
-				});
+			const obsidianToolExecutor = createToolExecutor(plugin.app, {
+				listNotesLimit: settings.listNotesLimit,
+				maxNoteChars: settings.maxNoteChars,
+				isCloudProvider: isApiProviderModel(currentModel),
+				privacySettings: settings.privacy,
+			});
 
 				// Fetch MCP tools if any servers are enabled
 				let toolsBundle = [...vaultTools];
@@ -2263,10 +2273,14 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
+						const ragPrivacyFilter = isApiProviderModel(currentModel) && plugin.settings.privacy?.enabled
+							? (fp: string) => !isFilePrivate(plugin.app, fp, plugin.settings.privacy)
+							: undefined;
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
 							ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+							ragPrivacyFilter,
 						);
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
@@ -2286,12 +2300,14 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				}
 			}
 
-			// Build vault tools (same as Gemini path)
+		// Build vault tools (same as Gemini path)
 			const allMessages = [...messages, userMessage];
 			let tools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false });
 			const obsidianToolExecutor = createToolExecutor(plugin.app, {
 				listNotesLimit: settings.listNotesLimit,
 				maxNoteChars: settings.maxNoteChars,
+				isCloudProvider: isApiProviderModel(currentModel),
+				privacySettings: settings.privacy,
 			});
 
 			// Fetch MCP tools
@@ -2702,6 +2718,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					? createToolExecutor(plugin.app, {
 						listNotesLimit: settings.listNotesLimit,
 						maxNoteChars: settings.maxNoteChars,
+						isCloudProvider: isApiProviderModel(currentModel),
+						privacySettings: settings.privacy,
 					})
 					: undefined;
 
@@ -3059,10 +3077,14 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
 					if (ragSettingObj) {
 						try {
+							const ragPrivacyFilter = isApiProviderModel(currentModel) && plugin.settings.privacy?.enabled
+								? (fp: string) => !isFilePrivate(plugin.app, fp, plugin.settings.privacy)
+								: undefined;
 							const localRag = await searchLocalRag(
 								selectedRagSetting, resolvedContent,
 								ragSettingObj, getGeminiApiKey(plugin.settings),
-								plugin.settings.proxyUrl, plugin.settings.proxyBypass
+								plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+								ragPrivacyFilter,
 							);
 							if (localRag.sources.length > 0) {
 								systemPrompt += localRag.context;

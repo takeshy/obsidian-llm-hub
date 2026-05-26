@@ -838,13 +838,14 @@ export async function searchLocalRag(
   fallbackApiKey: string,
   proxyUrl?: string,
   proxyBypass?: string,
+  fileFilter?: (filePath: string) => boolean,
 ): Promise<LocalRagResult> {
   const store = getLocalRagStore();
   const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
   if (!store || !apiKey) {
     return { context: "", sources: [], mediaReferences: [] };
   }
-  const results = await store.search(
+  let results = await store.search(
     settingName, query, apiKey,
     ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL), ragSetting.topK,
     ragSetting.embeddingBaseUrl || undefined,
@@ -852,6 +853,9 @@ export async function searchLocalRag(
     ragSetting.searchFileExtensions,
     proxyUrl, proxyBypass,
   );
+  if (fileFilter) {
+    results = results.filter(r => fileFilter(r.filePath));
+  }
   if (results.length === 0) {
     return { context: "", sources: [], mediaReferences: [] };
   }

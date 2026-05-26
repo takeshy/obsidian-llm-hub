@@ -14,6 +14,7 @@ import { displayMcpServersSettings } from "src/ui/settings/mcpServersSettings";
 import { displayApiProviderSettings } from "src/ui/settings/apiProviderSettings";
 import { displayProxySettings } from "src/ui/settings/proxySettings";
 import { displayDiscordSettings } from "src/ui/settings/discordSettings";
+import { displayPrivacySettings } from "src/ui/settings/privacySettings";
 
 export class SettingsTab extends PluginSettingTab {
   plugin: LlmHubPlugin;
@@ -40,6 +41,7 @@ export class SettingsTab extends PluginSettingTab {
     displayApiProviderSettings(containerEl, ctx);
     displayProxySettings(containerEl, ctx);
     displayWorkspaceSettings(containerEl, ctx);
+    displayPrivacySettings(containerEl, ctx);
     displayEditHistorySettings(containerEl, ctx);
     displayEncryptionSettings(containerEl, ctx);
     displayLangfuseSettings(containerEl, ctx);

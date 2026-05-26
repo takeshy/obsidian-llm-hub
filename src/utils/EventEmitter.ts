@@ -37,7 +37,7 @@ export class EventEmitter {
     if (!listeners || listeners.size === 0) {
       return false;
     }
-    for (const listener of listeners) {
+    for (const listener of [...listeners]) {
       listener(...args);
     }
     return true;
