@@ -140,7 +140,7 @@ export interface LlmHubSettings {
   functionCallWarningThreshold: number; // 残りこの回数で警告
   listNotesLimit: number;             // listNotesのデフォルト件数制限
   maxNoteChars: number;               // ノート読み込み時の最大文字数
-  cloudVaultToolAllowedFolders: string[]; // Empty = cloud/API vault tools can access the whole vault
+  cloudVaultToolAllowedFolders: string[]; // Empty = LLM vault tools can access the whole vault
 
   // Edit history settings
   editHistory: EditHistorySettings;

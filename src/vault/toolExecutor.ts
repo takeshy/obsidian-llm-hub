@@ -38,12 +38,12 @@ export type ToolResult = Record<string, unknown>;
 export interface ToolExecutionContext {
   listNotesLimit?: number;
   maxNoteChars?: number;
-  isCloudProvider?: boolean;
+  limitVaultToolScope?: boolean;
   cloudVaultToolAllowedFolders?: string[];
 }
 
 function hasCloudVaultToolScope(context: ToolExecutionContext | undefined): boolean {
-  return !!(context?.isCloudProvider && context.cloudVaultToolAllowedFolders && context.cloudVaultToolAllowedFolders.length > 0);
+  return !!(context?.limitVaultToolScope && context.cloudVaultToolAllowedFolders && context.cloudVaultToolAllowedFolders.length > 0);
 }
 
 function cloudVaultToolFileFilter(context: ToolExecutionContext | undefined): ((file: TFile) => boolean) | undefined {

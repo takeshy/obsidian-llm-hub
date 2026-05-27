@@ -4,7 +4,7 @@
 
 **免费开源的** Obsidian AI 助手，提供**聊天**、**工作流自动化**和**语义搜索（RAG）**功能。支持多种 LLM 提供商 — 使用最适合您需求的 AI。
 
-> **使用任何 LLM 提供商：** [Gemini](https://ai.google.dev)、[OpenAI](https://platform.openai.com)、[Anthropic](https://console.anthropic.com)、[OpenRouter](https://openrouter.ai)、[Grok](https://console.x.ai)、[OpenCode Zen / Go](https://opencode.ai)、本地 LLM（[Ollama](https://ollama.com)、[LM Studio](https://lmstudio.ai)、[vLLM](https://docs.vllm.ai)、[OpenCode](https://opencode.ai)），或 CLI 工具（[Gemini CLI](https://github.com/google-gemini/gemini-cli)、[Claude Code](https://github.com/anthropics/claude-code)、[Codex CLI](https://github.com/openai/codex)）。
+> **使用任何 LLM 提供商：** [Gemini](https://ai.google.dev)、[OpenAI](https://platform.openai.com)、[Anthropic](https://console.anthropic.com)、[OpenRouter](https://openrouter.ai)、[Grok](https://console.x.ai)、[OpenCode Zen / Go](https://opencode.ai)、本地 LLM（[Ollama](https://ollama.com)、[LM Studio](https://lmstudio.ai)、[vLLM](https://docs.vllm.ai)、[OpenCode](https://opencode.ai)），或 CLI 工具（[Antigravity CLI](https://antigravity.google)、[Claude Code](https://github.com/anthropics/claude-code)、[Codex CLI](https://github.com/openai/codex)）。
 
 ## 主要特性
 
@@ -32,14 +32,14 @@
 | **OpenCode Zen / Go** (API) | ✅ 流式传输 | ✅ 函数调用 | ❌ | ❌ | ✅ |
 | **本地 LLM** (LM Studio, vLLM, AnythingLLM) | ✅ 流式传输 | ✅ 函数调用（自动回退） | ❌ | ❌ | ✅ |
 | **本地 LLM** (Ollama, OpenCode) | ✅ 流式传输 | ❌（标记模式） | ❌ | ❌ | ✅ |
-| **CLI** (Gemini, Claude, Codex) | ✅ 流式传输 | ❌ | ❌ | ❌ | ✅ |
+| **CLI** (Antigravity, Claude, Codex) | ✅ 流式传输 | ❌ | ❌ | ❌ | ✅ |
 
 > [!TIP]
 > **可以同时配置多个提供商。** 在聊天过程中自由切换模型 — 每个提供商拥有独立的 API 密钥和设置。
 
 > [!TIP]
 > **CLI 选项** 让您只需一个账户即可使用旗舰模型 - 无需 API 密钥！
-> - **Gemini CLI**：安装 [Gemini CLI](https://github.com/google-gemini/gemini-cli)，运行 `gemini` 并使用 `/auth` 进行身份验证
+> - **Antigravity CLI**：安装 [Antigravity CLI](https://antigravity.google)，使用 `agy` 进行身份验证
 > - **Claude CLI**：安装 [Claude Code](https://github.com/anthropics/claude-code)（`npm install -g @anthropic-ai/claude-code`），运行 `claude` 并进行身份验证
 > - **Codex CLI**：安装 [Codex CLI](https://github.com/openai/codex)（`npm install -g @openai/codex`），运行 `codex` 并进行身份验证
 
@@ -94,7 +94,7 @@ AI 聊天功能提供与您所选 LLM 提供商的交互式对话界面，与您
 > `{selection}` 和 `{content}` 都**故意不在输入区域展开**——由于聊天输入框较小，展开长文本会使输入变得困难。内容会在您发送消息时展开，您可以通过查看聊天中已发送的消息来验证这一点。
 
 > [!NOTE]
-> 仓库文件的 @ 提及仅插入文件路径 - AI 通过工具读取内容。这在 CLI 模型、Ollama 或 OpenCode (Local) 中不可用（不支持仓库工具）；Gemini CLI 可通过 shell 读取文件，但响应格式可能有所不同。**LM Studio / vLLM / AnythingLLM** 本地 LLM 在加载的模型支持 tool calling 时可正常工作。
+> 仓库文件的 @ 提及仅插入文件路径 - AI 通过工具读取内容。这不适用于 CLI 模型，也不适用于 Ollama/OpenCode 等仅支持标记模式的本地 LLM。**LM Studio / vLLM / AnythingLLM** 等支持工具的本地 LLM 在加载的模型支持 Function Calling 时，可以通过 vault 工具读取文件。Antigravity CLI 可以通过 shell 读取文件，但响应格式可能有所不同。
 
 ## 文件附件
 
@@ -140,7 +140,7 @@ AI 可以使用以下工具与您的仓库交互：
 
 | 条件 | 默认模式 | 可更改 |
 |------|----------|--------|
-| CLI 模型（Gemini/Claude/Codex CLI） | Vault: 关闭 | 否 |
+| CLI 模型（Antigravity/Claude/Codex CLI） | Vault: 关闭 | 否 |
 | 本地 LLM | Vault: 关闭 | 否 |
 | Gemma 4 + RAG/Web Search | Vault: 关闭 | 是（禁用 RAG/Web Search 后工具会重新启用） |
 | 普通 | Vault: 全部 | 是 |
@@ -149,6 +149,10 @@ AI 可以使用以下工具与您的仓库交互：
 
 - **CLI 模型、Ollama、OpenCode (Local)**：不公开 OpenAI 风格的函数调用，因此无法使用 Vault 工具。**LM Studio / vLLM / AnythingLLM** 本地 LLM 在加载的模型支持 tool calling 时**可以**使用 Vault 工具；如果模型拒绝首次 tools 请求，会自动设置标记并在后续轮次回退到标记模式（在 **设置 → Local LLM → Re-enable tools** 中可清除该标记）。
 - **Gemma 4**：函数调用和 RAG/Web Search 无法在单个请求中同时使用。当一个启用时，另一个会自动禁用。
+
+**LLM vault 工具文件夹：**
+
+在 **设置 → Workspace → LLM vault tool folders** 中，可以限制 LLM 驱动的 vault 工具能够访问哪些 vault 文件夹。此设置适用于 API 提供商、支持工具的本地 LLM，以及由 LLM 触发的 skill workflow。留空表示允许访问整个 vault。CLI 模型不使用这些 vault 工具，因此不受此设置限制。
 
 ## 安全编辑
 
@@ -262,7 +266,7 @@ MCP（Model Context Protocol）服务器提供额外的工具，扩展 AI 在 Va
 - **参考资料** - 在 `references/` 中包含风格指南、模板和检查清单
 - **工作流集成** - 技能可以将工作流作为 Function Calling 工具公开
 - **斜杠命令** - 输入 `/folder-name` 即可立即调用技能并发送
-- **CLI 模式支持** - 技能可在 Gemini CLI、Claude CLI 和 Codex CLI 后端中使用
+- **CLI 模式支持** - 技能可在 Antigravity CLI、Claude CLI 和 Codex CLI 后端中使用
 - **选择性激活** - 按对话选择哪些技能处于活动状态
 
 创建技能的方式与工作流相同 — 选择 **+ New (AI)**，勾选 **"作为代理技能创建"**，然后描述您想要的功能。AI 会同时生成 `SKILL.md` 指令和工作流。
@@ -341,7 +345,7 @@ MCP（Model Context Protocol）服务器提供额外的工具，扩展 AI 在 Va
 
 - **多提供商支持** — 兼容所有已配置的 LLM 提供商（Gemini、OpenAI、Anthropic、OpenRouter、Grok、CLI、本地 LLM）
 - **按频道状态** — 每个 Discord 频道维护各自的对话历史、模型选择和 RAG 设置
-- **Vault 工具** — AI 可根据您的插件设置完全访问 vault 工具（读取、写入、搜索笔记）
+- **Vault 工具** — AI 可根据您的插件设置读取、写入和搜索笔记，并遵循 Workspace LLM vault 工具文件夹限制
 - **RAG 集成** — 可通过 `!rag` 命令按频道启用语义搜索
 - **斜杠命令** — 通过 `!skill` 激活插件斜杠命令
 - **长消息分割** — 超过 Discord 2000 字符限制的响应会在自然断点处自动分割
@@ -569,6 +573,8 @@ npm run build
 > [!NOTE]
 > **LM Studio / vLLM / AnythingLLM** 本地 LLM 对 vault 工具使用 OpenAI 风格的函数调用 — 在支持 tools 的模型上默认启用。如果模型拒绝首次 tools 请求，会自动设置标记并在后续轮次降级到基于标记的 skill 模式；在 **设置 → Local LLM → Re-enable tools** 中清除标记可重试。
 >
+> 这些工具遵循 **设置 → Workspace → LLM vault tool folders**，也就是 API 提供商和 LLM 触发的 skill workflow 使用的同一文件夹限制。
+>
 > **Ollama** 和 **OpenCode (Local)** 仍仅使用标记模式。请对这些框架使用工作流或 RAG 进行笔记操作。
 
 #### OpenCode 本地服务器
@@ -610,12 +616,12 @@ OpenCode 在 Windows 上[推荐使用 WSL](https://opencode.ai/docs/ja/windows-w
 
    点击 **Fetch models**，选择一个 `<providerID>/<modelID>` 格式的模型并保存。
 
-### CLI 模式（Gemini / Claude / Codex）
+### CLI 模式（Antigravity / Claude / Codex）
 
-**Gemini CLI：**
-1. 安装 [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-2. 使用 `gemini` → `/auth` 进行身份验证
-3. 在 Gemini CLI 部分点击"Verify"
+**Antigravity CLI：**
+1. 安装 [Antigravity CLI](https://antigravity.google)
+2. 使用 `agy`
+3. 在 Antigravity CLI 部分点击"Verify"
 
 **Claude CLI：**
 1. 安装 [Claude Code](https://github.com/anthropics/claude-code)：`npm install -g @anthropic-ai/claude-code`
@@ -637,15 +643,15 @@ OpenCode 在 Windows 上[推荐使用 WSL](https://opencode.ai/docs/ja/windows-w
 <details>
 <summary><b>Windows：如何查找 CLI 路径</b></summary>
 
-将 CLI 路径留空并点击 **Verify** — 插件会自动检测 npm 全局安装（检查 `%APPDATA%\npm\node_modules`、`%PROGRAMFILES%\nodejs\node_modules` 及 PATH 中的位置），并通过 `node` 运行真正的 `.js` 入口点。Claude 的独立安装程序位置 `%LOCALAPPDATA%\Programs\claude\claude.exe` 也会被自动识别。
+Leave the CLI path empty and click **Verify** — the plugin looks for `agy` on PATH. Claude's standalone installer at `%LOCALAPPDATA%\Programs\claude\claude.exe` is also picked up automatically.
 
 仅在自动检测失败时才设置自定义 CLI 路径。以下任一方式均可（按安全性从高到低）：
 
-1. **`.js` 脚本（推荐）** — 如 `C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js`。通过 `node` 运行（不经过 `cmd.exe`）。
+1. **`.exe` executable** — e.g. `C:\Users\YourName\AppData\Local\Programs\Antigravity\agy.exe`. Runs directly.
 2. **`.exe` 可执行文件** — 如 `C:\Users\YourName\AppData\Local\Programs\claude\claude.exe`。直接运行。
-3. **`.cmd` / `.bat` 包装脚本** — 如 `C:\Users\YourName\AppData\Roaming\npm\gemini.cmd`。必须经过 `cmd.exe`，提示词中的 `&`、`|`、`>`、`^`、`%VAR%` 等可能导致异常。
+3. **`.cmd` / `.bat` 包装脚本** — 如 `C:\Users\YourName\AppData\Roaming\npm\agy.cmd`。必须经过 `cmd.exe`，提示词中的 `&`、`|`、`>`、`^`、`%VAR%` 等可能导致异常。
 
-在 PowerShell 中运行 `Get-Command gemini` / `Get-Command claude` / `Get-Command codex` 可查看包装脚本路径；可直接填入（方式 3），或定位到相邻的 `.js` / `.exe` 以获得更安全的方式。
+在 PowerShell 中运行 `Get-Command agy` / `Get-Command claude` / `Get-Command codex` 可查看包装脚本路径；可直接填入（方式 3），或定位到相邻的 `.js` / `.exe` 以获得更安全的方式。
 </details>
 
 <details>
@@ -653,13 +659,13 @@ OpenCode 在 Windows 上[推荐使用 WSL](https://opencode.ai/docs/ja/windows-w
 
 1. 打开终端并运行：
    ```bash
-   which gemini
+   which agy
    ```
-2. 将显示的路径（例如：`/home/user/.local/bin/gemini`）输入到 CLI 路径设置中
+2. 将显示的路径（例如：`/home/user/.local/bin/agy`）输入到 CLI 路径设置中
 
 对于 Claude CLI，使用 `which claude`。对于 Codex CLI，使用 `which codex`。
 
-**Node.js 版本管理器：** 如果您使用 nodenv、nvm、volta、fnm、asdf 或 mise，插件会自动从常见位置检测 node 二进制文件。如果检测失败，请直接指定 CLI 脚本路径（例如：`~/.npm-global/lib/node_modules/@google/gemini-cli/dist/index.js`）。
+**Node.js 版本管理器：** 如果您使用 nodenv、nvm、volta、fnm、asdf 或 mise，插件会自动从常见位置检测 node 二进制文件。如果检测失败，请直接指定 CLI 脚本路径（例如：`~/.local/bin/agy`）。
 </details>
 
 > [!TIP]
@@ -906,7 +912,7 @@ if __name__ == "__main__":
 - 工作流 `http` 节点可以向工作流中指定的任何 URL 发送数据
 
 **CLI 提供程序（可选）：**
-- 启用 CLI 模式时，外部 CLI 工具（gemini、claude、codex）通过 child_process 执行
+- 启用 CLI 模式时，外部 CLI 工具（agy、claude、codex）通过 child_process 执行
 - 仅在用户明确配置和验证时才会发生
 - CLI 模式通过 child_process 执行外部 CLI 工具
 

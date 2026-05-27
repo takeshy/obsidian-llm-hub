@@ -4,7 +4,7 @@
 
 Assistente AI **gratuito e open-source** per Obsidian con **Chat**, **Automazione dei Workflow** e **Ricerca Semantica (RAG)**. Supporta diversi provider LLM — usa l'AI che meglio si adatta alle tue esigenze.
 
-> **Usa qualsiasi provider LLM:** [Gemini](https://ai.google.dev), [OpenAI](https://platform.openai.com), [Anthropic](https://console.anthropic.com), [OpenRouter](https://openrouter.ai), [Grok](https://console.x.ai), [OpenCode Zen / Go](https://opencode.ai), LLM locali ([Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [vLLM](https://docs.vllm.ai), [OpenCode](https://opencode.ai)), o strumenti CLI ([Gemini CLI](https://github.com/google-gemini/gemini-cli), [Claude Code](https://github.com/anthropics/claude-code), [Codex CLI](https://github.com/openai/codex)).
+> **Usa qualsiasi provider LLM:** [Gemini](https://ai.google.dev), [OpenAI](https://platform.openai.com), [Anthropic](https://console.anthropic.com), [OpenRouter](https://openrouter.ai), [Grok](https://console.x.ai), [OpenCode Zen / Go](https://opencode.ai), LLM locali ([Ollama](https://ollama.com), [LM Studio](https://lmstudio.ai), [vLLM](https://docs.vllm.ai), [OpenCode](https://opencode.ai)), o strumenti CLI ([Antigravity CLI](https://antigravity.google), [Claude Code](https://github.com/anthropics/claude-code), [Codex CLI](https://github.com/openai/codex)).
 
 ## Caratteristiche Principali
 
@@ -32,14 +32,14 @@ Assistente AI **gratuito e open-source** per Obsidian con **Chat**, **Automazion
 | **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **LLM Locale** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling (fallback automatico) | ❌ | ❌ | ✅ |
 | **LLM Locale** (Ollama, OpenCode) | ✅ Streaming | ❌ (modalità marker) | ❌ | ❌ | ✅ |
-| **CLI** (Gemini, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
+| **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
 > [!TIP]
 > **È possibile configurare più provider contemporaneamente.** Cambia modello liberamente durante la chat — ogni provider ha la propria chiave API e le proprie impostazioni.
 
 > [!TIP]
 > Le **Opzioni CLI** ti permettono di usare modelli flagship con un semplice account - nessuna chiave API necessaria!
-> - **Gemini CLI**: Installa [Gemini CLI](https://github.com/google-gemini/gemini-cli), esegui `gemini` e autenticati con `/auth`
+> - **Antigravity CLI**: Installa [Antigravity CLI](https://antigravity.google), autenticati con `agy`
 > - **Claude CLI**: Installa [Claude Code](https://github.com/anthropics/claude-code) (`npm install -g @anthropic-ai/claude-code`), esegui `claude` e autenticati
 > - **Codex CLI**: Installa [Codex CLI](https://github.com/openai/codex) (`npm install -g @openai/codex`), esegui `codex` e autenticati
 
@@ -94,7 +94,7 @@ Fai riferimento a file e variabili digitando `@`:
 > Sia `{selection}` che `{content}` **non vengono espansi** intenzionalmente nell'area di input—poiché l'input della chat è compatto, espandere testo lungo renderebbe difficile la digitazione. Il contenuto viene espanso quando invii il messaggio, cosa che puoi verificare controllando il tuo messaggio inviato nella chat.
 
 > [!NOTE]
-> Le menzioni @ dei file del vault inseriscono solo il percorso del file - l'AI legge il contenuto tramite strumenti. Questo non funziona con i modelli CLI, Ollama o OpenCode (Local) (nessun supporto per strumenti vault); Gemini CLI può leggere file via shell, ma il formato della risposta potrebbe differire. I LLM locali **LM Studio / vLLM / AnythingLLM** funzionano se il modello caricato supporta il tool calling.
+> Le menzioni @ dei file del vault inseriscono solo il percorso del file - l'AI legge il contenuto tramite strumenti. Questo non funziona con i modelli CLI né con framework Local LLM solo marker come Ollama/OpenCode. I framework Local LLM compatibili con strumenti, come **LM Studio / vLLM / AnythingLLM**, possono leggere il file tramite strumenti del vault quando il modello caricato supporta Function Calling. Antigravity CLI può leggere file via shell, ma il formato della risposta potrebbe differire.
 
 ## Allegati
 
@@ -140,7 +140,7 @@ Quando l'AI gestisce le note nella Chat, utilizza gli strumenti Vault. Controlla
 
 | Condizione | Modalità Predefinita | Modificabile |
 |------------|---------------------|--------------|
-| Modelli CLI (Gemini/Claude/Codex CLI) | Vault: Disattivato | No |
+| Modelli CLI (Antigravity/Claude/Codex CLI) | Vault: Disattivato | No |
 | LLM Locale | Vault: Disattivato | No |
 | Gemma 4 + RAG/Web Search | Vault: Disattivato | Sì (disabilitare RAG/Web Search riattiva gli strumenti) |
 | Normale | Vault: Tutti | Sì |
@@ -149,6 +149,10 @@ Quando l'AI gestisce le note nella Chat, utilizza gli strumenti Vault. Controlla
 
 - **Modelli CLI, Ollama, OpenCode (Local)**: Non espongono il function calling in stile OpenAI, quindi gli strumenti Vault non possono essere utilizzati. I LLM locali **LM Studio / vLLM / AnythingLLM** POSSONO usare gli strumenti Vault quando il modello caricato supporta il tool calling; se un modello rifiuta la prima richiesta con tools, viene contrassegnato automaticamente e ricade in modalità marker per i turni successivi (cancella il contrassegno in **Impostazioni → Local LLM → Re-enable tools**).
 - **Gemma 4**: Le chiamate di funzione e RAG/Web Search non possono essere combinati in una singola richiesta. Quando uno è attivo, l'altro viene automaticamente disabilitato.
+
+**Cartelle degli strumenti Vault LLM:**
+
+In **Impostazioni → Workspace → LLM vault tool folders**, puoi limitare quali cartelle del vault possono essere raggiunte dagli strumenti Vault guidati dal LLM. Questo si applica ai provider API, ai Local LLM compatibili con strumenti e agli skill workflow attivati dal LLM. Lascia la lista vuota per consentire l'intero vault. I modelli CLI non sono limitati da questa impostazione perché non usano questi strumenti Vault.
 
 ## Modifica Sicura
 
@@ -262,7 +266,7 @@ Estendi le capacità dell'IA con istruzioni personalizzate, materiali di riferim
 - **Materiali di riferimento** - Includi guide di stile, modelli e checklist in `references/`
 - **Integrazione dei workflow** - Gli skill possono esporre workflow come strumenti di Function Calling
 - **Comando slash** - Digita `/folder-name` per invocare uno skill istantaneamente e inviare
-- **Supporto modalità CLI** - Gli skill funzionano con i backend Gemini CLI, Claude CLI e Codex CLI
+- **Supporto modalità CLI** - Gli skill funzionano con i backend Antigravity CLI, Claude CLI e Codex CLI
 - **Attivazione selettiva** - Scegli quali skill sono attivi per conversazione
 
 Crea gli skill allo stesso modo dei workflow — seleziona **+ New (AI)**, attiva **"Crea come agent skill"** e descrivi cosa vuoi. L'AI genera sia le istruzioni del `SKILL.md` che il workflow.
@@ -341,7 +345,7 @@ Gli utenti possono interagire con il bot usando questi comandi in Discord:
 
 - **Supporto multi-provider** — Funziona con tutti i provider LLM configurati (Gemini, OpenAI, Anthropic, OpenRouter, Grok, CLI, LLM Locale)
 - **Stato per canale** — Ogni canale Discord mantiene la propria cronologia delle conversazioni, selezione del modello e impostazione RAG
-- **Strumenti vault** — L'AI ha accesso completo agli strumenti vault (leggere, scrivere, cercare note) in base alle impostazioni del plugin
+- **Strumenti vault** — L'AI può leggere, scrivere e cercare note in base alle impostazioni del plugin, incluso il limite Workspace per le cartelle degli strumenti Vault LLM
 - **Integrazione RAG** — La ricerca semantica può essere abilitata per canale tramite il comando `!rag`
 - **Comandi slash** — Attiva i comandi slash del plugin tramite `!skill`
 - **Divisione messaggi lunghi** — Le risposte che superano il limite di 2000 caratteri di Discord vengono automaticamente divise nei punti di interruzione naturali
@@ -569,6 +573,8 @@ Connettiti a server LLM in esecuzione locale:
 > [!NOTE]
 > I LLM locali **LM Studio / vLLM / AnythingLLM** usano il function calling in stile OpenAI per gli strumenti vault — abilitato per impostazione predefinita per i modelli compatibili con tools. Se un modello rifiuta la prima richiesta con tools, viene contrassegnato automaticamente e degradato alla modalità skill basata su marker per i turni successivi; cancella il contrassegno in **Impostazioni → Local LLM → Re-enable tools** per riprovare.
 >
+> Questi strumenti seguono **Impostazioni → Workspace → LLM vault tool folders**, lo stesso limite di cartelle usato per provider API e skill workflow attivati dal LLM.
+>
 > **Ollama** e **OpenCode (Local)** continuano a usare solo la modalità marker. Usa workflow o RAG per le operazioni sulle note con quei framework.
 
 #### OpenCode Local Server
@@ -610,12 +616,12 @@ OpenCode [raccomanda WSL](https://opencode.ai/docs/ja/windows-wsl) su Windows pe
 
    Clicca su **Fetch models**, scegli un modello `<providerID>/<modelID>` e salva.
 
-### Modalità CLI (Gemini / Claude / Codex)
+### Modalità CLI (Antigravity / Claude / Codex)
 
-**Gemini CLI:**
-1. Installa [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-2. Autenticati con `gemini` → `/auth`
-3. Clicca "Verify" nella sezione Gemini CLI
+**Antigravity CLI:**
+1. Installa [Antigravity CLI](https://antigravity.google)
+2. Autenticati con `agy`
+3. Clicca "Verify" nella sezione Antigravity CLI
 
 **Claude CLI:**
 1. Installa [Claude Code](https://github.com/anthropics/claude-code): `npm install -g @anthropic-ai/claude-code`
@@ -637,15 +643,15 @@ OpenCode [raccomanda WSL](https://opencode.ai/docs/ja/windows-wsl) su Windows pe
 <details>
 <summary><b>Windows: Come trovare il percorso del CLI</b></summary>
 
-Lascia vuoto il campo percorso CLI e fai clic su **Verify** — il plugin rileva automaticamente l'installazione npm-global (controlla `%APPDATA%\npm\node_modules`, `%PROGRAMFILES%\nodejs\node_modules` e i percorsi basati su PATH) ed esegue il vero entry point `.js` tramite `node`. L'installazione standalone di Claude in `%LOCALAPPDATA%\Programs\claude\claude.exe` viene rilevata automaticamente.
+Leave the CLI path empty and click **Verify** — the plugin looks for `agy` on PATH. Claude's standalone installer at `%LOCALAPPDATA%\Programs\claude\claude.exe` is also picked up automatically.
 
 Imposta un percorso CLI personalizzato solo se il rilevamento automatico fallisce. Ognuna delle seguenti opzioni funziona (dalla più sicura alla meno sicura):
 
-1. **Script `.js` (consigliato)** — es. `C:\Users\YourName\AppData\Roaming\npm\node_modules\@google\gemini-cli\dist\index.js`. Eseguito tramite `node` (senza passare per `cmd.exe`).
+1. **`.exe` executable** — e.g. `C:\Users\YourName\AppData\Local\Programs\Antigravity\agy.exe`. Runs directly.
 2. **Eseguibile `.exe`** — es. `C:\Users\YourName\AppData\Local\Programs\claude\claude.exe`. Eseguito direttamente.
-3. **Wrapper `.cmd` / `.bat`** — es. `C:\Users\YourName\AppData\Roaming\npm\gemini.cmd`. Deve passare per `cmd.exe`, quindi i prompt contenenti `&`, `|`, `>`, `^` o `%VAR%` possono causare problemi.
+3. **Wrapper `.cmd` / `.bat`** — es. `C:\Users\YourName\AppData\Roaming\npm\agy.cmd`. Deve passare per `cmd.exe`, quindi i prompt contenenti `&`, `|`, `>`, `^` o `%VAR%` possono causare problemi.
 
-Usa `Get-Command gemini` / `Get-Command claude` / `Get-Command codex` in PowerShell per trovare il percorso del wrapper; inseriscilo direttamente (opzione 3) o naviga al `.js` / `.exe` adiacente per le opzioni più sicure.
+Usa `Get-Command agy` / `Get-Command claude` / `Get-Command codex` in PowerShell per trovare il percorso del wrapper; inseriscilo direttamente (opzione 3) o naviga al `.js` / `.exe` adiacente per le opzioni più sicure.
 </details>
 
 <details>
@@ -653,13 +659,13 @@ Usa `Get-Command gemini` / `Get-Command claude` / `Get-Command codex` in PowerSh
 
 1. Apri un terminale ed esegui:
    ```bash
-   which gemini
+   which agy
    ```
-2. Inserisci il percorso mostrato (es: `/home/user/.local/bin/gemini`) nelle impostazioni del percorso CLI
+2. Inserisci il percorso mostrato (es: `/home/user/.local/bin/agy`) nelle impostazioni del percorso CLI
 
 Per Claude CLI, usa `which claude`. Per Codex CLI, usa `which codex`.
 
-**Gestori di versioni Node.js:** Se usi nodenv, nvm, volta, fnm, asdf o mise, il plugin rileva automaticamente il binario node dalle posizioni comuni. Se il rilevamento fallisce, specifica direttamente il percorso dello script CLI (es: `~/.npm-global/lib/node_modules/@google/gemini-cli/dist/index.js`).
+**Gestori di versioni Node.js:** Se usi nodenv, nvm, volta, fnm, asdf o mise, il plugin rileva automaticamente il binario node dalle posizioni comuni. Se il rilevamento fallisce, specifica direttamente il percorso dello script CLI (es: `~/.local/bin/agy`).
 </details>
 
 > [!TIP]
@@ -906,7 +912,7 @@ La scheda **Discussion** offre un'arena di dibattito multi-modello in cui divers
 - I nodi `http` dei workflow possono inviare dati a qualsiasi URL specificato nel workflow
 
 **Provider CLI (opzionali):**
-- Quando la modalità CLI è abilitata, strumenti CLI esterni (gemini, claude, codex) vengono eseguiti tramite child_process
+- Quando la modalità CLI è abilitata, strumenti CLI esterni (agy, claude, codex) vengono eseguiti tramite child_process
 - Questo avviene solo quando esplicitamente configurato e verificato dall'utente
 - La modalità CLI esegue strumenti CLI esterni tramite child_process
 

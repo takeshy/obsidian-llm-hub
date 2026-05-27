@@ -1,7 +1,7 @@
 import type { TFile } from "obsidian";
 
 export const CLOUD_VAULT_SCOPE_DENIED_MSG =
-  "Access denied: cloud/API provider vault tools are limited to the configured allowed folders.";
+  "Access denied: LLM vault tools are limited to the configured allowed folders.";
 
 export function normalizeAllowedVaultFolders(folders: string[] | undefined): string[] {
   return (folders ?? [])

@@ -147,8 +147,8 @@ export const ja: Record<string, string> = {
   "settings.listNotesLimit.desc": "制限が指定されていない場合にlist_notesが返すノートの最大数",
   "settings.maxNoteChars": "最大ノート文字数",
   "settings.maxNoteChars.desc": "ノートから読み取る最大文字数（長いノートは切り詰められます）",
-  "settings.cloudVaultToolAllowedFolders": "Cloud/APIのVault tool許可フォルダ",
-  "settings.cloudVaultToolAllowedFolders.desc": "Cloud/API providerのVault toolとcloudから起動されたskill workflowがアクセスできるフォルダをカンマ区切りで指定します。空の場合はVault全体を許可します。RAG、手動添付、@note mention、MCP tool、script、shell commandは制限しません。",
+  "settings.cloudVaultToolAllowedFolders": "LLMのVault tool許可フォルダ",
+  "settings.cloudVaultToolAllowedFolders.desc": "LLMのVault toolとLLMから起動されたskill workflowがアクセスできるフォルダをカンマ区切りで指定します。空の場合はVault全体を許可します。RAG、手動添付、@note mention、MCP tool、script、shell commandは制限しません。",
   "settings.cloudVaultToolAllowedFolders.placeholder": "例: Public, Shared/Docs",
   "settings.resetToDefault": "デフォルトにリセット（{{value}}）",
 

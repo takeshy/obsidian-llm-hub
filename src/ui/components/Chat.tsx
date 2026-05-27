@@ -366,9 +366,8 @@ function getPendingInfos<T>(items: T[]): T[] | undefined {
 
 const MAX_BACKGROUND_STREAMS = 3;
 
-function shouldLimitCloudVaultTools(model: ModelType): boolean {
-	return !isLocalLlmModel(model)
-		&& model !== "antigravity-cli"
+function shouldLimitLlmVaultTools(model: ModelType): boolean {
+	return model !== "antigravity-cli"
 		&& model !== "claude-cli"
 		&& model !== "codex-cli";
 }
@@ -1934,7 +1933,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				const obsidianToolExecutor = createToolExecutor(plugin.app, {
 					listNotesLimit: settings.listNotesLimit,
 					maxNoteChars: settings.maxNoteChars,
-					isCloudProvider: shouldLimitCloudVaultTools(currentModel),
+					limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
 					cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 				});
 
@@ -1976,7 +1975,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 						return { result: mcpResult.result };
 					}
 					if (name === "run_skill_workflow" && llmSkillWorkflowMap.size > 0) {
-						return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, llmSkillWorkflowMap);
+						return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, llmSkillWorkflowMap, {
+							cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+						});
 					}
 					if (name === "run_skill_script" && llmSkillScriptMap.size > 0) {
 						return await executeSkillScript(plugin, args.scriptId as string, args.args as string | undefined, llmSkillScriptMap);
@@ -2167,7 +2168,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				if (stopped) break;
 
 				const markerResult = llmLoadedSkills.length > 0
-					? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills, abortController.signal)
+					? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills, abortController.signal, {
+						cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+					})
 					: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
 
 				fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
@@ -2306,7 +2309,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			const obsidianToolExecutor = createToolExecutor(plugin.app, {
 				listNotesLimit: settings.listNotesLimit,
 				maxNoteChars: settings.maxNoteChars,
-				isCloudProvider: shouldLimitCloudVaultTools(currentModel),
+				limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
 				cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 			});
 
@@ -2720,7 +2723,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					? createToolExecutor(plugin.app, {
 						listNotesLimit: settings.listNotesLimit,
 						maxNoteChars: settings.maxNoteChars,
-						isCloudProvider: shouldLimitCloudVaultTools(allowedModel),
+						limitVaultToolScope: shouldLimitLlmVaultTools(allowedModel),
 						cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 					})
 					: undefined;
@@ -2765,7 +2768,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								args.workflowId as string,
 								args.variables as string | undefined,
 								skillWorkflowMap,
-								shouldLimitCloudVaultTools(allowedModel)
+								shouldLimitLlmVaultTools(allowedModel)
 									? { cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
 									: undefined,
 							);
@@ -3759,6 +3762,9 @@ async function processSkillMarkers(
 	content: string,
 	skills: LoadedSkill[],
 	signal?: AbortSignal,
+	options?: {
+		cloudVaultToolAllowedFolders?: string[];
+	},
 ): Promise<{ processedContent: string; followUpMessage?: string; aborted?: boolean }> {
 	if (skills.length === 0) return { processedContent: content };
 
@@ -3800,7 +3806,7 @@ async function processSkillMarkers(
 		if (signal?.aborted) return { processedContent, aborted: true };
 		const workflowId = match[1].trim();
 		const variablesJson = match[2] || undefined;
-		const result = await executeSkillWorkflow(plugin, workflowId, variablesJson, skillWorkflowMap);
+		const result = await executeSkillWorkflow(plugin, workflowId, variablesJson, skillWorkflowMap, options);
 		const resultText = JSON.stringify(result, null, 2);
 		processedContent = processedContent.replace(match[0],
 			`**Workflow executed: ${workflowId}**\n\`\`\`json\n${resultText}\n\`\`\``

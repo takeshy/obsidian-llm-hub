@@ -1069,7 +1069,7 @@ export class DiscordService {
     const toolExecutor = createToolExecutor(this.app, {
       listNotesLimit: settings.listNotesLimit,
       maxNoteChars: settings.maxNoteChars,
-      isCloudProvider: !isCliModel && !isLocalLlmModel(model),
+      limitVaultToolScope: !isCliModel,
       cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
     });
 
@@ -1084,7 +1084,7 @@ export class DiscordService {
       if (name === "run_skill_workflow" && workflowMap.size > 0) {
         return await this.executeSkillWorkflow(
           args.workflowId as string, args.variables as string | undefined, workflowMap,
-          !isCliModel && !isLocalLlmModel(model)
+          !isCliModel
             ? { cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
             : undefined,
         );
@@ -1333,7 +1333,9 @@ export class DiscordService {
     }
 
     // Process text markers from response
-    fullResponse = await this.processTextMarkers(fullResponse, scriptMap, workflowMap, vaultBasePath);
+    fullResponse = await this.processTextMarkers(fullResponse, scriptMap, workflowMap, vaultBasePath, {
+      cloudVaultToolAllowedFolders: this.plugin.settings.cloudVaultToolAllowedFolders,
+    });
 
     return fullResponse;
   }
@@ -1387,6 +1389,9 @@ export class DiscordService {
     scriptMap: Map<string, { skill: LoadedSkill; scriptRef: SkillScriptRef; vaultPath: string }>,
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
     vaultBasePath: string,
+    options?: {
+      cloudVaultToolAllowedFolders?: string[];
+    },
   ): Promise<string> {
     let result = content;
 
@@ -1405,7 +1410,7 @@ export class DiscordService {
       const workflowRegex = /\[RUN_WORKFLOW:\s*(.+?)\](?:\(([\s\S]*?)\))?/g;
       let match;
       while ((match = workflowRegex.exec(content)) !== null) {
-        const wfResult = await this.executeSkillWorkflow(match[1].trim(), match[2]?.trim(), workflowMap);
+        const wfResult = await this.executeSkillWorkflow(match[1].trim(), match[2]?.trim(), workflowMap, options);
         result = result.replace(match[0], `**Workflow: ${match[1].trim()}**\n\`\`\`json\n${JSON.stringify(wfResult, null, 2)}\n\`\`\``);
       }
     }

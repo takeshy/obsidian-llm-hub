@@ -207,7 +207,7 @@ Please revise the output based on the user's feedback above.`;
       }
     }
   }
-  const isCloudProviderForVaultTools = !isCliModel && !isLocalLlm;
+  const shouldLimitLlmVaultTools = !isCliModel;
 
   if (isCliModel) {
     // Use persistent CLI session (shared across workflow nodes)
@@ -408,7 +408,7 @@ Please revise the output based on the user's feedback above.`;
       const obsidianToolExecutor = createToolExecutor(app, {
         listNotesLimit: plugin.settings.listNotesLimit,
         maxNoteChars: plugin.settings.maxNoteChars,
-        isCloudProvider: true,
+        limitVaultToolScope: true,
         cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
       });
 
@@ -664,7 +664,7 @@ Please revise the output based on the user's feedback above.`;
     const obsidianToolExecutor = createToolExecutor(app, {
       listNotesLimit: plugin.settings.listNotesLimit,
       maxNoteChars: plugin.settings.maxNoteChars,
-      isCloudProvider: isCloudProviderForVaultTools,
+      limitVaultToolScope: shouldLimitLlmVaultTools,
       cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
     });
 

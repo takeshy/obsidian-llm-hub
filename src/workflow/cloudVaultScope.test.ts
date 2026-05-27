@@ -64,7 +64,7 @@ function makeNode(type: WorkflowNode["type"], properties: Record<string, string>
   };
 }
 
-describe("workflow cloud vault scope", () => {
+describe("workflow LLM vault scope", () => {
   it("blocks note-read outside configured folders", async () => {
     const app = makeApp([makeFile("Private/Secret.md", "secret")]);
     const context = makeContext(["Public"]);

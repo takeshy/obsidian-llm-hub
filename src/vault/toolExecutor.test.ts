@@ -42,12 +42,12 @@ function makeFolder(path: string): TFolder {
   return folder;
 }
 
-describe("cloud vault tool folder scope", () => {
+describe("LLM vault tool folder scope", () => {
   it("allows the whole vault when no allowed folders are configured", async () => {
     const app = makeApp([makeFile("Private/Secret.md", "secret")]);
 
     const result = await executeToolCall(app, "read_note", { fileName: "Private/Secret.md" }, {
-      isCloudProvider: true,
+      limitVaultToolScope: true,
       cloudVaultToolAllowedFolders: [],
     });
 
@@ -62,7 +62,7 @@ describe("cloud vault tool folder scope", () => {
     ]);
 
     const result = await executeToolCall(app, "read_note", { fileName: "Private/Secret.md" }, {
-      isCloudProvider: true,
+      limitVaultToolScope: true,
       cloudVaultToolAllowedFolders: ["Public"],
     });
 
@@ -81,7 +81,7 @@ describe("cloud vault tool folder scope", () => {
       folder: "Public",
       content: "leak",
     }, {
-      isCloudProvider: true,
+      limitVaultToolScope: true,
       cloudVaultToolAllowedFolders: ["Public"],
     });
 
@@ -96,7 +96,7 @@ describe("cloud vault tool folder scope", () => {
       makeFile("Private/Other.md", "other"),
     ]);
     const context = {
-      isCloudProvider: true,
+      limitVaultToolScope: true,
       cloudVaultToolAllowedFolders: ["Public"],
     };
 
@@ -111,18 +111,18 @@ describe("cloud vault tool folder scope", () => {
     const app = makeApp([]);
 
     const result = await executeToolCall(app, "list_folders", {}, {
-      isCloudProvider: true,
+      limitVaultToolScope: true,
       cloudVaultToolAllowedFolders: ["Public"],
     });
 
     expect(result.folders).toEqual(["Public", "Public/Nested"]);
   });
 
-  it("does not restrict local provider vault tools", async () => {
+  it("does not restrict callers that do not opt into LLM vault scope", async () => {
     const app = makeApp([makeFile("Private/Secret.md", "secret")]);
 
     const result = await executeToolCall(app, "read_note", { fileName: "Private/Secret.md" }, {
-      isCloudProvider: false,
+      limitVaultToolScope: false,
       cloudVaultToolAllowedFolders: ["Public"],
     });
 

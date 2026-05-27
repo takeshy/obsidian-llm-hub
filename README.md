@@ -94,7 +94,7 @@ Reference files and variables by typing `@`:
 > Both `{selection}` and `{content}` are intentionally **not expanded** in the input area—since the chat input is compact, expanding long text would make typing difficult. The content is expanded when you send the message, which you can verify by checking your sent message in the chat.
 
 > [!NOTE]
-> Vault file @mentions insert only the file path - the AI reads content via tools. This doesn't work with CLI models or Local LLMs (no vault tool support). Antigravity CLI can read files via shell, but response format may differ.
+> Vault file @mentions insert only the file path - the AI reads content via tools. This does not work with CLI models or marker-only Local LLM frameworks such as Ollama/OpenCode. Tools-capable Local LLM frameworks such as LM Studio, vLLM, and AnythingLLM can read the file via vault tools when the loaded model supports function calling. Antigravity CLI can read files via shell, but response format may differ.
 
 ## File Attachments
 
@@ -149,6 +149,10 @@ When the AI handles notes in Chat, it uses Vault tools. Control which vault tool
 
 - **CLI models, Ollama, OpenCode (Local)**: These do not expose OpenAI-style function calling, so Vault tools cannot be used. **LM Studio / vLLM / AnythingLLM** local LLMs CAN use Vault tools when the loaded model supports tool calling; if a model rejects the first tools request, it is auto-flagged and falls back to marker mode for subsequent turns (clear the flag in **Settings → Local LLM → Re-enable tools**).
 - **Gemma 4**: Function calling and RAG/Web Search cannot be combined in a single request. When one is active, the other is automatically disabled.
+
+**LLM vault tool folders:**
+
+In **Settings → Workspace → LLM vault tool folders**, you can limit which vault folders LLM-driven vault tools may access. This applies to API providers and tools-capable Local LLMs, including LLM-triggered skill workflows. Leave the list empty to allow the whole vault. CLI models are not restricted by this setting because they do not use these vault tools.
 
 ## Safe Editing
 
@@ -344,7 +348,7 @@ Users can interact with the bot using these commands in Discord:
 
 - **Multi-provider support** — Works with all configured LLM providers (Gemini, OpenAI, Anthropic, OpenRouter, Grok, CLI, Local LLM)
 - **Per-channel state** — Each Discord channel maintains its own conversation history, model selection, and RAG setting
-- **Vault tools** — AI has full access to vault tools (read, write, search notes) based on your plugin settings
+- **Vault tools** — AI can read, write, and search notes based on your plugin settings, including the Workspace LLM vault tool folder limit
 - **RAG integration** — Semantic search can be enabled per channel via `!rag` command
 - **Slash commands** — Activate plugin slash commands via `!skill`
 - **Deep Research** — Run Gemini Deep Research via `!research` command. Runs in the background so you can continue chatting while it works. Results are posted to the channel when complete (requires Gemini API key)
@@ -575,6 +579,8 @@ Connect to locally running LLM servers:
 
 > [!NOTE]
 > **LM Studio / vLLM / AnythingLLM** local LLMs use OpenAI-style function calling for vault tools — enabled by default for tools-capable models. If a model rejects the first tools request it is auto-flagged and downgraded to marker-based skill mode for subsequent turns; clear the flag in **Settings → Local LLM → Re-enable tools** to retry.
+>
+> These tools follow **Settings → Workspace → LLM vault tool folders**, the same folder limit used for API providers and LLM-triggered skill workflows.
 >
 > **Ollama** and **OpenCode (Local)** still use marker mode only. Use workflows or RAG for note operations with those frameworks.
 

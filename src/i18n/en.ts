@@ -147,8 +147,8 @@ export const en = {
   "settings.listNotesLimit.desc": "Maximum number of notes returned by list_notes when no limit is specified",
   "settings.maxNoteChars": "Max note characters",
   "settings.maxNoteChars.desc": "Maximum characters to read from a note (longer notes will be truncated)",
-  "settings.cloudVaultToolAllowedFolders": "Cloud/API vault tool folders",
-  "settings.cloudVaultToolAllowedFolders.desc": "Comma-separated folders that cloud/API provider vault tools and cloud-triggered skill workflows may access. Leave empty to allow the whole vault. This does not limit RAG, manual attachments, @note mentions, MCP tools, scripts, or shell commands.",
+  "settings.cloudVaultToolAllowedFolders": "LLM vault tool folders",
+  "settings.cloudVaultToolAllowedFolders.desc": "Comma-separated folders that LLM vault tools and LLM-triggered skill workflows may access. Leave empty to allow the whole vault. This does not limit RAG, manual attachments, @note mentions, MCP tools, scripts, or shell commands.",
   "settings.cloudVaultToolAllowedFolders.placeholder": "Example: Public, Shared/Docs",
   "settings.resetToDefault": "Reset to default ({{value}})",
 
