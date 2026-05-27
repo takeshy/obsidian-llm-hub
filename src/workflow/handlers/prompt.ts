@@ -3,6 +3,7 @@ import { WorkflowNode, ExecutionContext, PromptCallbacks } from "../types";
 import { replaceVariables, getVariable } from "./utils";
 import { isEncryptedFile, decryptFileContent } from "../../core/crypto";
 import { cryptoCache } from "../../core/cryptoCache";
+import { CLOUD_VAULT_SCOPE_DENIED_MSG, isFileAllowedForCloudVaultTools, isPathInAllowedVaultFolders } from "../../vault/cloudVaultScope";
 
 // Helper function to create file info object from path
 function createFileInfo(filePath: string): { path: string; basename: string; name: string; extension: string } {
@@ -12,6 +13,24 @@ function createFileInfo(filePath: string): { path: string; basename: string; nam
   const name = lastDotIndex > 0 ? basename.substring(0, lastDotIndex) : basename;
   const extension = lastDotIndex > 0 ? basename.substring(lastDotIndex + 1) : "";
   return { path: filePath, basename, name, extension };
+}
+
+function hasWorkflowVaultScope(context: ExecutionContext): boolean {
+  return !!(context.cloudVaultToolAllowedFolders && context.cloudVaultToolAllowedFolders.length > 0);
+}
+
+function assertWorkflowPathAllowed(context: ExecutionContext, path: string): void {
+  if (!hasWorkflowVaultScope(context)) return;
+  if (!isPathInAllowedVaultFolders(path, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
+
+function assertWorkflowFileAllowed(context: ExecutionContext, file: TFile): void {
+  if (!hasWorkflowVaultScope(context)) return;
+  if (!isFileAllowedForCloudVaultTools(file, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
 }
 
 // Handle prompt-file node - show file picker dialog or use active file in hotkey mode
@@ -90,6 +109,7 @@ export async function handlePromptFileNode(
 
   // Read file content (support .md and .md.encrypted)
   const notePath = filePath.endsWith(".md") || filePath.endsWith(".encrypted") ? filePath : `${filePath}.md`;
+  assertWorkflowPathAllowed(context, notePath);
   let file = app.vault.getAbstractFileByPath(notePath);
   if (!file && notePath.endsWith(".md")) {
     file = app.vault.getAbstractFileByPath(`${notePath}.encrypted`);
@@ -97,6 +117,7 @@ export async function handlePromptFileNode(
   if (!file || !(file instanceof TFile)) {
     throw new Error(`File not found: ${notePath}`);
   }
+  assertWorkflowFileAllowed(context, file);
   let content = await app.vault.read(file);
 
   // Decrypt if encrypted
@@ -219,8 +240,10 @@ export async function handlePromptSelectionNode(
     try {
       const fileInfo = JSON.parse(String(eventFile));
       if (fileInfo.path) {
+        assertWorkflowPathAllowed(context, fileInfo.path);
         const file = app.vault.getAbstractFileByPath(fileInfo.path);
         if (file && file instanceof TFile) {
+          assertWorkflowFileAllowed(context, file);
           const content = await app.vault.read(file);
           context.variables.set(saveTo, content);
 
@@ -254,10 +277,12 @@ export async function handlePromptSelectionNode(
   }
 
   // Read the file content to extract the actual selected text
+  assertWorkflowPathAllowed(context, result.path);
   const file = app.vault.getAbstractFileByPath(result.path);
   if (!file || !(file instanceof TFile)) {
     throw new Error(`File not found: ${result.path}`);
   }
+  assertWorkflowFileAllowed(context, file);
   const fileContent = await app.vault.read(file);
 
   // Convert EditorPosition (line, ch) to character offsets

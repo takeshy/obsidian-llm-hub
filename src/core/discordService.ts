@@ -1069,6 +1069,8 @@ export class DiscordService {
     const toolExecutor = createToolExecutor(this.app, {
       listNotesLimit: settings.listNotesLimit,
       maxNoteChars: settings.maxNoteChars,
+      isCloudProvider: !isCliModel && !isLocalLlmModel(model),
+      cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
     });
 
     const vaultBasePath = (this.app.vault.adapter as { basePath?: string }).basePath || ".";
@@ -1082,6 +1084,9 @@ export class DiscordService {
       if (name === "run_skill_workflow" && workflowMap.size > 0) {
         return await this.executeSkillWorkflow(
           args.workflowId as string, args.variables as string | undefined, workflowMap,
+          !isCliModel && !isLocalLlmModel(model)
+            ? { cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
+            : undefined,
         );
       }
       if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
@@ -1471,6 +1476,9 @@ export class DiscordService {
     workflowId: string,
     variablesJson: string | undefined,
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
+    options?: {
+      cloudVaultToolAllowedFolders?: string[];
+    },
   ): Promise<Record<string, unknown>> {
     const entry = workflowMap.get(workflowId);
     if (!entry) {
@@ -1519,7 +1527,10 @@ export class DiscordService {
         workflow,
         { variables },
         undefined,
-        { workflowName: entry.vaultPath.substring(entry.vaultPath.lastIndexOf("/") + 1).replace(/\.md$/, "") || workflowId },
+        {
+          workflowName: entry.vaultPath.substring(entry.vaultPath.lastIndexOf("/") + 1).replace(/\.md$/, "") || workflowId,
+          cloudVaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
+        },
         callbacks,
       );
 

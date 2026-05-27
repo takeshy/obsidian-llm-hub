@@ -366,6 +366,13 @@ function getPendingInfos<T>(items: T[]): T[] | undefined {
 
 const MAX_BACKGROUND_STREAMS = 3;
 
+function shouldLimitCloudVaultTools(model: ModelType): boolean {
+	return !isLocalLlmModel(model)
+		&& model !== "antigravity-cli"
+		&& model !== "claude-cli"
+		&& model !== "codex-cli";
+}
+
 interface ChatProps {
 	plugin: LlmHubPlugin;
 }
@@ -1927,6 +1934,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				const obsidianToolExecutor = createToolExecutor(plugin.app, {
 					listNotesLimit: settings.listNotesLimit,
 					maxNoteChars: settings.maxNoteChars,
+					isCloudProvider: shouldLimitCloudVaultTools(currentModel),
+					cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 				});
 
 				// Fetch MCP tools if any servers are enabled
@@ -2297,6 +2306,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			const obsidianToolExecutor = createToolExecutor(plugin.app, {
 				listNotesLimit: settings.listNotesLimit,
 				maxNoteChars: settings.maxNoteChars,
+				isCloudProvider: shouldLimitCloudVaultTools(currentModel),
+				cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 			});
 
 			// Fetch MCP tools
@@ -2350,7 +2361,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					return { result: mcpResult.result };
 				}
 				if (name === "run_skill_workflow" && apiSkillWorkflowMap.size > 0) {
-					return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, apiSkillWorkflowMap);
+					return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, apiSkillWorkflowMap, {
+						cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+					});
 				}
 				if (name === "run_skill_script" && apiSkillScriptMap.size > 0) {
 					return await executeSkillScript(plugin, args.scriptId as string, args.args as string | undefined, apiSkillScriptMap);
@@ -2707,6 +2720,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					? createToolExecutor(plugin.app, {
 						listNotesLimit: settings.listNotesLimit,
 						maxNoteChars: settings.maxNoteChars,
+						isCloudProvider: shouldLimitCloudVaultTools(allowedModel),
+						cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 					})
 					: undefined;
 
@@ -2750,6 +2765,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								args.workflowId as string,
 								args.variables as string | undefined,
 								skillWorkflowMap,
+								shouldLimitCloudVaultTools(allowedModel)
+									? { cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
+									: undefined,
 							);
 						}
 						// Skill script tool
@@ -3903,6 +3921,9 @@ async function executeSkillWorkflow(
 		workflowRef: SkillWorkflowRef;
 		vaultPath: string;
 	}>,
+	options?: {
+		cloudVaultToolAllowedFolders?: string[];
+	},
 ): Promise<Record<string, unknown>> {
 	const entry = skillWorkflowMap.get(workflowId);
 	if (!entry) {
@@ -3997,6 +4018,7 @@ async function executeSkillWorkflow(
 				workflowName: workflowDisplayName,
 				recordHistory: true,
 				abortSignal: abortController.signal,
+				cloudVaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
 			},
 			callbacks,
 		);

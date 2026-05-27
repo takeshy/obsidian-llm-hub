@@ -15,6 +15,7 @@ import {
   type ModelType,
   type SlashCommand,
   type LocalLlmConfig,
+  type CliProviderConfig,
   DEFAULT_SETTINGS,
   DEFAULT_LOCAL_LLM_CONFIG,
   getGeminiApiKey,
@@ -41,6 +42,25 @@ import { DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETT
 import { initLocale, t } from "src/i18n";
 import { registerWorkflowCodeBlockProcessor } from "src/ui/workflowCodeBlock";
 import { initDiscordService, resetDiscordService } from "src/core/discordService";
+
+function normaliseCliConfig(loaded: Record<string, unknown>): CliProviderConfig {
+  const raw = (loaded.cliConfig ?? {}) as Record<string, unknown>;
+  const migrated = raw.antigravityCliMigrated === true;
+  const config = {
+    ...DEFAULT_CLI_CONFIG,
+    ...raw,
+    antigravityCliMigrated: true,
+  };
+
+  if (!migrated) {
+    delete config.geminiCliPath;
+    if (raw.cliVerified === true) {
+      config.cliVerified = false;
+    }
+  }
+
+  return config;
+}
 
 /**
  * Normalise the Local LLM config stored on disk into the modern array form.
@@ -556,6 +576,7 @@ export class LlmHubPlugin extends Plugin {
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...loaded,
+      cliConfig: normaliseCliConfig(loaded),
       // Deep copy arrays to avoid mutating DEFAULT_SETTINGS
       // Use loaded commands if present, otherwise use default commands
       slashCommands: loaded.slashCommands
@@ -585,6 +606,9 @@ export class LlmHubPlugin extends Plugin {
         : [],
       enabledWorkflowEventTriggers: loaded.enabledWorkflowEventTriggers
         ? [...loaded.enabledWorkflowEventTriggers]
+        : [],
+      cloudVaultToolAllowedFolders: Array.isArray(loaded.cloudVaultToolAllowedFolders)
+        ? loaded.cloudVaultToolAllowedFolders.map((folder: unknown) => String(folder).trim()).filter(Boolean)
         : [],
       // Deep merge editHistory settings
       editHistory: {

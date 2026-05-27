@@ -94,6 +94,25 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
       );
   }
 
+  new Setting(containerEl)
+    .setName(t("settings.cloudVaultToolAllowedFolders"))
+    .setDesc(t("settings.cloudVaultToolAllowedFolders.desc"))
+    .addText((text) => {
+      text
+        .setPlaceholder(t("settings.cloudVaultToolAllowedFolders.placeholder"))
+        .setValue(plugin.settings.cloudVaultToolAllowedFolders.join(", "));
+      text.inputEl.addEventListener("blur", () => {
+        void (async () => {
+          plugin.settings.cloudVaultToolAllowedFolders = text.inputEl.value
+            .split(",")
+            .map((folder) => folder.trim().replace(/^\/+|\/+$/g, ""))
+            .filter(Boolean);
+          text.setValue(plugin.settings.cloudVaultToolAllowedFolders.join(", "));
+          await plugin.saveSettings();
+        })();
+      });
+    });
+
   // Save Chat History
   new Setting(containerEl)
     .setName(t("settings.saveChatHistory"))

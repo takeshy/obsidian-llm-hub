@@ -102,6 +102,7 @@ export interface ExecutionContext {
   variables: Map<string, string | number>;
   chatId?: string;
   logs: ExecutionLog[];
+  cloudVaultToolAllowedFolders?: string[];
   lastCommandInfo?: LastCommandInfo;
   regenerateInfo?: RegenerateInfo;
   /** Persistent CLI sessions keyed by provider name, shared across workflow nodes */

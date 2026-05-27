@@ -2,6 +2,25 @@ import { App, TFile, WorkspaceLeaf } from "obsidian";
 import type { LlmHubPlugin } from "../../plugin";
 import { WorkflowNode, ExecutionContext, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
+import { CLOUD_VAULT_SCOPE_DENIED_MSG, isFileAllowedForCloudVaultTools, isPathInAllowedVaultFolders } from "../../vault/cloudVaultScope";
+
+function hasWorkflowVaultScope(context: ExecutionContext): boolean {
+  return !!(context.cloudVaultToolAllowedFolders && context.cloudVaultToolAllowedFolders.length > 0);
+}
+
+function assertWorkflowPathAllowed(context: ExecutionContext, path: string): void {
+  if (!hasWorkflowVaultScope(context)) return;
+  if (!isPathInAllowedVaultFolders(path, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
+
+function assertWorkflowFileAllowed(context: ExecutionContext, file: TFile): void {
+  if (!hasWorkflowVaultScope(context)) return;
+  if (!isFileAllowedForCloudVaultTools(file, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
 
 // Handle workflow node - execute a sub-workflow
 export async function handleWorkflowNode(
@@ -151,10 +170,12 @@ export async function handleObsidianCommandNode(
   // If path is specified, open the file first
   if (path) {
     const filePath = path.endsWith(".md") ? path : `${path}.md`;
+    assertWorkflowPathAllowed(context, filePath);
     const file = app.vault.getAbstractFileByPath(filePath);
     if (!file || !(file instanceof TFile)) {
       throw new Error(`File not found: ${filePath}`);
     }
+    assertWorkflowFileAllowed(context, file);
 
     // Check if file is already open in any leaf
     let existingLeaf: WorkspaceLeaf | null = null;

@@ -1,6 +1,7 @@
 import { App, TFile } from "obsidian";
 import { WorkflowNode, ExecutionContext, PromptCallbacks, FileExplorerData } from "../types";
 import { replaceVariables } from "./utils";
+import { CLOUD_VAULT_SCOPE_DENIED_MSG, isFileAllowedForCloudVaultTools, isPathInAllowedVaultFolders } from "../../vault/cloudVaultScope";
 
 // Binary file extensions that should be read as binary and encoded as Base64
 const BINARY_EXTENSIONS = [
@@ -116,6 +117,24 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
+function hasWorkflowVaultScope(context: ExecutionContext): boolean {
+  return !!(context.cloudVaultToolAllowedFolders && context.cloudVaultToolAllowedFolders.length > 0);
+}
+
+function assertWorkflowPathAllowed(context: ExecutionContext, path: string): void {
+  if (!hasWorkflowVaultScope(context)) return;
+  if (!isPathInAllowedVaultFolders(path, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
+
+function assertWorkflowFileAllowed(context: ExecutionContext, file: TFile): void {
+  if (!hasWorkflowVaultScope(context)) return;
+  if (!isFileAllowedForCloudVaultTools(file, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
+
 // Recursively ensure all parent folders exist
 async function ensureFolderExists(app: App, folderPath: string): Promise<void> {
   if (!folderPath) return;
@@ -187,6 +206,7 @@ export async function handleFileExplorerNode(
   if (filePath === null) {
     throw new Error("File selection cancelled by user");
   }
+  assertWorkflowPathAllowed(context, filePath);
 
   // Save path if savePathTo is specified
   if (savePathTo) {
@@ -218,6 +238,7 @@ export async function handleFileExplorerNode(
       if (!file || !(file instanceof TFile)) {
         throw new Error(`File not found: ${filePath}`);
       }
+      assertWorkflowFileAllowed(context, file);
 
       const extension = file.extension.toLowerCase();
       const mimeType = getMimeType(extension);
@@ -285,6 +306,7 @@ export async function handleFileSaveNode(
   if (!filePath.includes(".") && fileData.extension) {
     filePath = `${filePath}.${fileData.extension}`;
   }
+  assertWorkflowPathAllowed(context, filePath);
 
   // Ensure parent folder exists
   const folderPath = filePath.substring(0, filePath.lastIndexOf("/"));

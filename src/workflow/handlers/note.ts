@@ -4,6 +4,7 @@ import { isEncryptedFile, decryptFileContent } from "../../core/crypto";
 import { cryptoCache } from "../../core/cryptoCache";
 import { WorkflowNode, ExecutionContext, PromptCallbacks } from "../types";
 import { replaceVariables, getVariable, RegenerateRequestError } from "./utils";
+import { CLOUD_VAULT_SCOPE_DENIED_MSG, isFileAllowedForCloudVaultTools, isPathInAllowedVaultFolders } from "../../vault/cloudVaultScope";
 
 // Sanitize path segments by replacing characters not allowed in Obsidian file names
 function sanitizePath(path: string): string {
@@ -11,6 +12,29 @@ function sanitizePath(path: string): string {
     .split("/")
     .map((segment) => segment.replace(/[*"\\<>:|?]/g, "-"))
     .join("/");
+}
+
+function hasWorkflowVaultScope(context: ExecutionContext): boolean {
+  return !!(context.cloudVaultToolAllowedFolders && context.cloudVaultToolAllowedFolders.length > 0);
+}
+
+function assertWorkflowPathAllowed(context: ExecutionContext, path: string): void {
+  if (!hasWorkflowVaultScope(context)) return;
+  if (!isPathInAllowedVaultFolders(path, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
+
+function assertWorkflowFileAllowed(context: ExecutionContext, file: TFile): void {
+  if (!hasWorkflowVaultScope(context)) return;
+  if (!isFileAllowedForCloudVaultTools(file, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
+
+function filterWorkflowFiles(context: ExecutionContext, files: TFile[]): TFile[] {
+  if (!hasWorkflowVaultScope(context)) return files;
+  return files.filter((file) => isFileAllowedForCloudVaultTools(file, context.cloudVaultToolAllowedFolders));
 }
 
 // Recursively ensure all parent folders exist
@@ -58,6 +82,7 @@ export async function handleNoteNode(
 
   // Ensure .md extension and sanitize path
   const notePath = sanitizePath(path.endsWith(".md") ? path : `${path}.md`);
+  assertWorkflowPathAllowed(context, notePath);
 
   const existingFile = app.vault.getAbstractFileByPath(notePath);
   const originalContent = existingFile instanceof TFile
@@ -168,6 +193,7 @@ export async function handleNoteReadNode(
 
   // Ensure .md extension (but also try .md.encrypted for encrypted files)
   const notePath = path.endsWith(".md") || path.endsWith(".encrypted") ? path : `${path}.md`;
+  assertWorkflowPathAllowed(context, notePath);
 
   let file = app.vault.getAbstractFileByPath(notePath);
   // If not found and path ends with .md, try the encrypted variant
@@ -181,6 +207,7 @@ export async function handleNoteReadNode(
   if (!(file instanceof TFile)) {
     throw new Error(`Path is not a file: ${notePath}`);
   }
+  assertWorkflowFileAllowed(context, file);
 
   let content = await app.vault.read(file);
 
@@ -228,7 +255,7 @@ export async function handleNoteSearchNode(
     throw new Error("note-search node missing 'saveTo' property");
   }
 
-  const files = app.vault.getMarkdownFiles();
+  const files = filterWorkflowFiles(context, app.vault.getMarkdownFiles());
   const results: { name: string; path: string; matchedContent?: string }[] = [];
 
   if (searchContent) {
@@ -375,10 +402,11 @@ export function handleNoteListNode(
         .filter((t) => t.length > 1)
     : [];
 
-  let files = app.vault.getMarkdownFiles();
+  let files = filterWorkflowFiles(context, app.vault.getMarkdownFiles());
 
   // Filter by folder
   if (folder) {
+    assertWorkflowPathAllowed(context, folder);
     const normalizedFolder = folder.endsWith("/") ? folder : folder + "/";
     files = files.filter((file) => {
       if (recursive) {
@@ -481,6 +509,9 @@ export function handleFolderListNode(
   }
 
   const folders: string[] = [];
+  if (parentFolder) {
+    assertWorkflowPathAllowed(context, parentFolder);
+  }
 
   // Get all folders from the vault
   const allFiles = app.vault.getAllLoadedFiles();
@@ -503,6 +534,9 @@ export function handleFolderListNode(
       }
 
       if (folderPath) {
+        if (hasWorkflowVaultScope(context) && !isPathInAllowedVaultFolders(folderPath, context.cloudVaultToolAllowedFolders)) {
+          continue;
+        }
         folders.push(folderPath);
       }
     }

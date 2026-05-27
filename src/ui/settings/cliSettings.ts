@@ -201,7 +201,7 @@ async function handleVerifyCli(
       return;
     }
 
-    plugin.settings.cliConfig = { ...plugin.settings.cliConfig, [verifiedKey]: true };
+    plugin.settings.cliConfig = { ...plugin.settings.cliConfig, [verifiedKey]: true, ...(cliType === "gemini" ? { antigravityCliMigrated: true } : {}) };
     await plugin.saveSettings();
     display();
     new Notice(successNotice);

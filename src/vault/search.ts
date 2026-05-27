@@ -74,9 +74,10 @@ export interface SearchResult {
 export function searchByName(
   app: App,
   query: string,
-  limit = 10
+  limit = 10,
+  fileFilter?: (file: TFile) => boolean,
 ): SearchResult[] {
-  const files = getSearchableVaultFiles(app);
+  const files = fileFilter ? getSearchableVaultFiles(app).filter(fileFilter) : getSearchableVaultFiles(app);
   const searchTerm = query.toLowerCase().trim();
 
   const results: SearchResult[] = [];
@@ -118,9 +119,10 @@ export function searchByName(
 export async function searchByContent(
   app: App,
   query: string,
-  limit = 10
+  limit = 10,
+  fileFilter?: (file: TFile) => boolean,
 ): Promise<SearchResult[]> {
-  const files = getSearchableVaultFiles(app);
+  const files = fileFilter ? getSearchableVaultFiles(app).filter(fileFilter) : getSearchableVaultFiles(app);
   const searchTerm = query.toLowerCase().trim();
 
   const results: SearchResult[] = [];
@@ -167,9 +169,10 @@ export function listNotes(
   app: App,
   folder?: string,
   recursive = false,
-  limit = DEFAULT_SETTINGS.listNotesLimit
+  limit = DEFAULT_SETTINGS.listNotesLimit,
+  fileFilter?: (file: TFile) => boolean,
 ): { results: SearchResult[]; totalCount: number; hasMore: boolean } {
-  let files = getVaultTextFiles(app);
+  let files = fileFilter ? getVaultTextFiles(app).filter(fileFilter) : getVaultTextFiles(app);
 
   if (folder) {
     const normalizedFolder = folder.toLowerCase().replace(/\/$/, "");

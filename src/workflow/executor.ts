@@ -46,8 +46,23 @@ import { ExecutionHistoryManager, EncryptionConfig } from "./history";
 import { isEncryptedFile } from "../core/crypto";
 import { tracing } from "../core/tracingHooks";
 import { formatError } from "../utils/error";
+import { CLOUD_VAULT_SCOPE_DENIED_MSG, isFileAllowedForCloudVaultTools, isPathInAllowedVaultFolders } from "../vault/cloudVaultScope";
 
 const MAX_ITERATIONS = 1000; // Prevent infinite loops
+
+function assertWorkflowPathAllowed(context: ExecutionContext, path: string): void {
+  if (!context.cloudVaultToolAllowedFolders || context.cloudVaultToolAllowedFolders.length === 0) return;
+  if (!isPathInAllowedVaultFolders(path, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
+
+function assertWorkflowFileAllowed(context: ExecutionContext, file: TFile): void {
+  if (!context.cloudVaultToolAllowedFolders || context.cloudVaultToolAllowedFolders.length === 0) return;
+  if (!isFileAllowedForCloudVaultTools(file, context.cloudVaultToolAllowedFolders)) {
+    throw new Error(CLOUD_VAULT_SCOPE_DENIED_MSG);
+  }
+}
 
 export interface ExecuteOptions {
   workflowPath?: string;
@@ -56,6 +71,7 @@ export interface ExecuteOptions {
   abortSignal?: AbortSignal;
   startNodeId?: string;
   initialVariables?: Map<string, string | number>;
+  cloudVaultToolAllowedFolders?: string[];
 }
 
 export interface ExecuteResult {
@@ -100,6 +116,7 @@ export class WorkflowExecutor {
     const context: ExecutionContext = {
       variables: new Map(input.variables),
       logs: [],
+      cloudVaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
     };
 
     // Merge initial variables (for retry from error)
@@ -1013,11 +1030,13 @@ export class WorkflowExecutor {
               workflowPath: string,
               inputVariables: Map<string, string | number>
             ): Promise<Map<string, string | number>> => {
+              assertWorkflowPathAllowed(context, workflowPath);
               // Read workflow file
               const file = this.app.vault.getAbstractFileByPath(workflowPath);
               if (!file) {
                 // Try with .md extension
                 const mdPath = workflowPath.endsWith(".md") ? workflowPath : `${workflowPath}.md`;
+                assertWorkflowPathAllowed(context, mdPath);
                 const mdFile = this.app.vault.getAbstractFileByPath(mdPath);
                 if (!mdFile) {
                   throw new Error(`Workflow file not found: ${workflowPath}`);
@@ -1029,6 +1048,7 @@ export class WorkflowExecutor {
               if (!(actualFile instanceof TFile)) {
                 throw new Error(`Invalid workflow file: ${workflowPath}`);
               }
+              assertWorkflowFileAllowed(context, actualFile);
 
               const content = await this.app.vault.read(actualFile);
               const subWorkflow = parseWorkflowFromMarkdown(content);
@@ -1049,7 +1069,9 @@ export class WorkflowExecutor {
                     subLog.status
                   );
                 },
-                undefined, // Don't record sub-workflow history separately
+                {
+                  cloudVaultToolAllowedFolders: context.cloudVaultToolAllowedFolders,
+                },
                 promptCallbacks
               );
 

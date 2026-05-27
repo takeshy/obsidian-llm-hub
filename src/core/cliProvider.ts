@@ -1361,6 +1361,7 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
         shell,
         env: typeof process !== "undefined" ? process.env : undefined,
       });
+      proc.stdin?.end();
 
       let stderr = "";
       proc.stderr?.on("data", (data: Uint8Array) => {
@@ -1401,6 +1402,7 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
         shell,
         env: typeof process !== "undefined" ? process.env : undefined,
       });
+      proc.stdin?.end();
 
       let stderr = "";
       proc.stderr?.on("data", (data: Uint8Array) => {

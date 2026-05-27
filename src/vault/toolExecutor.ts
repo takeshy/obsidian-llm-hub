@@ -1,4 +1,4 @@
-import type { App } from "obsidian";
+import { TFile, type App } from "obsidian";
 import {
   readNote,
   createNote,
@@ -15,6 +15,7 @@ import {
   proposeBulkEdit,
   proposeBulkDelete,
   proposeBulkRename,
+  findFileByName,
 } from "./notes";
 import {
   searchByName,
@@ -25,6 +26,11 @@ import {
 } from "./search";
 import { DEFAULT_SETTINGS } from "src/types";
 import { formatError } from "src/utils/error";
+import {
+  CLOUD_VAULT_SCOPE_DENIED_MSG,
+  isFileAllowedForCloudVaultTools,
+  isPathInAllowedVaultFolders,
+} from "./cloudVaultScope";
 
 export type ToolResult = Record<string, unknown>;
 
@@ -32,6 +38,46 @@ export type ToolResult = Record<string, unknown>;
 export interface ToolExecutionContext {
   listNotesLimit?: number;
   maxNoteChars?: number;
+  isCloudProvider?: boolean;
+  cloudVaultToolAllowedFolders?: string[];
+}
+
+function hasCloudVaultToolScope(context: ToolExecutionContext | undefined): boolean {
+  return !!(context?.isCloudProvider && context.cloudVaultToolAllowedFolders && context.cloudVaultToolAllowedFolders.length > 0);
+}
+
+function cloudVaultToolFileFilter(context: ToolExecutionContext | undefined): ((file: TFile) => boolean) | undefined {
+  if (!hasCloudVaultToolScope(context)) return undefined;
+  return (file) => isFileAllowedForCloudVaultTools(file, context!.cloudVaultToolAllowedFolders);
+}
+
+function resolveToolFile(app: App, fileName: string | undefined, activeNote: boolean | undefined): TFile | null {
+  if (activeNote) return app.workspace.getActiveFile();
+  if (!fileName) return null;
+  const direct = app.vault.getAbstractFileByPath(fileName);
+  if (direct instanceof TFile) return direct;
+  return findFileByName(app, fileName);
+}
+
+function denyIfCloudVaultToolPathOutsideScope(path: string, context: ToolExecutionContext | undefined): ToolResult | null {
+  if (!hasCloudVaultToolScope(context)) return null;
+  return isPathInAllowedVaultFolders(path, context!.cloudVaultToolAllowedFolders)
+    ? null
+    : { success: false, error: CLOUD_VAULT_SCOPE_DENIED_MSG };
+}
+
+function denyIfCloudVaultToolFileOutsideScope(
+  app: App,
+  fileName: string | undefined,
+  activeNote: boolean | undefined,
+  context: ToolExecutionContext | undefined,
+): ToolResult | null {
+  if (!hasCloudVaultToolScope(context)) return null;
+  const file = resolveToolFile(app, fileName, activeNote);
+  if (!file) return null;
+  return isFileAllowedForCloudVaultTools(file, context!.cloudVaultToolAllowedFolders)
+    ? null
+    : { success: false, error: CLOUD_VAULT_SCOPE_DENIED_MSG };
 }
 
 // Execute a tool call and return the result
@@ -69,13 +115,17 @@ async function executeToolCallInternal(
   context?: ToolExecutionContext
 ): Promise<ToolResult> {
   switch (toolName) {
-    case "read_note":
+    case "read_note": {
+      const fileName = asString(args.fileName);
+      const denied = denyIfCloudVaultToolFileOutsideScope(app, fileName, args.activeNote as boolean | undefined, context);
+      if (denied) return denied;
       return readNote(
         app,
-        asString(args.fileName),
+        fileName,
         args.activeNote as boolean | undefined,
         context?.maxNoteChars ?? DEFAULT_SETTINGS.maxNoteChars
       );
+    }
 
     case "create_note": {
       let name = asString(args.name);
@@ -97,6 +147,9 @@ async function executeToolCallInternal(
       if (args.content == null) {
         return { success: false, error: "Required parameter 'content' is missing" };
       }
+      const targetPath = folder ? `${folder}/${name}` : name;
+      const denied = denyIfCloudVaultToolPathOutsideScope(targetPath, context);
+      if (denied) return denied;
       return createNote(
         app,
         name,
@@ -106,20 +159,26 @@ async function executeToolCallInternal(
       );
     }
 
-    case "update_note":
+    case "update_note": {
+      const fileName = asString(args.fileName);
+      const denied = denyIfCloudVaultToolFileOutsideScope(app, fileName, args.activeNote as boolean | undefined, context);
+      if (denied) return denied;
       return updateNote(
         app,
-        asString(args.fileName),
+        fileName,
         args.activeNote as boolean | undefined,
         asString(args.newContent),
         (asString(args.mode) as "replace" | "append" | "prepend") || "replace"
       );
+    }
 
     case "delete_note": {
       const fileName = asString(args.fileName);
       if (!fileName) {
         return { success: false, error: "Required parameter 'fileName' is missing" };
       }
+      const denied = denyIfCloudVaultToolFileOutsideScope(app, fileName, false, context);
+      if (denied) return denied;
       return deleteNote(app, fileName);
     }
 
@@ -132,6 +191,10 @@ async function executeToolCallInternal(
       if (!newPath) {
         return { success: false, error: "Required parameter 'newPath' is missing" };
       }
+      const deniedOldPath = denyIfCloudVaultToolFileOutsideScope(app, oldPath, false, context);
+      if (deniedOldPath) return deniedOldPath;
+      const deniedNewPath = denyIfCloudVaultToolPathOutsideScope(newPath, context);
+      if (deniedNewPath) return deniedNewPath;
       return proposeRename(app, oldPath, newPath);
     }
 
@@ -143,9 +206,10 @@ async function executeToolCallInternal(
       const searchContent = args.searchContent as boolean | undefined;
       const parsedLimit = args.limit ? parseInt(asString(args.limit) || "10", 10) : 10;
       const limit = Number.isNaN(parsedLimit) || parsedLimit <= 0 ? 10 : parsedLimit;
+      const fileFilter = cloudVaultToolFileFilter(context);
 
       if (searchContent) {
-        const results = await searchByContent(app, query, limit);
+        const results = await searchByContent(app, query, limit, fileFilter);
         return {
           success: true,
           results: results.map((r) => ({
@@ -156,7 +220,7 @@ async function executeToolCallInternal(
           count: results.length,
         };
       } else {
-        const results = searchByName(app, query, limit);
+        const results = searchByName(app, query, limit, fileFilter);
         return {
           success: true,
           results: results.map((r) => ({ name: r.name, path: r.path })),
@@ -171,7 +235,9 @@ async function executeToolCallInternal(
       const defaultLimit = context?.listNotesLimit ?? DEFAULT_SETTINGS.listNotesLimit;
       const parsedLimit = args.limit ? parseInt(asString(args.limit) || String(defaultLimit), 10) : defaultLimit;
       const limit = Number.isNaN(parsedLimit) || parsedLimit <= 0 ? defaultLimit : parsedLimit;
-      const { results, totalCount, hasMore } = listNotes(app, folder, recursive, limit);
+      const deniedFolder = folder ? denyIfCloudVaultToolPathOutsideScope(folder, context) : null;
+      if (deniedFolder) return deniedFolder;
+      const { results, totalCount, hasMore } = listNotes(app, folder, recursive, limit, cloudVaultToolFileFilter(context));
       return {
         success: true,
         notes: results.map((r) => ({ name: r.name, path: r.path })),
@@ -186,7 +252,10 @@ async function executeToolCallInternal(
 
     case "list_folders": {
       const parentFolder = asString(args.parentFolder);
-      const folders = listFolders(app, parentFolder);
+      const denied = parentFolder ? denyIfCloudVaultToolPathOutsideScope(parentFolder, context) : null;
+      if (denied) return denied;
+      const folders = listFolders(app, parentFolder)
+        .filter((folder) => isPathInAllowedVaultFolders(folder, hasCloudVaultToolScope(context) ? context!.cloudVaultToolAllowedFolders : undefined));
       return {
         success: true,
         folders,
@@ -199,10 +268,14 @@ async function executeToolCallInternal(
       if (!path) {
         return { success: false, error: "Required parameter 'path' is missing" };
       }
+      const denied = denyIfCloudVaultToolPathOutsideScope(path, context);
+      if (denied) return denied;
       return createFolder(app, path);
     }
 
     case "get_active_note_info": {
+      const denied = denyIfCloudVaultToolFileOutsideScope(app, undefined, true, context);
+      if (denied) return denied;
       const info = getActiveNoteInfo(app);
       if (info) {
         return { success: true, ...info };
@@ -213,16 +286,20 @@ async function executeToolCallInternal(
       };
     }
 
-    case "propose_edit":
+    case "propose_edit": {
+      const fileName = asString(args.fileName);
+      const denied = denyIfCloudVaultToolFileOutsideScope(app, fileName, args.activeNote as boolean | undefined, context);
+      if (denied) return denied;
       return proposeEdit(
         app,
-        asString(args.fileName),
+        fileName,
         args.activeNote as boolean | undefined,
         asString(args.newContent),
         (asString(args.mode) as "replace" | "append" | "prepend" | "patch") || "replace",
         undefined,
         args.patches as Array<{ search: string; replace: string }> | undefined
       );
+    }
 
     case "apply_edit":
       return applyEdit(app);
@@ -235,6 +312,8 @@ async function executeToolCallInternal(
       if (!fileName) {
         return { success: false, error: "Required parameter 'fileName' is missing" };
       }
+      const denied = denyIfCloudVaultToolFileOutsideScope(app, fileName, false, context);
+      if (denied) return denied;
       return proposeDelete(app, fileName);
     }
 
@@ -256,6 +335,10 @@ async function executeToolCallInternal(
           error: "No edits provided. The 'edits' array is required.",
         };
       }
+      const denied = edits
+        .map((edit) => denyIfCloudVaultToolFileOutsideScope(app, edit.fileName, false, context))
+        .find(Boolean);
+      if (denied) return denied;
       return proposeBulkEdit(app, edits);
     }
 
@@ -267,6 +350,13 @@ async function executeToolCallInternal(
           error: "No renames provided. The 'renames' array is required.",
         };
       }
+      const denied = renames
+        .flatMap((rename) => [
+          denyIfCloudVaultToolFileOutsideScope(app, rename.oldPath, false, context),
+          denyIfCloudVaultToolPathOutsideScope(rename.newPath, context),
+        ])
+        .find(Boolean);
+      if (denied) return denied;
       return proposeBulkRename(app, renames);
     }
 
@@ -278,6 +368,10 @@ async function executeToolCallInternal(
           error: "No files provided. The 'fileNames' array is required.",
         };
       }
+      const denied = fileNames
+        .map((fileName) => denyIfCloudVaultToolFileOutsideScope(app, fileName, false, context))
+        .find(Boolean);
+      if (denied) return denied;
       return proposeBulkDelete(app, fileNames);
     }
 
