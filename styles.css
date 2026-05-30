@@ -736,6 +736,18 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   border-radius: 12px;
 }
 
+.llm-hub-rag-source-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.llm-hub-rag-source-setting-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Thinking Content (Collapsible) */
 .llm-hub-thinking {
   display: block;

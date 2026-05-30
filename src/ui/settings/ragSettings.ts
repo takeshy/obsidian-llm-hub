@@ -2,12 +2,23 @@ import { Setting, Notice } from "obsidian";
 import { getLocalRagStore } from "src/core/localRagStore";
 import { fetchEmbeddingModels } from "src/core/embeddingProvider";
 import { t } from "src/i18n";
-import { DEFAULT_RAG_SETTING, getGeminiApiKey } from "src/types";
+import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, getGeminiApiKey } from "src/types";
 import type { RagSetting } from "src/types";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { formatError } from "src/utils/error";
 import { RagSettingNameModal } from "./RagSettingNameModal";
 import type { SettingsContext } from "./settingsContext";
+
+type RagSettingMode = "internal" | "combined" | "external";
+
+function getEffectiveEmbeddingModel(ragSetting: RagSetting): string {
+  return ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL);
+}
+
+function hasSameEmbeddingConfig(a: RagSetting, b: RagSetting): boolean {
+  return a.embeddingBaseUrl.trim() === b.embeddingBaseUrl.trim()
+    && getEffectiveEmbeddingModel(a) === getEffectiveEmbeddingModel(b);
+}
 
 export function displayRagSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
   const { plugin, display } = ctx;
@@ -143,22 +154,88 @@ function displayLocalStoreSettings(
   const { plugin, display } = ctx;
   const app = plugin.app;
   const isExternal = !!ragSetting.externalIndexPath;
+  const isBundle = ragSetting.sourceRagSettings.length > 0;
+  const mode: RagSettingMode = isBundle ? "combined" : isExternal ? "external" : "internal";
+  const internalSourceNames = plugin.getRagSettingNames().filter(sourceName => {
+    if (sourceName === name) return false;
+    const source = plugin.getRagSetting(sourceName);
+    return !!source && !source.externalIndexPath && source.sourceRagSettings.length === 0;
+  });
+  const sourceCompatibilityAnchorName = ragSetting.sourceRagSettings.find(sourceName =>
+    internalSourceNames.includes(sourceName)
+  ) ?? internalSourceNames[0];
+  const sourceCompatibilityAnchor = sourceCompatibilityAnchorName
+    ? plugin.getRagSetting(sourceCompatibilityAnchorName)
+    : null;
+  const compatibleSourceNames = sourceCompatibilityAnchor
+    ? internalSourceNames.filter(sourceName => {
+      const source = plugin.getRagSetting(sourceName);
+      return !!source && hasSameEmbeddingConfig(sourceCompatibilityAnchor, source);
+    })
+    : [];
 
-  // External index toggle
+  // RAG index mode
   new Setting(containerEl)
-    .setName(t("settings.externalIndex"))
-    .setDesc(t("settings.externalIndex.desc"))
-    .addToggle((toggle) =>
-      toggle.setValue(isExternal).onChange((value) => {
-        void (async () => {
-          await plugin.updateRagSetting(name, { externalIndexPath: value ? " " : "" });
-          getLocalRagStore()?.setExternalPath(name, value ? " " : "");
-          display();
-        })();
-      })
-    );
+    .setName(t("settings.ragMode"))
+    .setDesc(t("settings.ragMode.desc"))
+    .addDropdown((dropdown) => {
+      dropdown
+        .addOption("internal", t("settings.ragMode.internal"))
+        .addOption("combined", t("settings.ragMode.combined"))
+        .addOption("external", t("settings.ragMode.external"))
+        .setValue(mode)
+        .onChange((value) => {
+          const nextMode = value as RagSettingMode;
+          const compatibleSelectedSources = ragSetting.sourceRagSettings.filter(sourceName =>
+            compatibleSourceNames.includes(sourceName)
+          );
+          const sourceRagSettings = nextMode === "combined"
+            ? (compatibleSelectedSources.length > 0 ? compatibleSelectedSources : compatibleSourceNames.slice(0, 1))
+            : [];
+          const externalIndexPath = nextMode === "external" ? (ragSetting.externalIndexPath || " ") : "";
+          void (async () => {
+            await plugin.updateRagSetting(name, { sourceRagSettings, externalIndexPath });
+            getLocalRagStore()?.setExternalPath(name, externalIndexPath);
+            getLocalRagStore()?.setSourceRagSettings(name, sourceRagSettings);
+            display();
+          })();
+        });
+    });
 
-  if (isExternal) {
+  if (isBundle) {
+    const sourceSetting = new Setting(containerEl)
+      .setName(t("settings.ragSourceSettings"))
+      .setDesc(t("settings.ragSourceSettings.desc"));
+    const sourceContainer = sourceSetting.controlEl.createDiv({ cls: "llm-hub-rag-source-settings" });
+    if (compatibleSourceNames.length === 0) {
+      sourceContainer.setText(t("settings.ragSourceSettings.empty"));
+    } else {
+      for (const sourceName of compatibleSourceNames) {
+        const label = sourceContainer.createEl("label", { cls: "llm-hub-rag-source-setting-option" });
+        const checkbox = label.createEl("input", {
+          type: "checkbox",
+          value: sourceName,
+        });
+        checkbox.checked = ragSetting.sourceRagSettings.includes(sourceName);
+        label.createSpan({ text: sourceName });
+        checkbox.addEventListener("change", () => {
+          void (async () => {
+            const nextSources = checkbox.checked
+              ? [...ragSetting.sourceRagSettings, sourceName]
+              : ragSetting.sourceRagSettings.filter(item => item !== sourceName);
+            const uniqueSources = [...new Set(nextSources)].filter(item => compatibleSourceNames.includes(item));
+            await plugin.updateRagSetting(name, { sourceRagSettings: uniqueSources });
+            getLocalRagStore()?.setSourceRagSettings(name, uniqueSources);
+            display();
+          })();
+        });
+      }
+    }
+
+    displayTopKSetting(containerEl, plugin, name, ragSetting, display);
+    displayScoreThresholdSetting(containerEl, plugin, name, ragSetting, display);
+    displayIndexStatus(containerEl, app, name, ragSetting);
+  } else if (isExternal) {
     const refreshExternalIndexModel = displayExternalIndexModel(containerEl, app, name);
 
     // --- External index mode ---
@@ -166,7 +243,7 @@ function displayLocalStoreSettings(
     new Setting(containerEl)
       .setName(t("settings.externalIndexPath"))
       .setDesc(t("settings.externalIndexPath.desc"))
-      .addText((text) =>
+      .addTextArea((text) => {
         text
           .setPlaceholder(t("settings.externalIndexPath.placeholder"))
           .setValue(ragSetting.externalIndexPath.trim())
@@ -177,8 +254,10 @@ function displayLocalStoreSettings(
               getLocalRagStore()?.setExternalPath(name, path);
               refreshExternalIndexModel();
             })();
-          })
-      );
+          });
+        text.inputEl.rows = 4;
+        text.inputEl.addClass("gemini-helper-settings-textarea");
+      });
 
     // Embedding server URL for query embedding
     new Setting(containerEl)
@@ -696,6 +775,12 @@ function displaySyncControls(
                     removed: String(result.removed),
                   })
                 );
+                if (result.failedFiles && result.failedFiles.length > 0) {
+                  new Notice(t("settings.localSyncFilesFailed", {
+                    count: String(result.failedFiles.length),
+                    files: result.failedFiles.join("\n"),
+                  }));
+                }
                 if (result.errors.length > 0) {
                   const errorSummary = result.errors.slice(0, 3).join("\n");
                   const suffix = result.errors.length > 3 ? `\n...and ${result.errors.length - 3} more` : "";

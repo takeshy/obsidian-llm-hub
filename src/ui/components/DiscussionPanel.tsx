@@ -372,7 +372,7 @@ const DiscussionPanel = forwardRef<DiscussionPanelRef, DiscussionPanelProps>(({ 
 
     // RAG search (if selected and no SearchPanel attachments)
     if (selectedRagSetting && !ragContext) {
-      const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
+      const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
       if (ragSettingObj) {
         try {
           const localRag = await searchLocalRag(

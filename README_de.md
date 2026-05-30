@@ -821,12 +821,18 @@ Lokale vektorbasierte Suche, die relevante Vault-Inhalte in LLM-Konversationen e
 
 > **Multimodale Indexierung** (Bilder, PDFs, Audio, Video) wird automatisch aktiviert, wenn Gemini-native Embedding-Modelle (`gemini-embedding-*`) verwendet werden. Keine manuelle Konfiguration erforderlich.
 
+**Große Vaults und mehrere Indizes:**
+
+Für große Vaults können Sie mehrere RAG-Einstellungen für separate Ordner erstellen, jede einzeln synchronisieren und dann eine weitere RAG-Einstellung mit **Combine internal** erstellen. Wählen Sie die synchronisierten Quell-Einstellungen aus, um sie gemeinsam über eine Chat-/Suchauswahl zu durchsuchen.
+
+Während der Synchronisierung werden geänderte Dateien in kleinen Datei-Batches verarbeitet und gespeichert. Dies ist unabhängig von der RAG-Chunk-Size-Einstellung. Wenn die PDF-Textextraktion fehlschlägt, wird die PDF-Datei nach der Synchronisierung aufgelistet, ihre Prüfsumme gespeichert und sie erscheint in der Liste der indexierten Dateien mit `0 chunks`. Eine erneute Verarbeitung erfolgt erst, wenn sich die PDF-Datei ändert. Zum Erzwingen eines erneuten Imports benennen Sie die PDF-Datei um, ändern Sie die Datei oder erstellen Sie den RAG-Index neu.
+
 **Externer Index:**
 
 Verwenden Sie einen vorgefertigten Index anstelle der Synchronisation aus dem Vault:
 
-1. Aktivieren Sie den Schalter **Use external index**
-2. Setzen Sie den absoluten Pfad zu einem Verzeichnis mit `index.json` und `vectors.bin`
+1. Setzen Sie **Index mode** auf **External**
+2. Geben Sie pro Zeile ein absolutes Index-Verzeichnis an. Jedes Verzeichnis muss `index.json` und `vectors.bin` enthalten
 3. Optional: Embedding Base URL für Query-Embedding setzen (leer = Gemini API)
 4. Das Embedding-Modell wird automatisch aus der Indexdatei erkannt
 

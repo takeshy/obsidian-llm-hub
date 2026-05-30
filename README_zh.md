@@ -821,12 +821,18 @@ if __name__ == "__main__":
 
 > **多模态索引**（图像、PDF、音频、视频）在使用 Gemini 原生 Embedding 模型（`gemini-embedding-*`）时自动启用。无需手动配置。
 
+**大型 Vault 和多个索引：**
+
+对于大型 Vault，可以为不同文件夹创建多个 RAG 设置并分别同步，然后再创建一个 RAG 设置并选择 **Combine internal**。选择已同步的来源设置后，就可以在一个聊天/搜索选择器中统一搜索这些索引。
+
+同步时，已更改的文件会按较小的文件批次处理并保存。这与 RAG 的 chunk size 设置不同。如果 PDF 文本提取失败，同步后会列出失败的 PDF 路径，保存其 checksum，并在已索引文件列表中显示为 `0 chunks`。除非 PDF 文件发生变化，否则后续同步不会再次尝试。若要强制重新导入，请重命名 PDF、修改文件，或重建 RAG 索引。
+
 **外部索引：**
 
 使用预构建的索引代替从 Vault 同步：
 
-1. 启用**使用外部索引**开关
-2. 设置包含 `index.json` 和 `vectors.bin` 的目录的绝对路径
+1. 将 **Index mode** 设置为 **External**
+2. 每行输入一个绝对索引目录。每个目录都必须包含 `index.json` 和 `vectors.bin`
 3. 可选设置 Embedding Base URL 用于查询 Embedding（空 = Gemini API）
 4. Embedding 模型从索引文件中自动检测
 

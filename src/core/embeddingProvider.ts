@@ -44,7 +44,7 @@ export function extensionToMimeType(ext: string): string | null {
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
     pdf: "application/pdf",
-    mp3: "audio/mp3",
+    mp3: "audio/mpeg",
     wav: "audio/wav",
     mp4: "video/mp4",
     mpeg: "video/mpeg",

@@ -177,7 +177,9 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
 
   // Check if current setting is internal (not external index)
   const currentRagSetting = plugin.getRagSetting(selectedRagSetting);
-  const isInternalRag = currentRagSetting ? !currentRagSetting.externalIndexPath : false;
+  const isInternalRag = currentRagSetting
+    ? !currentRagSetting.externalIndexPath && currentRagSetting.sourceRagSettings.length === 0
+    : false;
 
   // Revoke PDF blob URLs and abort AI suggestions on unmount
   useEffect(() => {
@@ -327,6 +329,12 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
             removed: String(result.removed),
           })
         );
+        if (result.failedFiles && result.failedFiles.length > 0) {
+          new Notice(t("settings.localSyncFilesFailed", {
+            count: String(result.failedFiles.length),
+            files: result.failedFiles.join("\n"),
+          }));
+        }
         // Reload indexed files list after sync
         void loadIndexedFiles();
       }
@@ -357,7 +365,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
       return;
     }
 
-    const ragSetting = plugin.getRagSetting(selectedRagSetting);
+    const ragSetting = plugin.getRagSearchSetting(selectedRagSetting);
     if (!ragSetting) {
       new Notice(t("search.ragSettingNotFound"));
       return;

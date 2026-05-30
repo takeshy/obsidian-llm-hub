@@ -833,12 +833,20 @@ Local vector-based search that injects relevant vault content into LLM conversat
 
 > **Multimodal indexing** (images, PDFs, audio, video) is automatically enabled when using Gemini native embedding models (`gemini-embedding-*`). No manual configuration needed.
 
+**Large vaults and multiple indexes:**
+
+For large vaults, create multiple RAG settings for separate folders, sync each one, then create another RAG setting and choose **Combine internal**. Select the synced source settings to search them together from one chat/search selector. Combined settings use the embedding server, API key, and model from the first selected source setting.
+
+During sync, changed files are processed and saved in small file batches. This is separate from the RAG chunk size setting. If Obsidian crashes during a large first-time sync, the next sync can continue from the saved index state instead of starting from scratch.
+
+If PDF text extraction fails, the failed PDF paths are listed after sync, their checksums are saved, and they appear in the indexed file list with `0 chunks`. They will not be retried on later syncs unless the PDF file changes. To force re-import, rename the PDF, modify the file, or clear/rebuild the RAG index.
+
 **External Index:**
 
 Use a pre-built index instead of syncing from the vault:
 
-1. Enable **Use external index** toggle
-2. Set the absolute path to a directory containing `index.json` and `vectors.bin`
+1. Set **Index mode** to **External**
+2. Enter one absolute index directory per line. Each directory must contain `index.json` and `vectors.bin`
 3. Optionally set Embedding Base URL for query embedding (empty = Gemini API)
 4. The embedding model is auto-detected from the index file
 

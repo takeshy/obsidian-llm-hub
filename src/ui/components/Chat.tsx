@@ -1597,7 +1597,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
 			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
-				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
+				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
 						const localRag = await searchLocalRag(
@@ -1883,7 +1883,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
 			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
-				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
+				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
 						const localRag = await searchLocalRag(
@@ -2277,7 +2277,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
 			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
-				const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
+				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
 						const localRag = await searchLocalRag(
@@ -3082,7 +3082,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				// Local RAG: search and inject context into system prompt
 				let localRagSources: string[] = [];
 				if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
-					const ragSettingObj = plugin.getRagSetting(selectedRagSetting);
+					const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 					if (ragSettingObj) {
 						try {
 							const localRag = await searchLocalRag(

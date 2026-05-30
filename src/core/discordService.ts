@@ -1011,7 +1011,7 @@ export class DiscordService {
     const ragSettingName = conversation.ragSetting;
     const ragEnabled = !!ragSettingName;
     if (ragSettingName) {
-      const ragSetting = this.plugin.getRagSetting(ragSettingName);
+      const ragSetting = this.plugin.getRagSearchSetting(ragSettingName);
       if (ragSetting) {
         const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
         if (lastUserMsg?.content) {

@@ -821,12 +821,18 @@ Recherche vectorielle locale qui injecte du contenu pertinent du coffre dans les
 
 > **Indexation multimodale** (images, PDF, audio, vidéo) est automatiquement activée lors de l'utilisation des modèles d'embedding natifs Gemini (`gemini-embedding-*`). Aucune configuration manuelle nécessaire.
 
+**Grands vaults et index multiples :**
+
+Pour les grands vaults, créez plusieurs paramètres RAG pour des dossiers séparés, synchronisez-les chacun, puis créez un autre paramètre RAG avec **Combine internal**. Sélectionnez les paramètres sources synchronisés pour les rechercher ensemble depuis un seul sélecteur de chat/recherche.
+
+Pendant la synchronisation, les fichiers modifiés sont traités et enregistrés par petits lots de fichiers. Ceci est indépendant du paramètre de chunk size RAG. Si l'extraction du texte d'un PDF échoue, le PDF est listé après la synchronisation, son checksum est enregistré et il apparaît dans la liste des fichiers indexés avec `0 chunks`. Il ne sera pas réessayé lors des synchronisations suivantes sauf si le fichier PDF change. Pour forcer une réimportation, renommez le PDF, modifiez le fichier ou reconstruisez l'index RAG.
+
 **Index externe :**
 
 Utiliser un index pré-construit au lieu de synchroniser depuis le coffre :
 
-1. Activez le toggle **Utiliser un index externe**
-2. Définissez le chemin absolu vers un répertoire contenant `index.json` et `vectors.bin`
+1. Réglez **Index mode** sur **External**
+2. Saisissez un répertoire d'index absolu par ligne. Chaque répertoire doit contenir `index.json` et `vectors.bin`
 3. Optionnellement, définissez Embedding Base URL pour l'embedding des requêtes (vide = API Gemini)
 4. Le modèle d'embedding est auto-détecté depuis le fichier d'index
 

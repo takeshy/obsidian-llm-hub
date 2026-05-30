@@ -238,7 +238,7 @@ describe("extensionToMimeType", () => {
     expect(extensionToMimeType("jpg")).toBe("image/jpeg");
     expect(extensionToMimeType("jpeg")).toBe("image/jpeg");
     expect(extensionToMimeType("pdf")).toBe("application/pdf");
-    expect(extensionToMimeType("mp3")).toBe("audio/mp3");
+    expect(extensionToMimeType("mp3")).toBe("audio/mpeg");
     expect(extensionToMimeType("wav")).toBe("audio/wav");
     expect(extensionToMimeType("mp4")).toBe("video/mp4");
     expect(extensionToMimeType("mpeg")).toBe("video/mpeg");

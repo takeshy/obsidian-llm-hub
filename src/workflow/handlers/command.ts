@@ -371,7 +371,7 @@ Please revise the output based on the user's feedback above.`;
         ? (plugin.workspaceState.selectedRagSetting ?? undefined)
         : apiRagSettingName;
       if (effectiveApiRagName && effectiveApiRagName !== "__none__" && effectiveApiRagName !== "__websearch__" && effectiveApiRagName !== "") {
-        const resolvedRagSetting = plugin.workspaceState.ragSettings[effectiveApiRagName];
+        const resolvedRagSetting = plugin.getRagSearchSetting(effectiveApiRagName);
         if (resolvedRagSetting) {
           try {
             const localRag = await searchLocalRag(
@@ -540,7 +540,7 @@ Please revise the output based on the user's feedback above.`;
       ? (plugin.workspaceState.selectedRagSetting ?? undefined)
       : ragSettingName;
     if (effectiveRagSettingName && effectiveRagSettingName !== "__none__" && effectiveRagSettingName !== "__websearch__" && effectiveRagSettingName !== "") {
-      const resolvedRagSetting = plugin.workspaceState.ragSettings[effectiveRagSettingName];
+      const resolvedRagSetting = plugin.getRagSearchSetting(effectiveRagSettingName);
       if (resolvedRagSetting) {
         try {
           const localRag = await searchLocalRag(

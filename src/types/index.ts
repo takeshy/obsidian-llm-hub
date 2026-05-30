@@ -257,6 +257,7 @@ export interface RagSetting {
   searchFileExtensions: string[]; // 検索時のファイル拡張子フィルタ（空 = 全て）
   lastFullSync: number | null;
   externalIndexPath: string;    // 外部インデックスのパス（空 = 通常のvault sync）
+  sourceRagSettings: string[];  // names of internal RAG settings to merge (empty = standalone)
   indexMultimodal: boolean;     // 画像/PDF/音声/動画もインデックス対象にする（Gemini native時のみ有効）
 }
 
@@ -287,6 +288,7 @@ export const DEFAULT_RAG_SETTING: RagSetting = {
   searchFileExtensions: [],
   lastFullSync: null,
   externalIndexPath: "",
+  sourceRagSettings: [],
   indexMultimodal: false,
 };
 

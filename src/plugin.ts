@@ -728,6 +728,20 @@ export class LlmHubPlugin extends Plugin {
     return this.wsManager.getRagSetting(name);
   }
 
+  getRagSearchSetting(name: string): RagSetting | null {
+    const setting = this.getRagSetting(name);
+    if (!setting) return null;
+    const sourceName = setting.sourceRagSettings[0];
+    const sourceSetting = sourceName ? this.getRagSetting(sourceName) : null;
+    if (!sourceSetting) return setting;
+    return {
+      ...setting,
+      embeddingApiKey: sourceSetting.embeddingApiKey,
+      embeddingBaseUrl: sourceSetting.embeddingBaseUrl,
+      embeddingModel: sourceSetting.embeddingModel,
+    };
+  }
+
   getRagSettingNames(): string[] {
     return this.wsManager.getRagSettingNames();
   }
@@ -921,7 +935,7 @@ export class LlmHubPlugin extends Plugin {
   async syncVaultForLocalRAG(
     ragSettingName: string,
     onProgress?: (current: number, total: number, fileName: string, action: "embed" | "skip" | "remove") => void
-  ): Promise<{ embedded: number; skipped: number; removed: number; errors: string[] } | null> {
+  ): Promise<{ embedded: number; skipped: number; removed: number; errors: string[]; failedFiles?: string[] } | null> {
     const localRag = getLocalRagStore();
     if (!localRag) {
       new Notice(t("chat.clientNotInitialized"));
@@ -934,7 +948,7 @@ export class LlmHubPlugin extends Plugin {
       return null;
     }
 
-    if (ragSetting.externalIndexPath) {
+    if (ragSetting.externalIndexPath || ragSetting.sourceRagSettings.length > 0) {
       new Notice(t("settings.externalIndexSyncDisabled"));
       return null;
     }
@@ -953,7 +967,8 @@ export class LlmHubPlugin extends Plugin {
       const indexMultimodal = !ragSetting.embeddingBaseUrl
         ? /gemini-embedding-/i.test(effectiveModel)
         : true;
-      const result = await localRag.sync(
+      const failedFiles = new Set<string>();
+      let result = await localRag.sync(
         this.app,
         ragSettingName,
         embeddingApiKey,
@@ -971,6 +986,28 @@ export class LlmHubPlugin extends Plugin {
         this.settings.proxyUrl,
         this.settings.proxyBypass,
       );
+      result.failedFiles?.forEach(filePath => failedFiles.add(filePath));
+      while (result.deferredFiles) {
+        result = await localRag.sync(
+          this.app,
+          ragSettingName,
+          embeddingApiKey,
+          effectiveModel,
+          ragSetting.chunkSize,
+          ragSetting.chunkOverlap,
+          ragSetting.pdfChunkPages ?? 6,
+          {
+            includeFolders: ragSetting.targetFolders,
+            excludePatterns: ragSetting.excludePatterns,
+          },
+          onProgress,
+          ragSetting.embeddingBaseUrl || undefined,
+          indexMultimodal,
+          this.settings.proxyUrl,
+          this.settings.proxyBypass,
+        );
+        result.failedFiles?.forEach(filePath => failedFiles.add(filePath));
+      }
 
       // Update sync metadata
       this.workspaceState.ragSettings[ragSettingName] = {
@@ -980,7 +1017,7 @@ export class LlmHubPlugin extends Plugin {
       await this.saveWorkspaceState();
       this.settingsEmitter.emit("workspace-state-loaded", this.workspaceState);
 
-      return result;
+      return { ...result, failedFiles: Array.from(failedFiles) };
     } catch (error) {
       throw (error instanceof Error ? error : new Error(formatError(error)));
     }
@@ -989,7 +1026,7 @@ export class LlmHubPlugin extends Plugin {
   // Clear local RAG index
   async clearLocalRagIndex(ragSettingName: string): Promise<void> {
     const ragSetting = this.workspaceState.ragSettings[ragSettingName];
-    if (ragSetting?.externalIndexPath) {
+    if (ragSetting?.externalIndexPath || ragSetting?.sourceRagSettings.length) {
       new Notice(t("settings.externalIndexSyncDisabled"));
       return;
     }

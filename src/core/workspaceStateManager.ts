@@ -243,10 +243,17 @@ export class WorkspaceStateManager {
       throw new Error(`Semantic search setting "${name}" not found`);
     }
 
-    this.workspaceState.ragSettings[name] = {
+    const next = {
       ...existing,
       ...updates,
     };
+    if (next.sourceRagSettings.length > 0) {
+      next.sourceRagSettings = next.sourceRagSettings.filter(sourceName =>
+        sourceName !== name && !!this.workspaceState.ragSettings[sourceName]
+      );
+    }
+
+    this.workspaceState.ragSettings[name] = next;
 
     await this.saveWorkspaceState();
   }
@@ -258,6 +265,9 @@ export class WorkspaceStateManager {
     }
 
     delete this.workspaceState.ragSettings[name];
+    for (const setting of Object.values(this.workspaceState.ragSettings)) {
+      setting.sourceRagSettings = setting.sourceRagSettings.filter(sourceName => sourceName !== name);
+    }
 
     // If this was the selected setting, clear selection
     if (this.workspaceState.selectedRagSetting === name) {
@@ -279,6 +289,11 @@ export class WorkspaceStateManager {
 
     this.workspaceState.ragSettings[newName] = this.workspaceState.ragSettings[oldName];
     delete this.workspaceState.ragSettings[oldName];
+    for (const setting of Object.values(this.workspaceState.ragSettings)) {
+      setting.sourceRagSettings = setting.sourceRagSettings.map(sourceName =>
+        sourceName === oldName ? newName : sourceName
+      );
+    }
 
     // Update selection if needed
     if (this.workspaceState.selectedRagSetting === oldName) {

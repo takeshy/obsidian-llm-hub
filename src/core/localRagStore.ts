@@ -21,7 +21,62 @@ import {
   loadExternalRagIndex,
   loadExternalRagVectors,
 } from "./localRagStorage";
-import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING } from "../types";
+import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type RagSetting } from "../types";
+
+const MAX_CHANGED_FILES_PER_SYNC = 50;
+const SCAN_YIELD_INTERVAL = 25;
+
+async function yieldToEventLoop(): Promise<void> {
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+}
+
+function parseExternalIndexPaths(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map(path => path.trim())
+    .filter(path => path.length > 0);
+}
+
+function mergeLoadedIndexes(items: { index: LocalRagIndex; vectors: Float32Array }[]): {
+  index: LocalRagIndex | null;
+  vectors: Float32Array | null;
+} {
+  const compatible = items.filter(({ index, vectors }) =>
+    index.dimension > 0 &&
+    index.meta.length > 0 &&
+    vectors.length >= index.meta.length * index.dimension
+  );
+  if (compatible.length === 0) return { index: null, vectors: null };
+
+  const dimension = compatible[0].index.dimension;
+  const sameDimension = compatible.filter(({ index }) => index.dimension === dimension);
+  if (sameDimension.length === 0) return { index: null, vectors: null };
+
+  const meta = sameDimension.flatMap(({ index }) => index.meta);
+  const mergedVectors = new Float32Array(meta.length * dimension);
+  let offset = 0;
+  for (const { index, vectors } of sameDimension) {
+    const length = index.meta.length * dimension;
+    mergedVectors.set(vectors.subarray(0, length), offset);
+    offset += length;
+  }
+
+  return {
+    index: {
+      ...sameDimension[0].index,
+      meta,
+      dimension,
+      fileChecksums: Object.assign({}, ...sameDimension.map(({ index }) => index.fileChecksums)),
+    },
+    vectors: mergedVectors,
+  };
+}
+
+interface LocalRagEntry {
+  index: LocalRagIndex | null;
+  vectors: Float32Array | null;
+}
+
 export interface FilterConfig {
   includeFolders: string[];
   excludePatterns: string[];
@@ -95,17 +150,19 @@ function binaryChecksum(mtime: number, size: number): string {
 
 class LocalRagStore {
   private app: App | null = null;
-  private entries = new Map<string, { index: LocalRagIndex | null; vectors: Float32Array | null }>();
+  private entries = new Map<string, LocalRagEntry>();
   private externalPaths = new Map<string, string>();
+  private sourceRagSettings = new Map<string, string[]>();
   workspaceFolder = "LLMHub";
 
-  async load(app: App, settingNames: string[], ragSettings?: Record<string, import("src/types").RagSetting>): Promise<void> {
+  async load(app: App, settingNames: string[], ragSettings?: Record<string, RagSetting>): Promise<void> {
     this.app = app;
     if (ragSettings) {
       for (const [name, setting] of Object.entries(ragSettings)) {
         if (setting.externalIndexPath) {
           this.externalPaths.set(name, setting.externalIndexPath);
         }
+        this.setSourceRagSettings(name, setting.sourceRagSettings);
       }
     }
     for (const settingName of settingNames) {
@@ -119,8 +176,18 @@ class LocalRagStore {
     } else {
       this.externalPaths.delete(settingName);
     }
-    // Invalidate cache so next access reloads from the new source
-    this.entries.delete(settingName);
+    // A changed source can affect combined indexes, so reload all cached entries.
+    this.clearAll();
+  }
+
+  setSourceRagSettings(settingName: string, sourceNames: string[]): void {
+    const filtered = sourceNames.filter(sourceName => sourceName && sourceName !== settingName);
+    if (filtered.length > 0) {
+      this.sourceRagSettings.set(settingName, filtered);
+    } else {
+      this.sourceRagSettings.delete(settingName);
+    }
+    this.clearAll();
   }
 
   async sync(
@@ -137,7 +204,7 @@ class LocalRagStore {
     indexMultimodal = false,
     proxyUrl?: string,
     proxyBypass?: string,
-  ): Promise<{ embedded: number; skipped: number; removed: number; errors: string[] }> {
+  ): Promise<{ embedded: number; skipped: number; removed: number; errors: string[]; deferredFiles?: number; failedFiles?: string[] }> {
     this.app = app;
     const result = { embedded: 0, skipped: 0, removed: 0, errors: [] as string[] };
     const entry = await this.ensureLoaded(app, settingName);
@@ -183,11 +250,11 @@ class LocalRagStore {
     // Calculate checksums for current files
     const currentChecksums: Record<string, string> = {};
     const contentCache = new Map<string, string>();
-    for (const file of allFiles) {
+    for (let i = 0; i < allFiles.length; i++) {
+      const file = allFiles[i];
       if (file.extension === "md") {
         const content = await app.vault.read(file);
         currentChecksums[file.path] = simpleChecksum(content);
-        contentCache.set(file.path, content);
       } else {
         // Binary files: use stat-based checksum
         const stat = await app.vault.adapter.stat(file.path);
@@ -195,10 +262,13 @@ class LocalRagStore {
           currentChecksums[file.path] = binaryChecksum(stat.mtime, stat.size);
         }
       }
+      if ((i + 1) % SCAN_YIELD_INTERVAL === 0) {
+        await yieldToEventLoop();
+      }
     }
 
     // Determine which files need updating
-    const filesToEmbed: TFile[] = [];
+    let filesToEmbed: TFile[] = [];
     const filesToKeepSet = new Set<string>();
     const currentFilePaths = new Set(allFiles.map(f => f.path));
 
@@ -208,6 +278,14 @@ class LocalRagStore {
         filesToKeepSet.add(file.path);
       } else {
         filesToEmbed.push(file);
+      }
+    }
+
+    const deferredFiles = filesToEmbed.slice(MAX_CHANGED_FILES_PER_SYNC);
+    filesToEmbed = filesToEmbed.slice(0, MAX_CHANGED_FILES_PER_SYNC);
+    for (const file of deferredFiles) {
+      if (index.fileChecksums[file.path]) {
+        filesToKeepSet.add(file.path);
       }
     }
 
@@ -253,6 +331,7 @@ class LocalRagStore {
     const newMeta: LocalRagChunkMeta[] = [];
     const newVectorParts: Float32Array[] = [];
     const embeddedChecksums: Record<string, string> = {};
+    const failedFiles: string[] = [];
     let dimension = index.dimension;
     let currentOp = filesToKeepSet.size + filesToRemove.length;
 
@@ -263,7 +342,8 @@ class LocalRagStore {
       try {
         if (file.extension === "md") {
           // Text file: chunk and embed
-          const content = contentCache.get(file.path);
+          const content = contentCache.get(file.path) ?? await app.vault.read(file);
+          contentCache.set(file.path, content);
           if (!content) continue;
           const chunks = chunkText(content, chunkSize, chunkOverlap);
           if (chunks.length === 0) continue;
@@ -336,10 +416,18 @@ class LocalRagStore {
           } else {
             // Non-Gemini: extract text from PDF and embed as text chunks
             const pdfResult = await extractPdfTextWithOffsets(app, file);
-            if (!pdfResult) continue;
+            if (!pdfResult) {
+              failedFiles.push(file.path);
+              embeddedChecksums[file.path] = currentChecksums[file.path];
+              continue;
+            }
 
             const chunks = chunkTextWithOffsets(pdfResult.text, chunkSize, chunkOverlap);
-            if (chunks.length === 0) continue;
+            if (chunks.length === 0) {
+              failedFiles.push(file.path);
+              embeddedChecksums[file.path] = currentChecksums[file.path];
+              continue;
+            }
 
             const embeddings = await generateEmbeddings(
               chunks.map(c => c.text), apiKey, model, embeddingBaseUrl, proxyUrl, proxyBypass,
@@ -367,12 +455,17 @@ class LocalRagStore {
           const sizeLimit = MULTIMODAL_FILE_SIZE_LIMITS[file.extension];
           const stat = await app.vault.adapter.stat(file.path);
           if (!stat || (sizeLimit && stat.size > sizeLimit)) {
-            result.errors.push(`${file.path}: file too large (${stat?.size ?? 0} bytes, limit ${sizeLimit ?? 0})`);
+            failedFiles.push(file.path);
+            embeddedChecksums[file.path] = currentChecksums[file.path];
             continue;
           }
 
           const mimeType = extensionToMimeType(file.extension);
-          if (!mimeType) continue;
+          if (!mimeType) {
+            failedFiles.push(file.path);
+            embeddedChecksums[file.path] = currentChecksums[file.path];
+            continue;
+          }
 
           const buffer = await app.vault.readBinary(file);
           const base64 = arrayBufferToBase64(buffer);
@@ -390,10 +483,21 @@ class LocalRagStore {
             newVectorParts.push(new Float32Array(embeddings[0]));
             result.embedded++;
             embeddedChecksums[file.path] = currentChecksums[file.path];
+          } else {
+            failedFiles.push(file.path);
+            embeddedChecksums[file.path] = currentChecksums[file.path];
           }
         }
       } catch (error) {
-        result.errors.push(`${file.path}: ${error instanceof Error ? error.message : String(error)}`);
+        if (file.extension === "pdf" || MULTIMODAL_EXTENSIONS.has(file.extension)) {
+          failedFiles.push(file.path);
+          embeddedChecksums[file.path] = currentChecksums[file.path];
+        } else {
+          result.errors.push(`${file.path}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      if (currentOp % SCAN_YIELD_INTERVAL === 0) {
+        await yieldToEventLoop();
       }
     }
 
@@ -435,8 +539,9 @@ class LocalRagStore {
 
     await saveRagIndex(app, settingName, index, this.workspaceFolder);
     await saveRagVectors(app, settingName, vectors, this.workspaceFolder);
+    this.clearAll();
 
-    return result;
+    return { ...result, deferredFiles: deferredFiles.length, failedFiles };
   }
 
   async search(
@@ -521,7 +626,7 @@ class LocalRagStore {
 
   async clear(app: App, settingName: string): Promise<void> {
     this.app = app;
-    this.entries.delete(settingName);
+    this.clearAll();
     await deleteRagIndex(app, settingName, this.workspaceFolder);
   }
 
@@ -548,6 +653,9 @@ class LocalRagStore {
     const entry = await this.ensureLoaded(app, settingName);
     if (!entry.index) return [];
     const counts = new Map<string, number>();
+    for (const filePath of Object.keys(entry.index.fileChecksums ?? {})) {
+      counts.set(filePath, 0);
+    }
     for (const m of entry.index.meta) {
       counts.set(m.filePath, (counts.get(m.filePath) ?? 0) + 1);
     }
@@ -652,20 +760,34 @@ class LocalRagStore {
   private async ensureLoaded(
     app: App,
     settingName: string
-  ): Promise<{ index: LocalRagIndex | null; vectors: Float32Array | null }> {
+  ): Promise<LocalRagEntry> {
     const existing = this.entries.get(settingName);
     if (existing) {
       return existing;
     }
 
     const externalPath = this.externalPaths.get(settingName);
+    const sourceNames = this.sourceRagSettings.get(settingName) ?? [];
     let index: LocalRagIndex | null;
     let vectors: Float32Array | null;
-    if (externalPath) {
-      index = await loadExternalRagIndex(externalPath);
-      vectors = index && index.meta.length > 0
-        ? await loadExternalRagVectors(externalPath)
-        : null;
+    if (sourceNames.length > 0) {
+      const loadedIndexes: { index: LocalRagIndex; vectors: Float32Array }[] = [];
+      for (const sourceName of sourceNames) {
+        const sourceEntry = await this.ensureLoaded(app, sourceName);
+        if (!sourceEntry.index || !sourceEntry.vectors || sourceEntry.index.meta.length === 0) continue;
+        loadedIndexes.push({ index: sourceEntry.index, vectors: sourceEntry.vectors });
+      }
+      ({ index, vectors } = mergeLoadedIndexes(loadedIndexes));
+    } else if (externalPath) {
+      const loadedIndexes: { index: LocalRagIndex; vectors: Float32Array }[] = [];
+      for (const path of parseExternalIndexPaths(externalPath)) {
+        const externalIndex = await loadExternalRagIndex(path);
+        if (!externalIndex || externalIndex.meta.length === 0 || externalIndex.dimension <= 0) continue;
+        const externalVectors = await loadExternalRagVectors(path);
+        if (!externalVectors || externalVectors.length < externalIndex.meta.length * externalIndex.dimension) continue;
+        loadedIndexes.push({ index: externalIndex, vectors: externalVectors });
+      }
+      ({ index, vectors } = mergeLoadedIndexes(loadedIndexes));
     } else {
       index = await loadRagIndex(app, settingName, this.workspaceFolder);
       vectors = index && index.meta.length > 0
