@@ -170,7 +170,7 @@ function resolveNonWindowsCustomPath(customPath: string, args: string[]): Resolv
  * @param args - Command line arguments to pass to the CLI
  * @param customPath - Optional custom path to the CLI script/executable
  */
-function resolveAntigravityCommand(args: string[], customPath?: string): ResolvedCommand {
+export function resolveAntigravityCommand(args: string[], customPath?: string): ResolvedCommand {
   // If custom path is specified, validate and use it
   if (customPath && validateCustomPath(customPath)) {
     if (isWindows()) {
@@ -315,7 +315,7 @@ function findWindowsNpmScript(packagePath: string): string | undefined {
  * @param args - Command line arguments to pass to the CLI
  * @param customPath - Optional custom path to the CLI script/executable
  */
-function resolveClaudeCommand(args: string[], customPath?: string): ResolvedCommand {
+export function resolveClaudeCommand(args: string[], customPath?: string): ResolvedCommand {
   // If custom path is specified, validate and use it
   if (customPath && validateCustomPath(customPath)) {
     if (isWindows()) {
@@ -395,7 +395,7 @@ function formatWindowsClaudeCliError(message: string | undefined): string | unde
  * @param args - Command line arguments to pass to the CLI
  * @param customPath - Optional custom path to the CLI script/executable
  */
-function resolveCodexCommand(args: string[], customPath?: string): ResolvedCommand {
+export function resolveCodexCommand(args: string[], customPath?: string): ResolvedCommand {
   // If custom path is specified, validate and use it
   if (customPath && validateCustomPath(customPath)) {
     if (isWindows()) {

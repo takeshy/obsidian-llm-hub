@@ -649,6 +649,8 @@ Windows では[公式ドキュメント](https://opencode.ai/docs/ja/windows-wsl
 
 **CLI の制限:** Vault ツール非対応、Web 検索なし、デスクトップ版のみ
 
+**TTY ターミナル:** コマンドパレットから「LLM Hub: Open CLI terminal」を実行すると、Obsidian 内に CLI ターミナルビューを開けます。このビューは `node-pty` と `@xterm/xterm` が利用可能なデスクトップ環境で、Vault ルートを作業ディレクトリにして Antigravity / Claude / Codex の完全な TTY セッションを起動します。
+
 > [!NOTE]
 > **CLI のみの利用:** API キーなしで CLI モードを使用できます。CLI ツールをインストールして Verify するだけです。
 
