@@ -642,6 +642,8 @@ OpenCode [recommends WSL](https://opencode.ai/docs/ja/windows-wsl) on Windows fo
 
 **CLI Limitations:** No vault tool support, no web search, desktop only
 
+**TTY terminal:** Run “LLM Hub: Open CLI terminal” from the command palette to open an in-Obsidian CLI terminal view. In desktop environments where `node-pty` and `@xterm/xterm` are available, the view starts a full TTY session for Antigravity / Claude / Codex with the vault root as the working directory.
+
 > [!NOTE]
 > **CLI-only usage:** You can use CLI mode without any API key. Just install and verify a CLI tool.
 

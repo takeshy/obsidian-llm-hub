@@ -7,6 +7,7 @@ import { WorkflowManager } from "src/plugin/workflowManager";
 import { WorkspaceStateManager } from "src/core/workspaceStateManager";
 import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
+import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
 import { SettingsTab } from "src/ui/SettingsTab";
 import {
   type LlmHubSettings,
@@ -273,6 +274,12 @@ export class LlmHubPlugin extends Plugin {
       (leaf) => new CryptView(leaf, this)
     );
 
+    // Register terminal view for full TTY CLI sessions
+    this.registerView(
+      CLI_TERMINAL_VIEW_TYPE,
+      (leaf) => new CliTerminalView(leaf, this)
+    );
+
     // Register .encrypted extension so Obsidian opens these files in CryptView
     // Wrapped in try-catch to avoid conflict when another plugin already registered this extension
     try {
@@ -357,6 +364,15 @@ export class LlmHubPlugin extends Plugin {
       name: "Toggle chat / editor",
       callback: () => {
         this.toggleChatView();
+      },
+    });
+
+    // Add command to open a real TTY-backed CLI terminal in the vault root
+    this.addCommand({
+      id: "open-cli-terminal",
+      name: "Open CLI terminal",
+      callback: () => {
+        void this.activateCliTerminalView();
       },
     });
 
@@ -854,6 +870,31 @@ export class LlmHubPlugin extends Plugin {
           active: false,
         });
       }
+    }
+  }
+
+  async activateCliTerminalView(): Promise<void> {
+    const { workspace } = this.app;
+    let leaf: WorkspaceLeaf | null = null;
+
+    const existingLeaves = workspace.getLeavesOfType(CLI_TERMINAL_VIEW_TYPE);
+    if (existingLeaves.length > 0) {
+      leaf = existingLeaves[0];
+    } else {
+      leaf = workspace.getRightLeaf(false);
+      if (!leaf) {
+        leaf = workspace.getRightLeaf(true);
+      }
+      if (leaf) {
+        await leaf.setViewState({
+          type: CLI_TERMINAL_VIEW_TYPE,
+          active: true,
+        });
+      }
+    }
+
+    if (leaf) {
+      void workspace.revealLeaf(leaf);
     }
   }
 

@@ -174,8 +174,12 @@ Please revise the output based on the user's feedback above.`;
   let model = normalizeDeprecatedModelIdentifier(modelName || plugin.getSelectedModel()) as import("../../types").ModelType;
   let geminiProviderConfig: typeof plugin.settings.apiProviders[number] | null = null;
 
+  if (model === "claude-cli") {
+    throw new Error("Claude CLI is not supported in workflows. Register Claude as an Anthropic API Provider and select that model instead.");
+  }
+
   // Check if this is a CLI model, Local LLM, or API provider
-  let isCliModel = model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli";
+  let isCliModel = model === "antigravity-cli" || model === "codex-cli";
   let isLocalLlm = isLocalLlmModel(model);
 
   // If resolved model requires API key but none is configured, fall back to a
@@ -196,8 +200,6 @@ Please revise the output based on the user's feedback above.`;
         const cliConfig = plugin.settings.cliConfig;
         if (cliConfig?.cliVerified) {
           model = "antigravity-cli";
-        } else if (cliConfig?.claudeCliVerified) {
-          model = "claude-cli";
         } else if (cliConfig?.codexCliVerified) {
           model = "codex-cli";
         } else {
@@ -211,7 +213,7 @@ Please revise the output based on the user's feedback above.`;
 
   if (isCliModel) {
     // Use persistent CLI session (shared across workflow nodes)
-    const providerName = (model === "claude-cli" ? "claude-cli" : model === "codex-cli" ? "codex-cli" : "antigravity-cli") as import("../../types").ChatProvider;
+    const providerName = (model === "codex-cli" ? "codex-cli" : "antigravity-cli") as import("../../types").ChatProvider;
 
     // Get or create persistent CLI session from context
     if (!context.persistentCliSessions) {
@@ -223,9 +225,7 @@ Please revise the output based on the user's feedback above.`;
       const cliConfig = plugin.settings.cliConfig;
       const customCliPath = providerName === "antigravity-cli"
         ? cliConfig?.geminiCliPath
-        : providerName === "claude-cli"
-          ? cliConfig?.claudeCliPath
-          : cliConfig?.codexCliPath;
+        : cliConfig?.codexCliPath;
       session = new PersistentCliSession(providerName, vaultPath, customCliPath);
       session.start();
       context.persistentCliSessions.set(providerName, session);

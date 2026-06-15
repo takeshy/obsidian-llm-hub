@@ -8919,3 +8919,70 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   border-top: none;
   opacity: 0.85;
 }
+
+/* CLI terminal view */
+.llm-hub-cli-terminal-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 8px;
+}
+
+.llm-hub-cli-terminal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.llm-hub-cli-terminal-status {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.llm-hub-cli-terminal-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.llm-hub-cli-terminal-model-select {
+  max-width: 240px;
+  min-width: 160px;
+}
+
+.llm-hub-cli-terminal-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #000000;
+  padding: 8px;
+  color: #f2f2f2;
+}
+
+.llm-hub-cli-terminal-host .xterm {
+  height: 100%;
+  width: 100%;
+}
+
+.llm-hub-cli-terminal-host .xterm-viewport {
+  background-color: #000000 !important;
+}
+
+.llm-hub-cli-terminal-host .xterm-screen {
+  user-select: text;
+}
+
+.llm-hub-cli-terminal-fallback {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
