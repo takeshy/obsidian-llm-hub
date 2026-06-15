@@ -87,6 +87,7 @@ import {
 } from "./workflow/EditConfirmationModal";
 import MessageList from "./MessageList";
 import InputArea, { type InputAreaHandle } from "./InputArea";
+import CliTerminalPanel, { isTerminalProvider } from "./CliTerminalPanel";
 import {
 	isEncryptedFile,
 	decryptFileContent,
@@ -449,6 +450,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const initialLastActiveChatIdRef = useRef<string | null>(plugin.lastActiveChatId);
 	const hasCompletedInitialRestoreRef = useRef(false);
 	const persistentCliRef = useRef<PersistentCliSession | null>(null);
+	const previousNonTerminalModelRef = useRef<ModelType | null>(
+		isTerminalProvider(initialModel) ? null : initialModel
+	);
 	const [vaultFiles, setVaultFiles] = useState<string[]>([]);
 	const [hasSelection, setHasSelection] = useState(false);
 	const [cliConfig, setCliConfig] = useState(plugin.settings.cliConfig || DEFAULT_CLI_CONFIG);
@@ -497,6 +501,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const isAntigravityCliMode = !Platform.isMobile && currentModel === "antigravity-cli";
 	const isClaudeCliMode = !Platform.isMobile && currentModel === "claude-cli";
 	const isCodexCliMode = !Platform.isMobile && currentModel === "codex-cli";
+	const isNativeCliTerminalMode = isTerminalProvider(currentModel);
 	const isLocalLlmMode = !Platform.isMobile && isLocalLlmModel(currentModel);
 	const isApiProviderMode = !Platform.isMobile && isApiProviderModel(currentModel);
 	// Local LLMs with an OpenAI-compatible framework + a tools-capable model
@@ -560,6 +565,20 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			}));
 		}),
 	];
+
+	useEffect(() => {
+		if (!isTerminalProvider(currentModel)) {
+			previousNonTerminalModelRef.current = currentModel;
+		}
+	}, [currentModel]);
+
+	const handleBackToChat = () => {
+		const fallbackModel = availableModels.find(model => !isTerminalProvider(model.name))?.name;
+		const targetModel = previousNonTerminalModelRef.current ?? fallbackModel;
+		if (targetModel) {
+			handleModelChange(targetModel);
+		}
+	};
 
 	useImperativeHandle(ref, () => ({
 		getActiveChat: () => activeChat,
@@ -3658,67 +3677,79 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 			{isConfigReady ? (
 				<>
-					<MessageList
-						ref={messagesContainerRef}
-						messages={messages}
-						streamingContent={streamingContent}
-						streamingThinking={streamingThinking}
-						isLoading={isLoading}
-						onApplyEdit={handleApplyEdit}
-						onDiscardEdit={handleDiscardEdit}
-						alwaysThink={getThinkingToggle() === true}
-						app={plugin.app}
-						localLlmConfigs={plugin.settings.localLlmConfigs}
-					/>
+					{isNativeCliTerminalMode ? (
+						<CliTerminalPanel
+							plugin={plugin}
+							provider="claude-cli"
+							availableModels={availableModels}
+							onModelChange={handleModelChange}
+							onBackToChat={handleBackToChat}
+						/>
+					) : (
+						<>
+							<MessageList
+								ref={messagesContainerRef}
+								messages={messages}
+								streamingContent={streamingContent}
+								streamingThinking={streamingThinking}
+								isLoading={isLoading}
+								onApplyEdit={handleApplyEdit}
+								onDiscardEdit={handleDiscardEdit}
+								alwaysThink={getThinkingToggle() === true}
+								app={plugin.app}
+								localLlmConfigs={plugin.settings.localLlmConfigs}
+							/>
 
-					<InputArea
-						ref={inputAreaRef}
-						onSend={(content, attachments, skillPath) => {
-							void sendMessage(content, attachments, skillPath);
-						}}
-						onStop={stopMessage}
-						isLoading={isLoading}
-						model={currentModel}
-						onModelChange={handleModelChange}
-						availableModels={availableModels}
-						allowWebSearch={allowWebSearch}
-						ragEnabled={allowRag}
-						ragSettings={allowRag ? ragSettingNames : []}
-						selectedRagSetting={selectedRagSetting}
-						onRagSettingChange={handleRagSettingChange}
-						vaultToolMode={vaultToolMode}
-						onVaultToolModeChange={handleVaultToolModeChange}
-						vaultToolModeOnlyNone={isCliMode}
-						alwaysThinkModels={alwaysThinkModels}
-						onAlwaysThinkModelToggle={(modelId, enabled) => {
-							setAlwaysThinkModels(prev => {
-								const next = new Set(prev);
-								if (enabled) next.add(modelId); else next.delete(modelId);
-								plugin.workspaceState.alwaysThinkModels = Array.from(next);
-								void plugin.saveWorkspaceState();
-								return next;
-							});
-						}}
-						mcpServers={mcpServers}
-						onMcpServerToggle={handleMcpServerToggle}
-						slashCommands={plugin.settings.slashCommands}
-						onSlashCommand={handleSlashCommand}
-						availableSkills={availableSkills}
-						activeSkillPaths={activeSkillPaths}
-						onToggleSkill={(folderPath) => {
-							setActiveSkillPaths(prev =>
-								prev.includes(folderPath)
-									? prev.filter(p => p !== folderPath)
-									: [...prev, folderPath]
-							);
-						}}
-						onCompact={() => { void handleCompact(); }}
-						messageCount={messages.length}
-						isCompacting={isCompacting}
-						vaultFiles={vaultFiles}
-						hasSelection={hasSelection}
-						app={plugin.app}
-					/>
+							<InputArea
+								ref={inputAreaRef}
+								onSend={(content, attachments, skillPath) => {
+									void sendMessage(content, attachments, skillPath);
+								}}
+								onStop={stopMessage}
+								isLoading={isLoading}
+								model={currentModel}
+								onModelChange={handleModelChange}
+								availableModels={availableModels}
+								allowWebSearch={allowWebSearch}
+								ragEnabled={allowRag}
+								ragSettings={allowRag ? ragSettingNames : []}
+								selectedRagSetting={selectedRagSetting}
+								onRagSettingChange={handleRagSettingChange}
+								vaultToolMode={vaultToolMode}
+								onVaultToolModeChange={handleVaultToolModeChange}
+								vaultToolModeOnlyNone={isCliMode}
+								alwaysThinkModels={alwaysThinkModels}
+								onAlwaysThinkModelToggle={(modelId, enabled) => {
+									setAlwaysThinkModels(prev => {
+										const next = new Set(prev);
+										if (enabled) next.add(modelId); else next.delete(modelId);
+										plugin.workspaceState.alwaysThinkModels = Array.from(next);
+										void plugin.saveWorkspaceState();
+										return next;
+									});
+								}}
+								mcpServers={mcpServers}
+								onMcpServerToggle={handleMcpServerToggle}
+								slashCommands={plugin.settings.slashCommands}
+								onSlashCommand={handleSlashCommand}
+								availableSkills={availableSkills}
+								activeSkillPaths={activeSkillPaths}
+								onToggleSkill={(folderPath) => {
+									setActiveSkillPaths(prev =>
+										prev.includes(folderPath)
+											? prev.filter(p => p !== folderPath)
+											: [...prev, folderPath]
+									);
+								}}
+								onCompact={() => { void handleCompact(); }}
+								messageCount={messages.length}
+								isCompacting={isCompacting}
+								vaultFiles={vaultFiles}
+								hasSelection={hasSelection}
+								app={plugin.app}
+							/>
+						</>
+					)}
 				</>
 			) : (
 				<div className="llm-hub-config-required">

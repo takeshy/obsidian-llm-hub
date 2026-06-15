@@ -1,11 +1,11 @@
 import { App, Modal, Notice, Platform, parseYaml, TFile, setIcon, MarkdownRenderer, Component } from "obsidian";
 import type { LlmHubPlugin } from "src/plugin";
-import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "src/core/cliProvider";
+import { AntigravityCliProvider, CodexCliProvider } from "src/core/cliProvider";
 import { GeminiClient } from "src/core/gemini";
 import { openaiChatWithToolsStream } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { tracing } from "src/core/tracingHooks";
-import { CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, DEFAULT_CLI_CONFIG, getGeminiApiKey, isApiProviderModel, getApiProviderId, getApiProviderModelName, SKILLS_FOLDER, WORKFLOWS_FOLDER, type ModelType, type Attachment, type StreamChunkUsage } from "src/types";
+import { CLI_MODEL, CODEX_CLI_MODEL, DEFAULT_CLI_CONFIG, getGeminiApiKey, isApiProviderModel, getApiProviderId, getApiProviderModelName, SKILLS_FOLDER, WORKFLOWS_FOLDER, type ModelType, type Attachment, type StreamChunkUsage } from "src/types";
 import { getWorkflowSpecification, buildWorkflowSpecContext } from "src/workflow/workflowSpec";
 import type { SidebarNode, WorkflowNodeType, ExecutionStep } from "src/workflow/types";
 import { findWorkflowBlocks, normalizeYamlText } from "src/workflow/parser";
@@ -615,7 +615,6 @@ export class AIWorkflowModal extends Modal {
 
     const cliConfig = this.plugin.settings.cliConfig || DEFAULT_CLI_CONFIG;
     const antigravityCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
-    const claudeCliVerified = !Platform.isMobile && cliConfig.claudeCliVerified === true;
     const codexCliVerified = !Platform.isMobile && cliConfig.codexCliVerified === true;
     const enabledProviders = this.plugin.settings.apiProviders.filter(
       p => p.enabled && p.verified
@@ -630,7 +629,6 @@ export class AIWorkflowModal extends Modal {
     );
     const cliModels = [
       ...(antigravityCliVerified ? [CLI_MODEL] : []),
-      ...(claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
       ...(codexCliVerified ? [CODEX_CLI_MODEL] : []),
     ];
     const availableModels = [...cliModels, ...baseModels];
@@ -1006,9 +1004,8 @@ export class AIWorkflowModal extends Modal {
     }
 
     const isAntigravityCli = selectedModel === "antigravity-cli";
-    const isClaudeCli = selectedModel === "claude-cli";
     const isCodexCli = selectedModel === "codex-cli";
-    const isCliModel = isAntigravityCli || isClaudeCli || isCodexCli;
+    const isCliModel = isAntigravityCli || isCodexCli;
 
     // Check API provider (skip for CLI model)
     if (!isCliModel && isApiProviderModel(selectedModel)) {
@@ -1171,9 +1168,8 @@ export class AIWorkflowModal extends Modal {
       );
 
       if (isCliModel) {
-        const isClaudeCli = selectedModel === "claude-cli";
         const isCodexCli = selectedModel === "codex-cli";
-        const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Antigravity CLI";
+        const cliName = isCodexCli ? "Codex CLI" : "Antigravity CLI";
         generationModal.setStatus(t("workflow.generation.generatingWithCli", { cli: cliName }));
       }
 
@@ -1517,16 +1513,10 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
 
     if (isCliModel) {
       const cliConfig = this.plugin.settings.cliConfig || DEFAULT_CLI_CONFIG;
-      const isClaudeCli = selectedModel === "claude-cli";
       const isCodexCli = selectedModel === "codex-cli";
 
-      let provider: AntigravityCliProvider | ClaudeCliProvider | CodexCliProvider;
-      if (isClaudeCli) {
-        if (!cliConfig.claudeCliVerified) {
-          throw new Error("Claude CLI is not available. Please verify it in settings.");
-        }
-        provider = new ClaudeCliProvider();
-      } else if (isCodexCli) {
+      let provider: AntigravityCliProvider | CodexCliProvider;
+      if (isCodexCli) {
         if (!cliConfig.codexCliVerified) {
           throw new Error("Codex CLI is not available. Please verify it in settings.");
         }

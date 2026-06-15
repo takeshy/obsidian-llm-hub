@@ -138,6 +138,61 @@ export function findNodeBinary(): string {
   return "node";
 }
 
+function dirname(path: string): string | undefined {
+  const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  if (index <= 0) return undefined;
+  return path.slice(0, index);
+}
+
+function getNonWindowsCliBinCandidates(): string[] {
+  if (typeof process === "undefined" || isWindows()) return [];
+
+  const home = process.env?.HOME;
+  const candidateDirs: string[] = [];
+
+  if (home) {
+    candidateDirs.push(`${home}/.bun/bin`);
+    candidateDirs.push(`${home}/.local/bin`);
+    candidateDirs.push(`${home}/.npm-global/bin`);
+    candidateDirs.push(`${home}/.nodenv/shims`);
+    candidateDirs.push(`${home}/.volta/bin`);
+    candidateDirs.push(`${home}/.fnm/aliases/default/bin`);
+    candidateDirs.push(`${home}/.asdf/shims`);
+    candidateDirs.push(`${home}/.local/share/mise/shims`);
+
+    const nvmDir = process.env?.NVM_DIR || `${home}/.nvm`;
+    candidateDirs.push(`${nvmDir}/current/bin`);
+  }
+
+  candidateDirs.push("/opt/homebrew/bin");
+  candidateDirs.push("/usr/local/bin");
+  candidateDirs.push("/usr/bin");
+
+  const nodeDir = dirname(findNodeBinary());
+  if (nodeDir) {
+    candidateDirs.unshift(nodeDir);
+  }
+
+  return [...new Set(candidateDirs)];
+}
+
+function buildCliEnvironment(): Record<string, string | undefined> | undefined {
+  if (typeof process === "undefined") return undefined;
+
+  const env = { ...process.env };
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") || "PATH";
+  const separator = isWindows() ? ";" : ":";
+  const existingPath = env[pathKey] || "";
+  const existingDirs = new Set(existingPath.split(separator).filter(Boolean));
+  const extraDirs = getNonWindowsCliBinCandidates().filter((dir) => fileExistsSync(dir) && !existingDirs.has(dir));
+
+  if (extraDirs.length > 0) {
+    env[pathKey] = [...extraDirs, existingPath].filter(Boolean).join(separator);
+  }
+
+  return env;
+}
+
 /**
  * Dispatch a custom CLI path on Windows by extension.
  * `.js` runs via node, `.exe` runs directly, everything else (e.g. `.cmd`/`.bat`)
@@ -321,8 +376,7 @@ export function resolveClaudeCommand(args: string[], customPath?: string): Resol
     if (isWindows()) {
       return resolveWindowsCustomPath(customPath, args);
     }
-    const node = findNodeBinary();
-    return { command: node, args: [customPath, ...args], shell: false };
+    return resolveNonWindowsCustomPath(customPath, args);
   }
 
   if (isWindows() && typeof process !== "undefined") {
@@ -415,28 +469,12 @@ export function resolveCodexCommand(args: string[], customPath?: string): Resolv
     return { command: "codex", args, shell: true };
   }
 
-  // Non-Windows: check common installation paths first (Obsidian may not have full PATH)
-  if (typeof process !== "undefined") {
-    const home = process.env?.HOME;
-    const candidatePaths: string[] = [];
-
-    if (home) {
-      // Linux/Mac: ~/.local/bin/codex
-      candidatePaths.push(`${home}/.local/bin/codex`);
-      // npm global with custom prefix: ~/.npm-global/bin/codex
-      candidatePaths.push(`${home}/.npm-global/bin/codex`);
-    }
-
-    // Mac: Homebrew paths
-    // Apple Silicon
-    candidatePaths.push("/opt/homebrew/bin/codex");
-    // Intel Mac
-    candidatePaths.push("/usr/local/bin/codex");
-
-    for (const path of candidatePaths) {
-      if (fileExistsSync(path)) {
-        return { command: path, args, shell: false };
-      }
+  // Non-Windows: check common installation paths first (Obsidian may not have full PATH).
+  // Bun installs npm globals into ~/.bun/bin by default, which is common on WSL.
+  for (const dir of getNonWindowsCliBinCandidates()) {
+    const path = `${dir}/codex`;
+    if (fileExistsSync(path)) {
+      return { command: path, args, shell: false };
     }
   }
 
@@ -1520,7 +1558,7 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
         shell,
-        env: typeof process !== "undefined" ? process.env : undefined,
+        env: buildCliEnvironment(),
       });
       proc.stdin?.end();
 
@@ -1561,7 +1599,7 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
         shell,
-        env: typeof process !== "undefined" ? process.env : undefined,
+        env: buildCliEnvironment(),
       });
       proc.stdin?.end();
 
@@ -1617,7 +1655,7 @@ export async function verifyClaudeCli(customPath?: string): Promise<CliVerifyRes
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
         shell,
-        env: typeof process !== "undefined" ? process.env : undefined,
+        env: buildCliEnvironment(),
       });
 
       // Close stdin immediately to signal no more input
@@ -1660,7 +1698,7 @@ export async function verifyClaudeCli(customPath?: string): Promise<CliVerifyRes
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
         shell,
-        env: typeof process !== "undefined" ? process.env : undefined,
+        env: buildCliEnvironment(),
       });
 
       // Close stdin immediately to signal no more input
@@ -1723,7 +1761,7 @@ export async function verifyCodexCli(customPath?: string): Promise<CliVerifyResu
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
         shell,
-        env: typeof process !== "undefined" ? process.env : undefined,
+        env: buildCliEnvironment(),
       });
 
       // Close stdin immediately to signal no more input
@@ -1766,7 +1804,7 @@ export async function verifyCodexCli(customPath?: string): Promise<CliVerifyResu
       const proc = spawn(command, args, {
         stdio: ["pipe", "pipe", "pipe"],
         shell,
-        env: typeof process !== "undefined" ? process.env : undefined,
+        env: buildCliEnvironment(),
       });
 
       // Close stdin immediately to signal no more input

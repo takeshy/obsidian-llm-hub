@@ -106,8 +106,6 @@ const context = await esbuild.context({
     "electron",
     "child_process",
     "node-pty",
-    "@xterm/xterm",
-    "@xterm/addon-fit",
     "@codemirror/autocomplete",
     "@codemirror/collab",
     "@codemirror/commands",

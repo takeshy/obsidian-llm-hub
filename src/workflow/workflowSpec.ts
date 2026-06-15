@@ -1,7 +1,7 @@
 // Workflow specification for AI generation
 // This is used as a system prompt when Gemini generates or modifies workflows
 
-import { type McpServerConfig, type ApiProviderConfig, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, type CliProviderConfig, type ToolDefinition } from "src/types";
+import { type McpServerConfig, type ApiProviderConfig, CLI_MODEL, CODEX_CLI_MODEL, type CliProviderConfig, type ToolDefinition } from "src/types";
 import type { LlmHubPlugin } from "src/plugin";
 
 export interface WorkflowSpecContext {
@@ -16,7 +16,6 @@ export function getWorkflowSpecification(context: WorkflowSpecContext): string {
 
   // Add CLI models if verified
   if (context.cliConfig?.cliVerified) modelNames.push(CLI_MODEL.name);
-  if (context.cliConfig?.claudeCliVerified) modelNames.push(CLAUDE_CLI_MODEL.name);
   if (context.cliConfig?.codexCliVerified) modelNames.push(CODEX_CLI_MODEL.name);
 
   // Add each enabled API provider as a selectable model

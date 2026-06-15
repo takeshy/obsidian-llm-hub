@@ -1,6 +1,6 @@
 import { App, Modal, Setting, TFile } from "obsidian";
 import { SidebarNode, WorkflowNodeType } from "src/workflow/types";
-import { CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL } from "src/types";
+import { CLI_MODEL, CODEX_CLI_MODEL } from "src/types";
 import type { LlmHubPlugin } from "src/plugin";
 import { t, TranslationKey } from "src/i18n";
 
@@ -235,9 +235,6 @@ export class NodeEditorModal extends Modal {
         if (cliConfig?.cliVerified) {
           modelOptions.push({ value: CLI_MODEL.name, label: CLI_MODEL.displayName });
         }
-        if (cliConfig?.claudeCliVerified) {
-          modelOptions.push({ value: CLAUDE_CLI_MODEL.name, label: CLAUDE_CLI_MODEL.displayName });
-        }
         if (cliConfig?.codexCliVerified) {
           modelOptions.push({ value: CODEX_CLI_MODEL.name, label: CODEX_CLI_MODEL.displayName });
         }
@@ -257,7 +254,7 @@ export class NodeEditorModal extends Modal {
           { value: "none", label: t("nodeEditor.vaultToolsNone") },
         ];
 
-        const isCliModel = (model: string) => model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli";
+        const isCliModel = (model: string) => model === "antigravity-cli" || model === "codex-cli";
 
         let searchDropdown: HTMLSelectElement | null = null;
         let vaultToolDropdown: HTMLSelectElement | null = null;
