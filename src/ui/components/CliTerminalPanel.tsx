@@ -47,16 +47,17 @@ function getPluginNodeModule<T>(plugin: LlmHubPlugin, id: string): T {
     if (!loader) throw firstError;
 
     const vaultBasePath = (plugin.app.vault.adapter as { basePath?: string }).basePath;
+    const pluginsDir = `${plugin.app.vault.configDir}/plugins`;
     const pluginDir = (plugin.manifest as { dir?: string; id?: string }).dir || plugin.manifest.id;
     if (!vaultBasePath || !pluginDir) throw firstError;
 
     const isAbsolutePluginDir = /^(?:[A-Za-z]:[\\/]|[\\/])/.test(pluginDir);
-    const includesPluginRoot = pluginDir.includes(".obsidian/plugins") || pluginDir.includes(".obsidian\\plugins");
+    const includesPluginRoot = pluginDir.includes(pluginsDir) || pluginDir.includes(pluginsDir.replace(/\//g, "\\"));
     const candidatePaths = [
       isAbsolutePluginDir ? `${pluginDir}/node_modules/${id}` : "",
       includesPluginRoot ? `${vaultBasePath}/${pluginDir}/node_modules/${id}` : "",
-      `${vaultBasePath}/.obsidian/plugins/${pluginDir}/node_modules/${id}`,
-      `${vaultBasePath}/.obsidian/plugins/${plugin.manifest.id}/node_modules/${id}`,
+      `${vaultBasePath}/${pluginsDir}/${pluginDir}/node_modules/${id}`,
+      `${vaultBasePath}/${pluginsDir}/${plugin.manifest.id}/node_modules/${id}`,
     ].filter((path, index, paths): path is string => path.length > 0 && paths.indexOf(path) === index);
 
     const errors: string[] = [];
@@ -73,17 +74,18 @@ function getPluginNodeModule<T>(plugin: LlmHubPlugin, id: string): T {
 
 function getPluginDirectory(plugin: LlmHubPlugin): string | undefined {
   const vaultBasePath = (plugin.app.vault.adapter as { basePath?: string }).basePath;
+  const pluginsDir = `${plugin.app.vault.configDir}/plugins`;
   const pluginDir = (plugin.manifest as { dir?: string; id?: string }).dir || plugin.manifest.id;
   if (!vaultBasePath || !pluginDir) return undefined;
 
   const fs = getNodeModule<typeof import("fs")>("fs");
   const isAbsolutePluginDir = /^(?:[A-Za-z]:[\\/]|[\\/])/.test(pluginDir);
-  const includesPluginRoot = pluginDir.includes(".obsidian/plugins") || pluginDir.includes(".obsidian\\plugins");
+  const includesPluginRoot = pluginDir.includes(pluginsDir) || pluginDir.includes(pluginsDir.replace(/\//g, "\\"));
   const candidateDirs = [
     isAbsolutePluginDir ? pluginDir : "",
     includesPluginRoot ? `${vaultBasePath}/${pluginDir}` : "",
-    `${vaultBasePath}/.obsidian/plugins/${pluginDir}`,
-    `${vaultBasePath}/.obsidian/plugins/${plugin.manifest.id}`,
+    `${vaultBasePath}/${pluginsDir}/${pluginDir}`,
+    `${vaultBasePath}/${pluginsDir}/${plugin.manifest.id}`,
   ].filter((path, index, paths): path is string => path.length > 0 && paths.indexOf(path) === index);
 
   return candidateDirs.find((dir) => fs.existsSync(`${dir}/package.json`)) || candidateDirs.find((dir) => fs.existsSync(dir));
