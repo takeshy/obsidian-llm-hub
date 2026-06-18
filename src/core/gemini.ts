@@ -155,15 +155,14 @@ async function mobileFetch(input: RequestInfo | URL, init?: RequestInit): Promis
  * reject the function_response payload.
  */
 function sanitizeToolResult(value: unknown): unknown {
-  if (value === null || value === undefined) return "none";
+  if (value === null || value === undefined) return value;
   if (Array.isArray(value)) {
-    if (value.length === 0) return "no results";
+    if (value.length === 0) return null;
     return value.map(sanitizeToolResult);
   }
   if (typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (v === undefined) continue;
       out[k] = sanitizeToolResult(v);
     }
     return out;
@@ -1072,7 +1071,10 @@ export class GeminiClient {
 
     try {
       let continueLoop = true;
-      let nextInput: string | Interactions.Content[] = input;
+      // v2 input accepts string | Content[] | Step[] (the Interactions API input
+      // field is polymorphic). Content[] is used for the initial user turn; Step[]
+      // is used when sending function_result + user_input steps back to the model.
+      let nextInput: string | Interactions.Content[] | Interactions.Step[] = input;
 
       while (continueLoop) {
         roundNumber++;
@@ -1100,17 +1102,35 @@ export class GeminiClient {
         let roundUsage: TracingUsage | undefined;
         let hasReceivedEvent = false;
 
-        // Process SSE events
+        const pendingFunctionCalls = new Map<
+          number,
+          { id: string; name: string; argsBuffer: string; startArgs: Record<string, unknown> }
+        >();
+
+        // Process SSE events (v2 steps schema)
         for await (const event of stream) {
           hasReceivedEvent = true;
 
           switch (event.event_type) {
-            case "interaction.start": {
+            case "interaction.created": {
               currentInteractionId = event.interaction?.id;
               break;
             }
 
-            case "content.delta": {
+            case "step.start": {
+              const step = event.step;
+              if (step?.type === "function_call") {
+                pendingFunctionCalls.set(event.index, {
+                  id: step.id,
+                  name: step.name,
+                  argsBuffer: "",
+                  startArgs: step.arguments ?? {},
+                });
+              }
+              break;
+            }
+
+            case "step.delta": {
               const delta = event.delta;
               if (!delta) break;
 
@@ -1132,14 +1152,15 @@ export class GeminiClient {
                   }
                   break;
 
-                case "function_call":
-                  if ("name" in delta && "arguments" in delta && "id" in delta) {
-                    functionCallsToProcess.push({
-                      id: delta.id,
-                      name: delta.name,
-                      args: delta.arguments ?? {},
-                    });
+                case "arguments_delta": {
+                  const pending = pendingFunctionCalls.get(event.index);
+                  if (pending && "arguments" in delta && typeof delta.arguments === "string") {
+                    pending.argsBuffer += delta.arguments;
                   }
+                  break;
+                }
+
+                case "file_search_call":
                   break;
 
                 case "file_search_result":
@@ -1168,7 +1189,35 @@ export class GeminiClient {
               break;
             }
 
-            case "interaction.complete": {
+            case "step.stop": {
+              const pending = pendingFunctionCalls.get(event.index);
+              if (pending) {
+                let args = pending.startArgs;
+                if (pending.argsBuffer) {
+                  try {
+                    args = JSON.parse(pending.argsBuffer) as Record<string, unknown>;
+                  } catch {
+                    args = pending.startArgs;
+                  }
+                }
+                functionCallsToProcess.push({
+                  id: pending.id,
+                  name: pending.name,
+                  args,
+                });
+                pendingFunctionCalls.delete(event.index);
+              }
+              break;
+            }
+
+            case "interaction.status_update": {
+              if (event.metadata?.usage) {
+                roundUsage = extractInteractionsUsage(event.metadata.usage, this.model);
+              }
+              break;
+            }
+
+            case "interaction.completed": {
               const interaction = event.interaction;
               if (interaction?.usage) {
                 roundUsage = extractInteractionsUsage(interaction.usage, this.model);
@@ -1250,15 +1299,15 @@ export class GeminiClient {
             });
             let finalUsage: TracingUsage | undefined;
             for await (const event of finalStream) {
-              if (event.event_type === "content.delta" && event.delta?.type === "text" && "text" in event.delta) {
+              if (event.event_type === "step.delta" && event.delta?.type === "text" && "text" in event.delta) {
                 const text = event.delta.text;
                 accumulatedOutput += text;
                 yield { type: "text", content: text };
               }
-              if (event.event_type === "interaction.start" && event.interaction?.id) {
+              if (event.event_type === "interaction.created" && event.interaction?.id) {
                 currentInteractionId = event.interaction.id;
               }
-              if (event.event_type === "interaction.complete" && event.interaction?.usage) {
+              if (event.event_type === "interaction.completed" && event.interaction?.usage) {
                 finalUsage = extractInteractionsUsage(event.interaction.usage, this.model);
               }
             }
@@ -1279,8 +1328,8 @@ export class GeminiClient {
             };
           }
 
-          // Execute function calls and build FunctionResultContent inputs
-          const functionResults: Interactions.Content[] = [];
+          // Execute function calls and build FunctionResultStep inputs for v2.
+          const functionResults: Interactions.Step[] = [];
 
           for (const fc of callsToExecute) {
             const toolCall: ToolCall = {
@@ -1320,7 +1369,7 @@ export class GeminiClient {
               call_id: fc.id,
               name: fc.name,
               result: sanitizeToolResult(result),
-            } as Interactions.Content);
+            } as Interactions.Step);
           }
 
           functionCallCount += callsToExecute.length;
@@ -1336,9 +1385,9 @@ export class GeminiClient {
 
             // Send results + limit message
             functionResults.push({
-              type: "text",
-              text: "[System: Function call limit reached. Please provide a final answer based on the information gathered so far.]",
-            } as Interactions.Content);
+              type: "user_input",
+              content: [{ type: "text", text: "[System: Function call limit reached. Please provide a final answer based on the information gathered so far.]" }],
+            } as Interactions.Step);
             nextInput = functionResults;
             tracing.spanEnd(roundSpanId, { metadata: { reason: "function_call_limit_with_skipped", usage: roundUsage } });
 
@@ -1356,15 +1405,15 @@ export class GeminiClient {
             });
             let finalUsage: TracingUsage | undefined;
             for await (const event of finalStream) {
-              if (event.event_type === "content.delta" && event.delta?.type === "text" && "text" in event.delta) {
+              if (event.event_type === "step.delta" && event.delta?.type === "text" && "text" in event.delta) {
                 const text = event.delta.text;
                 accumulatedOutput += text;
                 yield { type: "text", content: text };
               }
-              if (event.event_type === "interaction.start" && event.interaction?.id) {
+              if (event.event_type === "interaction.created" && event.interaction?.id) {
                 currentInteractionId = event.interaction.id;
               }
-              if (event.event_type === "interaction.complete" && event.interaction?.usage) {
+              if (event.event_type === "interaction.completed" && event.interaction?.usage) {
                 finalUsage = extractInteractionsUsage(event.interaction.usage, this.model);
               }
             }
@@ -1376,9 +1425,9 @@ export class GeminiClient {
           // Add warning if approaching limit
           if (warningEmitted && remainingAfter <= warningThreshold) {
             functionResults.push({
-              type: "text",
-              text: `[System: You have ${remainingAfter} function calls remaining. Please complete your task efficiently or provide a summary.]`,
-            } as Interactions.Content);
+              type: "user_input",
+              content: [{ type: "text", text: `[System: You have ${remainingAfter} function calls remaining. Please complete your task efficiently or provide a summary.]` }],
+            } as Interactions.Step);
           }
 
           // Send function results back — next iteration creates a new interaction chained via previous_interaction_id
@@ -1565,12 +1614,16 @@ export class GeminiClient {
         const result = await this.ai.interactions.get(interactionId);
 
         if (result.status === "completed") {
-          // Extract text from outputs
-          const outputs = result.outputs ?? [];
-          let fullText = "";
-          for (const output of outputs) {
-            if ("text" in output && output.text) {
-              fullText += output.text;
+          let fullText = result.output_text ?? "";
+          if (!fullText && Array.isArray(result.steps)) {
+            for (const step of result.steps) {
+              if (step?.type === "model_output" && Array.isArray(step.content)) {
+                for (const content of step.content as Array<{ type?: string; text?: string }>) {
+                  if (content?.type === "text" && content.text) {
+                    fullText += content.text;
+                  }
+                }
+              }
             }
           }
 

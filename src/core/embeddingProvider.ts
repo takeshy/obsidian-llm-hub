@@ -250,17 +250,28 @@ export async function generateGeminiNativeEmbeddings(
 
   // Batch text-only inputs in chunks of 100 (Gemini batch limit)
   const BATCH_LIMIT = 100;
-  for (let start = 0; start < textOnlyIndices.length; start += BATCH_LIMIT) {
-    const batchIndices = textOnlyIndices.slice(start, start + BATCH_LIMIT);
-    const textContents = batchIndices.map(i => inputs[i].text!);
-    const response = await ai.models.embedContent({
-      model,
-      contents: textContents,
-      config,
-    });
-    if (response.embeddings) {
-      for (let i = 0; i < response.embeddings.length; i++) {
-        embeddings[batchIndices[i]] = response.embeddings[i].values ?? [];
+  if (model.includes("gemini-embedding-2")) {
+    for (const idx of textOnlyIndices) {
+      const response = await ai.models.embedContent({
+        model,
+        contents: inputs[idx].text!,
+        config,
+      });
+      embeddings[idx] = response.embeddings?.[0]?.values ?? [];
+    }
+  } else {
+    for (let start = 0; start < textOnlyIndices.length; start += BATCH_LIMIT) {
+      const batchIndices = textOnlyIndices.slice(start, start + BATCH_LIMIT);
+      const textContents = batchIndices.map(i => inputs[i].text!);
+      const response = await ai.models.embedContent({
+        model,
+        contents: textContents,
+        config,
+      });
+      if (response.embeddings) {
+        for (let i = 0; i < response.embeddings.length; i++) {
+          embeddings[batchIndices[i]] = response.embeddings[i].values ?? [];
+        }
       }
     }
   }
@@ -293,5 +304,5 @@ export async function generateGeminiNativeEmbeddings(
     }
   }
 
-  return embeddings.map(emb => emb ?? []);
+  return Array.from({ length: inputs.length }, (_, i) => embeddings[i] ?? []);
 }
