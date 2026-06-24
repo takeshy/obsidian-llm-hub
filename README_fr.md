@@ -11,6 +11,7 @@ Assistant IA **gratuit et open-source** pour Obsidian avec **Chat**, **Automatis
 - **Chat LLM Multi-Fournisseurs** - Utilisez Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, des LLMs locaux ou des backends CLI
 - **Opérations sur le Coffre** - L'IA lit, écrit, recherche et édite vos notes avec Function Calling (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, et LLMs locaux compatibles outils via LM Studio / vLLM / AnythingLLM)
 - **Constructeur de Workflows** - Automatisez des tâches multi-étapes avec l'éditeur visuel de nœuds et 25 types de nœuds
+- **Tableau de bord** - Organisez des vues Bases, des notes, des pages web et la sortie de workflows dans une grille de widgets responsive
 - **Recherche Sémantique (RAG)** - Recherche vectorielle locale avec onglet de recherche dédié, aperçu PDF et flux résultats vers chat
 - **AI Discussion** - Arène de débat multi-modèle avec réponses parallèles, vote et détermination du gagnant
 - **Historique d'Édition** - Suivez et restaurez les modifications faites par l'IA avec vue des différences
@@ -457,6 +458,55 @@ Les workflows peuvent être automatiquement déclenchés par des événements Ob
 
 ---
 
+# Tableau de bord
+
+Construisez une **page d'accueil / de synthèse** personnelle à partir d'une grille de widgets responsive. Un tableau de bord est un fichier `.dashboard` qui organise des **vues Bases**, des **notes**, des **pages web**, la **sortie de workflows** et des **tableaux kanban** dans une grille où l'on déplace et redimensionne par glisser-déposer — ouvrez-le comme n'importe quelle note pour voir un tableau modifiable en direct.
+
+![Tableau de bord](docs/images/dashboard.png)
+
+**Créer un tableau de bord :**
+- Commande : **« LLM Hub : Créer un tableau de bord »** — crée un nouveau tableau dans `Dashboards/` et l'ouvre
+- Ou demandez à l'IA dans le chat (le skill d'agent intégré **dashboard** crée les fichiers `.dashboard` et les fichiers `.base` sous-jacents pour vous)
+
+**Mode édition :** Cliquez sur **Modifier** pour déplacer, redimensionner, ajouter et configurer des widgets ; **Terminé** pour l'afficher. La grille est responsive — sur les écrans étroits, les widgets se réorganisent en une seule colonne. Toutes les modifications sont enregistrées automatiquement.
+
+## Types de widget
+
+Cliquez sur **+ Ajouter un widget** en mode édition pour choisir un type :
+
+![Ajouter un widget](docs/images/dashboard_widgets.png)
+
+| Widget | Affiche | Configuration clé |
+|--------|-------|------------|
+| **Base** | Une vue nommée d'un fichier `.base` via l'interface Bases native d'Obsidian (tableau / cartes / liste) | chemin `base`, nom de `view` |
+| **Markdown** | Une note existante, rendue en ligne | `path` vers la note |
+| **Web Embed** | Une page web dans un iframe | `url` |
+| **Workflow** | La sortie d'un workflow, exécuté en headless et rendu en Markdown ou HTML | chemin `workflow`, `output`, `refreshInterval` |
+| **Kanban** | Des notes sous forme de cartes déplaçables, groupées en colonnes par statut | filtre `tag`/`folder`, `statusProperty`, `columns` |
+
+Les widgets **Base** et **Workflow** incluent un bouton **Créer avec l'IA** pour créer le fichier `.base` ou le workflow sous-jacent sans quitter le panneau de paramètres.
+
+## Tableau Kanban
+
+Transformez des notes en un tableau par glisser-déposer. Les cartes sont des notes correspondant à un filtre par **tag** et/ou **dossier**, groupées en colonnes selon une **propriété de statut** du frontmatter. Faites glisser une carte vers une autre colonne pour mettre à jour le statut de cette note — écrit directement dans le frontmatter de la note. Le tableau est entièrement interactif en **mode affichage** ; pas besoin d'entrer en mode édition pour déplacer les cartes.
+
+![Tableau Kanban](docs/images/dashboard_kanban.png)
+
+- **Titre & Nouveau** — l'en-tête affiche un titre de tableau optionnel (pratique lorsqu'un tableau de bord contient plusieurs tableaux) et un bouton **Nouveau** qui ouvre une boîte de dialogue pour saisir un titre et choisir une colonne, puis crée une note correspondant déjà aux filtres du tableau (dossier, tag, statut).
+- **Aperçu & ouverture** — cliquez sur une carte pour prévisualiser sa note dans une boîte de dialogue ; l'icône d'ouverture de la boîte de dialogue ouvre la note dans un nouvel onglet.
+- **Colonnes** — codées par couleur et entièrement configurables ; une colonne optionnelle « Non spécifié » regroupe les cartes dont le statut ne correspond à aucune colonne.
+
+Configurez tout depuis les paramètres du widget en mode édition :
+
+![Paramètres Kanban](docs/images/dashboard_kanban_edit.png)
+
+> [!NOTE]
+> **Les widgets de workflow lisent depuis un cache, pas en direct.** Un widget de workflow ne s'exécute que via le bouton **Exécuter**, l'exécution de test de l'éditeur de configuration, ou une fois à l'ouverture lorsque son résultat en cache est plus ancien que l'**intervalle d'actualisation automatique** (minutes ; `0` = manuel uniquement). Les résultats sont stockés dans un fichier sidecar masqué à côté du tableau de bord, de sorte que la sortie survit à une réouverture. Le workflow doit stocker sa sortie Markdown/HTML dans une variable (par défaut `result`).
+
+> **Pour le format de fichier `.dashboard`, le schéma YAML complet et des conseils de génération par IA, consultez la [Documentation du tableau de bord](docs/DASHBOARD.md)**
+
+---
+
 # Commun
 
 ## Modèles Supportés
@@ -561,6 +611,10 @@ Ajoutez un ou plusieurs fournisseurs API dans les paramètres du plugin. Chaque 
 Vous pouvez également ajouter des endpoints personnalisés compatibles OpenAI.
 
 ![Paramètres de Base](docs/images/setting_basic.png)
+
+### Proxy
+
+Acheminez toutes les requêtes API via un proxy HTTP CONNECT pour les environnements de passerelle d'entreprise. Voir [Paramètres du Proxy](docs/PROXY.md) pour plus de détails.
 
 ### LLM Local
 

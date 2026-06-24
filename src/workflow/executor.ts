@@ -1071,6 +1071,9 @@ export class WorkflowExecutor {
                 },
                 {
                   cloudVaultToolAllowedFolders: context.cloudVaultToolAllowedFolders,
+                  // Forward the abort signal so cancelling the parent run (e.g. a
+                  // dashboard workflow widget) also interrupts the sub-workflow.
+                  abortSignal: options?.abortSignal,
                 },
                 promptCallbacks
               );

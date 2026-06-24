@@ -8,6 +8,10 @@ import { WorkspaceStateManager } from "src/core/workspaceStateManager";
 import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
 import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
+import { DashboardView, DASHBOARD_VIEW_TYPE } from "src/ui/DashboardView";
+import { registerCoreWidgets } from "src/dashboard/widgets/registry";
+import { dashboardPath, serializeDashboard, createEmptyDashboard } from "src/dashboard/dashboardFile";
+import { DASHBOARD_FOLDER } from "src/dashboard/types";
 import { SettingsTab } from "src/ui/SettingsTab";
 import {
   type LlmHubSettings,
@@ -280,10 +284,24 @@ export class LlmHubPlugin extends Plugin {
       (leaf) => new CliTerminalView(leaf, this)
     );
 
+    // Register dashboard view (.dashboard files: widget grid over bases/notes/web)
+    registerCoreWidgets();
+    this.registerView(
+      DASHBOARD_VIEW_TYPE,
+      (leaf) => new DashboardView(leaf, this)
+    );
+
     // Register .encrypted extension so Obsidian opens these files in CryptView
     // Wrapped in try-catch to avoid conflict when another plugin already registered this extension
     try {
       this.registerExtensions(["encrypted"], CRYPT_VIEW_TYPE);
+    } catch {
+      // Extension already registered by another plugin — skip
+    }
+
+    // Register .dashboard extension so Obsidian opens these files in DashboardView
+    try {
+      this.registerExtensions(["dashboard"], DASHBOARD_VIEW_TYPE);
     } catch {
       // Extension already registered by another plugin — skip
     }
@@ -373,6 +391,15 @@ export class LlmHubPlugin extends Plugin {
       name: "Open CLI terminal",
       callback: () => {
         void this.activateCliTerminalView();
+      },
+    });
+
+    // Add command to create a new dashboard
+    this.addCommand({
+      id: "create-dashboard",
+      name: t("command.createDashboard"),
+      callback: () => {
+        void this.createDashboard();
       },
     });
 
@@ -896,6 +923,40 @@ export class LlmHubPlugin extends Plugin {
     if (leaf) {
       void workspace.revealLeaf(leaf);
     }
+  }
+
+  /**
+   * Create a new empty `.dashboard` file under `dashboards/` and open it.
+   * Picks a unique "Dashboard", "Dashboard 2", … name.
+   */
+  async createDashboard(): Promise<void> {
+    const { vault, workspace } = this.app;
+
+    if (!vault.getAbstractFileByPath(DASHBOARD_FOLDER)) {
+      try {
+        await vault.createFolder(DASHBOARD_FOLDER);
+      } catch {
+        // Folder may already exist (race) — ignore.
+      }
+    }
+
+    let name = "Dashboard";
+    let path = dashboardPath(name);
+    for (let i = 2; vault.getAbstractFileByPath(path); i++) {
+      name = `Dashboard ${i}`;
+      path = dashboardPath(name);
+    }
+
+    let file: TFile;
+    try {
+      file = await vault.create(path, serializeDashboard(createEmptyDashboard()));
+    } catch (error) {
+      new Notice(`Failed to create dashboard: ${String(error)}`);
+      return;
+    }
+
+    const leaf = workspace.getLeaf(true);
+    await leaf.openFile(file);
   }
 
   async activateChatView(): Promise<void> {

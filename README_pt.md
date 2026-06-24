@@ -11,6 +11,7 @@ Assistente de IA **gratuito e open-source** para Obsidian com **Chat**, **Automa
 - **Chat LLM Multi-Provedor** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, LLMs locais ou backends CLI
 - **Operacoes no Vault** - A IA le, escreve, pesquisa e edita suas notas com chamada de funcoes (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, e LLMs locais com suporte a ferramentas via LM Studio / vLLM / AnythingLLM)
 - **Construtor de Workflows** - Automatize tarefas de multiplas etapas com editor visual de nos e 25 tipos de nos
+- **Painel** - Organize visualizacoes de Bases, notas, paginas web e a saida de workflows em uma grade de widgets responsiva
 - **Busca Semantica (RAG)** - Busca vetorial local com aba de busca dedicada, pre-visualizacao de PDF e fluxo de resultados para o chat
 - **AI Discussion** - Arena de debate multi-modelo com respostas paralelas, votacao e determinacao do vencedor
 - **Historico de Edicoes** - Rastreie e restaure alteracoes feitas pela IA com visualizacao de diff
@@ -457,6 +458,55 @@ Workflows podem ser acionados automaticamente por eventos do Obsidian:
 
 ---
 
+# Painel
+
+Crie uma **pagina inicial / de visao geral** pessoal a partir de uma grade responsiva de widgets. Um painel e um arquivo `.dashboard` que organiza **visualizacoes de Bases**, **notas**, **paginas web**, **saida de workflows** e **quadros kanban** em uma grade onde se arrasta e redimensiona — abra-o como qualquer nota para ver um quadro editavel ao vivo.
+
+![Painel](docs/images/dashboard.png)
+
+**Criar um painel:**
+- Comando: **"LLM Hub: Criar painel"** — cria um novo quadro em `Dashboards/` e o abre
+- Ou peca a IA no chat (a skill de agente integrada **dashboard** cria os arquivos `.dashboard` e os arquivos `.base` subjacentes para voce)
+
+**Modo de edicao:** Clique em **Editar** para mover, redimensionar, adicionar e configurar widgets; **Concluido** para visualizar. A grade e responsiva — em telas estreitas os widgets se reorganizam em uma unica coluna. Todas as alteracoes sao salvas automaticamente.
+
+## Tipos de widget
+
+Clique em **+ Adicionar widget** no modo de edicao para escolher um tipo:
+
+![Adicionar widget](docs/images/dashboard_widgets.png)
+
+| Widget | Mostra | Configuracao principal |
+|--------|-------|------------|
+| **Base** | Uma visualizacao nomeada de um arquivo `.base` pela UI nativa de Bases do Obsidian (tabela / cartoes / lista) | caminho `base`, nome de `view` |
+| **Markdown** | Uma nota existente, renderizada inline | `path` para a nota |
+| **Web Embed** | Uma pagina web em um iframe | `url` |
+| **Workflow** | A saida de um workflow, executado headless e renderizado como Markdown ou HTML | caminho `workflow`, `output`, `refreshInterval` |
+| **Kanban** | Notas como cartoes arrastaveis agrupados em colunas de status | filtro `tag`/`folder`, `statusProperty`, `columns` |
+
+Os widgets **Base** e **Workflow** incluem um botao **Criar com IA** para criar o arquivo `.base` ou o workflow subjacente sem sair do painel de configuracoes.
+
+## Quadro Kanban
+
+Transforme notas em um quadro de arrastar e soltar. Os cartoes sao notas que correspondem a um filtro de **tag** e/ou **pasta**, agrupados em colunas por uma **propriedade de status** do frontmatter. Arraste um cartao para outra coluna para atualizar o status dessa nota — gravado diretamente no frontmatter da nota. O quadro e totalmente interativo no **modo de visualizacao**; nao e necessario entrar no modo de edicao para mover cartoes.
+
+![Quadro Kanban](docs/images/dashboard_kanban.png)
+
+- **Titulo e Novo** — o cabecalho mostra um titulo de quadro opcional (util quando um painel contem varios quadros) e um botao **Novo** que abre uma caixa de dialogo para inserir um titulo e escolher uma coluna, e entao cria uma nota que ja corresponde aos filtros do quadro (pasta, tag, status).
+- **Previsualizar e abrir** — clique em um cartao para previsualizar sua nota em uma caixa de dialogo; o icone de abertura da caixa de dialogo salta para a nota em uma nova aba.
+- **Colunas** — codificadas por cor e totalmente configuraveis; uma coluna opcional "Nao especificado" reune os cartoes cujo status nao corresponde a nenhuma coluna.
+
+Configure tudo nas configuracoes do widget no modo de edicao:
+
+![Configuracoes do Kanban](docs/images/dashboard_kanban_edit.png)
+
+> [!NOTE]
+> **Os widgets de workflow leem de um cache, nao ao vivo.** Um widget de workflow so e executado pelo botao **Executar**, pela execucao de teste do editor de configuracao, ou uma vez ao abrir quando seu resultado em cache e mais antigo que o **intervalo de atualizacao automatica** (minutos; `0` = somente manual). Os resultados sao armazenados em um arquivo sidecar oculto ao lado do painel, de modo que a saida sobrevive a reabertura. O workflow deve armazenar sua saida Markdown/HTML em uma variavel (padrao `result`).
+
+> **Para o formato do arquivo `.dashboard`, o esquema YAML completo e dicas de geracao com IA, consulte a [Documentacao do painel](docs/DASHBOARD.md)**
+
+---
+
 # Comum
 
 ## Modelos Suportados
@@ -561,6 +611,10 @@ Adicione um ou mais provedores de API nas configuracoes do plugin. Cada provedor
 Voce tambem pode adicionar endpoints personalizados compativeis com OpenAI.
 
 ![Configuracoes Basicas](docs/images/setting_basic.png)
+
+### Proxy
+
+Roteie todas as solicitacoes de API atraves de um proxy HTTP CONNECT para ambientes de gateway corporativo. Veja [Configuracoes de Proxy](docs/PROXY.md) para detalhes.
 
 ### Local LLM
 
