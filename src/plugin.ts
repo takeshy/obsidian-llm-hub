@@ -10,7 +10,7 @@ import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
 import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
 import { DashboardView, DASHBOARD_VIEW_TYPE } from "src/ui/DashboardView";
 import { registerCoreWidgets } from "src/dashboard/widgets/registry";
-import { dashboardPath, serializeDashboard, createEmptyDashboard } from "src/dashboard/dashboardFile";
+import { dashboardPath, serializeDashboard, createEmptyDashboard, ensureVaultFolder } from "src/dashboard/dashboardFile";
 import { DASHBOARD_FOLDER } from "src/dashboard/types";
 import { SettingsTab } from "src/ui/SettingsTab";
 import {
@@ -932,14 +932,6 @@ export class LlmHubPlugin extends Plugin {
   async createDashboard(): Promise<void> {
     const { vault, workspace } = this.app;
 
-    if (!vault.getAbstractFileByPath(DASHBOARD_FOLDER)) {
-      try {
-        await vault.createFolder(DASHBOARD_FOLDER);
-      } catch {
-        // Folder may already exist (race) — ignore.
-      }
-    }
-
     let name = "Dashboard";
     let path = dashboardPath(name);
     for (let i = 2; vault.getAbstractFileByPath(path); i++) {
@@ -949,6 +941,7 @@ export class LlmHubPlugin extends Plugin {
 
     let file: TFile;
     try {
+      await ensureVaultFolder(vault, DASHBOARD_FOLDER);
       file = await vault.create(path, serializeDashboard(createEmptyDashboard()));
     } catch (error) {
       new Notice(`Failed to create dashboard: ${String(error)}`);
