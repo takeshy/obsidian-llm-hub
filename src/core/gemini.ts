@@ -170,6 +170,16 @@ function sanitizeToolResult(value: unknown): unknown {
   return value;
 }
 
+function serializeFunctionResult(value: unknown): string {
+  const sanitized = sanitizeToolResult(value);
+  if (typeof sanitized === "string") return sanitized || "null";
+  try {
+    return JSON.stringify(sanitized) || "null";
+  } catch {
+    return "null";
+  }
+}
+
 // Pick the right CORS-free fetch for the current platform
 function corsFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   if (Platform.isMobile) {
@@ -427,6 +437,14 @@ export class GeminiClient {
 
   setModel(model: ModelType): void {
     this.model = model;
+  }
+
+  private getInteractionsModel(hasFunctionTools: boolean): ModelType {
+    const modelName = this.model as string;
+    if (modelName === "gemini-3.1-pro-preview" && hasFunctionTools) {
+      return "gemini-3.1-pro-preview-customtools" as ModelType;
+    }
+    return this.model;
   }
 
   // Build thinking config based on model capabilities (shared across streaming methods)
@@ -802,6 +820,197 @@ export class GeminiClient {
     return [{ functionDeclarations }];
   }
 
+  private shouldUseGenerateContentToolsApi(tools: ToolDefinition[], ragStoreIds?: string[]): boolean {
+    const modelLower = this.model.toLowerCase();
+    if (ragStoreIds && ragStoreIds.length > 0) return false;
+    if (!(modelLower.includes("gemini-3.1-pro") || modelLower.includes("gemini-3-pro"))) {
+      return false;
+    }
+    return tools.length > 0;
+  }
+
+  private buildGenerateContentTools(tools: ToolDefinition[], webSearchEnabled?: boolean): Tool[] | undefined {
+    const geminiTools = tools.length > 0 ? this.toolsToGeminiFormat(tools) : [];
+    if (webSearchEnabled) {
+      geminiTools.push({ googleSearch: {} });
+    }
+    return geminiTools.length > 0 ? geminiTools : undefined;
+  }
+
+  private async *chatWithToolsStreamGenerateContent(
+    messages: Message[],
+    tools: ToolDefinition[],
+    systemPrompt?: string,
+    executeToolCall?: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+    webSearchEnabled?: boolean,
+    options?: ChatWithToolsOptions,
+  ): AsyncGenerator<StreamChunk> {
+    const maxFunctionCalls = options?.functionCallLimits?.maxFunctionCalls ?? DEFAULT_SETTINGS.maxFunctionCalls;
+    const warningThreshold = Math.min(
+      options?.functionCallLimits?.functionCallWarningThreshold ?? DEFAULT_SETTINGS.functionCallWarningThreshold,
+      maxFunctionCalls,
+    );
+    let functionCallCount = 0;
+    let warningEmitted = false;
+    const traceId = options?.traceId ?? null;
+    const lastMsg = messages[messages.length - 1];
+    const generationId = tracing.generationStart(traceId, "chatWithToolsStreamGenerateContent", {
+      model: this.model,
+      input: lastMsg?.content,
+      metadata: { useGenerateContentApi: true, toolCount: tools.length, webSearchEnabled: !!webSearchEnabled },
+    });
+    const totalUsage: TracingUsage = { input: 0, output: 0, total: 0 };
+    let accumulatedOutput = "";
+    let roundNumber = 0;
+    let toolCallTraceCount = 0;
+
+    let contents = this.messagesToContents(messages);
+    const generationTools = this.buildGenerateContentTools(tools, webSearchEnabled);
+    const thinkingConfig = this.buildThinkingConfig(options?.enableThinking ?? true);
+
+    try {
+      while (true) {
+        roundNumber++;
+        const response = await this.ai.models.generateContentStream({
+          model: this.model,
+          contents,
+          config: {
+            systemInstruction: systemPrompt,
+            tools: options?.disableTools ? undefined : generationTools,
+            safetySettings: DEFAULT_SAFETY_SETTINGS,
+            thinkingConfig,
+          },
+        });
+
+        const modelParts: Part[] = [];
+        const functionCalls: Array<{ id?: string; name: string; args: Record<string, unknown> }> = [];
+        let roundUsage: TracingUsage | undefined;
+        let hasReceivedChunk = false;
+
+        for await (const chunk of response) {
+          hasReceivedChunk = true;
+          if (chunk.usageMetadata) {
+            roundUsage = extractUsage(chunk.usageMetadata, { model: this.model, webSearchUsed: !!webSearchEnabled });
+          }
+
+          const blockReason = checkFinishReason(chunk.candidates);
+          if (blockReason) {
+            tracing.generationEnd(generationId, { error: blockReason, usage: roundUsage });
+            yield { type: "error", error: blockReason };
+            return;
+          }
+
+          const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+          for (const part of parts) {
+            modelParts.push(part);
+            if (part.text) {
+              if (part.thought) {
+                yield { type: "thinking", content: part.text };
+              } else {
+                accumulatedOutput += part.text;
+                yield { type: "text", content: part.text };
+              }
+            }
+            if (part.functionCall?.name) {
+              functionCalls.push({
+                id: part.functionCall.id,
+                name: part.functionCall.name,
+                args: part.functionCall.args ?? {},
+              });
+            }
+          }
+        }
+
+        if (roundUsage) accumulateUsage(totalUsage, roundUsage);
+
+        if (!hasReceivedChunk) {
+          tracing.generationEnd(generationId, { error: "No response received from API" });
+          yield { type: "error", error: "No response received from API (possible server error)" };
+          return;
+        }
+
+        if (modelParts.length > 0) {
+          contents = [...contents, { role: "model", parts: modelParts }];
+        }
+
+        if (functionCalls.length === 0 || !executeToolCall) {
+          tracing.generationEnd(generationId, {
+            output: accumulatedOutput,
+            usage: totalUsage.total ? totalUsage : undefined,
+            metadata: { toolCallCount: toolCallTraceCount, roundCount: roundNumber, useGenerateContentApi: true },
+          });
+          yield {
+            type: "done",
+            usage: toStreamChunkUsage(totalUsage.total ? totalUsage : undefined),
+          };
+          return;
+        }
+
+        const remainingBefore = maxFunctionCalls - functionCallCount;
+        if (remainingBefore <= 0) {
+          contents = [...contents, {
+            role: "user",
+            parts: [{ text: "Function call limit reached. Please provide a final answer based on the information gathered so far." }],
+          }];
+          continue;
+        }
+
+        const callsToExecute = functionCalls.slice(0, remainingBefore);
+        const remainingAfter = remainingBefore - callsToExecute.length;
+        if (!warningEmitted && remainingAfter <= warningThreshold) {
+          warningEmitted = true;
+          yield { type: "text", content: `\n\n[Note: ${remainingAfter} function calls remaining. Please work efficiently.]` };
+        }
+
+        const functionResponseParts: Part[] = [];
+        for (const fc of callsToExecute) {
+          const toolCall: ToolCall = { id: fc.id ?? fc.name, name: fc.name, args: fc.args };
+          yield { type: "tool_call", toolCall };
+
+          toolCallTraceCount++;
+          const toolSpanId = tracing.spanStart(traceId, `tool:${fc.name}`, {
+            parentId: generationId ?? undefined,
+            input: fc.args,
+            metadata: { toolName: fc.name },
+          });
+
+          const result = await executeToolCall(fc.name, fc.args);
+          tracing.spanEnd(toolSpanId, { output: result });
+
+          const serializedResult = serializeFunctionResult(result);
+          accumulatedOutput += `\n[tool_call: ${fc.name}(${JSON.stringify(fc.args)})]\n`;
+          accumulatedOutput += `[tool_result: ${serializedResult.length > 500 ? serializedResult.slice(0, 500) + "..." : serializedResult}]\n`;
+
+          yield { type: "tool_result", toolResult: { toolCallId: toolCall.id, result } };
+
+          functionResponseParts.push({
+            functionResponse: {
+              id: fc.id,
+              name: fc.name,
+              response: { output: serializedResult },
+            },
+          });
+        }
+        functionCallCount += callsToExecute.length;
+
+        if (functionCalls.length > callsToExecute.length || functionCallCount >= maxFunctionCalls) {
+          functionResponseParts.push({
+            text: "Function call limit reached. Please provide a final answer based on the information gathered so far.",
+          });
+        }
+
+        contents = [...contents, { role: "user", parts: functionResponseParts }];
+      }
+    } catch (error) {
+      tracing.generationEnd(generationId, {
+        error: formatError(error),
+        usage: totalUsage.total ? totalUsage : undefined,
+        metadata: { toolCallCount: toolCallTraceCount, roundCount: roundNumber, useGenerateContentApi: true },
+      });
+      yield { type: "error", error: formatError(error) };
+    }
+  }
+
   // Simple chat without streaming
   async chat(
     messages: Message[],
@@ -923,6 +1132,18 @@ export class GeminiClient {
     webSearchEnabled?: boolean,
     options?: ChatWithToolsOptions
   ): AsyncGenerator<StreamChunk> {
+    if (!options?.disableTools && this.shouldUseGenerateContentToolsApi(tools, ragStoreIds)) {
+      yield* this.chatWithToolsStreamGenerateContent(
+        messages,
+        tools,
+        systemPrompt,
+        executeToolCall,
+        webSearchEnabled,
+        options,
+      );
+      return;
+    }
+
     // Function call limit settings
     const maxFunctionCalls = options?.functionCallLimits?.maxFunctionCalls ?? DEFAULT_SETTINGS.maxFunctionCalls;
     const warningThreshold = Math.min(
@@ -947,6 +1168,8 @@ export class GeminiClient {
     const isGemma4Model = this.model.toLowerCase().includes("gemma-4");
     const effectiveRagEnabled = ragEnabled && !isGemma4Model;
     const effectiveWebSearch = webSearchEnabled ?? false;
+    const hasFunctionTools = !options?.disableTools && !(isGemma4Model && effectiveWebSearch) && tools.length > 0;
+    const interactionModel = this.getInteractionsModel(hasFunctionTools);
     let interactionTools: Interactions.Tool[] | undefined;
     if (!options?.disableTools) {
       // Gemma 4: when google_search is active, drop function calling tools
@@ -1000,6 +1223,7 @@ export class GeminiClient {
       model: this.model,
       input: lastMessage.content,
       metadata: {
+        interactionModel,
         ragEnabled: !!ragEnabled,
         webSearchEnabled: !!webSearchEnabled,
         toolCount: tools.length,
@@ -1082,16 +1306,22 @@ export class GeminiClient {
           parentId: generationId ?? undefined,
           metadata: { roundNumber },
         });
+        const roundPreviousInteractionId = roundNumber === 1 ? previousInteractionId : currentInteractionId;
 
-        // Create streaming interaction
+        // Create streaming interaction.
+        // Tools, system_instruction, and generation_config are passed on every
+        // round (including follow-up interactions chained via
+        // previous_interaction_id) because the Interactions API does not
+        // reliably retain tool declarations across interactions for non-Pro
+        // models.  Pro models use the generateContent path instead.
         const stream = await this.ai.interactions.create({
-          model: this.model,
+          model: interactionModel,
           input: nextInput,
           stream: true,
+          previous_interaction_id: roundPreviousInteractionId,
+          store: true,
           tools: interactionTools,
           system_instruction: ragSystemPrompt,
-          previous_interaction_id: roundNumber === 1 ? previousInteractionId : currentInteractionId,
-          store: true,
           generation_config: generationConfig,
         });
 
@@ -1212,7 +1442,7 @@ export class GeminiClient {
 
             case "interaction.status_update": {
               if (event.metadata?.usage) {
-                roundUsage = extractInteractionsUsage(event.metadata.usage, this.model);
+                roundUsage = extractInteractionsUsage(event.metadata.usage, interactionModel);
               }
               break;
             }
@@ -1220,7 +1450,7 @@ export class GeminiClient {
             case "interaction.completed": {
               const interaction = event.interaction;
               if (interaction?.usage) {
-                roundUsage = extractInteractionsUsage(interaction.usage, this.model);
+                roundUsage = extractInteractionsUsage(interaction.usage, interactionModel);
               }
               // Check for blocked/failed/incomplete status
               const status = interaction?.status;
@@ -1289,7 +1519,7 @@ export class GeminiClient {
             // One more round to get the final answer, then stop
             roundNumber++;
             const finalStream = await this.ai.interactions.create({
-              model: this.model,
+              model: interactionModel,
               input: nextInput,
               stream: true,
               system_instruction: ragSystemPrompt,
@@ -1308,7 +1538,7 @@ export class GeminiClient {
                 currentInteractionId = event.interaction.id;
               }
               if (event.event_type === "interaction.completed" && event.interaction?.usage) {
-                finalUsage = extractInteractionsUsage(event.interaction.usage, this.model);
+                finalUsage = extractInteractionsUsage(event.interaction.usage, interactionModel);
               }
             }
             if (finalUsage) accumulateUsage(totalUsage, finalUsage);
@@ -1351,8 +1581,8 @@ export class GeminiClient {
 
             tracing.spanEnd(toolSpanId, { output: result });
 
-            const resultForTrace = typeof result === "string" ? result : JSON.stringify(result);
-            const truncatedResult = resultForTrace.length > 500 ? resultForTrace.substring(0, 500) + "..." : resultForTrace;
+            const serializedResult = serializeFunctionResult(result);
+            const truncatedResult = serializedResult.length > 500 ? serializedResult.substring(0, 500) + "..." : serializedResult;
             accumulatedOutput += `\n[tool_call: ${fc.name}(${JSON.stringify(fc.args)})]\n`;
             accumulatedOutput += `[tool_result: ${truncatedResult}]\n`;
 
@@ -1361,14 +1591,14 @@ export class GeminiClient {
               toolResult: { toolCallId: toolCall.id, result },
             };
 
-            // Build FunctionResultContent for Interactions API
-            // Preserve original result structure (object/array) so the model can consume fields directly
-            // Sanitize result to avoid Gemini API rejecting empty values ([], undefined, null)
+            // Build FunctionResultStep for the v2 Interactions API.
+            // Use a JSON string result, matching the SDK README examples and
+            // avoiding stricter model-side validation of arbitrary objects.
             functionResults.push({
               type: "function_result",
               call_id: fc.id,
               name: fc.name,
-              result: sanitizeToolResult(result),
+              result: serializedResult,
             } as Interactions.Step);
           }
 
@@ -1394,7 +1624,7 @@ export class GeminiClient {
             // Final round
             roundNumber++;
             const finalStream = await this.ai.interactions.create({
-              model: this.model,
+              model: interactionModel,
               input: nextInput,
               stream: true,
               tools: interactionTools,
@@ -1414,7 +1644,7 @@ export class GeminiClient {
                 currentInteractionId = event.interaction.id;
               }
               if (event.event_type === "interaction.completed" && event.interaction?.usage) {
-                finalUsage = extractInteractionsUsage(event.interaction.usage, this.model);
+                finalUsage = extractInteractionsUsage(event.interaction.usage, interactionModel);
               }
             }
             if (finalUsage) accumulateUsage(totalUsage, finalUsage);

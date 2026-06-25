@@ -1,13 +1,16 @@
-// Headless `.base` generation: builds a system prompt from the built-in `base`
-// skill and streams a single completion from the user's selected model, then
-// returns the cleaned YAML. Provider dispatch mirrors AIWorkflowModal's
-// streamForWorkflow (CLI / Gemini / Anthropic / OpenAI-compatible).
+// `.base` generation: builds a system prompt from the built-in `base` skill and
+// streams a completion from the user's selected model. Read-only vault tools are
+// made available where the provider supports function calling so the model can
+// inspect existing notes before authoring. Provider dispatch mirrors
+// AIWorkflowModal's streamForWorkflow (CLI / Gemini / Anthropic / OpenAI-compatible).
 
 import type { LlmHubPlugin } from "src/plugin";
 import { AntigravityCliProvider, CodexCliProvider } from "src/core/cliProvider";
 import { GeminiClient } from "src/core/gemini";
 import { openaiChatWithToolsStream } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
+import { getEnabledTools } from "src/core/tools";
+import { createToolExecutor } from "src/vault/toolExecutor";
 import { loadBuiltinSkill, builtinFolderPath } from "src/core/builtinSkills";
 import {
   DEFAULT_CLI_CONFIG,
@@ -29,7 +32,13 @@ export function buildBaseSystemPrompt(): string {
   return [
     "You are an expert at authoring Obsidian Bases (`.base`) files.",
     "Produce a single valid `.base` YAML document that satisfies the user's request.",
-    "Output ONLY the YAML — no prose, no explanation, and no Markdown code fences.",
+    "You may use the read-only vault tools (read_note, search_notes, list_notes,",
+    "list_folders, get_active_note_info) to inspect existing notes and their",
+    "properties, for example to find which frontmatter property holds an image,",
+    "cover, or status. Do not assume property names; verify them against real",
+    "notes when relevant.",
+    "Your FINAL message must contain ONLY the `.base` YAML, no prose, no",
+    "explanation, and no Markdown code fences.",
     "",
     reference,
   ].join("\n");
@@ -46,6 +55,7 @@ async function collectText(stream: AsyncGenerator<StreamChunk>): Promise<string>
   let out = "";
   for await (const chunk of stream) {
     if (chunk.type === "text" && chunk.content) out += chunk.content;
+    else if (chunk.type === "tool_call") out = "";
     else if (chunk.type === "error") throw new Error(chunk.error || "Generation failed");
   }
   return out;
@@ -107,30 +117,43 @@ function streamFor(
   const resolvedModelName = isApiProviderModel(selectedModel)
     ? getApiProviderModelName(selectedModel) || providerConfig?.enabledModels[0] || ""
     : selectedModel;
+  const tools = getEnabledTools({ allowWrite: false, allowDelete: false, ragEnabled: false });
+  const executeToolCall = createToolExecutor(plugin.app, {
+    listNotesLimit: plugin.settings.listNotesLimit,
+    maxNoteChars: plugin.settings.maxNoteChars,
+    limitVaultToolScope: true,
+    cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+  });
 
   if (providerConfig?.type === "gemini") {
     const apiKey = providerConfig.apiKey || getGeminiApiKey(plugin.settings);
     if (!apiKey) throw new Error("Gemini API key is not configured.");
     const client = new GeminiClient(apiKey, resolvedModelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
-    return client.generateWorkflowStream(userMessages, systemPrompt, null);
+    return client.chatWithToolsStream(
+      userMessages,
+      tools,
+      systemPrompt,
+      executeToolCall,
+      undefined,
+      false,
+      { functionCallLimits: { maxFunctionCalls: 12 }, enableThinking: true, traceId: null },
+    );
   }
 
   if (providerConfig?.type === "anthropic") {
-    const noop = () => Promise.resolve({});
     return anthropicChatWithToolsStream(
       providerConfig.baseUrl, providerConfig.apiKey,
-      resolvedModelName, userMessages, [],
-      systemPrompt, noop, abort.signal, true,
+      resolvedModelName, userMessages, tools,
+      systemPrompt, executeToolCall, abort.signal, true,
       plugin.settings.proxyUrl, plugin.settings.proxyBypass,
     );
   }
 
   if (providerConfig) {
-    const noop = () => Promise.resolve({});
     return openaiChatWithToolsStream(
       providerConfig.baseUrl, providerConfig.apiKey,
-      resolvedModelName, userMessages, [],
-      systemPrompt, noop, abort.signal, true,
+      resolvedModelName, userMessages, tools,
+      systemPrompt, executeToolCall, abort.signal, true,
       plugin.settings.proxyUrl, plugin.settings.proxyBypass,
     );
   }
@@ -139,5 +162,13 @@ function streamFor(
   const apiKey = getGeminiApiKey(plugin.settings);
   if (!apiKey) throw new Error("No model is configured. Add an API provider or CLI in settings.");
   const client = new GeminiClient(apiKey, resolvedModelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
-  return client.generateWorkflowStream(userMessages, systemPrompt, null);
+  return client.chatWithToolsStream(
+    userMessages,
+    tools,
+    systemPrompt,
+    executeToolCall,
+    undefined,
+    false,
+    { functionCallLimits: { maxFunctionCalls: 12 }, enableThinking: true, traceId: null },
+  );
 }

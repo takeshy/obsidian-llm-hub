@@ -1409,7 +1409,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 		setMessages([]);
 		setCurrentChatId(null);
-		setActiveSkillPaths(DEFAULT_BUILTIN_SKILL_IDS.map(builtinFolderPath));
+		// Keep the user's currently selected skills when starting a new chat.
+		// Skills are a session-level selection, not per-chat state.
 		setCliSession(null);
 		setShowHistory(false);
 		// Cleanup persistent CLI session
