@@ -1293,7 +1293,7 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
 
         const reviewResult = await this.runReviewPhase(
           selectedModel, isCliModel, currentRequest, plan || "", result.yaml, isSkill,
-          workflowSpec, abortController, generationModal, traceId, isCancelled
+          workflowSpec, this.appendInstructions, abortController, generationModal, traceId, isCancelled
         );
         critiqueResult = reviewResult.review;
         totalUsage = mergeUsage(totalUsage, reviewResult.usage);
@@ -1352,7 +1352,7 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
         generationModal.appendThinkingSeparator(t("workflow.generation.reviewRefining"));
         const refinement = await this.runRefinementPass(
           selectedModel, isCliModel, currentRequest, plan || "", result.yaml, result.explanation,
-          critiqueResult, systemPrompt, isSkill, abortController, generationModal, traceId, isCancelled
+          critiqueResult, systemPrompt, isSkill, this.appendInstructions, abortController, generationModal, traceId, isCancelled
         );
         totalUsage = mergeUsage(totalUsage, refinement.usage);
 
@@ -1692,6 +1692,7 @@ ${currentRequest}${existingContext}`;
     generatedYaml: string,
     isSkill: boolean,
     workflowSpec: string,
+    appendInstructions: string | undefined,
     abortController: AbortController,
     generationModal: WorkflowGenerationModal,
     traceId: string | null,
@@ -1750,11 +1751,15 @@ IMPORTANT:
 
     const entityType = isSkill ? "skill" : "workflow";
     const planSection = plan ? `\nPLAN:\n${plan}\n` : "";
+    const activeRequirementsSection = appendInstructions
+      ? `\nADDITIONAL ACTIVE REQUIREMENTS:\n${appendInstructions}\n`
+      : "";
     const reviewUserPrompt = `Review this generated ${entityType}:
 
 ORIGINAL REQUEST:
 ${currentRequest}
 ${planSection}
+${activeRequirementsSection}
 GENERATED YAML:
 ${generatedYaml}`;
 
@@ -1799,6 +1804,7 @@ ${generatedYaml}`;
     review: ReviewResult,
     systemPrompt: string,
     isSkill: boolean,
+    appendInstructions: string | undefined,
     abortController: AbortController,
     generationModal: WorkflowGenerationModal,
     traceId: string | null,
@@ -1809,6 +1815,9 @@ ${generatedYaml}`;
       .join("\n");
 
     const planSection = plan ? `\nPLAN:\n${plan}\n` : "";
+    const activeRequirementsSection = appendInstructions
+      ? `\nADDITIONAL ACTIVE REQUIREMENTS:\n${appendInstructions}\n`
+      : "";
 
     let generatedOutput: string;
     let outputInstruction: string;
@@ -1831,6 +1840,7 @@ ${generatedYaml}`;
 ORIGINAL REQUEST:
 ${currentRequest}
 ${planSection}
+${activeRequirementsSection}
 ${generatedOutput}
 
 ${feedbackSection}
