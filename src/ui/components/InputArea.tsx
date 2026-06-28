@@ -66,7 +66,7 @@ export interface InputAreaHandle {
 interface MentionItem {
   value: string;
   description: string;
-  isVariable: boolean;
+  kind: "variable" | "mention" | "wikilink";
 }
 
 // 対応ファイル形式
@@ -175,19 +175,31 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     const hasActiveNote = !!app.workspace.getActiveFile();
     const variables: MentionItem[] = [
       // Only show {selection} if there's an active selection
-      ...(hasSelection ? [{ value: "{selection}", description: t("input.selectionVariable"), isVariable: true }] : []),
+      ...(hasSelection ? [{ value: "{selection}", description: t("input.selectionVariable"), kind: "variable" as const }] : []),
       // Only show {content} if there's an active note
-      ...(hasActiveNote ? [{ value: "{content}", description: t("input.contentVariable"), isVariable: true }] : []),
+      ...(hasActiveNote ? [{ value: "{content}", description: t("input.contentVariable"), kind: "variable" as const }] : []),
     ];
     const files: MentionItem[] = vaultFiles.map((f) => ({
       value: f,
       description: t("input.vaultFile"),
-      isVariable: false,
+      kind: "mention",
     }));
     const all = [...variables, ...files];
     if (!query) return all.slice(0, 10);
     const lowerQuery = query.toLowerCase();
     return all.filter((item) => item.value.toLowerCase().includes(lowerQuery)).slice(0, 10);
+  };
+
+  const buildWikilinkCandidates = (query: string): MentionItem[] => {
+    const lowerQuery = query.toLowerCase();
+    return vaultFiles
+      .filter((file) => !lowerQuery || file.toLowerCase().includes(lowerQuery))
+      .slice(0, 10)
+      .map((file) => ({
+        value: file,
+        description: t("input.vaultFile"),
+        kind: "wikilink" as const,
+      }));
   };
 
   const handleSubmit = () => {
@@ -270,8 +282,21 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       setShowAutocomplete(false);
     }
 
-    // Check for @ mention trigger
+    // Check for [[ wikilink trigger
     const textBeforeCursor = value.substring(0, cursorPos);
+    const wikiMatch = textBeforeCursor.match(/\[\[([^\]\n]*)$/);
+    if (wikiMatch) {
+      const query = wikiMatch[1];
+      const startPos = cursorPos - wikiMatch[0].length;
+      const mentions = buildWikilinkCandidates(query);
+      setFilteredMentions(mentions);
+      setMentionStartPos(startPos);
+      setShowMentionAutocomplete(mentions.length > 0);
+      setMentionIndex(0);
+      return;
+    }
+
+    // Check for @ mention trigger
     const atMatch = textBeforeCursor.match(/@([^\s@]*)$/);
     if (atMatch) {
       const query = atMatch[1];
@@ -314,12 +339,13 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     const cursorPos = textareaRef.current?.selectionStart || input.length;
     const before = input.substring(0, mentionStartPos);
     const after = input.substring(cursorPos);
-    const newInput = before + mention.value + " " + after;
+    const inserted = mention.kind === "wikilink" ? `[[${mention.value}]]` : `${mention.value} `;
+    const newInput = before + inserted + after;
     setInput(newInput);
     setShowMentionAutocomplete(false);
     // Set cursor position after the inserted mention
     setTimeout(() => {
-      const newPos = mentionStartPos + mention.value.length + 1;
+      const newPos = mentionStartPos + inserted.length;
       textareaRef.current?.setSelectionRange(newPos, newPos);
       textareaRef.current?.focus();
     }, 0);
@@ -369,7 +395,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       if (e.key === "O" && e.ctrlKey && e.shiftKey && filteredMentions.length > 0) {
         e.preventDefault();
         const mention = filteredMentions[mentionIndex];
-        if (mention && !mention.isVariable) {
+        if (mention && mention.kind !== "variable") {
           void app.workspace.openLinkText(mention.value, "", true);
           // Return focus to textarea after opening
           setTimeout(() => textareaRef.current?.focus(), 100);
@@ -556,12 +582,12 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                 onMouseEnter={() => setMentionIndex(index)}
               >
                 <span className="llm-hub-autocomplete-name">
-                  {mention.isVariable ? mention.value : mention.value}
+                  {mention.kind === "wikilink" ? `[[${mention.value}]]` : mention.value}
                 </span>
                 <span className="llm-hub-autocomplete-desc">
                   {mention.description}
                 </span>
-                {!mention.isVariable && (
+                {mention.kind !== "variable" && (
                   <button
                     className="llm-hub-preview-btn"
                     onClick={(e) => {

@@ -11,7 +11,7 @@
 - **Multi-Provider LLM Chat** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, local LLMs, or CLI backends
 - **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, and tools-capable local LLMs via LM Studio / vLLM / AnythingLLM)
 - **Workflow Builder** - Automate multi-step tasks with visual node editor and 25 node types
-- **Dashboard** - Arrange Bases views, notes, web pages, and workflow output in a responsive widget grid
+- **Dashboard** - Arrange Bases views, notes, web pages, timelines, and workflow output in a responsive widget grid
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
 - **AI Discussion** - Multi-model debate arena with parallel responses, voting, and winner determination
 - **Edit History** - Track and restore AI-made changes with diff view

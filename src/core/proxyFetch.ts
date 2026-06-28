@@ -84,8 +84,10 @@ function tlsWrap(
   servername: string,
 ): Promise<import("tls").TLSSocket> {
   const tls = nodeRequire<typeof import("tls")>("tls");
+  const net = nodeRequire<typeof import("net")>("net");
   return new Promise((resolve, reject) => {
-    const tlsSocket = tls.connect({ socket, servername }, () => resolve(tlsSocket));
+    const options = net.isIP(servername) ? { socket } : { socket, servername };
+    const tlsSocket = tls.connect(options, () => resolve(tlsSocket));
     tlsSocket.on("error", reject);
   });
 }

@@ -683,6 +683,7 @@ export class LlmHubPlugin extends Plugin {
       },
     };
     this.settings.lastAIWorkflowModel = normalizeModelSetting(this.settings.lastAIWorkflowModel);
+    this.settings.lastTimelineAiModel = normalizeModelSetting(this.settings.lastTimelineAiModel);
   }
 
   async saveSettings() {

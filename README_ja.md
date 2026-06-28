@@ -11,7 +11,7 @@
 - **マルチプロバイダー LLM チャット** - Gemini、OpenAI、Anthropic、OpenRouter、Grok、OpenCode Zen/Go、ローカル LLM、CLI バックエンドに対応
 - **Vault 操作** - AI が Function Calling でノートの読み書き・検索・編集を実行（Gemini、OpenAI、Anthropic、OpenCode Zen/Go、および LM Studio / vLLM / AnythingLLM 経由でツール対応モデルを使うローカル LLM）
 - **ワークフロービルダー** - ビジュアルノードエディタと 25 種類のノードでマルチステップタスクを自動化
-- **ダッシュボード** - Bases ビュー、ノート、Web ページ、ワークフロー出力をレスポンシブなウィジェットグリッドに配置
+- **ダッシュボード** - Bases ビュー、ノート、Web ページ、Timeline、ワークフロー出力をレスポンシブなウィジェットグリッドに配置
 - **セマンティック検索（RAG）** - 専用検索タブ、PDF プレビュー、検索結果からチャットへの連携を備えたローカルベクトル検索
 - **AI Discussion** - 並列応答、投票、勝者決定を備えたマルチモデル討論アリーナ
 - **編集履歴** - AI による変更を差分表示で追跡・復元
