@@ -1,7 +1,7 @@
-import { App, Modal, Notice, setIcon } from "obsidian";
+import { App, Modal, Notice, Platform, setIcon } from "obsidian";
 import type { LlmHubPlugin } from "src/plugin";
-import { localLlmChatStream } from "src/core/localLlmProvider";
-import { getLocalLlmConfig, type Message, type ModelType, type StreamChunk } from "src/types";
+import { streamChatForModel } from "src/core/discussionEngine";
+import { CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, isImageGenerationModel, localLlmDisplayName, type Message, type ModelType, type StreamChunk } from "src/types";
 import { t } from "src/i18n";
 import { renderDiffView, createDiffViewToggle, type DiffRendererState } from "src/ui/components/workflow/DiffRenderer";
 
@@ -36,8 +36,6 @@ async function generateRewrite(
   content: string,
   instruction: string,
 ): Promise<string> {
-  const llmConfig = getLocalLlmConfig(model, plugin.settings);
-  if (!llmConfig) throw new Error(t("dashboard.aiNoModels"));
   const systemPrompt = [
     "You rewrite a single Obsidian Timeline post draft.",
     "Return only the rewritten Markdown body.",
@@ -55,10 +53,11 @@ async function generateRewrite(
     "```",
   ].join("\n");
   const messages: Message[] = [{ role: "user", content: userPrompt, timestamp: Date.now() }];
-  const raw = await collectText(localLlmChatStream(
-    llmConfig,
+  const raw = await collectText(streamChatForModel(
+    model,
     messages,
     systemPrompt,
+    plugin.settings,
   ));
   const rewritten = stripCodeFence(raw);
   if (!rewritten) throw new Error(t("dashboard.timelineAiEmpty"));
@@ -151,21 +150,46 @@ export class TimelineAiRewriteModal extends Modal {
   }
 
   private availableTextModels(): TimelineAiModelOption[] {
-    return (this.plugin.settings.localLlmConfigs ?? [])
-      .filter((config) => config.verified === true && config.enabled !== false)
-      .flatMap((config) => {
-        const modelNames = config.enabledModels && config.enabledModels.length > 0
-          ? config.enabledModels
-          : config.availableModels && config.availableModels.length > 0
-            ? config.availableModels
-            : config.model
-              ? [config.model]
-              : [];
-        return modelNames.map((modelName) => ({
-          name: `local-llm:${config.id}:${modelName}` as ModelType,
-          displayName: `${config.name || config.framework} (${modelName})`,
-        }));
-      });
+    const settings = this.plugin.settings;
+    const cliConfig = settings.cliConfig;
+    const antigravityCliVerified = !Platform.isMobile && cliConfig?.cliVerified === true;
+    const claudeCliVerified = !Platform.isMobile && cliConfig?.claudeCliVerified === true;
+    const codexCliVerified = !Platform.isMobile && cliConfig?.codexCliVerified === true;
+    const enabledApiProviders = !Platform.isMobile
+      ? settings.apiProviders.filter((p) => p.enabled && p.verified)
+      : [];
+    const activeLocalLlmConfigs = !Platform.isMobile
+      ? (settings.localLlmConfigs ?? []).filter((c) => c.verified === true && c.enabled !== false)
+      : [];
+
+    const apiModels: TimelineAiModelOption[] = enabledApiProviders.flatMap((p) =>
+      p.enabledModels
+        .filter((m) => !isImageGenerationModel(m))
+        .map((m) => ({
+          name: `api:${p.id}:${m}` as ModelType,
+          displayName: `${p.name} (${m})`,
+        })),
+    );
+    const cliModels: TimelineAiModelOption[] = [
+      ...(antigravityCliVerified ? [CLI_MODEL] : []),
+      ...(claudeCliVerified ? [CLAUDE_CLI_MODEL] : []),
+      ...(codexCliVerified ? [CODEX_CLI_MODEL] : []),
+    ].map((m) => ({ name: m.name, displayName: m.displayName }));
+    const localModels: TimelineAiModelOption[] = activeLocalLlmConfigs.flatMap((config) => {
+      const modelNames = config.enabledModels && config.enabledModels.length > 0
+        ? config.enabledModels
+        : config.availableModels && config.availableModels.length > 0
+          ? config.availableModels
+          : config.model
+            ? [config.model]
+            : [];
+      return modelNames.map((modelName) => ({
+        name: `local-llm:${config.id}:${modelName}` as ModelType,
+        displayName: localLlmDisplayName(config, modelName),
+      }));
+    });
+
+    return [...apiModels, ...cliModels, ...localModels];
   }
 
   private defaultModel(models: TimelineAiModelOption[]): ModelType | null {
