@@ -100,6 +100,15 @@ export interface SlashCommand {
   enabledMcpServers?: string[] | null;  // null = 現在の設定, [] = すべてオフ, ["name1", "name2"] = 指定のサーバーのみ有効
 }
 
+export interface KnowledgeSource {
+  id: string;
+  name: string;
+  path: string;
+  type: "okf";
+  enabled: boolean;
+  activeBundleIds?: string[];
+}
+
 // Settings interface
 export interface LlmHubSettings {
 
@@ -122,6 +131,9 @@ export interface LlmHubSettings {
 
   // Slash commands
   slashCommands: SlashCommand[];
+
+  // Knowledge sources
+  knowledgeSources: KnowledgeSource[];
 
   // Workflow hotkeys
   enabledWorkflowHotkeys: string[];  // Vault paths to workflow files (e.g., "folder/file.md"). Each file holds exactly one workflow.
@@ -939,6 +951,7 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   saveChatHistory: true,
   systemPrompt: "",
   slashCommands: DEFAULT_SLASH_COMMANDS,
+  knowledgeSources: [],
   enabledWorkflowHotkeys: [],
   enabledWorkflowEventTriggers: [],
   apiProviders: [],

@@ -5,12 +5,14 @@ import StopCircle from "lucide-react/dist/esm/icons/stop-circle";
 import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import Database from "lucide-react/dist/esm/icons/database";
+import BookOpen from "lucide-react/dist/esm/icons/book-open";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { Notice, Platform, type App } from "obsidian";
 import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type VaultToolMode } from "src/types";
 import { RagSourceModal } from "./RagSourceModal";
 import type { SkillMetadata } from "src/core/skillsLoader";
+import type { OkfBundle } from "src/core/okfLoader";
 import SkillSelector from "./SkillSelector";
 import { isThinkingRequired } from "src/core/gemini";
 import { t } from "src/i18n";
@@ -47,6 +49,9 @@ interface InputAreaProps {
   availableSkills: SkillMetadata[];
   activeSkillPaths: string[];
   onToggleSkill: (folderPath: string) => void;
+  okfBundles: OkfBundle[];
+  activeOkfBundleIds: string[];
+  onToggleOkfBundle: (bundleId: string) => void;
   onCompact?: () => void; // Built-in /compact command handler
   messageCount?: number; // Number of messages (to enable/disable /compact)
   isCompacting?: boolean; // Whether compact is in progress
@@ -104,6 +109,9 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   availableSkills,
   activeSkillPaths,
   onToggleSkill,
+  okfBundles,
+  activeOkfBundleIds,
+  onToggleOkfBundle,
   onCompact,
   messageCount = 0,
   isCompacting = false,
@@ -866,6 +874,25 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
               </option>
             ))}
           </select>
+          {okfBundles.length > 0 && (
+            <div className="llm-hub-okf-bundles">
+              <span className="llm-hub-model-label">
+                <BookOpen size={14} />
+                OKF
+              </span>
+              {okfBundles.map((bundle) => (
+                <label key={bundle.id} className="llm-hub-okf-bundle">
+                  <input
+                    type="checkbox"
+                    checked={activeOkfBundleIds.includes(bundle.id)}
+                    onChange={() => onToggleOkfBundle(bundle.id)}
+                    disabled={isLoading}
+                  />
+                  {bundle.name}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {!isCollapsed && availableSkills.length > 0 && (

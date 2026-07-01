@@ -564,8 +564,19 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
 /* Model Selector */
 .llm-hub-model-selector {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   padding: 0 12px 12px 12px;
+}
+
+.llm-hub-model-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .llm-hub-model-select {
@@ -586,6 +597,26 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
 
 .llm-hub-model-select:hover {
   color: var(--text-normal);
+}
+
+.llm-hub-okf-bundles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.llm-hub-okf-bundle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-normal);
+  white-space: nowrap;
+}
+
+.llm-hub-okf-bundle input[type="checkbox"] {
+  margin: 0;
 }
 
 .llm-hub-model-select:focus {

@@ -32,6 +32,7 @@ import {
 	type ApiProviderConfig,
 	type ModelType,
 	type Attachment,
+	type KnowledgeSource,
 	type PendingEditInfo,
 	type PendingDeleteInfo,
 	type PendingRenameInfo,
@@ -97,6 +98,7 @@ import { formatError } from "src/utils/error";
 import { findFileMentionOccurrences } from "src/utils/mentionResolver";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
+import { buildOkfSystemPrompt, discoverOkfBundles, type OkfBundle } from "src/core/okfLoader";
 import { getInterpreter, runScript } from "src/core/scriptRunner";
 import { parseWorkflowFromMarkdown } from "src/workflow/parser";
 import { WorkflowExecutor } from "src/workflow/executor";
@@ -486,6 +488,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [activeSkillPaths, setActiveSkillPaths] = useState<string[]>(
 		() => DEFAULT_BUILTIN_SKILL_IDS.map(builtinFolderPath)
 	);
+	const [okfBundles, setOkfBundles] = useState<OkfBundle[]>([]);
+	const [activeOkfBundleIds, setActiveOkfBundleIds] = useState<string[]>([]);
 
 	// CLI provider state (CLI not available on mobile)
 	const antigravityCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
@@ -904,6 +908,76 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			plugin.settingsEmitter.off("skills-changed", refreshSkills);
 		};
 	}, [plugin, refreshSkills]);
+
+	const getOkfSource = useCallback((): KnowledgeSource | null => {
+		const source = (plugin.settings.knowledgeSources || []).find(s => s.enabled && s.type === "okf" && s.path.trim());
+		return source ?? null;
+	}, [plugin]);
+
+	const getOkfRoot = useCallback((): string | null => {
+		return getOkfSource()?.path.trim() || null;
+	}, [getOkfSource]);
+
+	const saveActiveOkfBundleIds = useCallback((activeBundleIds: string[]) => {
+		const source = getOkfSource();
+		if (!source) return;
+		plugin.settings.knowledgeSources = plugin.settings.knowledgeSources.map(item =>
+			item.id === source.id ? { ...item, activeBundleIds } : item
+		);
+		void plugin.saveSettings();
+	}, [getOkfSource, plugin]);
+
+	const refreshOkfBundles = useCallback(() => {
+		const source = getOkfSource();
+		if (!source) {
+			setOkfBundles([]);
+			setActiveOkfBundleIds([]);
+			return;
+		}
+		const root = source.path.trim();
+		const savedActiveBundleIds = source.activeBundleIds;
+		void discoverOkfBundles(plugin.app, root)
+			.then((bundles) => {
+				setOkfBundles(bundles);
+				setActiveOkfBundleIds(prev => {
+					const validIds = new Set(bundles.map(bundle => bundle.id));
+					if (savedActiveBundleIds) {
+						return savedActiveBundleIds.filter(id => validIds.has(id));
+					}
+					const kept = prev.filter(id => validIds.has(id));
+					return kept.length > 0 ? kept : bundles.map(bundle => bundle.id);
+				});
+			})
+			.catch((e) => {
+				console.warn("Failed to discover OKF bundles:", e);
+				setOkfBundles([]);
+				setActiveOkfBundleIds([]);
+			});
+	}, [getOkfSource, plugin]);
+
+	useEffect(() => {
+		refreshOkfBundles();
+		plugin.settingsEmitter.on("settings-updated", refreshOkfBundles);
+		return () => {
+			plugin.settingsEmitter.off("settings-updated", refreshOkfBundles);
+		};
+	}, [plugin, refreshOkfBundles]);
+
+	const handleToggleOkfBundle = useCallback((bundleId: string) => {
+		setActiveOkfBundleIds(prev => {
+			const next = prev.includes(bundleId)
+				? prev.filter(id => id !== bundleId)
+				: [...prev, bundleId];
+			saveActiveOkfBundleIds(next);
+			return next;
+		});
+	}, [saveActiveOkfBundleIds]);
+
+	const appendOkfSystemPrompt = useCallback(async (systemPrompt: string): Promise<string> => {
+		const okfRoot = getOkfRoot();
+		if (!okfRoot || activeOkfBundleIds.length === 0) return systemPrompt;
+		return systemPrompt + await buildOkfSystemPrompt(plugin.app, okfRoot, activeOkfBundleIds);
+	}, [activeOkfBundleIds, getOkfRoot, plugin]);
 
 	// Cleanup MCP executor and persistent CLI session on unmount
 	useEffect(() => {
@@ -1614,6 +1688,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				}
 			}
 
+			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
+
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
 			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
@@ -1899,6 +1975,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					}
 				}
 			}
+
+			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
 
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
@@ -2293,6 +2371,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			if (settings.systemPrompt) {
 				systemPrompt += `\n\nAdditional instructions: ${settings.systemPrompt}`;
 			}
+
+			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
 
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
@@ -3099,6 +3179,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					}
 				}
 
+				systemPrompt = await appendOkfSystemPrompt(systemPrompt);
+
 				// Local RAG: search and inject context into system prompt
 				let localRagSources: string[] = [];
 				if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
@@ -3742,6 +3824,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 											: [...prev, folderPath]
 									);
 								}}
+								okfBundles={okfBundles}
+								activeOkfBundleIds={activeOkfBundleIds}
+								onToggleOkfBundle={handleToggleOkfBundle}
 								onCompact={() => { void handleCompact(); }}
 								messageCount={messages.length}
 								isCompacting={isCompacting}

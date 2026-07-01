@@ -82,11 +82,12 @@ function connectTunnel(
 function tlsWrap(
   socket: import("net").Socket,
   servername: string,
+  tlsOptions: import("tls").ConnectionOptions = {},
 ): Promise<import("tls").TLSSocket> {
   const tls = nodeRequire<typeof import("tls")>("tls");
   const net = nodeRequire<typeof import("net")>("net");
   return new Promise((resolve, reject) => {
-    const options = net.isIP(servername) ? { socket } : { socket, servername };
+    const options = net.isIP(servername) ? { ...tlsOptions, socket } : { ...tlsOptions, socket, servername };
     const tlsSocket = tls.connect(options, () => resolve(tlsSocket));
     tlsSocket.on("error", reject);
   });
@@ -248,7 +249,11 @@ export function createNodeFetch(): typeof fetch {
  * @param proxyBypass - Comma-separated hosts to bypass proxy (e.g., "api.openai.com,localhost")
  * @returns A fetch-compatible function
  */
-export function createProxyFetch(proxyUrl: string, proxyBypass?: string): typeof fetch {
+export function createProxyFetch(
+  proxyUrl: string,
+  proxyBypass?: string,
+  tlsOptions: import("tls").ConnectionOptions = {},
+): typeof fetch {
   const proxy = new URL(proxyUrl);
 
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -280,7 +285,7 @@ export function createProxyFetch(proxyUrl: string, proxyBypass?: string): typeof
 
     // For HTTPS targets, wrap the tunnel in TLS
     const socket = isTargetHttps
-      ? await tlsWrap(tunnelSocket, targetHost)
+      ? await tlsWrap(tunnelSocket, targetHost, tlsOptions)
       : tunnelSocket;
 
     // Merge headers: init takes precedence over Request properties

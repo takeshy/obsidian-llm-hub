@@ -15,6 +15,33 @@ import {
 } from "./embeddingProvider";
 import { normalizeExternalRagIndex } from "./localRagStorage";
 
+// Mock requestUrl to use native fetch (for OpenAI-compatible endpoint tests).
+// Vitest hoists vi.mock calls, so keep this at top level to match execution order.
+vi.mock("obsidian", async () => {
+  return {
+    App: class {},
+    TFile: class { path = ""; name = ""; extension = ""; basename = ""; },
+    requestUrl: async (options: { url: string; method: string; headers?: Record<string, string>; body?: string }) => {
+      const resp = await fetch(options.url, {
+        method: options.method,
+        headers: options.headers,
+        body: options.body,
+      });
+      const text = await resp.text();
+      let json: unknown;
+      try { json = JSON.parse(text); } catch { json = null; }
+      return {
+        status: resp.status,
+        text,
+        json,
+        headers: Object.fromEntries(resp.headers.entries()),
+      };
+    },
+    parseYaml: (text: string) => JSON.parse(text),
+    stringifyYaml: (obj: unknown) => JSON.stringify(obj),
+  };
+});
+
 // API key from environment variable
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 const MODEL = "gemini-embedding-2-preview";
@@ -348,32 +375,6 @@ describe("normalizeExternalRagIndex", () => {
 // These tests call the real Gemini API. Set GEMINI_API_KEY env var to run.
 
 describe.skipIf(!hasApiKey)("Gemini Embedding API (integration)", () => {
-  // Mock requestUrl to use native fetch (for OpenAI-compatible endpoint tests)
-  vi.mock("obsidian", async () => {
-    return {
-      App: class {},
-      TFile: class { path = ""; name = ""; extension = ""; basename = ""; },
-      requestUrl: async (options: { url: string; method: string; headers?: Record<string, string>; body?: string }) => {
-        const resp = await fetch(options.url, {
-          method: options.method,
-          headers: options.headers,
-          body: options.body,
-        });
-        const text = await resp.text();
-        let json: unknown;
-        try { json = JSON.parse(text); } catch { json = null; }
-        return {
-          status: resp.status,
-          text,
-          json,
-          headers: Object.fromEntries(resp.headers.entries()),
-        };
-      },
-      parseYaml: (text: string) => JSON.parse(text),
-      stringifyYaml: (obj: unknown) => JSON.stringify(obj),
-    };
-  });
-
   let generateEmbeddings: typeof import("./embeddingProvider").generateEmbeddings;
   let fetchEmbeddingModels: typeof import("./embeddingProvider").fetchEmbeddingModels;
   let generateGeminiNativeEmbeddings: typeof import("./embeddingProvider").generateGeminiNativeEmbeddings;

@@ -488,15 +488,18 @@ describe("createProxyFetch -- HTTPS target", () => {
   let proxy: ReturnType<typeof createProxyServer>;
   let httpsGatewayPort: number;
   let proxyPort: number;
-  let savedTlsReject: string | undefined;
+  let trustedCert: string;
+  let testTlsOptions: import("tls").ConnectionOptions;
 
   beforeAll(async () => {
     // Self-signed cert for test only. In production, Electron uses the OS
     // certificate store so corporate CAs are trusted automatically.
-    savedTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
     const { key, cert } = await generateSelfSignedCert();
+    trustedCert = cert;
+    testTlsOptions = {
+      ca: trustedCert,
+      checkServerIdentity: () => undefined,
+    };
     httpsGateway = createHttpsLlmGateway({ key, cert });
     proxy = createProxyServer();
 
@@ -506,16 +509,11 @@ describe("createProxyFetch -- HTTPS target", () => {
   });
 
   afterAll(async () => {
-    if (savedTlsReject === undefined) {
-      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    } else {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedTlsReject;
-    }
     await Promise.all([close(httpsGateway), close(proxy)]);
   });
 
   it("tunnels GET /v1/models through proxy to HTTPS target", async () => {
-    const proxyFetch = createProxyFetch(`http://127.0.0.1:${proxyPort}`);
+    const proxyFetch = createProxyFetch(`http://127.0.0.1:${proxyPort}`, undefined, testTlsOptions);
     const resp = await proxyFetch(`https://127.0.0.1:${httpsGatewayPort}/v1/models`, {
       method: "GET",
       headers: { "Authorization": "Bearer corp-key" },
@@ -527,7 +525,7 @@ describe("createProxyFetch -- HTTPS target", () => {
   });
 
   it("tunnels POST /v1/chat/completions through proxy to HTTPS target", async () => {
-    const proxyFetch = createProxyFetch(`http://127.0.0.1:${proxyPort}`);
+    const proxyFetch = createProxyFetch(`http://127.0.0.1:${proxyPort}`, undefined, testTlsOptions);
     const resp = await proxyFetch(`https://127.0.0.1:${httpsGatewayPort}/v1/chat/completions`, {
       method: "POST",
       headers: {
@@ -545,7 +543,7 @@ describe("createProxyFetch -- HTTPS target", () => {
   });
 
   it("returns 401 for invalid credentials to HTTPS target", async () => {
-    const proxyFetch = createProxyFetch(`http://127.0.0.1:${proxyPort}`);
+    const proxyFetch = createProxyFetch(`http://127.0.0.1:${proxyPort}`, undefined, testTlsOptions);
     const resp = await proxyFetch(`https://127.0.0.1:${httpsGatewayPort}/v1/models`, {
       method: "GET",
     });
@@ -553,7 +551,7 @@ describe("createProxyFetch -- HTTPS target", () => {
   });
 
   it("returns 404 for unknown path on HTTPS target", async () => {
-    const proxyFetch = createProxyFetch(`http://127.0.0.1:${proxyPort}`);
+    const proxyFetch = createProxyFetch(`http://127.0.0.1:${proxyPort}`, undefined, testTlsOptions);
     const resp = await proxyFetch(`https://127.0.0.1:${httpsGatewayPort}/v2/unknown`, {
       headers: { "Authorization": "Bearer corp-key" },
     });
