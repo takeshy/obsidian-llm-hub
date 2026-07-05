@@ -3,27 +3,28 @@ type: Feature
 title: Workflow Builder
 description: Workflows automate multi-step tasks with Markdown YAML, visual editing, AI generation, event triggers, hotkeys, history, and skill integration.
 tags: [workflow, automation, yaml]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Workflow Builder
 
-Workflows are stored in Markdown files with a `workflow` code block. Each file should hold exactly one workflow. Users can run workflows from the Workflow / skill sidebar tab or from the command palette command "LLM Hub: Run Workflow".
+Workflows are stored in Markdown files with a `hub-workflow` code block. Legacy `workflow` code blocks are still parsed, but the plugin always writes `hub-workflow`. Each file should hold exactly one workflow. Users can run workflows from the Workflow / skill sidebar tab or from the command palette command "LLM Hub: Run workflow".
 
 The visual workflow editor can create, edit, reload, and execute workflows. The AI creation flow asks for a natural-language description, produces a plan, generates YAML, runs a review pass, and saves the accepted result. Users can also copy the prompt to an external LLM and paste a generated response back.
 
-Workflows use node types for variables, control flow, LLM calls, HTTP, JSON, JavaScript, notes, files, prompts, sub-workflows, RAG sync, MCP tools, Obsidian commands, and sleep. Important node examples:
+Workflows use node types for variables, control flow, LLM calls, HTTP, JSON, JavaScript, shell commands, notes, files, prompts, sub-workflows, MCP tools, Obsidian commands, and sleep. Important node examples:
 
-- `command` sends a prompt to a model and can override model, search, vault tool mode, MCP servers, thinking, and attachments.
+- `command` sends a prompt to any configured model (API providers, local LLMs, or the Gemini/Codex CLI; Claude CLI is not supported in workflows) and can override model, search, vault tool mode, MCP servers, thinking, and attachments.
 - `note`, `note-read`, `note-search`, `note-list`, `folder-list`, and `open` operate on vault files.
 - `prompt-file`, `prompt-selection`, and `dialog` collect user input.
 - `workflow` calls another workflow.
-- `mcp` calls an MCP server tool.
-- `rag-sync` syncs vault content to File Search.
+- `mcp` calls a tool on an MCP server given by URL.
+- `shell` runs a local system command.
+- `rag-sync` is a deprecated compatibility node that only logs a warning; use local RAG instead.
 
 Hotkeys can run workflows directly. Event triggers can run workflows on file create, modify, delete, rename, or open events, optionally filtered by glob patterns.
 
-Workflow history records runs and can be exported or referenced when asking AI to modify a workflow. Skill workflows run through chat with the same interactive modals and return non-private variables to the chat model.
+Workflow history records runs and can be exported or referenced when asking AI to modify a workflow. Skill workflows run through chat with the same interactive modals and return all variables except `__`-prefixed internal ones to the chat model.
 
 Legacy files with multiple `workflow` code blocks can be split into one workflow per file from the Workflow / skill panel. The original file keeps the first workflow; skill capabilities, hotkeys, and event triggers that pointed to the original path remain attached to that first workflow and should be rebound manually if needed.
 

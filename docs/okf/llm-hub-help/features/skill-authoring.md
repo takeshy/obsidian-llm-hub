@@ -1,9 +1,9 @@
 ---
 type: Feature Reference
 title: Skill Authoring
-description: How to structure vault skills with SKILL.md, references, workflows, and skill-capabilities.
+description: How to structure vault skills with SKILL.md, references, workflows, scripts, and skill-capabilities.
 tags: [skills, authoring, skill-md, references]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Skill Authoring
@@ -19,6 +19,8 @@ skills/
       checklist.md
     workflows/
       review.md
+    scripts/
+      check.sh
 ```
 
 # SKILL.md
@@ -50,22 +52,30 @@ The Markdown body should explain when to use the skill, what behavior to follow,
 
 # skill-capabilities
 
-Workflow capability definitions live in a fenced YAML block tagged `skill-capabilities`. This is the current source of truth for skill workflows.
+Workflow and script capability definitions live in a fenced YAML block tagged `skill-capabilities`. This is the current source of truth for skill workflows and scripts.
 
 ```yaml
 workflows:
   - path: workflows/run-lint.md
     description: Run linting on the current note
     inputVariables: [targetPath]
+scripts:
+  - path: scripts/check.sh
+    description: Run the project check script
 ```
 
-Fields:
+Workflow fields:
 
 - `path` - workflow file path relative to the skill folder.
 - `description` - description used for workflow tool selection.
 - `inputVariables` - variables the chat model should pass when invoking the workflow.
 
-Legacy `workflows:` frontmatter is still accepted for backward compatibility, but LLM Hub warns and prefers migration to `skill-capabilities`.
+Script fields:
+
+- `path` - script file path relative to the skill folder; it must live under `scripts/`.
+- `description` - description used for script tool selection.
+
+Legacy `workflows:` / `scripts:` frontmatter is still accepted for backward compatibility, but LLM Hub warns and prefers migration to `skill-capabilities`.
 
 # References
 
@@ -75,7 +85,11 @@ Reference files belong in `references/`. Use them for style guides, templates, c
 
 Skill workflows use normal LLM Hub workflow Markdown files. Place them in `workflows/` by convention. Workflows are executed through chat with `run_skill_workflow`.
 
-Any variable read as `{{var}}` before being initialized by `variable` or `set`, and before being written by `saveTo`, becomes a workflow input. AI-generated skills derive these input variables and write them into the `skill-capabilities` block.
+A variable read as `{{var}}` counts as a workflow input when it is never initialized anywhere in the workflow: not by a `variable` or `set` node, and not written by any `save*` property (`saveTo`, `saveFileTo`, `savePathTo`, `saveStatus`, `saveImageTo`, `saveSelectionTo`, `saveUiTo`). Order does not matter. Names starting with `_` are excluded; that namespace is reserved for runtime system variables. AI-generated skills derive these input variables and write them into the `skill-capabilities` block.
+
+# Scripts
+
+Skill scripts are executable files under `scripts/` declared in the `skill-capabilities` block. Chat executes them with `run_skill_script` (desktop only). Scripts run with the environment variables `SKILL_DIR` (the skill folder) and `VAULT_PATH` (the vault root). Script entries whose `path` is not under `scripts/` are skipped.
 
 # AI Creation And Modification
 

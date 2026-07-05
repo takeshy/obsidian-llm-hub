@@ -3,12 +3,12 @@ type: Playbook
 title: Security and Privacy
 description: LLM Hub protects users with confirmation flows, optional encryption, folder access limits, scoped tools, and sandboxed MCP Apps.
 tags: [security, privacy, encryption]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Security and Privacy
 
-LLM Hub sends chat requests, attachments, tool results, and optional feature payloads to the provider or local/CLI backend selected by the user. Gemini-specific features such as Gemini File Search RAG, Gemini web search, Deep Research, and Gemini image generation use Google's APIs according to the user's settings and Google API behavior.
+LLM Hub sends chat requests, attachments, tool results, and optional feature payloads to the provider or local/CLI backend selected by the user. Gemini-specific features such as Gemini web search, Deep Research, and Gemini image generation use Google's APIs according to the user's settings and Google API behavior. RAG embedding sync sends vault file chunks to the configured embedding endpoint; the resulting vectors are stored locally.
 
 Safe editing is the default for chat tools. `propose_edit`, `bulk_propose_edit`, `propose_delete`, `bulk_propose_delete`, and `bulk_propose_rename` show confirmation UI before modifying files. The legacy direct `update_note` tool is disabled in favor of proposal-based editing.
 

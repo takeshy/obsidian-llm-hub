@@ -549,8 +549,8 @@ function MemoPanel({
   const saveEdit = async () => {
     if (!editingId || !memos) return;
     const text = editText.trim();
-    if (!text) return;
     const quote = editQuote.trim();
+    if (!text && !quote) return;
     const next = memos.map((memo) =>
       memo.id === editingId
         ? {

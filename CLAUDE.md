@@ -91,19 +91,19 @@ This runs `version-bump.mjs` which updates `package.json`, `manifest.json`, and 
 ## Important Implementation Details
 
 ### Safe Editing (`propose_edit` tool)
-- Changes applied directly to file, original content backed up in memory
-- User clicks Apply (confirm) or Discard (restore from backup)
+- File is NOT written at proposal time; pending edit info is stored in memory
+- User clicks Apply (writes the change to the file) or Discard (clears the pending edit)
 - `update_note` tool disabled to force safe editing flow
 
 ### RAG Integration
-- Multiple RAG settings stored in workspace state file (`.gemini-workspace.json`)
+- Multiple RAG settings stored in workspace state file (`gemini-workspace.json`; legacy `.gemini-workspace.json` is migrated)
 - Each RAG setting has its own embedding config (URL, API key, model, chunk size, overlap, topK)
 - Local vector index stored in `{workspaceFolder}/rag/{settingName}/` (index.json + vectors.bin)
 - Supports external pre-built index via `externalIndexPath` (absolute path to directory)
 - RAG injects context into system prompt before LLM call (works with all providers, non-exclusive with vault tools)
 
 ### Chat History
-- Saved as Markdown files in `{workspaceFolder}/chats/{chatId}.md`
+- Saved as Markdown files in `{workspaceFolder}/{chatId}.md`
 - YAML frontmatter with title, timestamps
 - Messages parsed/serialized via `messagesToMarkdown()`/`parseMarkdownToMessages()`
 

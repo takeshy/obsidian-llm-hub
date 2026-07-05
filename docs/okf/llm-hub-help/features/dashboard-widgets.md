@@ -3,7 +3,7 @@ type: Feature Reference
 title: Dashboard Widgets
 description: Detailed behavior, settings, storage, and caveats for every built-in dashboard widget type.
 tags: [dashboard, widgets, base, kanban, timeline]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Dashboard Widgets
@@ -21,14 +21,14 @@ Settings and actions:
 - Base file - vault path to the `.base` file.
 - View - named view to render; empty uses the first view.
 - New Base - creates a `.base` file under `Dashboards/Bases/`.
-- View editor - edits view name, type, order, sort, limit, filters, card image, list indentation, and raw YAML.
+- View editor - edits view name, type, order, sort, limit, filters, card image, list indentation, and raw YAML. The editor only handles the `table`, `cards`, and `list` types; saving a view of another type (such as `map`) through it coerces the type to `table`.
 - Create with AI / Edit with AI - generates or edits `.base` YAML and shows a diff before applying changes.
 
 The same `.base` file can be used by multiple Base widgets, usually one widget per view such as Active, Done, or Backlog. If the `.base` file changed outside the settings panel, the editor reloads before saving to avoid overwriting newer content.
 
 # File Widget
 
-The File widget renders a vault file inline. Supported file types include Markdown, text, HTML, JSON, CSV/TSV, JavaScript/TypeScript, CSS, XML, YAML, images, PDF, and EPUB. Unsupported files show an open button.
+The File widget renders a vault file inline. Supported file types include Markdown, text, HTML, JSON, CSV/TSV, JavaScript/TypeScript, CSS, XML, YAML, images, PDF, and EPUB. Unsupported files show an open button. Plain-text files (text, JSON, CSV, code, and similar) are edited inline; a Save button writes changes back to the file.
 
 Settings:
 
@@ -41,7 +41,7 @@ For document reading, selected text has context actions:
 - Ask AI - prefill Chat with the selected text.
 - Add to memo - attach the selected quote to a reading memo.
 
-Memos are stored under `Dashboards/Memos/` using the source file path. Quote anchors include context when possible so memo links can jump back to repeated text more reliably. While the memo panel is open, saved memo ranges are highlighted. Empty memo text is allowed when a quote link is attached.
+Memos are stored under `Dashboards/Memos/` using the source file path. Quote anchors include context when possible so memo links can jump back to repeated text more reliably. While the memo panel is open, saved memo ranges are highlighted. Empty memo text is allowed when a quote link is attached. The memo panel's open and collapsed state is saved in the widget config (`memoPanelOpen`, `memoPanelCollapsed`), so it persists with the dashboard.
 
 # Web Embed Widget
 
@@ -84,11 +84,11 @@ Settings:
 - Display fields - ordered frontmatter fields shown below the title, such as `priority` or `due`.
 - Show unmatched cards column - shows an "Unspecified" column for notes whose status matches no configured column.
 
-The New button creates a note matching the board filters: folder, tag, and selected column status are written into the new note.
+The New button creates a note matching the board filters: folder, tag, selected column status, and (when configured) the title property are written into the new note.
 
 # Timeline Widget
 
-The Timeline widget stores short dated posts under `Dashboards/Timeline/<name>/`, one Markdown file per day. It renders a reverse-chronological feed with composer, filters, pinned posts, image attachments, inline editing, and AI-assisted rewriting.
+The Timeline widget stores short dated posts under `Dashboards/Timeline/<name>/`, one Markdown file per day. It renders a chronological feed (oldest first) that auto-scrolls to the latest post, with composer, filters, pinned posts, image attachments, inline editing, and AI-assisted rewriting. A Load older button at the top of the feed loads earlier posts.
 
 Settings:
 
@@ -97,11 +97,11 @@ Settings:
 - Collapse after lines - visual line threshold for collapsed preview; default 8.
 - Collapse after characters - character threshold for collapsed preview; default 440.
 
-Posts can contain tags, images, and wikilinks. Long posts and embedded notes collapse with Show more / Show less. The composer and inline editor include Edit with AI, which sends the current draft plus the user instruction to Gemini and applies the rewrite only after a diff preview is accepted. Timeline image attachments are stored with the timeline data.
+Posts can contain tags, images, and wikilinks. Typing `[[` in the composer or inline editor opens a file suggestion popup; arrow keys or Tab navigate and Enter inserts the link. Long posts and embedded notes collapse with Show more / Show less. The composer and inline editor include Edit with AI, which sends the current draft plus the user instruction to a selectable model (any configured API provider, CLI backend, or local LLM server) and applies the rewrite only after a diff preview is accepted. Timeline image attachments are saved under `Dashboards/Timeline/<name>/attachments/<date>/`.
 
 # MemoList Widget
 
-The MemoList widget lists File-widget memo files under `Dashboards/Memos/`. Use it as an index for reading notes across PDFs, EPUBs, Markdown notes, and other files.
+The MemoList widget lists File-widget memo files under `Dashboards/Memos/`. Use it as an index for reading notes across PDFs, EPUBs, Markdown notes, and other files. A search box filters rows by source file path, and long lists are paginated 20 rows per page.
 
 Clicking a memo row does not navigate away from the dashboard. The MemoList widget maximizes and temporarily displays the selected source file with its memo panel open. Restoring the widget returns to the MemoList.
 

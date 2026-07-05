@@ -3,7 +3,7 @@ type: Feature Reference
 title: Skill Chat and Workflows
 description: How skills are activated in chat, how slash commands work, and how skill workflows execute and return results.
 tags: [skills, chat, run-skill-workflow, slash-command]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Skill Chat and Workflows
@@ -23,9 +23,11 @@ Autocomplete shows matching skill folder names. The folder name is used, not nec
 
 # Prompt Loading Behavior
 
-Built-in skills are fully inlined into the system prompt with instructions, references, and workflow listings.
+Built-in skills are fully inlined into the system prompt with instructions, references, and workflow / script listings.
 
-Vault skills are intentionally lightweight in the initial prompt. The model sees the skill name, description, and `SKILL.md` path. It must call `read_note` on `SKILL.md` before invoking workflows because workflow IDs, descriptions, and required input variables live in the `skill-capabilities` block.
+Vault skills are intentionally lightweight in the initial prompt. The model sees the skill name, description, and `SKILL.md` path. It must call `read_note` on `SKILL.md` before invoking workflows or scripts because their IDs, descriptions, and required input variables live in the `skill-capabilities` block.
+
+In CLI and local-LLM mode, vault tools such as `read_note` are unavailable. The model instead emits text markers on their own line: `[READ_SKILL: skillName]` to load `SKILL.md`, `[RUN_WORKFLOW: workflowId]({"key": "value"})` to execute a workflow, and `[RUN_SCRIPT: scriptId](["arg1"])` to execute a script. Results are fed back as a follow-up message.
 
 # run_skill_workflow
 
@@ -50,6 +52,10 @@ The tool accepts:
 
 The model should infer input values from the user request when possible. If a required input cannot be inferred, it should ask before running the workflow.
 
+# run_skill_script
+
+When active skills expose scripts, chat gets the `run_skill_script` tool (desktop only). The script ID format is `<skill name>/<script basename without extension>`, for example `Code Review/check` for `scripts/check.sh`. The tool accepts the script ID and optional arguments. Scripts run with the `SKILL_DIR` and `VAULT_PATH` environment variables set.
+
 # Execution Behavior
 
 Skill workflows run with the same interactive modals as workflows from the Workflow / skill panel:
@@ -61,7 +67,7 @@ Skill workflows run with the same interactive modals as workflows from the Workf
 
 # Returning Values
 
-Every workflow variable whose name does not start with `_` is returned to chat after `run_skill_workflow`. A final `command` node just to display output is unnecessary. If a variable must be shown verbatim, put that rule in the `SKILL.md` instructions body.
+Every workflow variable whose name does not start with `__` (double underscore) is returned to chat after `run_skill_workflow`; variables starting with a single `_` are returned. A final `command` node just to display output is unnecessary. If a variable must be shown verbatim, put that rule in the `SKILL.md` instructions body.
 
 Example instruction:
 

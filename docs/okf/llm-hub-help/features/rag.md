@@ -1,95 +1,74 @@
 ---
 type: Feature
 title: RAG Semantic Search
-description: RAG uses Gemini File Search stores for semantic retrieval over synced vault files, with internal and external store modes.
-tags: [rag, semantic-search, file-search]
-timestamp: 2026-07-04T00:00:00Z
+description: RAG builds a local vector index of vault files (embeddings + cosine similarity) and injects retrieved chunks into the system prompt for all chat providers.
+tags: [rag, semantic-search, embeddings, local-index]
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # RAG Semantic Search
 
-RAG is LLM Hub's semantic search feature. It syncs selected vault files to Google Gemini File Search and retrieves relevant chunks before the main chat response. Retrieved contexts are injected into the system prompt and emitted back to the UI as RAG sources.
+RAG is LLM Hub's semantic search feature. It chunks selected vault files, generates embeddings, and stores them in a local vector index. Before the main chat response, the user message is embedded and matched against the index by cosine similarity; the top-scoring chunks are appended to the system prompt and reported back to the UI as RAG sources.
 
-Use RAG when the user wants broad retrieval over vault files, PDFs, Office documents, or images. Use vault tools when the target file is known or exact file operations are needed. Use OKF for curated concepts and stable domain knowledge.
+Because retrieval happens locally before the LLM call, RAG works with every chat provider — API providers, CLI backends, and local LLM servers — and can be combined with function calling (vault tools). Non-text results (images, PDF pages, audio, video) are additionally attached to the LLM call as files so the model can see the actual content.
 
-# Supported Files
+Use RAG when the user wants broad retrieval over notes, PDFs, images, or audio/video. Use vault tools when the target file is known or exact file operations are needed. Use OKF for curated concepts and stable domain knowledge.
 
-Internal sync supports:
+# Embedding Providers
 
-- Markdown: `md`
-- PDF: `pdf`
-- Images: `png`, `jpg`, `jpeg`
-- Microsoft Office: `doc`, `docx`, `xls`, `xlsx`, `pptx`
+Each RAG setting has its own embedding configuration:
 
-Image RAG uses the multimodal embedding model `models/gemini-embedding-2`.
+- Empty embedding URL: Gemini native embedding via the SDK. Default model is `gemini-embedding-2-preview`.
+- Custom embedding URL: any OpenAI-compatible `/v1/embeddings` endpoint (Ollama, LM Studio, vLLM, etc.), with its own API key and model.
 
-# Store Modes
+The model picker fetches available models from Ollama's `/api/tags` when present, otherwise from the OpenAI-compatible `/v1/models` endpoint.
 
-Internal mode creates and manages a File Search store for the selected RAG setting. LLM Hub creates the store, uploads files, tracks checksums, deletes stale remote files, and stores sync state locally.
+# Index Modes
 
-External mode uses existing File Search store IDs. Multiple store IDs can be configured. LLM Hub queries them but does not sync vault files into them.
+Internal mode is the default: LLM Hub manages a local index for the setting, stored in the vault at `{workspaceFolder}/rag/{settingName}/` as `index.json` (chunk metadata and checksums) plus `vectors.bin` (embedding vectors).
+
+External mode uses `externalIndexPath`: one or more newline-separated absolute paths to pre-built local index directories (each containing `index.json` and `vectors.bin`). LLM Hub searches them read-only and does not sync vault files into them. Multiple external indexes with the same embedding dimension are merged.
+
+Combined mode uses `sourceRagSettings`: a setting can merge the indexes of other internal RAG settings into one searchable index.
+
+# Eligible Files
+
+- Markdown (`md`) is always indexed.
+- PDF (`pdf`) is indexed when Index multimodal is enabled. With Gemini native embedding, PDF pages are embedded directly in chunks of 1-6 pages (PDF chunk pages setting); with other providers, PDF text is extracted and embedded as text chunks.
+- Images (`png`, `jpg`, `jpeg`) and audio/video (`mp3`, `wav`, `mp4`, `mpeg`) are indexed only when Index multimodal is enabled and Gemini native embedding is used.
 
 # Sync Behavior
 
-Internal sync is checksum-based and incremental:
+Sync is checksum-based and incremental:
 
-- Files matching supported extensions are considered.
 - `targetFolders` limits sync to selected vault folders; empty means the whole vault.
 - `excludePatterns` are regex patterns; invalid regexes are skipped.
-- Changed files are uploaded.
-- Unchanged files are skipped.
-- Files removed or excluded are deleted from the remote internal store.
-- Sync progress reports upload, skip, and delete actions.
-- Sync can be cancelled from the settings UI.
+- Markdown checksums come from file content; binary checksums from modification time and size.
+- Changed or new files are embedded; unchanged files are skipped.
+- Files removed from the vault or excluded by filters are removed from the local index.
+- Sync progress reports embed, skip, and remove actions, and can be cancelled.
+- At most 50 changed files are embedded per sync run; the rest are deferred, so large vaults need repeated sync runs to finish indexing.
 
-Each synced file stores checksum, upload timestamp, and remote file ID in the RAG setting state. Full sync time is stored as `lastFullSync`.
+The last full sync time is stored as `lastFullSync`. Changing the embedding model, chunk size, chunk overlap, PDF chunk pages, or the Index multimodal setting triggers a full index rebuild on the next sync.
 
-# Metadata
+# Retrieval Settings
 
-Uploaded internal files include custom metadata:
+Each RAG setting controls retrieval:
 
-- `path` - vault-relative path.
-- `extension` - lowercase extension.
-- `basename` - file name without extension.
-- `folder` - parent folder path.
-- `modified` - Obsidian mtime in Unix epoch milliseconds.
-- `size` - file size in bytes.
-
-The Metadata filter setting applies at query time. Example filters:
-
-```text
-extension = "md"
-folder = "Projects" AND extension = "md"
-extension = "pdf" OR folder = "notes"
-size < 100000
-modified > 1719763200000
-new Date("2024-07-01T00:00:00Z").getTime()
-```
-
-# Chat Retrieval
-
-Chat can use RAG and function calling together. For Gemini models where direct File Search with function calling is not supported, LLM Hub pre-retrieves RAG context with `generateContent` and injects that context into the main request. RAG top-K is clamped to the configured limit.
-
-Gemma image/text model paths may not support RAG; image generation does not use RAG.
-
-# Status Tool
-
-The `get_rag_sync_status` chat tool answers:
-
-- A specific file's sync status.
-- Unsynced files in a directory.
-- Vault-level sync summary.
-
-It can report whether a file is synced, when it was imported, whether it has changed, current checksum, stored checksum, unsynced count, files with diffs, and last full sync.
+- `topK` - maximum number of chunks returned.
+- `scoreThreshold` - minimum cosine similarity score (0.0-1.0).
+- `searchFileExtensions` - restrict results to given file extensions; empty means all.
+- `chunkSize` / `chunkOverlap` - chunking parameters used at index time.
 
 # Operations
 
-Settings can reset sync state without deleting the remote store. For internal stores, Delete Store removes indexed data from Google File Search. Deleting a RAG setting does not automatically delete the server-side store.
-
-Free API keys may have limited RAG sync capacity; users can run sync periodically because unchanged files are skipped.
+- Clear index deletes the setting's local index directory (`index.json` and `vectors.bin`).
+- Deleting a RAG setting removes only the setting; its index data stays on disk.
+- Reset sync state clears `lastFullSync` for the setting.
 
 # Related
 
+- [RAG Search Tab](./rag-search.md) explains manual search, filtering, chunk editing, and handoff to Chat or Discussion.
 - [OKF Knowledge Sources](./okf.md) explains curated Markdown knowledge bundles.
 - [Settings](../operations/settings.md) lists all RAG settings.
 - [Vault Tools](./vault-tools.md) explains exact vault operations.

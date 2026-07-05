@@ -3,16 +3,20 @@ type: Playbook
 title: Troubleshooting User Questions
 description: Common practical answers for users who are unsure how LLM Hub features work or why something is unavailable.
 tags: [troubleshooting, support]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Troubleshooting User Questions
 
-If image generation is unavailable, check that the API plan is paid and an image model is selected. Free API keys do not support image generation.
+If image generation is unavailable, check that an image-capable model is selected on a provider that supports it, such as Gemini image models or DALL-E via OpenAI.
 
 If the AI cannot find vault content, check vault tool mode, AI Folder Access restrictions, RAG selection, and whether the file was explicitly attached or mentioned. Vault: Off disables vault tools. Vault: No search disables search and list tools.
 
-If RAG misses content, check whether the target folder is included, the file type is supported, exclude patterns do not match the file, and sync has run after the latest edits. Free API keys may have limited RAG sync capacity.
+If RAG misses content, check whether the target folder is included, the file type is supported, exclude patterns do not match the file, and sync has run after the latest edits. Also confirm the RAG setting's embedding endpoint is reachable and the embedding model exists; embedding API rate limits can slow or fail sync. If a PDF is synced but never retrieved, text extraction may have produced no content (for example image-only scanned PDFs).
+
+If a local LLM model is unavailable, check that the local server is running and the Base URL is reachable, then run Verify again. If the model list cannot be fetched, check the framework selection and endpoint: Ollama lists models via `/api/tags`, OpenAI-compatible servers via `/v1/models`.
+
+If vault tools fail with a local model, the model may not support function calling; such models are auto-downgraded to marker mode (re-enable tools from the Local LLM settings). Use workflows with note nodes as an alternative.
 
 If OKF knowledge is not appearing, check Settings -> Knowledge sources, confirm OKF is enabled, confirm the path is vault-relative or an accessible absolute desktop path, and confirm the bundle has `index.md` files and concept files with `type` frontmatter. Built-in LLM Hub OKF is always available for plugin help.
 

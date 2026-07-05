@@ -62,13 +62,13 @@ Bypass entries are comma-separated:
 
 # TLS and Certificates
 
-TLS to the target API or corporate gateway runs inside the CONNECT tunnel. Certificate verification uses the operating system trust store through Electron and Node.js. If a corporate gateway uses an internal CA, install that CA certificate in the OS trust store.
+TLS to the target API or corporate gateway runs inside the CONNECT tunnel. The tunnel uses Node.js TLS, which verifies certificates against Node's bundled Mozilla CA list — not the operating system trust store. If a corporate gateway presents an internal CA, provide that CA bundle to Node, for example by setting the `NODE_EXTRA_CA_CERTS` environment variable before launching Obsidian. Installing the CA only in the OS trust store does not affect the tunnel.
 
 # Troubleshooting
 
 - Connection timeout - verify proxy URL and network reachability.
 - `407 Proxy Authentication Required` - add proxy credentials to the URL.
-- `SELF_SIGNED_CERT` - install the corporate CA certificate.
+- `SELF_SIGNED_CERT` - provide the corporate CA certificate via `NODE_EXTRA_CA_CERTS`.
 - Local LLM unreachable - bypass the local server hostname.
 
 # Implementation Notes

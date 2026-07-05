@@ -1,36 +1,31 @@
 ---
 type: Product Reference
 title: Models and Installation
-description: Supported API plans, model availability, installation options, requirements, related plugins, and support links.
+description: Model availability per provider, installation options, requirements, and provider notes.
 tags: [models, installation, requirements]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Models and Installation
 
-LLM Hub requires Obsidian v0.15.0 or later and runs as a desktop-only plugin. Configure at least one provider, such as Gemini, OpenAI, Anthropic, OpenRouter, Grok, a local OpenAI-compatible endpoint, or a supported CLI provider.
+LLM Hub requires Obsidian v1.10.0 or later and runs as a desktop-only plugin. Configure at least one provider, such as Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, a local OpenAI-compatible endpoint, or a supported CLI provider (Antigravity, Claude, or Codex CLI).
 
-Free Gemini API keys support basic chat, vault operations, Gemini web search, limited Gemini File Search RAG sync, and workflows. Paid provider keys and local/CLI backends unlock the models and capabilities offered by those providers.
+Free Gemini API keys support basic chat, vault operations, Gemini web search, and workflows. Paid provider keys and local/CLI backends unlock the models and capabilities offered by those providers.
 
-# Paid Plan Models
+# Model Availability
 
-- Gemini 3.1 Pro Preview - flagship model with 1M context; recommended for highest quality.
-- Gemini 3.1 Pro Preview (Custom Tools) - optimized for agentic workflows with custom tools and bash.
-- Gemini 3.5 Flash - fast 1M-context model with strong cost performance.
-- Gemini 3.1 Flash Lite - stable, low-latency, cost-effective 1M-context model.
-- Gemini 2.5 Flash - fast 1M-context model.
-- Gemini 2.5 Pro - Pro 1M-context model.
-- Gemini 3 Pro (Image) - Pro image generation, up to 4K.
-- Gemini 3.1 Flash (Image) - fast, low-cost image generation.
+There is no fixed model list. After entering an API key, Verify fetches the provider's available models, and the user checks which models to enable; enabled models appear in the chat model dropdown. Multiple providers can be configured simultaneously.
 
-# Free Plan Models
+Local LLM models are auto-detected from the running server during Verify. CLI providers use their own authenticated accounts and appear as single model entries after verification.
 
-- Gemini 2.5 Flash.
-- Gemini 2.5 Flash Lite.
-- Gemini 3.5 Flash.
-- Gemini 3.1 Flash Lite.
-- Gemma 4 31B.
-- Gemma 4 26B A4B MoE.
+# Embeddings for RAG
+
+RAG needs an embedding endpoint, configured per RAG setting:
+
+- Gemini-native embeddings - leave the embedding base URL empty to use the Gemini provider key.
+- OpenAI-compatible or Ollama endpoints - for example a local Ollama server with an embedding model such as `nomic-embed-text`.
+
+Chat and embeddings are independent: a cloud chat provider can be combined with local embeddings.
 
 # Thinking Mode
 
@@ -38,11 +33,9 @@ Chat can enable thinking based on message keywords such as "think", "analyze", o
 
 # Installation
 
-Recommended installation is through Obsidian Community plugins: Settings -> Community plugins -> Browse -> search "LLM Hub" -> install and enable.
+Recommended installation is through BRAT: install the BRAT plugin, choose "Add Beta plugin", and enter `https://github.com/takeshy/obsidian-llm-hub`, then enable the plugin in Community plugins settings.
 
-BRAT can install beta versions from `https://github.com/takeshy/obsidian-llm-hub`.
-
-Manual installation copies `main.js`, `manifest.json`, and `styles.css` into `.obsidian/plugins/llm-hub/`.
+Manual installation copies `main.js`, `manifest.json`, and `styles.css` from releases into `.obsidian/plugins/llm-hub/`.
 
 Source installation:
 
@@ -55,4 +48,4 @@ npm run build
 
 # Provider Notes
 
-Gemini-specific features include Gemini web search, Gemini File Search RAG, Deep Research, and Gemini image generation. Local LLM and CLI providers are desktop workflows and require their corresponding local servers or command-line tools to be installed and reachable from Obsidian.
+Gemini-specific features include Gemini web search, Deep Research, and Gemini image generation. Local LLM and CLI providers are desktop workflows and require their corresponding local servers or command-line tools to be installed and reachable from Obsidian.

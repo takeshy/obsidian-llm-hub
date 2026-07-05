@@ -3,7 +3,7 @@ type: Feature Reference
 title: Dashboard Schema
 description: Storage model and schema guidance for `.dashboard` files, widget configs, and generated sidecar files.
 tags: [dashboard, schema, widgets]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Dashboard Schema
@@ -19,6 +19,7 @@ The dashboard stores widget definitions and responsive layout. Widget content is
 - Workflow widget cache files are stored under `Dashboards/Data/<encoded dashboard path>.json`.
 - Reading memos are stored under `Dashboards/Memos/`.
 - Timeline posts are stored under `Dashboards/Timeline/<name>/`.
+- Timeline image attachments are stored under `Dashboards/Timeline/<name>/attachments/<date>/`.
 
 # Layout and Alignment
 
@@ -27,7 +28,7 @@ The dashboard grid uses 12 columns, row height `80`, and gap `8` by default. Wid
 - `lg` - large-screen layout.
 - `sm` - small-screen layout, derived from `lg` when missing.
 
-Widgets can be dragged and resized directly. The layout engine prevents overlap by pushing colliding widgets downward. File widgets disable drag/resize handles while their memo panel is open.
+Widgets can be dragged and resized directly. The layout engine prevents overlap by pushing colliding widgets downward. File widgets disable drag/resize handles while their memo panel is open (desktop only; on mobile the handles stay enabled).
 
 The toolbar provides:
 
@@ -42,7 +43,7 @@ Alignment updates only the `lg` layout and removes explicit `sm` layout so mobil
 
 Base widgets reference a `.base` path and optional view name. They can create or edit `.base` files and show table, cards, list, or map views through Obsidian's native Bases UI.
 
-File widgets reference a vault file path and optional header setting. They render Markdown, text, HTML, images, PDFs, EPUBs, or a fallback open button.
+File widgets reference a vault file path and optional header setting, plus persisted memo panel state (`memoPanelOpen`, `memoPanelCollapsed`). They render Markdown, text, HTML, images, PDFs, EPUBs, or a fallback open button.
 
 Web widgets store a URL and optional header setting. Some sites cannot be embedded because of frame-blocking headers.
 
@@ -50,7 +51,7 @@ Workflow widgets store workflow path, output format (`Markdown` or `HTML`), outp
 
 Kanban widgets store tag and folder filters, status property, title property, columns, displayed frontmatter fields, unmatched-column behavior, and manual card order.
 
-Timeline widgets store a timeline name, latest count, filters, collapse limits, and post display options. Posts are normal Markdown files.
+Timeline widgets store a timeline name, latest post count, and collapse line/character limits (`name`, `latestCount`, `collapseLineLimit`, `collapseCharLimit`). Feed filters are transient UI state and are not stored. Posts are `---`-separated blocks inside per-day Markdown files.
 
 MemoList widgets index dashboard memo files and open selected memos inside the widget.
 

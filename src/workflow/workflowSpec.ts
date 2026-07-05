@@ -693,7 +693,7 @@ nodes:
 
 When a workflow is invoked by a skill (via the \`run_skill_workflow\` tool), the
 runtime **automatically returns every variable whose name does NOT start with
-\`_\`** back to the chat AI. The chat AI then decides how to present those
+\`__\` (double underscore)** back to the chat AI. The chat AI then decides how to present those
 values to the user, guided by the SKILL.md instructions.
 
 - You do NOT need to add a final \`command\` node just to "output" a variable.

@@ -3,18 +3,18 @@ type: Feature Reference
 title: Vault Tools
 description: Function-calling tools available to chat for reading, searching, creating, editing, deleting, renaming, and inspecting vault files.
 tags: [chat, vault-tools, editing]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Vault Tools
 
-Vault tools are Gemini function-calling tools used by chat to operate on the Obsidian vault. Users control them from the Database icon tool menu.
+Vault tools are function-calling tools used by chat to operate on the Obsidian vault. They work with all providers that support function calling (Gemini, OpenAI-compatible, Anthropic, CLI, and compatible local servers). Users control them from the Database icon tool menu.
 
 # Tool Modes
 
-- Vault: All - full vault access through available tools.
-- Vault: No search - disables `search_notes` and `list_notes` while keeping direct read/write tools.
-- Vault: Off - disables vault tools.
+- Vault: all - full vault access through available tools.
+- Vault: no search - disables `search_notes` and `list_notes` while keeping direct read/write tools and `list_folders`.
+- Vault: off - disables vault tools.
 
 # Chat Tools
 
@@ -26,17 +26,18 @@ Vault tools are Gemini function-calling tools used by chat to operate on the Obs
 - `bulk_propose_delete` - propose deletion of multiple files with selection UI.
 - `search_notes` - search by name or content.
 - `list_notes` - list notes in a folder.
-- `rename_note` - rename or move a note.
+- `rename_note` - propose renaming or moving a note with Apply/Discard confirmation.
 - `bulk_propose_rename` - propose renames for multiple files.
 - `create_folder` - create a vault folder.
 - `list_folders` - list vault folders.
 - `get_active_note_info` - inspect the active note.
-- `get_rag_sync_status` - inspect RAG sync status for files, folders, or the whole store.
+
+Beyond vault tools, chat also provides `execute_javascript` (runs code in a sandboxed iframe with no DOM, network, or storage access) and, when skills are active, `run_skill_workflow` and `run_skill_script` for running skill-provided workflows and scripts.
 
 # Safe Editing
 
-Chat uses proposal tools for edits and deletes by default. A file is not changed until the user confirms. `propose_edit` backs up original content in memory so Discard can restore it.
+Chat uses proposal tools for edits, renames, and deletes by default. A file is not changed until the user confirms: `propose_edit` keeps the proposed content in memory without writing to the file, Apply writes it, and Discard clears the pending proposal, leaving the file untouched.
 
 # Folder Access
 
-Settings -> Workspace -> Folders AI can access automatically can restrict automatic chat and AI command workflow vault operations to specified vault-relative folders. Empty means whole-vault access. This does not restrict RAG, manual attachments, explicit mentions, MCP tools, scripts, or direct workflow note nodes.
+Settings -> Workspace -> LLM vault tool folders can restrict LLM vault tools and LLM-triggered skill workflows to specified vault-relative folders. Empty means whole-vault access. This does not restrict RAG, manual attachments, explicit mentions, MCP tools, scripts, shell commands, or direct workflow note nodes.

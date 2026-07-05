@@ -3,7 +3,7 @@ type: Feature Reference
 title: Workflow Authoring and Recovery
 description: AI workflow creation, AI modification, legacy migration, execution history, encryption, and failure recovery behavior.
 tags: [workflow, ai-generation, history, recovery]
-timestamp: 2026-07-04T00:00:00Z
+timestamp: 2026-07-05T00:00:00Z
 ---
 
 # Workflow Authoring and Recovery
@@ -16,7 +16,7 @@ The `+ New (AI)` flow asks for a workflow name and natural-language description.
 
 The generation flow produces a plan first. The user can accept, ask for a new plan, or cancel. After YAML generation, a review pass checks the workflow. If issues are found, the user can accept with confirmation, refine using review feedback, or cancel.
 
-Users can also use external LLMs by copying the generated prompt, pasting it into another model, then pasting the response back. The pasted response can be raw YAML or Markdown containing a `workflow` code block.
+Users can also use external LLMs by copying the generated prompt, pasting it into another model, then pasting the response back. The pasted response can be raw YAML or Markdown containing a `hub-workflow` (or legacy `workflow`) code block.
 
 # AI Modification
 

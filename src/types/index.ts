@@ -266,7 +266,7 @@ export interface RagSetting {
   chunkOverlap: number;          // default: 100
   pdfChunkPages: number;         // default: 6
   topK: number;                  // default: 5
-  scoreThreshold: number;       // 最低スコア閾値 (0.0-1.0, default: 0.5)
+  scoreThreshold: number;       // 最低スコア閾値 (0.0-1.0, default: 0.3)
   targetFolders: string[];      // 対象フォルダ（空の場合は全体）
   excludePatterns: string[];    // 正規表現パターンでファイルを除外
   searchFileExtensions: string[]; // 検索時のファイル拡張子フィルタ（空 = 全て）

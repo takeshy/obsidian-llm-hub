@@ -15,6 +15,7 @@ The RAG Search tab is the manual counterpart to the Chat RAG dropdown. It lets u
 Results are ranked by cosine similarity between the query embedding and indexed chunks. After retrieval, users can filter the result list with one or more keyword fields:
 
 - Terms inside one field use OR logic.
+- Quoted phrases (e.g. `"release notes"`) are matched as a single term.
 - Multiple fields use AND logic.
 - Filtering checks both chunk text and file path.
 - Whitespace is normalized so PDF extraction line breaks and full-width spaces do not prevent matches.
@@ -64,17 +65,22 @@ Text extraction runs in the background for PDF results, including vault PDFs and
 
 # Index Settings in Search
 
-The Search tab gear exposes per-RAG-setting controls:
+The search file extensions filter sits in the search parameter row next to Top K and score threshold, not in the gear section.
+
+The Search tab gear exposes per-RAG-setting controls. For all settings:
+
+- AI Refine Model.
+- Last-sync timestamp.
+- Indexed files list with per-file chunk counts.
+
+For internal (plugin-managed) RAG settings only:
 
 - Chunk size.
 - Chunk overlap.
 - PDF chunk pages, from 1 to 6 pages per embedding chunk.
 - Target folders.
 - Exclude regex patterns.
-- Search file extensions.
-- AI Refine Model.
-- Sync button with progress bar and last-sync timestamp.
-- Indexed files list with per-file chunk counts.
+- Sync button with progress bar.
 
 # Chat RAG vs Search Handoff
 
