@@ -276,7 +276,7 @@ MCP（Model Context Protocol）サーバーは、Vault操作以外のAI機能を
 
 スキルの作成もワークフローと同じ方法で — **+ New (AI)** を選択し、**「エージェントスキルとして作成」** にチェックを入れて説明を記述するだけ。AI が `SKILL.md` の指示とワークフローの両方を生成します。
 
-> **セットアップ手順と例については、[SKILLS.md](docs/SKILLS_ja.md)を参照してください**
+> **セットアップ手順と例については、[Agent Skills](docs/okf/llm-hub-help/features/agent-skills.md)を参照してください**
 
 ---
 
@@ -405,7 +405,7 @@ Markdown ファイル内で自動化ワークフローを構築。**プログラ
 | 外部連携       | `mcp`, `obsidian-command`                                              |
 | ユーティリティ | `sleep`                                                                |
 
-> **詳細なノード仕様と実例は [WORKFLOW_NODES_ja.md](docs/WORKFLOW_NODES_ja.md) を参照してください**
+> **詳細なノード仕様と実例は [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md) を参照してください**
 
 ## ホットキーモード
 
@@ -512,7 +512,7 @@ Obsidian のイベントでワークフローを自動実行：
 > [!NOTE]
 > **ワークフローウィジェットはライブ実行ではなくキャッシュから読み込みます。** ワークフローウィジェットが実行されるのは、**実行**ボタン、設定エディタのテスト実行、または**自動更新間隔**（分。`0` は手動のみ）より古いキャッシュ結果がある状態で開いたときの一度だけです。結果はダッシュボードの隣の隠しサイドカーファイルに保存されるため、再オープンしても出力が残ります。ワークフローは Markdown/HTML 出力を変数（既定 `result`）に格納する必要があります。
 
-> **`.dashboard` ファイル形式、完全な YAML スキーマ、AI 生成のヒントについては [ダッシュボードのドキュメント](docs/DASHBOARD.md) を参照してください**
+> **`.dashboard` ファイル形式、完全な YAML スキーマ、AI 生成のヒントについては [ダッシュボードのドキュメント](docs/okf/llm-hub-help/features/dashboard.md) を参照してください**
 
 ---
 
@@ -626,7 +626,7 @@ npm run build
 
 ### プロキシ
 
-企業ゲートウェイ環境向けに、すべての API リクエストを HTTP CONNECT プロキシ経由でルーティングします。詳しくは[プロキシ設定](docs/PROXY.md)を参照してください。
+企業ゲートウェイ環境向けに、すべての API リクエストを HTTP CONNECT プロキシ経由でルーティングします。詳しくは[プロキシ設定](docs/okf/llm-hub-help/operations/proxy.md)を参照してください。
 
 ### ローカル LLM
 
@@ -862,7 +862,7 @@ if __name__ == "__main__":
 
 > **警告:** パスワードを忘れると、暗号化ファイルは復元できません。パスワードは安全に保管してください。
 
-> **ヒント:** ディレクトリ内のすべてのファイルを一括暗号化するには、ワークフローを使用します。[WORKFLOW_NODES_ja.md](docs/WORKFLOW_NODES_ja.md#obsidian-command) の「ディレクトリ内の全ファイルを暗号化」の例を参照してください。
+> **ヒント:** ディレクトリ内のすべてのファイルを一括暗号化するには、ワークフローを使用します。[Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md#obsidian-command) の「ディレクトリ内の全ファイルを暗号化」の例を参照してください。
 
 ![ファイル暗号化ワークフロー](docs/images/enc.png)
 
@@ -932,7 +932,7 @@ Vault からの同期の代わりに、事前構築済みのインデックス�
 - **Chat または Discussion に送信** — 選択した結果が編集可能な添付ファイルとして追加
 - **インデックス設定**（歯車アイコン）— チャンクサイズ、オーバーラップ、対象フォルダ、同期などを設定
 
-> 詳細は [RAG Search ドキュメント](docs/RAG_SEARCH.md)（[日本語](docs/RAG_SEARCH_ja.md) | [中文](docs/RAG_SEARCH_zh.md) | [한국어](docs/RAG_SEARCH_ko.md) | [Français](docs/RAG_SEARCH_fr.md) | [Deutsch](docs/RAG_SEARCH_de.md) | [Español](docs/RAG_SEARCH_es.md) | [Português](docs/RAG_SEARCH_pt.md) | [Italiano](docs/RAG_SEARCH_it.md)）をご覧ください。
+> 詳細は [RAG Search ドキュメント](docs/okf/llm-hub-help/features/rag-search.md)をご覧ください。
 
 ### AI Discussion
 

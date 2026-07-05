@@ -179,6 +179,20 @@ export class LlmHubPlugin extends Plugin {
   }
 
   onload(): void {
+    try {
+      this.onloadImpl();
+    } catch (e) {
+      // Mobile has no readable console: surface startup failures via a
+      // persistent Notice and a log file in the vault.
+      // JavaScriptCore's error.stack omits the message, so include both explicitly.
+      const msg = `LLM Hub: onload failed: ${String(e)}\n${e instanceof Error ? e.stack ?? "" : ""}`;
+      new Notice(msg, 0);
+      void this.app.vault.adapter.write("llm-hub-load-error.log", msg).catch(() => {});
+      throw e;
+    }
+  }
+
+  private onloadImpl(): void {
     // Initialize i18n locale
     initLocale();
 
@@ -927,16 +941,21 @@ export class LlmHubPlugin extends Plugin {
   }
 
   /**
-   * Create a new empty `.dashboard` file under `dashboards/` and open it.
-   * Picks a unique "Dashboard", "Dashboard 2", … name.
+   * Create a new empty `.dashboard` file under the dashboard folder and open it.
+   * Picks a unique name by appending " 2", " 3", ... when needed.
    */
-  async createDashboard(): Promise<void> {
+  async createDashboard(requestedName = "Dashboard"): Promise<TFile | null> {
     const { vault, workspace } = this.app;
 
-    let name = "Dashboard";
+    const baseName = requestedName
+      .trim()
+      .replace(/[\\/:*?"<>|#^[\]]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || "Dashboard";
+    let name = baseName;
     let path = dashboardPath(name);
     for (let i = 2; vault.getAbstractFileByPath(path); i++) {
-      name = `Dashboard ${i}`;
+      name = `${baseName} ${i}`;
       path = dashboardPath(name);
     }
 
@@ -946,11 +965,12 @@ export class LlmHubPlugin extends Plugin {
       file = await vault.create(path, serializeDashboard(createEmptyDashboard()));
     } catch (error) {
       new Notice(`Failed to create dashboard: ${String(error)}`);
-      return;
+      return null;
     }
 
     const leaf = workspace.getLeaf(true);
     await leaf.openFile(file);
+    return file;
   }
 
   async activateChatView(): Promise<void> {
@@ -975,6 +995,64 @@ export class LlmHubPlugin extends Plugin {
 
     if (leaf) {
       void workspace.revealLeaf(leaf);
+    }
+  }
+
+  async askChatAboutSelection(selection: { text: string; sourcePath?: string }): Promise<void> {
+    const text = selection.text.trim();
+    if (!text) return;
+
+    const { workspace } = this.app;
+    let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VIEW_TYPE_GEMINI_CHAT)[0] ?? null;
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false);
+      if (leaf) {
+        await leaf.setViewState({
+          type: VIEW_TYPE_GEMINI_CHAT,
+          active: true,
+        });
+      }
+    }
+    if (!leaf) return;
+
+    await workspace.revealLeaf(leaf);
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => window.setTimeout(resolve, 30));
+      const view = leaf.view instanceof ChatView ? leaf.view : null;
+      if (view) {
+        view.askSelection({ text, sourcePath: selection.sourcePath });
+        this.settingsEmitter.emit("chat-activated");
+        return;
+      }
+    }
+  }
+
+  async openChatWithDraft(content: string): Promise<void> {
+    const draft = content.trim();
+    if (!draft) return;
+
+    const { workspace } = this.app;
+    let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VIEW_TYPE_GEMINI_CHAT)[0] ?? null;
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false);
+      if (leaf) {
+        await leaf.setViewState({
+          type: VIEW_TYPE_GEMINI_CHAT,
+          active: true,
+        });
+      }
+    }
+    if (!leaf) return;
+
+    await workspace.revealLeaf(leaf);
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => window.setTimeout(resolve, 30));
+      const view = leaf.view instanceof ChatView ? leaf.view : null;
+      if (view) {
+        view.setChatDraft(draft);
+        this.settingsEmitter.emit("chat-activated");
+        return;
+      }
     }
   }
 

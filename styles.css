@@ -272,6 +272,59 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   font-size: 12px;
 }
 
+.llm-hub-empty-dashboard {
+  width: min(100%, 420px);
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  text-align: left;
+}
+
+.llm-hub-empty-dashboard-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.llm-hub-empty-dashboard-description {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.llm-hub-empty-dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.llm-hub-empty-dashboard-link,
+.llm-hub-empty-dashboard-create {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.llm-hub-empty-dashboard-link span,
+.llm-hub-empty-dashboard-create span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .llm-hub-empty-tips {
   margin-top: 16px;
   text-align: left;
@@ -1153,13 +1206,30 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   height: 44px;
 }
 
+/* Mobile: give the textarea the full row; buttons move to a second row
+   (attach/vault-tool left, send/collapse right) so typing space isn't
+   squeezed between two 44px button columns. */
+.is-mobile .llm-hub-input-area {
+  flex-wrap: wrap;
+}
+
 .is-mobile .llm-hub-input-buttons {
+  flex-direction: row;
+  align-self: center;
   gap: 6px;
 }
 
 .is-mobile .llm-hub-input {
+  flex: 1 1 100%;
+  order: -1;
   min-height: 44px;
   font-size: 16px; /* Prevent iOS zoom on focus */
+}
+
+.is-mobile .llm-hub-send-buttons {
+  flex-direction: row;
+  align-self: center;
+  margin-left: auto;
 }
 
 .is-mobile .llm-hub-model-selector {
@@ -7633,10 +7703,25 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   color: var(--text-muted);
 }
 
+/* Scroll + grid */
+.llm-hub-db-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  position: relative;
+}
+.is-mobile .llm-hub-db-scroll {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 96px);
+}
+
 .llm-hub-rag-config-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+.llm-hub-db-grid.is-maximized {
+  display: block;
+  height: 100%;
 }
 
 /* Indexed files accordion */
@@ -9131,10 +9216,40 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   opacity: 0.85;
   z-index: 30;
 }
+.llm-hub-db-cell.is-maximized {
+  position: absolute;
+  inset: 0;
+  border-color: var(--background-modifier-border);
+  box-shadow: var(--shadow-s);
+  z-index: 40;
+}
 .llm-hub-db-cell-content {
   height: 100%;
+  min-height: 0;
   width: 100%;
+  min-width: 0;
   overflow: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* Mobile: iOS long-press selection keeps expanding until it hits a
+   user-select: none boundary, so a selectable dashboard chrome means one
+   long-press can select the whole board. Obsidian's own styles (e.g. the
+   native Bases table) re-enable selection at the element level inside
+   widgets, so this needs !important on both sides: everything under the
+   dashboard is non-selectable, then reading surfaces and text inputs are
+   switched back on (the later rule wins the equal-importance tie). */
+.is-mobile .llm-hub-db-root,
+.is-mobile .llm-hub-db-root * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.is-mobile .llm-hub-db-file-content,
+.is-mobile .llm-hub-db-file-content *,
+.is-mobile .llm-hub-db-root textarea,
+.is-mobile .llm-hub-db-root input {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 /* Snap preview */
@@ -9151,17 +9266,22 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
 .llm-hub-db-drag {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
+  width: 48px;
   height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: grab;
+  transform: translateX(-50%);
   background: var(--background-secondary);
-  border-bottom: 1px solid var(--background-modifier-border);
+  border: 1px solid var(--background-modifier-border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
   color: var(--text-faint);
   opacity: 0;
+  pointer-events: none;
+  z-index: 12;
   transition: opacity 0.15s ease;
 }
 .llm-hub-db-drag:active {
@@ -9169,6 +9289,15 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
 }
 .llm-hub-db-cell:hover .llm-hub-db-drag {
   opacity: 1;
+  pointer-events: auto;
+}
+.llm-hub-db-cell:focus-within .llm-hub-db-drag {
+  opacity: 0;
+  pointer-events: none;
+}
+.is-mobile .llm-hub-db-cell[data-widget-type="file"]:focus-within .llm-hub-db-drag {
+  opacity: 1;
+  pointer-events: auto;
 }
 .llm-hub-db-actions {
   position: absolute;
@@ -9178,10 +9307,6 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   align-items: center;
   gap: 2px;
   z-index: 10;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-.llm-hub-db-cell:hover .llm-hub-db-actions {
   opacity: 1;
 }
 .llm-hub-db-iconbtn {
@@ -9212,10 +9337,17 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   cursor: se-resize;
   color: var(--text-faint);
   opacity: 0;
+  pointer-events: none;
+  z-index: 12;
   transition: opacity 0.15s ease;
 }
 .llm-hub-db-cell:hover .llm-hub-db-resize {
   opacity: 1;
+  pointer-events: auto;
+}
+.llm-hub-db-cell:focus-within .llm-hub-db-resize {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Widget bodies */
@@ -9253,7 +9385,7 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   border-bottom: 1px solid var(--background-modifier-border);
 }
 .llm-hub-db-web-url {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9277,7 +9409,7 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   border-bottom: 1px solid var(--background-modifier-border);
 }
 .llm-hub-db-markdown-path {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9304,9 +9436,671 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
 }
 .llm-hub-db-markdown {
   flex: 1;
+  height: 100%;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px 12px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-markdown * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-markdown-render-target {
+  min-height: 100%;
+}
+
+.llm-hub-db-file-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+.llm-hub-db-file-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  /* Right padding reserves room for the cell's maximize/settings buttons,
+     which are absolutely positioned at the cell's top-right corner. */
+  padding: 4px 64px 4px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.llm-hub-db-file-main {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.llm-hub-db-file-content {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-file-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.llm-hub-db-file-editorbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 4px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.llm-hub-db-file-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  padding: 10px 12px;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+.llm-hub-db-file-textarea:focus {
+  box-shadow: none;
+  outline: none;
+}
+.llm-hub-db-file-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: none;
+  background: white;
+}
+.llm-hub-db-file-imagewrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 8px;
+  background: var(--background-secondary);
+}
+.llm-hub-db-file-imagewrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.llm-hub-db-pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--background-secondary);
+}
+.llm-hub-db-pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.llm-hub-db-pdf-pages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+.llm-hub-db-pdf-page {
+  position: relative;
+  margin: 0 auto 14px;
+  overflow: hidden;
+  background: white;
+  box-shadow: var(--shadow-s);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-pdf-page canvas {
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.llm-hub-db-pdf-page-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: var(--background-primary);
+}
+.llm-hub-db-pdf-text-layer {
+  color-scheme: only light;
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 1;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.llm-hub-db-pdf-text-layer :is(span, br) {
+  position: absolute;
+  white-space: pre;
+  color: transparent;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-pdf-text-layer > :not(.markedContent),
+.llm-hub-db-pdf-text-layer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.llm-hub-db-pdf-text-layer .markedContent {
+  display: contents;
+}
+.llm-hub-db-pdf-text-layer span[role="img"] {
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.llm-hub-db-pdf-text-layer ::selection {
+  background: rgb(59 130 246 / 0.35);
+  color: transparent;
+}
+.llm-hub-db-pdf-text-layer.selectionRendering ::selection,
+.llm-hub-db-pdf-text-layer br::selection {
+  background: transparent;
+  color: transparent;
+}
+.llm-hub-db-pdf-text-layer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.llm-hub-db-pdf-text-layer.selecting .endOfContent {
+  top: 0;
+}
+.llm-hub-db-markdown-open.is-active {
+  color: var(--text-accent);
+  background: var(--background-modifier-active-hover);
+}
+.llm-hub-db-checkrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+}
+.llm-hub-db-checkrow input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.llm-hub-db-memo-panel {
+  display: flex;
+  flex: 0 0 220px;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+.llm-hub-db-memo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  padding: 4px 6px 4px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+}
+.llm-hub-db-memo-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.llm-hub-db-memo-rail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 34px;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 8px 4px;
+  border: none;
+  border-right: 1px solid var(--background-modifier-border);
+  border-radius: 0;
+  background: var(--background-secondary);
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.llm-hub-db-memo-rail:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.llm-hub-db-memo-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-memo-empty {
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.llm-hub-db-memo-item {
+  padding: 7px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  min-width: 0;
+  overflow: hidden;
+}
+.llm-hub-db-memo-item + .llm-hub-db-memo-item {
+  margin-top: 6px;
+}
+.llm-hub-db-memo-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--text-muted);
+}
+.llm-hub-db-memo-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.llm-hub-db-memo-item time {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+.llm-hub-db-memo-item blockquote,
+.llm-hub-db-memo-relation blockquote {
+  margin: 0 0 6px;
+  padding: 4px 6px;
+  border-left: 3px solid var(--interactive-accent);
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-memo-quote-link {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: 96px;
+  margin: 0 0 6px;
+  padding: 4px 6px;
+  border: none;
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 0;
+  background: var(--background-secondary);
+  box-shadow: none;
+  color: var(--text-accent);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  text-align: left;
+  white-space: pre-wrap;
+  cursor: pointer;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-memo-quote-link:hover {
+  background: var(--background-modifier-hover);
+  text-decoration: underline;
+}
+.llm-hub-db-memo-item p {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: var(--font-ui-smaller);
+  line-height: 1.4;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.llm-hub-db-memo-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.llm-hub-db-memo-edit textarea {
+  width: 100%;
+  min-height: 74px;
+  max-height: 160px;
+  resize: vertical;
+  font-size: var(--font-ui-smaller);
+}
+.llm-hub-db-memo-edit textarea.llm-hub-db-memo-edit-quote {
+  min-height: 54px;
+  max-height: 110px;
+  border-left: 3px solid var(--interactive-accent);
+}
+.llm-hub-db-memo-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.llm-hub-db-memo-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+/* Mobile: while a memo input is focused, pin it above the on-screen
+   keyboard (same approach as the timeline composer) — otherwise iOS
+   scrolls the whole app out of view to reveal the input. */
+.is-mobile .llm-hub-db-memo-compose.is-keyboard-focused,
+.is-mobile .llm-hub-db-memo-edit.is-keyboard-focused {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--llm-hub-db-memo-keyboard-inset, 0px) + env(safe-area-inset-bottom) + 12px);
+  z-index: 1000;
+  max-height: min(420px, calc(100vh - var(--llm-hub-db-memo-keyboard-inset, 0px) - 40px));
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+}
+.is-mobile .llm-hub-db-memo-compose.is-mobile-hidden {
+  display: none;
+}
+.llm-hub-db-memo-compose-launcher {
+  display: none;
+}
+.is-mobile .llm-hub-db-memo-compose-launcher {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+.is-mobile .llm-hub-db-memo-compose-launcher .llm-hub-db-primary-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 36px;
+  border-radius: 6px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+.is-mobile .llm-hub-db-memo-compose-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.24);
+  box-shadow: none;
+}
+.is-mobile .llm-hub-db-memo-compose.is-mobile-modal {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--llm-hub-db-memo-keyboard-inset, 0px) + env(safe-area-inset-bottom) + 12px);
+  z-index: 1000;
+  max-height: min(420px, calc(100vh - var(--llm-hub-db-memo-keyboard-inset, 0px) - 40px));
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+}
+.is-mobile .llm-hub-db-memo-compose.is-mobile-modal > .llm-hub-db-primary-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 38px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+  box-shadow: 0 2px 10px hsla(var(--interactive-accent-hsl), 0.28);
+}
+.is-mobile .llm-hub-db-memo-compose.is-mobile-modal > .llm-hub-db-primary-btn:hover {
+  background: var(--interactive-accent-hover);
+}
+.is-mobile .llm-hub-db-memo-compose.is-mobile-modal textarea {
+  min-height: 120px;
+  max-height: 260px;
+  resize: none;
+}
+.llm-hub-db-memo-relation {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  max-height: 92px;
+  min-height: 0;
+}
+.llm-hub-db-memo-relation blockquote {
+  flex: 1;
+  min-width: 0;
+  max-height: 88px;
+  overflow: auto;
+}
+.llm-hub-db-memo-relation > .llm-hub-db-iconbtn {
+  position: sticky;
+  top: 0;
+  flex: 0 0 auto;
+  background: var(--background-primary);
+}
+.llm-hub-db-memo-compose textarea {
+  width: 100%;
+  min-height: 64px;
+  max-height: 140px;
+  resize: vertical;
+  font-size: var(--font-ui-smaller);
+}
+
+.llm-hub-db-selection-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-popover, 1000);
+}
+.llm-hub-db-selection-menu {
+  position: fixed;
+  min-width: 160px;
+  max-width: 260px;
+  padding: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  box-shadow: var(--shadow-l);
+}
+/* Mobile: the menu floats without a backdrop so the selection handles stay
+   usable; it needs its own stacking level. */
+.llm-hub-db-selection-menu-floating .llm-hub-db-selection-menu {
+  z-index: var(--layer-popover, 1000);
+}
+.llm-hub-db-selection-menu-quote {
+  max-height: 96px;
+  overflow: auto;
+  margin: 2px 4px 4px;
+  padding: 4px 6px;
+  border-left: 3px solid var(--interactive-accent);
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.llm-hub-db-selection-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  text-align: left;
+  cursor: pointer;
+}
+.llm-hub-db-selection-menu button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-db-memolist {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.llm-hub-db-memolist-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+}
+.llm-hub-db-memolist-search input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+}
+.llm-hub-db-memolist-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.llm-hub-db-memolist-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  height: auto;
+  min-height: 56px;
+  padding: 7px 8px;
+  border: none;
+  border-bottom: 1px solid var(--background-modifier-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-normal);
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  line-height: 1.25;
+}
+.llm-hub-db-memolist-row:hover {
+  background: var(--background-modifier-hover);
+}
+.llm-hub-db-memolist-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.llm-hub-db-memolist-row > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.llm-hub-db-memolist-text strong,
+.llm-hub-db-memolist-text small,
+.llm-hub-db-memolist-text em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.llm-hub-db-memolist-text strong {
+  font-size: var(--font-ui-smaller);
+  line-height: 1.25;
+}
+.llm-hub-db-memolist-text small,
+.llm-hub-db-memolist-row time {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+.llm-hub-db-memolist-text em {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.2;
+}
+.llm-hub-db-memolist-row time {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.llm-hub-db-memolist-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 4px;
+  border-top: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
 }
 
 /* Modal (widget palette) */
@@ -9387,7 +10181,7 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
 .llm-hub-db-panel-overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--layer-modal, 100);
+  z-index: 1000;
   display: flex;
   justify-content: flex-end;
   background: rgba(0, 0, 0, 0.3);
@@ -9506,6 +10300,7 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 34px;
   padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid var(--background-modifier-border);
@@ -9853,6 +10648,9 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   padding: 3px 8px;
   border-bottom: 1px solid var(--background-modifier-border);
 }
+.llm-hub-db-cell[data-widget-type="workflow"] .llm-hub-db-wf-header {
+  padding-right: 72px;
+}
 .llm-hub-db-wf-meta {
   display: flex;
   align-items: center;
@@ -9873,11 +10671,13 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 .llm-hub-db-wf-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   padding: 2px 7px;
   font-size: 10px;
   border-radius: 5px;
@@ -9886,6 +10686,11 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   color: var(--text-muted);
   cursor: pointer;
   box-shadow: none;
+  white-space: nowrap;
+}
+.llm-hub-db-wf-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .llm-hub-db-wf-btn:hover:not(:disabled) {
   background: var(--background-modifier-hover);
@@ -9936,6 +10741,9 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   padding: 4px 8px;
   flex: 0 0 auto;
 }
+.llm-hub-db-cell[data-widget-type="kanban"] .llm-hub-db-kanban-header {
+  padding-right: 72px;
+}
 .llm-hub-db-kanban-board-title {
   font-weight: 600;
   font-size: var(--font-ui-medium);
@@ -9952,6 +10760,7 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   padding: 3px 10px;
   font-size: var(--font-ui-smaller);
   font-weight: 500;
@@ -10182,6 +10991,11 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   align-items: center;
   gap: 6px;
   cursor: pointer;
+  white-space: nowrap;
+}
+.llm-hub-db-kanban-new span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .llm-hub-db-kanban-checkbox input[type="checkbox"] {
   width: var(--checkbox-size, 16px);
@@ -10346,6 +11160,10 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   padding: 5px 8px;
   border-bottom: 1px solid var(--background-modifier-border);
 }
+.llm-hub-db-cell[data-widget-type="timeline"] .llm-hub-db-timeline-header {
+  padding-right: 64px;
+}
+
 .llm-hub-db-timeline-title,
 .llm-hub-db-timeline-error,
 .llm-hub-db-timeline-post-meta span:first-child,
@@ -10664,4 +11482,44 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   .llm-hub-db-timeline-filters {
     grid-template-columns: 1fr;
   }
+}
+
+.is-mobile .llm-hub-db-timeline-composer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.24);
+  box-shadow: none;
+}
+.is-mobile .llm-hub-db-timeline-composer.is-mobile-modal {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--llm-hub-db-timeline-keyboard-inset, 0px) + env(safe-area-inset-bottom) + 12px);
+  z-index: 1000;
+  max-height: min(420px, calc(100vh - var(--llm-hub-db-timeline-keyboard-inset, 0px) - 40px));
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+}
+/* Same keyboard handling for the inline edit form. */
+.is-mobile .llm-hub-db-timeline-edit.is-keyboard-focused {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--llm-hub-db-timeline-keyboard-inset, 0px) + env(safe-area-inset-bottom) + 12px);
+  z-index: 1000;
+  max-height: min(420px, calc(100vh - var(--llm-hub-db-timeline-keyboard-inset, 0px) - 40px));
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
 }

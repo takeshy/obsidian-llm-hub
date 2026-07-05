@@ -274,7 +274,7 @@ Extend the AI with custom instructions, reference materials, and executable work
 
 Create skills the same way as workflows — select **+ New (AI)**, check **"Create as agent skill"**, and describe what you want. The AI generates both the `SKILL.md` instructions and the workflow.
 
-> **For setup instructions and examples, see [SKILLS.md](docs/SKILLS.md)**
+> **For setup instructions and examples, see [Agent Skills](docs/okf/llm-hub-help/features/agent-skills.md)**
 
 ---
 
@@ -405,7 +405,7 @@ Build automated multi-step workflows directly in Markdown files. **No programmin
 | RAG | `rag-sync` |
 | Utility | `sleep` |
 
-> **For detailed node specifications and examples, see [WORKFLOW_NODES.md](docs/WORKFLOW_NODES.md)**
+> **For detailed node specifications and examples, see [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md)**
 
 ## Hotkey Mode
 
@@ -507,7 +507,7 @@ Configure everything from the widget settings in edit mode:
 > [!NOTE]
 > **Workflow widgets read from a cache, not live.** A workflow widget runs only on the **Run** button, the config editor's test-run, or once on open when its cached result is older than the **Auto-refresh interval** (minutes; `0` = manual only). Results are stored in a hidden sidecar file next to the dashboard, so output survives reopening. The workflow must store its Markdown/HTML output in a variable (default `result`).
 
-> **For the `.dashboard` file format, the full YAML schema, and AI-generation tips, see [Dashboard Documentation](docs/DASHBOARD.md)**
+> **For the `.dashboard` file format, the full YAML schema, and AI-generation tips, see [Dashboard Documentation](docs/okf/llm-hub-help/features/dashboard.md)**
 
 ---
 
@@ -618,7 +618,7 @@ You can also add custom OpenAI-compatible endpoints.
 
 ### Proxy
 
-Route all API requests through an HTTP CONNECT proxy for corporate gateway environments. See [Proxy Settings](docs/PROXY.md) for details.
+Route all API requests through an HTTP CONNECT proxy for corporate gateway environments. See [Proxy Settings](docs/okf/llm-hub-help/operations/proxy.md) for details.
 
 ### Local LLM
 
@@ -848,7 +848,7 @@ Requires: `pip install cryptography`
 
 > **Warning:** If you forget your password, encrypted files cannot be recovered. Keep your password safe.
 
-> **Tip:** To encrypt all files in a directory at once, use a workflow. See the "Encrypt all files in a directory" example in [WORKFLOW_NODES.md](docs/WORKFLOW_NODES.md#obsidian-command).
+> **Tip:** To encrypt all files in a directory at once, use a workflow. See the "Encrypt all files in a directory" example in [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md#obsidian-command).
 
 ![File Encryption Workflow](docs/images/enc.png)
 
@@ -917,7 +917,7 @@ The **RAG Search** tab provides a dedicated interface for searching, filtering, 
 - **Send to Chat or Discussion** — selected results become editable attachments
 - **Index settings** (gear icon) — configure chunk size, overlap, target folders, sync, and more
 
-> For full details, see [RAG Search Documentation](docs/RAG_SEARCH.md) ([日本語](docs/RAG_SEARCH_ja.md) | [中文](docs/RAG_SEARCH_zh.md) | [한국어](docs/RAG_SEARCH_ko.md) | [Français](docs/RAG_SEARCH_fr.md) | [Deutsch](docs/RAG_SEARCH_de.md) | [Español](docs/RAG_SEARCH_es.md) | [Português](docs/RAG_SEARCH_pt.md) | [Italiano](docs/RAG_SEARCH_it.md))
+> For full details, see [RAG Search Documentation](docs/okf/llm-hub-help/features/rag-search.md)
 
 ### AI Discussion
 

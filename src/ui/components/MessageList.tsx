@@ -1,8 +1,16 @@
 import { forwardRef } from "react";
 import type { App } from "obsidian";
+import BookOpen from "lucide-react/dist/esm/icons/book-open";
+import LayoutDashboard from "lucide-react/dist/esm/icons/layout-dashboard";
+import Plus from "lucide-react/dist/esm/icons/plus";
 import type { Message, LocalLlmConfig } from "src/types";
 import MessageBubble from "./MessageBubble";
 import { t } from "src/i18n";
+
+interface DashboardLink {
+  basename: string;
+  path: string;
+}
 
 interface MessageListProps {
   messages: Message[];
@@ -14,6 +22,10 @@ interface MessageListProps {
   alwaysThink?: boolean;
   app: App;
   localLlmConfigs?: LocalLlmConfig[];
+  currentDashboard?: DashboardLink | null;
+  onOpenDashboard?: () => void;
+  onCreateDashboard?: () => void;
+  onAskLlmHubHelp?: () => void;
 }
 
 // Extract source file name from user message (e.g., From "xxx.md":)
@@ -38,6 +50,10 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
   alwaysThink,
   app,
   localLlmConfigs,
+  currentDashboard,
+  onOpenDashboard,
+  onCreateDashboard,
+  onAskLlmHubHelp,
 }, ref) => {
   // Get source file name for assistant message (from previous user message)
   const getSourceFileForIndex = (index: number): string | null => {
@@ -59,6 +75,59 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
           <p className="llm-hub-empty-hint">
             {t("chat.welcomeHint")}
           </p>
+          {onAskLlmHubHelp && (
+            <div className="llm-hub-empty-dashboard">
+              <div className="llm-hub-empty-dashboard-heading">
+                <BookOpen size={16} aria-hidden="true" />
+                <span>{t("chat.helpTitle")}</span>
+              </div>
+              <p className="llm-hub-empty-dashboard-description">
+                {t("chat.helpDescription")}
+              </p>
+              <div className="llm-hub-empty-dashboard-actions">
+                <button
+                  type="button"
+                  className="llm-hub-empty-dashboard-create"
+                  onClick={onAskLlmHubHelp}
+                >
+                  <BookOpen size={14} aria-hidden="true" />
+                  <span>{t("chat.askLlmHubHelp")}</span>
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="llm-hub-empty-dashboard">
+            <div className="llm-hub-empty-dashboard-heading">
+              <LayoutDashboard size={16} aria-hidden="true" />
+              <span>{t("chat.dashboardTitle")}</span>
+            </div>
+            <p className="llm-hub-empty-dashboard-description">
+              {t("chat.dashboardDescription")}
+            </p>
+            <div className="llm-hub-empty-dashboard-actions">
+              {currentDashboard && onOpenDashboard && (
+                <button
+                  type="button"
+                  className="llm-hub-empty-dashboard-link"
+                  title={currentDashboard.path}
+                  onClick={onOpenDashboard}
+                >
+                  <LayoutDashboard size={14} aria-hidden="true" />
+                  <span>{t("chat.openCurrentDashboard")}: {currentDashboard.basename}</span>
+                </button>
+              )}
+              {onCreateDashboard && (
+                <button
+                  type="button"
+                  className="llm-hub-empty-dashboard-create"
+                  onClick={onCreateDashboard}
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  <span>{t("chat.createDashboard")}</span>
+                </button>
+              )}
+            </div>
+          </div>
           <div className="llm-hub-empty-tips">
             {!alwaysThink && (
               <div className="llm-hub-empty-tip">

@@ -517,7 +517,7 @@ export interface CliProviderInterface {
  * Format conversation history as a prompt string
  */
 function formatHistoryAsPrompt(messages: Message[], systemPrompt: string): string {
-  const parts: string[] = [];
+	const parts: string[] = [];
 
   if (systemPrompt) {
     parts.push(`System: ${systemPrompt}\n`);
@@ -536,7 +536,26 @@ function formatHistoryAsPrompt(messages: Message[], systemPrompt: string): strin
     parts.push(`User: ${lastMessage.content}`);
   }
 
-  return parts.join("\n");
+	return parts.join("\n");
+}
+
+export function buildCodexExecInvocation(
+  messages: Message[],
+  systemPrompt: string,
+  sessionId?: string
+): { args: string[]; stdin: string } {
+  if (sessionId) {
+    const lastMessage = messages[messages.length - 1];
+    return {
+      args: ["exec", "--json", "--skip-git-repo-check", "resume", sessionId, "-"],
+      stdin: lastMessage?.role === "user" ? lastMessage.content : "",
+    };
+  }
+
+  return {
+    args: ["exec", "--json", "--skip-git-repo-check", "-"],
+    stdin: formatHistoryAsPrompt(messages, systemPrompt),
+  };
 }
 
 /**
@@ -1008,8 +1027,8 @@ export class ClaudeCliProvider extends BaseCliProvider {
 
 /**
  * Codex CLI provider
- * Uses: codex exec "prompt" --json --skip-git-repo-check
- * Supports session resumption with: codex exec resume <sessionId> "prompt"
+ * Uses: codex exec --json --skip-git-repo-check - with the prompt sent via stdin
+ * Supports session resumption with: codex exec resume <sessionId> -
  */
 export class CodexCliProvider extends BaseCliProvider {
   name: ChatProvider = "codex-cli";
@@ -1030,22 +1049,10 @@ export class CodexCliProvider extends BaseCliProvider {
     // Dynamically import child_process (not available on mobile)
     const { spawn } = getChildProcess();
 
-    // Build CLI arguments based on whether we have a session ID
-    // Note: --json and --skip-git-repo-check are options for 'exec', must come before subcommands
-    let cliArgs: string[];
-
-    if (sessionId) {
-      // Resuming an existing session - only send the latest user message
-      const lastMessage = messages[messages.length - 1];
-      const prompt = lastMessage?.role === "user" ? lastMessage.content : "";
-
-      cliArgs = ["exec", "--json", "--skip-git-repo-check", "resume", sessionId, prompt];
-    } else {
-      // First message - send full history with system prompt
-      const prompt = formatHistoryAsPrompt(messages, systemPrompt);
-
-      cliArgs = ["exec", "--json", "--skip-git-repo-check", prompt];
-    }
+    // Build CLI arguments based on whether we have a session ID.
+    // Prompt content is sent through stdin so large skill/OKF/RAG contexts do not hit argv limits.
+    // Note: --json and --skip-git-repo-check are options for 'exec', must come before subcommands.
+    const { args: cliArgs, stdin: prompt } = buildCodexExecInvocation(messages, systemPrompt, sessionId);
 
     const { command, args, shell } = resolveCodexCommand(cliArgs);
     const proc = spawn(command, args, {
@@ -1055,8 +1062,7 @@ export class CodexCliProvider extends BaseCliProvider {
       env: typeof process !== "undefined" ? process.env : undefined,
     });
 
-    // Close stdin immediately to signal no more input
-    proc.stdin?.end();
+    proc.stdin?.end(prompt);
 
     // Handle abort
     if (signal) {

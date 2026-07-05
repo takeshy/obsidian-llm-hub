@@ -272,7 +272,7 @@ MCP(Model Context Protocol) 서버는 Vault 작업 이외의 AI 기능을 확장
 
 스킬도 워크플로우와 같은 방법으로 만들 수 있습니다 — **+ New (AI)**를 선택하고, **"에이전트 스킬로 만들기"**를 체크한 후 설명을 입력하세요. AI가 `SKILL.md` 지침과 워크플로우를 모두 생성합니다.
 
-> **설정 방법과 예제는 [SKILLS.md](docs/SKILLS_ko.md)를 참조하세요**
+> **설정 방법과 예제는 [Agent Skills](docs/okf/llm-hub-help/features/agent-skills.md)를 참조하세요**
 
 ---
 
@@ -400,7 +400,7 @@ Markdown 파일에서 직접 자동화된 다단계 워크플로우를 구축합
 | 외부 | `mcp`, `obsidian-command` |
 | 유틸리티 | `sleep` |
 
-> **자세한 노드 사양과 예제는 [WORKFLOW_NODES.md](docs/WORKFLOW_NODES_ko.md)를 참조하세요**
+> **자세한 노드 사양과 예제는 [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md)를 참조하세요**
 
 ## 단축키 모드
 
@@ -504,7 +504,7 @@ Obsidian 이벤트에 의해 워크플로우가 자동으로 트리거될 수 �
 > [!NOTE]
 > **워크플로 위젯은 실시간이 아니라 캐시에서 읽습니다.** 워크플로 위젯은 **실행** 버튼, 구성 편집기의 테스트 실행, 또는 캐시된 결과가 **자동 새로 고침 간격**(분; `0` = 수동 전용)보다 오래된 상태로 열 때 한 번만 실행됩니다. 결과는 대시보드 옆의 숨겨진 사이드카 파일에 저장되므로 다시 열어도 출력이 유지됩니다. 워크플로는 Markdown/HTML 출력을 변수(기본값 `result`)에 저장해야 합니다.
 
-> **`.dashboard` 파일 형식, 전체 YAML 스키마, AI 생성 팁은 [대시보드 문서](docs/DASHBOARD.md)를 참조하세요**
+> **`.dashboard` 파일 형식, 전체 YAML 스키마, AI 생성 팁은 [대시보드 문서](docs/okf/llm-hub-help/features/dashboard.md)를 참조하세요**
 
 ---
 
@@ -615,7 +615,7 @@ npm run build
 
 ### 프록시
 
-기업 게이트웨이 환경을 위해 모든 API 요청을 HTTP CONNECT 프록시를 통해 라우팅합니다. 자세한 내용은 [프록시 설정](docs/PROXY.md)을 참조하세요.
+기업 게이트웨이 환경을 위해 모든 API 요청을 HTTP CONNECT 프록시를 통해 라우팅합니다. 자세한 내용은 [프록시 설정](docs/okf/llm-hub-help/operations/proxy.md)을 참조하세요.
 
 ### 로컬 LLM
 
@@ -838,7 +838,7 @@ if __name__ == "__main__":
 
 > **경고:** 비밀번호를 잊으면 암호화된 파일을 복구할 수 없습니다. 비밀번호를 안전하게 보관하세요.
 
-> **팁:** 디렉토리의 모든 파일을 한 번에 암호화하려면 워크플로우를 사용하세요. [WORKFLOW_NODES_ko.md](docs/WORKFLOW_NODES_ko.md#obsidian-command)의 "디렉토리의 모든 파일 암호화" 예제를 참조하세요.
+> **팁:** 디렉토리의 모든 파일을 한 번에 암호화하려면 워크플로우를 사용하세요. [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md#obsidian-command)의 "디렉토리의 모든 파일 암호화" 예제를 참조하세요.
 
 ![파일 암호화 워크플로우](docs/images/enc.png)
 
@@ -905,7 +905,7 @@ vault에서 동기화하는 대신 사전 구축된 인덱스를 사용:
 - **Chat 또는 Discussion으로 전송** — 선택한 결과가 편집 가능한 첨부 파일로 추가
 - **인덱스 설정** (톱니바퀴 아이콘) — 청크 크기, 오버랩, 대상 폴더, 동기화 등을 설정
 
-> 자세한 내용은 [RAG Search 문서](docs/RAG_SEARCH.md) ([日本語](docs/RAG_SEARCH_ja.md) | [中文](docs/RAG_SEARCH_zh.md) | [한국어](docs/RAG_SEARCH_ko.md) | [Français](docs/RAG_SEARCH_fr.md) | [Deutsch](docs/RAG_SEARCH_de.md) | [Español](docs/RAG_SEARCH_es.md) | [Português](docs/RAG_SEARCH_pt.md) | [Italiano](docs/RAG_SEARCH_it.md))를 참조하세요.
+> 자세한 내용은 [RAG Search 문서](docs/okf/llm-hub-help/features/rag-search.md)를 참조하세요.
 
 ### AI Discussion
 

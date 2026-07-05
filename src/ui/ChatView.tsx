@@ -63,4 +63,12 @@ export class ChatView extends ItemView {
   setActiveTab(tab: TabType): void {
     this.tabContainerRef?.setActiveTab(tab);
   }
+
+  askSelection(selection: { text: string; sourcePath?: string }): void {
+    this.tabContainerRef?.askSelection(selection);
+  }
+
+  setChatDraft(content: string): void {
+    this.tabContainerRef?.setChatDraft(content);
+  }
 }

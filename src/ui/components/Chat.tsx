@@ -5,6 +5,7 @@ import {
 	useImperativeHandle,
 	forwardRef,
 	useCallback,
+	useMemo,
 } from "react";
 import { TFile, Notice, MarkdownView, Platform } from "obsidian";
 import Plus from "lucide-react/dist/esm/icons/plus";
@@ -98,7 +99,7 @@ import { formatError } from "src/utils/error";
 import { findFileMentionOccurrences } from "src/utils/mentionResolver";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
-import { buildOkfSystemPrompt, discoverOkfBundles, type OkfBundle } from "src/core/okfLoader";
+import { buildBuiltinOkfSystemPrompt, buildOkfSystemPrompt, discoverOkfBundles, getBuiltinOkfBundle, isBuiltinOkfBundleId, type OkfBundle } from "src/core/okfLoader";
 import { getInterpreter, runScript } from "src/core/scriptRunner";
 import { parseWorkflowFromMarkdown } from "src/workflow/parser";
 import { WorkflowExecutor } from "src/workflow/executor";
@@ -130,11 +131,29 @@ export interface ChatRef {
 	setActiveChat: (chat: TFile | null) => void;
 	addAttachments: (attachments: Attachment[]) => void;
 	clearRagSetting: () => void;
+	askSelection: (selection: { text: string; sourcePath?: string }) => void;
+	setDraft: (content: string) => void;
 }
 
 function didToolCallFail(result: Record<string, unknown>): boolean {
 	return result.error !== undefined || result.success === false;
 }
+
+const MARKDOWN_SKILL_PATH = builtinFolderPath("obsidian-markdown");
+const DASHBOARD_SKILL_PATH = builtinFolderPath("dashboard");
+const CANVAS_SKILL_PATH = builtinFolderPath("json-canvas");
+const BASE_SKILL_PATH = builtinFolderPath("base");
+const CONTEXT_SKILL_BY_EXTENSION: Record<string, string> = {
+	dashboard: DASHBOARD_SKILL_PATH,
+	canvas: CANVAS_SKILL_PATH,
+	base: BASE_SKILL_PATH,
+};
+const CONTEXT_BUILTIN_SKILL_PATHS = new Set([
+	MARKDOWN_SKILL_PATH,
+	DASHBOARD_SKILL_PATH,
+	CANVAS_SKILL_PATH,
+	BASE_SKILL_PATH,
+]);
 
 /**
  * Heuristic: does this error message indicate the local LLM (or its gateway)
@@ -430,6 +449,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const messagesContainerRef = useRef<HTMLDivElement>(null);
 	const abortControllerRef = useRef<AbortController | null>(null);
 	const inputAreaRef = useRef<InputAreaHandle>(null);
+	const pendingExternalSelectionRef = useRef<{ text: string; sourcePath?: string } | null>(null);
 	const currentSlashCommandRef = useRef<SlashCommand | null>(null);
 	const preSlashSettingsRef = useRef<{
 		model: ModelType;
@@ -456,6 +476,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		isTerminalProvider(initialModel) ? null : initialModel
 	);
 	const [vaultFiles, setVaultFiles] = useState<string[]>([]);
+	const [currentDashboard, setCurrentDashboard] = useState<TFile | null>(null);
+	const [activeContextSkillPath, setActiveContextSkillPath] = useState<string | null>(null);
 	const [hasSelection, setHasSelection] = useState(false);
 	const [cliConfig, setCliConfig] = useState(plugin.settings.cliConfig || DEFAULT_CLI_CONFIG);
 	const [decryptingChatId, setDecryptingChatId] = useState<string | null>(null);
@@ -488,6 +510,27 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [activeSkillPaths, setActiveSkillPaths] = useState<string[]>(
 		() => DEFAULT_BUILTIN_SKILL_IDS.map(builtinFolderPath)
 	);
+	const effectiveActiveSkillPaths = useMemo(() => {
+		if (!activeContextSkillPath) {
+			return activeSkillPaths;
+		}
+		const withoutContextBuiltins = activeSkillPaths.filter(path => !CONTEXT_BUILTIN_SKILL_PATHS.has(path));
+		return [activeContextSkillPath, ...withoutContextBuiltins];
+	}, [activeSkillPaths, activeContextSkillPath]);
+	const getEffectiveSkillPathsForSend = useCallback((skillPath?: string) => {
+		let effectiveSkillPaths = activeSkillPaths;
+		if (skillPath && !effectiveSkillPaths.includes(skillPath)) {
+			effectiveSkillPaths = [...effectiveSkillPaths, skillPath];
+		}
+		if (skillPath && CONTEXT_BUILTIN_SKILL_PATHS.has(skillPath)) {
+			return effectiveSkillPaths.filter(path => !CONTEXT_BUILTIN_SKILL_PATHS.has(path) || path === skillPath);
+		}
+		if (!activeContextSkillPath) {
+			return effectiveSkillPaths;
+		}
+		const withoutContextBuiltins = effectiveSkillPaths.filter(path => !CONTEXT_BUILTIN_SKILL_PATHS.has(path));
+		return [activeContextSkillPath, ...withoutContextBuiltins];
+	}, [activeSkillPaths, activeContextSkillPath]);
 	const [okfBundles, setOkfBundles] = useState<OkfBundle[]>([]);
 	const [activeOkfBundleIds, setActiveOkfBundleIds] = useState<string[]>([]);
 
@@ -591,6 +634,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		clearRagSetting: () => {
 			setSelectedRagSetting(null);
 			plugin.workspaceState.selectedRagSetting = null;
+		},
+		askSelection: (selection: { text: string; sourcePath?: string }) => {
+			const text = selection.text.trim();
+			if (!text) return;
+			pendingExternalSelectionRef.current = { text, sourcePath: selection.sourcePath };
+			inputAreaRef.current?.setInputValue("{selection}");
+			inputAreaRef.current?.focus();
+		},
+		setDraft: (content: string) => {
+			inputAreaRef.current?.setInputValue(content);
+			inputAreaRef.current?.focus();
 		},
 	}));
 
@@ -921,37 +975,40 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const saveActiveOkfBundleIds = useCallback((activeBundleIds: string[]) => {
 		const source = getOkfSource();
 		if (!source) return;
+		const externalBundleIds = activeBundleIds.filter(id => !isBuiltinOkfBundleId(id));
 		plugin.settings.knowledgeSources = plugin.settings.knowledgeSources.map(item =>
-			item.id === source.id ? { ...item, activeBundleIds } : item
+			item.id === source.id ? { ...item, activeBundleIds: externalBundleIds } : item
 		);
 		void plugin.saveSettings();
 	}, [getOkfSource, plugin]);
 
 	const refreshOkfBundles = useCallback(() => {
+		const builtinBundle = getBuiltinOkfBundle();
 		const source = getOkfSource();
 		if (!source) {
-			setOkfBundles([]);
-			setActiveOkfBundleIds([]);
+			setOkfBundles([builtinBundle]);
+			setActiveOkfBundleIds(prev => prev.filter(id => isBuiltinOkfBundleId(id)));
 			return;
 		}
 		const root = source.path.trim();
 		const savedActiveBundleIds = source.activeBundleIds;
 		void discoverOkfBundles(plugin.app, root)
 			.then((bundles) => {
-				setOkfBundles(bundles);
+				const allBundles = [builtinBundle, ...bundles];
+				setOkfBundles(allBundles);
 				setActiveOkfBundleIds(prev => {
-					const validIds = new Set(bundles.map(bundle => bundle.id));
+					const validIds = new Set(allBundles.map(bundle => bundle.id));
 					if (savedActiveBundleIds) {
-						return savedActiveBundleIds.filter(id => validIds.has(id));
+						const builtinSelection = prev.filter(id => isBuiltinOkfBundleId(id));
+						return [...builtinSelection, ...savedActiveBundleIds.filter(id => validIds.has(id))];
 					}
-					const kept = prev.filter(id => validIds.has(id));
-					return kept.length > 0 ? kept : bundles.map(bundle => bundle.id);
+					return prev.filter(id => validIds.has(id));
 				});
 			})
 			.catch((e) => {
 				console.warn("Failed to discover OKF bundles:", e);
-				setOkfBundles([]);
-				setActiveOkfBundleIds([]);
+				setOkfBundles([builtinBundle]);
+				setActiveOkfBundleIds(prev => prev.filter(id => isBuiltinOkfBundleId(id)));
 			});
 	}, [getOkfSource, plugin]);
 
@@ -962,6 +1019,62 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			plugin.settingsEmitter.off("settings-updated", refreshOkfBundles);
 		};
 	}, [plugin, refreshOkfBundles]);
+
+	useEffect(() => {
+		const readLeafFile = (leaf: { view?: unknown }): TFile | null => {
+			const file = (leaf.view as { file?: TFile | null } | undefined)?.file;
+			return file instanceof TFile ? file : null;
+		};
+
+		const findContext = (): { dashboardFile: TFile | null; skillPath: string | null } => {
+			let dashboardFile: TFile | null = null;
+
+			const activeFile = plugin.app.workspace.getActiveFile();
+			const skillPath = activeFile ? (CONTEXT_SKILL_BY_EXTENSION[activeFile.extension] ?? null) : null;
+
+			const considerDashboardFile = (file: TFile | null) => {
+				if (!file) return;
+				if (file.extension === "dashboard" && !dashboardFile) {
+					dashboardFile = file;
+				}
+			};
+
+			considerDashboardFile(activeFile);
+			plugin.app.workspace.iterateAllLeaves((leaf) => {
+				considerDashboardFile(readLeafFile(leaf));
+			});
+
+			if (!dashboardFile) {
+				const dashboards = plugin.app.vault
+					.getFiles()
+					.filter(file => file.extension === "dashboard")
+					.sort((a, b) => b.stat.mtime - a.stat.mtime);
+				dashboardFile = dashboards[0] ?? null;
+			}
+
+			return { dashboardFile, skillPath };
+		};
+
+		const refreshContext = () => {
+			const context = findContext();
+			setCurrentDashboard(context.dashboardFile);
+			setActiveContextSkillPath(context.skillPath);
+		};
+
+		refreshContext();
+
+		plugin.app.vault.on("create", refreshContext);
+		plugin.app.vault.on("delete", refreshContext);
+		plugin.app.vault.on("rename", refreshContext);
+		plugin.app.workspace.on("active-leaf-change", refreshContext);
+
+		return () => {
+			plugin.app.vault.off("create", refreshContext);
+			plugin.app.vault.off("delete", refreshContext);
+			plugin.app.vault.off("rename", refreshContext);
+			plugin.app.workspace.off("active-leaf-change", refreshContext);
+		};
+	}, [plugin]);
 
 	const handleToggleOkfBundle = useCallback((bundleId: string) => {
 		setActiveOkfBundleIds(prev => {
@@ -974,9 +1087,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	}, [saveActiveOkfBundleIds]);
 
 	const appendOkfSystemPrompt = useCallback(async (systemPrompt: string): Promise<string> => {
+		if (activeOkfBundleIds.some(id => isBuiltinOkfBundleId(id))) {
+			systemPrompt += buildBuiltinOkfSystemPrompt();
+		}
 		const okfRoot = getOkfRoot();
-		if (!okfRoot || activeOkfBundleIds.length === 0) return systemPrompt;
-		return systemPrompt + await buildOkfSystemPrompt(plugin.app, okfRoot, activeOkfBundleIds);
+		const externalOkfBundleIds = activeOkfBundleIds.filter(id => !isBuiltinOkfBundleId(id));
+		if (!okfRoot || externalOkfBundleIds.length === 0) return systemPrompt;
+		return systemPrompt + await buildOkfSystemPrompt(plugin.app, okfRoot, externalOkfBundleIds);
 	}, [activeOkfBundleIds, getOkfRoot, plugin]);
 
 	// Cleanup MCP executor and persistent CLI session on unmount
@@ -1289,9 +1406,22 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		if (result.includes("{selection}")) {
 			let selection = "";
 			let locationInfo: { filePath: string; startLine: number; endLine: number } | null = null;
+			const externalSelection = pendingExternalSelectionRef.current;
+			pendingExternalSelectionRef.current = null;
+
+			if (externalSelection?.text) {
+				selection = externalSelection.text;
+				if (externalSelection.sourcePath) {
+					locationInfo = {
+						filePath: externalSelection.sourcePath,
+						startLine: 0,
+						endLine: 0,
+					};
+				}
+			}
 
 			// First try to get selection from current active view
-			const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+			const activeView = selection ? null : plugin.app.workspace.getActiveViewOfType(MarkdownView);
 			if (activeView) {
 				const editor = activeView.editor;
 				selection = editor.getSelection();
@@ -1315,12 +1445,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			// Build selection text with location info
 			let selectionText: string;
 			if (selection && locationInfo) {
-				const lineInfo = locationInfo.startLine === locationInfo.endLine
-					? `Line ${locationInfo.startLine}`
-					: `Lines ${locationInfo.startLine}-${locationInfo.endLine}`;
+				const lineInfo = locationInfo.startLine > 0
+					? (locationInfo.startLine === locationInfo.endLine
+						? ` (Line ${locationInfo.startLine})`
+						: ` (Lines ${locationInfo.startLine}-${locationInfo.endLine})`)
+					: "";
 				// Format as quote block for clear boundary
 				const quotedSelection = selection.split("\n").map(line => `> ${line}`).join("\n");
-				selectionText = `From "${locationInfo.filePath}" (${lineInfo}):\n${quotedSelection}`;
+				selectionText = `From "${locationInfo.filePath}"${lineInfo}:\n${quotedSelection}`;
+			} else if (selection) {
+				const quotedSelection = selection.split("\n").map(line => `> ${line}`).join("\n");
+				selectionText = `Selected text:\n${quotedSelection}`;
 			} else {
 				// Fallback to active note content if no selection
 				const activeFile = plugin.app.workspace.getActiveFile();
@@ -1618,10 +1753,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		const isCodexCli = currentModel === "codex-cli";
 
 		// Activate skill if invoked via slash command
-		let effectiveSkillPaths = activeSkillPaths;
-		if (skillPath && !effectiveSkillPaths.includes(skillPath)) {
-			effectiveSkillPaths = [...effectiveSkillPaths, skillPath];
-			setActiveSkillPaths(effectiveSkillPaths);
+		const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
+		if (skillPath && !activeSkillPaths.includes(skillPath)) {
+			setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
 		}
 
 		// Resolve variables in the content
@@ -1887,10 +2021,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		}
 
 		// Activate skill if invoked via slash command
-		let effectiveSkillPaths = activeSkillPaths;
-		if (skillPath && !effectiveSkillPaths.includes(skillPath)) {
-			effectiveSkillPaths = [...effectiveSkillPaths, skillPath];
-			setActiveSkillPaths(effectiveSkillPaths);
+		const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
+		if (skillPath && !activeSkillPaths.includes(skillPath)) {
+			setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
 		}
 
 		// Resolve variables in the content
@@ -2433,10 +2566,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			// Load skills for API provider mode
 			let apiLoadedSkills: LoadedSkill[] = [];
 			{
-				let effectiveSkillPaths = activeSkillPaths;
-				if (skillPath && !effectiveSkillPaths.includes(skillPath)) {
-					effectiveSkillPaths = [...effectiveSkillPaths, skillPath];
-				}
+				const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
 				if (effectiveSkillPaths.length > 0) {
 					const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
 					if (activeMetadata.length > 0) {
@@ -2734,10 +2864,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				}) : [];
 
 				// Activate skill if invoked via slash command
-				let effectiveSkillPaths = activeSkillPaths;
-				if (skillPath && !effectiveSkillPaths.includes(skillPath)) {
-					effectiveSkillPaths = [...effectiveSkillPaths, skillPath];
-					setActiveSkillPaths(effectiveSkillPaths);
+				const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
+				if (skillPath && !activeSkillPaths.includes(skillPath)) {
+					setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
 				}
 
 				// Load active skills (needed for both workflow tools and system prompt)
@@ -3651,6 +3780,40 @@ Always be helpful and provide clear, concise responses. When working with notes,
 		}
 	};
 
+	const handleOpenDashboard = useCallback(() => {
+		if (!currentDashboard) return;
+		void plugin.app.workspace.getLeaf(true).openFile(currentDashboard);
+	}, [plugin, currentDashboard]);
+
+	const handleCreateDashboard = useCallback(() => {
+		void promptForValue(plugin.app, t("dashboard.createNamePrompt"), "Dashboard", false).then((name) => {
+			if (name === null) return;
+			void plugin.createDashboard(name).then((file) => {
+				if (file) {
+					setCurrentDashboard(file);
+					setActiveContextSkillPath(DASHBOARD_SKILL_PATH);
+					return;
+				}
+				window.setTimeout(() => {
+					const activeFile = plugin.app.workspace.getActiveFile();
+					if (activeFile?.extension === "dashboard") {
+						setCurrentDashboard(activeFile);
+						setActiveContextSkillPath(DASHBOARD_SKILL_PATH);
+					}
+				}, 100);
+			});
+		});
+	}, [plugin]);
+
+	const handleAskLlmHubHelp = useCallback(() => {
+		const builtinOkfBundle = getBuiltinOkfBundle();
+		setActiveOkfBundleIds(prev =>
+			prev.includes(builtinOkfBundle.id) ? prev : [...prev, builtinOkfBundle.id]
+		);
+		inputAreaRef.current?.setInputValue(t("chat.helpQuestionDraft"));
+		inputAreaRef.current?.focus();
+	}, []);
+
 	const chatClassName = `llm-hub-chat${isKeyboardVisible ? " keyboard-visible" : ""}${isDecryptInputFocused ? " decrypt-input-focused" : ""}`;
 
 	return (
@@ -3777,11 +3940,18 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								streamingThinking={streamingThinking}
 								isLoading={isLoading}
 								onApplyEdit={handleApplyEdit}
-								onDiscardEdit={handleDiscardEdit}
-								alwaysThink={getThinkingToggle() === true}
-								app={plugin.app}
-								localLlmConfigs={plugin.settings.localLlmConfigs}
-							/>
+							onDiscardEdit={handleDiscardEdit}
+							alwaysThink={getThinkingToggle() === true}
+							app={plugin.app}
+							localLlmConfigs={plugin.settings.localLlmConfigs}
+							currentDashboard={currentDashboard ? {
+								basename: currentDashboard.basename,
+								path: currentDashboard.path,
+							} : null}
+							onOpenDashboard={currentDashboard ? handleOpenDashboard : undefined}
+							onCreateDashboard={handleCreateDashboard}
+							onAskLlmHubHelp={handleAskLlmHubHelp}
+						/>
 
 							<InputArea
 								ref={inputAreaRef}
@@ -3816,8 +3986,11 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								slashCommands={plugin.settings.slashCommands}
 								onSlashCommand={handleSlashCommand}
 								availableSkills={availableSkills}
-								activeSkillPaths={activeSkillPaths}
+								activeSkillPaths={effectiveActiveSkillPaths}
 								onToggleSkill={(folderPath) => {
+									if (activeContextSkillPath && CONTEXT_BUILTIN_SKILL_PATHS.has(folderPath)) {
+										return;
+									}
 									setActiveSkillPaths(prev =>
 										prev.includes(folderPath)
 											? prev.filter(p => p !== folderPath)

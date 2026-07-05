@@ -262,7 +262,7 @@ MCP（Model Context Protocol）伺服器提供額外的工具，擴充 AI 在 Va
 
 建立技能的方式與工作流相同 — 選擇 **+ New (AI)**，勾選**「作為代理技能建立」**，然後描述您想要的功能。AI 會同時生成 `SKILL.md` 指令和工作流。若要編輯現有技能，請開啟其 `SKILL.md` 並在 Workflow / skill 分頁中點選**使用 AI 修改技能** — AI 會同時更新指令內文和參照的工作流。
 
-> **有關設定說明和範例，請參閱 [SKILLS.md](docs/SKILLS_zh-TW.md)**
+> **有關設定說明和範例，請參閱 [Agent Skills](docs/okf/llm-hub-help/features/agent-skills.md)**
 
 ---
 
@@ -443,7 +443,7 @@ nodes:
 | 外部 | `mcp`, `obsidian-command` |
 | 公用程式 | `sleep` |
 
-> **詳細的節點規格和範例，請參閱 [WORKFLOW_NODES.md](docs/WORKFLOW_NODES_zh-TW.md)**
+> **詳細的節點規格和範例，請參閱 [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md)**
 
 ## 快速鍵模式
 
@@ -547,7 +547,7 @@ nodes:
 > [!NOTE]
 > **工作流小工具讀取快取，而不是即時執行。** 工作流小工具只會在按下 **執行** 按鈕、設定編輯器的測試執行，或開啟時快取結果早於**自動重新整理間隔**（分鐘；`0` = 僅手動）時執行一次。結果會儲存在儀表板旁的隱藏 sidecar 檔案中，因此重新開啟後輸出仍會保留。工作流必須將 Markdown/HTML 輸出儲存在變數中（預設 `result`）。
 
-> **關於 `.dashboard` 檔案格式、完整 YAML 結構和 AI 生成提示，請參閱[儀表板文件](docs/DASHBOARD.md)**
+> **關於 `.dashboard` 檔案格式、完整 YAML 結構和 AI 生成提示，請參閱[儀表板文件](docs/okf/llm-hub-help/features/dashboard.md)**
 
 ---
 
@@ -738,7 +738,7 @@ if __name__ == "__main__":
 
 > **警告：** 如果您忘記密碼，加密檔案將無法復原。請妥善保管您的密碼。
 
-> **提示：** 要一次加密目錄中的所有檔案，請使用工作流。參見 [WORKFLOW_NODES_zh-TW.md](docs/WORKFLOW_NODES_zh-TW.md#obsidian-command) 中的「加密目錄中的所有檔案」範例。
+> **提示：** 要一次加密目錄中的所有檔案，請使用工作流。參見 [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md#obsidian-command) 中的「加密目錄中的所有檔案」範例。
 
 ![檔案加密工作流](docs/images/enc.png)
 

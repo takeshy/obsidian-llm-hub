@@ -272,7 +272,7 @@ Estenda as capacidades da IA com instrucoes personalizadas, materiais de referen
 
 Crie skills da mesma forma que workflows — selecione **+ New (AI)**, marque **"Criar como agent skill"** e descreva o que deseja. A AI gera tanto as instrucoes do `SKILL.md` quanto o workflow.
 
-> **Para instrucoes de configuracao e exemplos, consulte [SKILLS.md](docs/SKILLS_pt.md)**
+> **Para instrucoes de configuracao e exemplos, consulte [Agent Skills](docs/okf/llm-hub-help/features/agent-skills.md)**
 
 ---
 
@@ -400,7 +400,7 @@ Construa workflows automatizados de multiplas etapas diretamente em arquivos Mar
 | Externo | `mcp`, `obsidian-command` |
 | Utilitario | `sleep` |
 
-> **Para especificacoes detalhadas de nos e exemplos, veja [WORKFLOW_NODES_pt.md](docs/WORKFLOW_NODES_pt.md)**
+> **Para especificacoes detalhadas de nos e exemplos, veja [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md)**
 
 ## Modo de Atalho
 
@@ -504,7 +504,7 @@ Configure tudo nas configuracoes do widget no modo de edicao:
 > [!NOTE]
 > **Os widgets de workflow leem de um cache, nao ao vivo.** Um widget de workflow so e executado pelo botao **Executar**, pela execucao de teste do editor de configuracao, ou uma vez ao abrir quando seu resultado em cache e mais antigo que o **intervalo de atualizacao automatica** (minutos; `0` = somente manual). Os resultados sao armazenados em um arquivo sidecar oculto ao lado do painel, de modo que a saida sobrevive a reabertura. O workflow deve armazenar sua saida Markdown/HTML em uma variavel (padrao `result`).
 
-> **Para o formato do arquivo `.dashboard`, o esquema YAML completo e dicas de geracao com IA, consulte a [Documentacao do painel](docs/DASHBOARD.md)**
+> **Para o formato do arquivo `.dashboard`, o esquema YAML completo e dicas de geracao com IA, consulte a [Documentacao do painel](docs/okf/llm-hub-help/features/dashboard.md)**
 
 ---
 
@@ -615,7 +615,7 @@ Voce tambem pode adicionar endpoints personalizados compativeis com OpenAI.
 
 ### Proxy
 
-Roteie todas as solicitacoes de API atraves de um proxy HTTP CONNECT para ambientes de gateway corporativo. Veja [Configuracoes de Proxy](docs/PROXY.md) para detalhes.
+Roteie todas as solicitacoes de API atraves de um proxy HTTP CONNECT para ambientes de gateway corporativo. Veja [Configuracoes de Proxy](docs/okf/llm-hub-help/operations/proxy.md) para detalhes.
 
 ### Local LLM
 
@@ -838,7 +838,7 @@ Requer: `pip install cryptography`
 
 > **Aviso:** Se voce esquecer sua senha, arquivos criptografados nao podem ser recuperados. Mantenha sua senha em seguranca.
 
-> **Dica:** Para criptografar todos os arquivos em um diretorio de uma vez, use um workflow. Veja o exemplo "Criptografar todos os arquivos em um diretorio" em [WORKFLOW_NODES_pt.md](docs/WORKFLOW_NODES_pt.md#obsidian-command).
+> **Dica:** Para criptografar todos os arquivos em um diretorio de uma vez, use um workflow. Veja o exemplo "Criptografar todos os arquivos em um diretorio" em [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md#obsidian-command).
 
 ![Fluxo de Criptografia de Arquivos](docs/images/enc.png)
 
@@ -905,7 +905,7 @@ A aba **RAG Search** fornece uma interface dedicada para buscar, filtrar, editar
 - **Enviar para Chat ou Discussion** — os resultados selecionados tornam-se anexos editáveis
 - **Configurações do índice** (ícone de engrenagem) — configure tamanho do fragmento, sobreposição, pastas alvo, sincronização e mais
 
-> Para mais detalhes, consulte a [Documentação do RAG Search](docs/RAG_SEARCH.md) ([日本語](docs/RAG_SEARCH_ja.md) | [中文](docs/RAG_SEARCH_zh.md) | [한국어](docs/RAG_SEARCH_ko.md) | [Français](docs/RAG_SEARCH_fr.md) | [Deutsch](docs/RAG_SEARCH_de.md) | [Español](docs/RAG_SEARCH_es.md) | [Português](docs/RAG_SEARCH_pt.md) | [Italiano](docs/RAG_SEARCH_it.md))
+> Para mais detalhes, consulte a [Documentação do RAG Search](docs/okf/llm-hub-help/features/rag-search.md)
 
 ### AI Discussion
 

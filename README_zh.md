@@ -272,7 +272,7 @@ MCP（Model Context Protocol）服务器提供额外的工具，扩展 AI 在 Va
 
 创建技能的方式与工作流相同 — 选择 **+ New (AI)**，勾选 **"作为代理技能创建"**，然后描述您想要的功能。AI 会同时生成 `SKILL.md` 指令和工作流。
 
-> **有关设置说明和示例，请参阅 [SKILLS.md](docs/SKILLS_zh.md)**
+> **有关设置说明和示例，请参阅 [Agent Skills](docs/okf/llm-hub-help/features/agent-skills.md)**
 
 ---
 
@@ -400,7 +400,7 @@ MCP（Model Context Protocol）服务器提供额外的工具，扩展 AI 在 Va
 | 外部 | `mcp`, `obsidian-command` |
 | 实用工具 | `sleep` |
 
-> **详细的节点规范和示例，请参阅 [WORKFLOW_NODES.md](docs/WORKFLOW_NODES_zh.md)**
+> **详细的节点规范和示例，请参阅 [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md)**
 
 ## 快捷键模式
 
@@ -504,7 +504,7 @@ MCP（Model Context Protocol）服务器提供额外的工具，扩展 AI 在 Va
 > [!NOTE]
 > **工作流小组件从缓存读取，而非实时运行。** 工作流小组件仅在以下情况运行：点击**运行**按钮、配置编辑器的测试运行，或在打开时缓存结果早于**自动刷新间隔**（分钟；`0` = 仅手动）时运行一次。结果存储在仪表板旁边的隐藏 sidecar 文件中，因此重新打开后输出仍会保留。工作流必须将其 Markdown/HTML 输出存储在一个变量中（默认 `result`）。
 
-> **有关 `.dashboard` 文件格式、完整的 YAML 架构以及 AI 生成提示，请参阅 [仪表板文档](docs/DASHBOARD.md)**
+> **有关 `.dashboard` 文件格式、完整的 YAML 架构以及 AI 生成提示，请参阅 [仪表板文档](docs/okf/llm-hub-help/features/dashboard.md)**
 
 ---
 
@@ -615,7 +615,7 @@ npm run build
 
 ### 代理
 
-通过 HTTP CONNECT 代理路由所有 API 请求，适用于企业网关环境。详见[代理设置](docs/PROXY.md)。
+通过 HTTP CONNECT 代理路由所有 API 请求，适用于企业网关环境。详见[代理设置](docs/okf/llm-hub-help/operations/proxy.md)。
 
 ### 本地 LLM
 
@@ -838,7 +838,7 @@ if __name__ == "__main__":
 
 > **警告：** 如果您忘记密码，加密文件将无法恢复。请妥善保管您的密码。
 
-> **提示：** 要一次性加密目录中的所有文件，请使用工作流。参见 [WORKFLOW_NODES_zh.md](docs/WORKFLOW_NODES_zh.md#obsidian-command) 中的"加密目录中的所有文件"示例。
+> **提示：** 要一次性加密目录中的所有文件，请使用工作流。参见 [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md#obsidian-command) 中的"加密目录中的所有文件"示例。
 
 ![文件加密工作流](docs/images/enc.png)
 
@@ -905,7 +905,7 @@ if __name__ == "__main__":
 - **发送到 Chat 或 Discussion** — 选中的结果将作为可编辑的附件添加
 - **索引设置**（齿轮图标）— 配置分块大小、重叠、目标文件夹、同步等
 
-> 详细信息请参阅 [RAG Search 文档](docs/RAG_SEARCH.md)（[日本語](docs/RAG_SEARCH_ja.md) | [中文](docs/RAG_SEARCH_zh.md) | [한국어](docs/RAG_SEARCH_ko.md) | [Français](docs/RAG_SEARCH_fr.md) | [Deutsch](docs/RAG_SEARCH_de.md) | [Español](docs/RAG_SEARCH_es.md) | [Português](docs/RAG_SEARCH_pt.md) | [Italiano](docs/RAG_SEARCH_it.md)）
+> 详细信息请参阅 [RAG Search 文档](docs/okf/llm-hub-help/features/rag-search.md)
 
 ### AI Discussion
 

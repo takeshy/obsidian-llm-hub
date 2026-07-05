@@ -272,7 +272,7 @@ Erweitern Sie die KI mit benutzerdefinierten Anweisungen, Referenzmaterialien un
 
 Erstellen Sie Skills genauso wie Workflows — wählen Sie **+ New (AI)**, aktivieren Sie **„Als Agent-Skill erstellen"** und beschreiben Sie, was Sie möchten. Die AI generiert sowohl die `SKILL.md`-Anweisungen als auch den Workflow.
 
-> **Für Einrichtungsanleitungen und Beispiele siehe [SKILLS.md](docs/SKILLS_de.md)**
+> **Für Einrichtungsanleitungen und Beispiele siehe [Agent Skills](docs/okf/llm-hub-help/features/agent-skills.md)**
 
 ---
 
@@ -400,7 +400,7 @@ Erstellen Sie automatisierte mehrstufige Workflows direkt in Markdown-Dateien. *
 | Extern | `mcp`, `obsidian-command` |
 | Dienstprogramm | `sleep` |
 
-> **Für detaillierte Node-Spezifikationen und Beispiele siehe [WORKFLOW_NODES_de.md](docs/WORKFLOW_NODES_de.md)**
+> **Für detaillierte Node-Spezifikationen und Beispiele siehe [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md)**
 
 ## Tastenkürzel-Modus
 
@@ -504,7 +504,7 @@ Konfigurieren Sie alles über die Widget-Einstellungen im Bearbeitungsmodus:
 > [!NOTE]
 > **Workflow-Widgets lesen aus einem Cache, nicht live.** Ein Workflow-Widget wird nur ausgeführt über die Schaltfläche **Ausführen**, den Testlauf im Konfigurationseditor oder einmalig beim Öffnen, wenn sein zwischengespeichertes Ergebnis älter als das **Aktualisierungsintervall** ist (Minuten; `0` = nur manuell). Die Ergebnisse werden in einer versteckten Sidecar-Datei neben dem Dashboard gespeichert, sodass die Ausgabe ein erneutes Öffnen übersteht. Der Workflow muss seine Markdown-/HTML-Ausgabe in einer Variable speichern (Standard `result`).
 
-> **Für das `.dashboard`-Dateiformat, das vollständige YAML-Schema und Tipps zur KI-Generierung siehe [Dashboard-Dokumentation](docs/DASHBOARD.md)**
+> **Für das `.dashboard`-Dateiformat, das vollständige YAML-Schema und Tipps zur KI-Generierung siehe [Dashboard-Dokumentation](docs/okf/llm-hub-help/features/dashboard.md)**
 
 ---
 
@@ -615,7 +615,7 @@ Sie können auch benutzerdefinierte OpenAI-kompatible Endpunkte hinzufügen.
 
 ### Proxy
 
-Leiten Sie alle API-Anfragen über einen HTTP-CONNECT-Proxy für Corporate-Gateway-Umgebungen. Siehe [Proxy-Einstellungen](docs/PROXY.md) für Details.
+Leiten Sie alle API-Anfragen über einen HTTP-CONNECT-Proxy für Corporate-Gateway-Umgebungen. Siehe [Proxy-Einstellungen](docs/okf/llm-hub-help/operations/proxy.md) für Details.
 
 ### Lokales LLM
 
@@ -838,7 +838,7 @@ Benötigt: `pip install cryptography`
 
 > **Warnung:** Wenn Sie Ihr Passwort vergessen, können verschlüsselte Dateien nicht wiederhergestellt werden. Bewahren Sie Ihr Passwort sicher auf.
 
-> **Tipp:** Um alle Dateien in einem Verzeichnis auf einmal zu verschlüsseln, verwenden Sie einen Workflow. Siehe das Beispiel "Alle Dateien in einem Verzeichnis verschlüsseln" in [WORKFLOW_NODES_de.md](docs/WORKFLOW_NODES_de.md#obsidian-command).
+> **Tipp:** Um alle Dateien in einem Verzeichnis auf einmal zu verschlüsseln, verwenden Sie einen Workflow. Siehe das Beispiel "Alle Dateien in einem Verzeichnis verschlüsseln" in [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md#obsidian-command).
 
 ![Dateiverschlüsselungs-Workflow](docs/images/enc.png)
 
@@ -905,7 +905,7 @@ Der **RAG Search**-Tab bietet eine dedizierte Oberfläche zum Suchen, Filtern, B
 - **An Chat oder Discussion senden** — ausgewählte Ergebnisse werden zu bearbeitbaren Anhängen
 - **Indexeinstellungen** (Zahnrad-Symbol) — Chunk-Größe, Überlappung, Zielordner, Synchronisierung und mehr konfigurieren
 
-> Weitere Details finden Sie in der [RAG Search Dokumentation](docs/RAG_SEARCH.md) ([日本語](docs/RAG_SEARCH_ja.md) | [中文](docs/RAG_SEARCH_zh.md) | [한국어](docs/RAG_SEARCH_ko.md) | [Français](docs/RAG_SEARCH_fr.md) | [Deutsch](docs/RAG_SEARCH_de.md) | [Español](docs/RAG_SEARCH_es.md) | [Português](docs/RAG_SEARCH_pt.md) | [Italiano](docs/RAG_SEARCH_it.md))
+> Weitere Details finden Sie in der [RAG Search Dokumentation](docs/okf/llm-hub-help/features/rag-search.md)
 
 ### AI Discussion
 

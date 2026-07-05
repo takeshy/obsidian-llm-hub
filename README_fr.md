@@ -272,7 +272,7 @@ Certains outils MCP retournent une UI interactive qui permet d'interagir visuell
 
 Créez des skills de la même manière que les workflows — sélectionnez **+ New (AI)**, cochez **« Créer en tant qu'agent skill »** et décrivez ce que vous souhaitez. L'AI génère à la fois les instructions du `SKILL.md` et le workflow.
 
-> **Pour les instructions de configuration et des exemples, consultez [SKILLS.md](docs/SKILLS_fr.md)**
+> **Pour les instructions de configuration et des exemples, consultez [Agent Skills](docs/okf/llm-hub-help/features/agent-skills.md)**
 
 ---
 
@@ -400,7 +400,7 @@ Construisez des workflows automatisés multi-étapes directement dans les fichie
 | Externe | `mcp`, `obsidian-command` |
 | Utilitaire | `sleep` |
 
-> **Pour les spécifications détaillées des nœuds et des exemples, voir [WORKFLOW_NODES_fr.md](docs/WORKFLOW_NODES_fr.md)**
+> **Pour les spécifications détaillées des nœuds et des exemples, voir [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md)**
 
 ## Mode Raccourcis Clavier
 
@@ -504,7 +504,7 @@ Configurez tout depuis les paramètres du widget en mode édition :
 > [!NOTE]
 > **Les widgets de workflow lisent depuis un cache, pas en direct.** Un widget de workflow ne s'exécute que via le bouton **Exécuter**, l'exécution de test de l'éditeur de configuration, ou une fois à l'ouverture lorsque son résultat en cache est plus ancien que l'**intervalle d'actualisation automatique** (minutes ; `0` = manuel uniquement). Les résultats sont stockés dans un fichier sidecar masqué à côté du tableau de bord, de sorte que la sortie survit à une réouverture. Le workflow doit stocker sa sortie Markdown/HTML dans une variable (par défaut `result`).
 
-> **Pour le format de fichier `.dashboard`, le schéma YAML complet et des conseils de génération par IA, consultez la [Documentation du tableau de bord](docs/DASHBOARD.md)**
+> **Pour le format de fichier `.dashboard`, le schéma YAML complet et des conseils de génération par IA, consultez la [Documentation du tableau de bord](docs/okf/llm-hub-help/features/dashboard.md)**
 
 ---
 
@@ -615,7 +615,7 @@ Vous pouvez également ajouter des endpoints personnalisés compatibles OpenAI.
 
 ### Proxy
 
-Acheminez toutes les requêtes API via un proxy HTTP CONNECT pour les environnements de passerelle d'entreprise. Voir [Paramètres du Proxy](docs/PROXY.md) pour plus de détails.
+Acheminez toutes les requêtes API via un proxy HTTP CONNECT pour les environnements de passerelle d'entreprise. Voir [Paramètres du Proxy](docs/okf/llm-hub-help/operations/proxy.md) pour plus de détails.
 
 ### LLM Local
 
@@ -838,7 +838,7 @@ Requis : `pip install cryptography`
 
 > **Avertissement :** Si vous oubliez votre mot de passe, les fichiers chiffrés ne peuvent pas être récupérés. Conservez votre mot de passe en lieu sûr.
 
-> **Astuce :** Pour chiffrer tous les fichiers d'un répertoire en une fois, utilisez un workflow. Voir l'exemple "Chiffrer tous les fichiers d'un répertoire" dans [WORKFLOW_NODES_fr.md](docs/WORKFLOW_NODES_fr.md#obsidian-command).
+> **Astuce :** Pour chiffrer tous les fichiers d'un répertoire en une fois, utilisez un workflow. Voir l'exemple "Chiffrer tous les fichiers d'un répertoire" dans [Workflow Nodes](docs/okf/llm-hub-help/features/workflow-nodes.md#obsidian-command).
 
 ![Processus de chiffrement des fichiers](docs/images/enc.png)
 
@@ -905,7 +905,7 @@ L'onglet **RAG Search** fournit une interface dédiée pour rechercher, filtrer,
 - **Envoi vers Chat ou Discussion** — les résultats sélectionnés deviennent des pièces jointes modifiables
 - **Paramètres d'index** (icône d'engrenage) — configurez la taille des fragments, le chevauchement, les dossiers cibles, la synchronisation et plus encore
 
-> Pour plus de détails, consultez la [Documentation RAG Search](docs/RAG_SEARCH.md) ([日本語](docs/RAG_SEARCH_ja.md) | [中文](docs/RAG_SEARCH_zh.md) | [한국어](docs/RAG_SEARCH_ko.md) | [Français](docs/RAG_SEARCH_fr.md) | [Deutsch](docs/RAG_SEARCH_de.md) | [Español](docs/RAG_SEARCH_es.md) | [Português](docs/RAG_SEARCH_pt.md) | [Italiano](docs/RAG_SEARCH_it.md))
+> Pour plus de détails, consultez la [Documentation RAG Search](docs/okf/llm-hub-help/features/rag-search.md)
 
 ### AI Discussion
 
