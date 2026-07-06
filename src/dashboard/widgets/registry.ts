@@ -38,7 +38,7 @@ export function registerWidget(def: WidgetDef): void {
  * types so the config is preserved on round-trip.
  */
 export function getWidgetDef(type: string): WidgetDef {
-  return registry.get(type) ?? {
+  return registry.get(type === "markdown" ? "file" : type) ?? {
     type: "__unknown__",
     label: `Unknown (${type})`,
     icon: React.createElement(Puzzle, { size: 16 }),

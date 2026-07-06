@@ -194,7 +194,7 @@ export function parseMarkdownToMessages(content: string): { messages: Message[];
 						if (meta.pendingDeletes) message.pendingDeletes = meta.pendingDeletes as Message["pendingDeletes"];
 						if (meta.pendingRename) message.pendingRename = meta.pendingRename as Message["pendingRename"];
 						if (meta.pendingRenames) message.pendingRenames = meta.pendingRenames as Message["pendingRenames"];
-						if (meta.usage) message.usage = meta.usage as Message["usage"];
+						if (meta.usage) message.usage = meta.usage;
 						if (meta.elapsedMs) message.elapsedMs = meta.elapsedMs as number;
 						if (meta.interactionId) message.interactionId = meta.interactionId as string;
 						if (meta.timestamp) message.timestamp = meta.timestamp as number;

@@ -1364,6 +1364,7 @@ export const en = {
 
   // Dashboard
   "command.createDashboard": "Create dashboard",
+  "dashboard.switchDashboard": "Switch dashboard",
   "dashboard.edit": "Edit",
   "dashboard.done": "Done",
   "dashboard.undo": "Undo",
@@ -1390,7 +1391,6 @@ export const en = {
   "dashboard.maximizeWidget": "Maximize widget",
   "dashboard.restoreWidget": "Restore widget",
   "dashboard.fileSelectFile": "Select a file",
-  "dashboard.markdownSelectFile": "Select a markdown note",
   "dashboard.fileNotFound": "File not found",
   "dashboard.openFile": "Open file",
   "dashboard.showHeader": "Show header",

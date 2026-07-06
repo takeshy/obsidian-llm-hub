@@ -25,6 +25,10 @@ const MAX_DOCS_PER_BUNDLE = 24;
 const MAX_BODY_CHARS = 1400;
 const OKF_SYSTEM_PROMPT_INTRO = "The following Open Knowledge Format (OKF) knowledge bundles are active. Treat them as curated domain context. Prefer their definitions, relationships, and documented procedures when answering domain questions. If a relevant concept may exist but is not included below, use vault tools or semantic search when available before guessing.";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export function getBuiltinOkfBundle(): OkfBundle {
   return {
     id: BUILTIN_OKF_BUNDLE_ID,
@@ -41,8 +45,9 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!match) return { frontmatter: {}, body: content };
   try {
+    const frontmatter: unknown = parseYaml(match[1]);
     return {
-      frontmatter: (parseYaml(match[1]) as Record<string, unknown>) || {},
+      frontmatter: isRecord(frontmatter) ? frontmatter : {},
       body: match[2],
     };
   } catch {
