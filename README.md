@@ -486,6 +486,7 @@ Click **+ Add widget** in edit mode to choose a type:
 | **Web Embed** | A web page in an iframe | `url` |
 | **Workflow** | The output of a workflow, run headlessly and rendered as Markdown or HTML | `workflow` path, `output`, `refreshInterval` |
 | **Kanban** | Notes as draggable cards grouped into status columns | `tag`/`folder` filter, `statusProperty`, `columns`, `displayFields` |
+| **Secret Manager** | Create, search, decrypt, and copy encrypted vault secrets | encrypted files under an optional folder |
 
 **Base** and **Workflow** widgets include a **Create with AI** button to author the backing `.base` file or workflow without leaving the settings panel. For a base, the AI can inspect your notes with read-only tools before authoring, and **Edit with AI** shows a diff with an additional-instruction box to refine before applying.
 
@@ -495,6 +496,8 @@ Turn notes into a drag-and-drop board. Cards are notes that match a **tag** and/
 
 ![Kanban board](docs/images/dashboard_kanban.png)
 
+Boards can be stored as reusable `.kanban` files under `Dashboards/Kanbans/`. Use **Create .kanban file from these settings** in the widget settings, then reference the same file from multiple dashboards. The board header also provides a temporary tag filter. Optional display fields are selected from detected frontmatter properties, support aliases or hidden labels, and expose `file.path`/`file.name`/`file.content`/`file.mtime`/`file.ctime` only when explicitly selected. A character limit can be set for `file.content`.
+
 - **Title & New** — the header shows an optional board title (handy when one dashboard holds several boards) and a **New** button that opens a modal to enter a title and pick a column, then creates a note already matching the board's filters (folder, tag, status).
 - **Preview & open** — click a card to preview its note in a modal; the modal's open icon jumps to the note in a new tab.
 - **Columns** — color-coded and fully configurable; an optional "Unspecified" column collects cards whose status matches none of the columns.
@@ -503,6 +506,10 @@ Turn notes into a drag-and-drop board. Cards are notes that match a **tag** and/
 Configure everything from the widget settings in edit mode:
 
 ![Kanban settings](docs/images/dashboard_kanban_edit.png)
+
+## Secret Manager
+
+The Secret Manager widget stores each value as an `.encrypted` vault file using the plugin's existing encryption keys. Names, descriptions, and explicitly public metadata remain searchable; secret values are decrypted only when copied and are never persisted as plaintext. Configure encryption in plugin settings first.
 
 > [!NOTE]
 > **Workflow widgets read from a cache, not live.** A workflow widget runs only on the **Run** button, the config editor's test-run, or once on open when its cached result is older than the **Auto-refresh interval** (minutes; `0` = manual only). Results are stored in a hidden sidecar file next to the dashboard, so output survives reopening. The workflow must store its Markdown/HTML output in a variable (default `result`).

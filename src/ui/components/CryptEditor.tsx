@@ -5,11 +5,15 @@ import Unlock from "lucide-react/dist/esm/icons/unlock";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import Edit2 from "lucide-react/dist/esm/icons/edit-2";
 import Lock from "lucide-react/dist/esm/icons/lock";
+import Plus from "lucide-react/dist/esm/icons/plus";
+import X from "lucide-react/dist/esm/icons/x";
 import type { LlmHubPlugin } from "src/plugin";
 import {
   decryptFileContent,
   unwrapEncryptedFile,
   decryptPrivateKey,
+  getEncryptedFileMetadata,
+  type EncryptedFileMetadata,
 } from "src/core/crypto";
 import { cryptoCache } from "src/core/cryptoCache";
 import { formatError } from "src/utils/error";
@@ -19,8 +23,57 @@ interface CryptEditorProps {
   plugin: LlmHubPlugin;
   filePath: string;
   encryptedContent: string;
-  onSave: (content: string) => Promise<void>;
+  onSave: (content: string, metadata: EncryptedFileMetadata) => Promise<void>;
   onDecrypt: (content: string) => Promise<void>;
+}
+
+interface MetadataRow { key: string; value: string }
+
+function metadataRows(metadata: Record<string, string>): MetadataRow[] {
+  const rows = Object.entries(metadata).map(([key, value]) => ({ key, value }));
+  return rows.length ? rows : [{ key: "", value: "" }];
+}
+
+function metadataRecord(rows: MetadataRow[]): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (key && !["description", "__proto__", "prototype", "constructor"].includes(key)) result[key] = row.value.trim();
+  }
+  return result;
+}
+
+function CryptMetadataEditor({ description, rows, onDescriptionChange, onRowsChange }: {
+  description: string;
+  rows: MetadataRow[];
+  onDescriptionChange: (value: string) => void;
+  onRowsChange: (rows: MetadataRow[]) => void;
+}) {
+  const update = (index: number, patch: Partial<MetadataRow>) =>
+    onRowsChange(rows.map((row, i) => i === index ? { ...row, ...patch } : row));
+  return <div className="llm-hub-crypt-metadata-editor">
+    <label><span>{t("dashboard.secretDescription")}</span><input value={description} onChange={(e) => onDescriptionChange(e.target.value)} /></label>
+    <div className="llm-hub-crypt-metadata-editor-heading"><span>{t("dashboard.secretMetadata")}</span><button type="button" onClick={() => onRowsChange([...rows, { key: "", value: "" }])}><Plus size={13} /> {t("dashboard.secretMetadataAdd")}</button></div>
+    <div className="llm-hub-crypt-metadata-editor-rows">{rows.map((row, index) => <div key={index}>
+      <input placeholder={t("dashboard.secretMetadataKey")} value={row.key} onChange={(e) => update(index, { key: e.target.value.replace(/[=\n]/g, "") })} />
+      <input placeholder={t("dashboard.secretMetadataValue")} value={row.value} onChange={(e) => update(index, { value: e.target.value.replace(/\n/g, "") })} />
+      <button type="button" aria-label={t("dashboard.remove")} onClick={() => onRowsChange(rows.length === 1 ? [{ key: "", value: "" }] : rows.filter((_, i) => i !== index))}><X size={14} /></button>
+    </div>)}</div>
+  </div>;
+}
+
+function CryptMetadata({ encryptedContent }: { encryptedContent: string }) {
+  const metadata = getEncryptedFileMetadata(encryptedContent);
+  const entries = Object.entries(metadata.publicMetadata ?? {});
+  if (!metadata.description && entries.length === 0) return null;
+  return (
+    <div className="llm-hub-crypt-metadata">
+      {metadata.description && <div className="llm-hub-crypt-metadata-description"><span>{t("dashboard.secretDescription")}</span><p>{metadata.description}</p></div>}
+      {entries.length > 0 && <div className="llm-hub-crypt-metadata-fields"><span>{t("dashboard.secretMetadata")}</span><dl>
+        {entries.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}
+      </dl></div>}
+    </div>
+  );
 }
 
 export default function CryptEditor({
@@ -30,6 +83,7 @@ export default function CryptEditor({
   onSave,
   onDecrypt,
 }: CryptEditorProps) {
+  const originalMetadata = useRef(getEncryptedFileMetadata(encryptedContent));
   const [decryptedContent, setDecryptedContent] = useState<string | null>(null);
   const [editedContent, setEditedContent] = useState<string>("");
   const [isDecrypting, setIsDecrypting] = useState(false);
@@ -38,6 +92,8 @@ export default function CryptEditor({
   const [showPreview, setShowPreview] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [description, setDescription] = useState(originalMetadata.current.description ?? "");
+  const [metadata, setMetadata] = useState<MetadataRow[]>(metadataRows(originalMetadata.current.publicMetadata ?? {}));
   const [previewNode, setPreviewNode] = useState<HTMLDivElement | null>(null);
   const previewRef = useCallback((node: HTMLDivElement | null) => {
     setPreviewNode(node);
@@ -131,14 +187,21 @@ export default function CryptEditor({
 
   // Track changes
   useEffect(() => {
-    setHasChanges(editedContent !== decryptedContent);
-  }, [editedContent, decryptedContent]);
+    const current = JSON.stringify({ description: description.trim(), publicMetadata: metadataRecord(metadata) });
+    const original = JSON.stringify({
+      description: originalMetadata.current.description?.trim() ?? "",
+      publicMetadata: originalMetadata.current.publicMetadata ?? {},
+    });
+    setHasChanges(editedContent !== decryptedContent || current !== original);
+  }, [editedContent, decryptedContent, description, metadata]);
 
   // Handle save (encrypted)
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave(editedContent);
+      const nextMetadata = { description: description.trim(), publicMetadata: metadataRecord(metadata) };
+      await onSave(editedContent, nextMetadata);
+      originalMetadata.current = nextMetadata;
       setDecryptedContent(editedContent);
       setHasChanges(false);
     } finally {
@@ -193,6 +256,7 @@ export default function CryptEditor({
         </div>
         <h3>{t("crypt.enterPassword")}</h3>
         <p>{t("crypt.enterPasswordDesc")}</p>
+        <CryptMetadata encryptedContent={encryptedContent} />
         <div className="llm-hub-crypt-password-form">
           <input
             type="password"
@@ -272,6 +336,8 @@ export default function CryptEditor({
         </div>
       </div>
 
+      {showPreview && <CryptMetadata encryptedContent={encryptedContent} />}
+
       <div className="llm-hub-crypt-content">
         {showPreview ? (
           <div
@@ -279,12 +345,10 @@ export default function CryptEditor({
             className="llm-hub-crypt-preview markdown-preview-view"
           />
         ) : (
-          <textarea
-            className="llm-hub-crypt-textarea"
-            value={editedContent}
-            onChange={(e) => setEditedContent(e.target.value)}
-            placeholder={t("crypt.editorPlaceholder")}
-          />
+          <div className="llm-hub-crypt-edit-content">
+            <CryptMetadataEditor description={description} rows={metadata} onDescriptionChange={setDescription} onRowsChange={setMetadata} />
+            <textarea className="llm-hub-crypt-textarea" value={editedContent} onChange={(e) => setEditedContent(e.target.value)} placeholder={t("crypt.editorPlaceholder")} />
+          </div>
         )}
       </div>
     </div>

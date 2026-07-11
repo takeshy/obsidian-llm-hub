@@ -1,6 +1,7 @@
 # vscode
 .vscode 
 .codex
+.claude
 
 # Intellij
 *.iml
