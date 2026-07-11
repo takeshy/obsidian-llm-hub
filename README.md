@@ -496,7 +496,7 @@ Turn notes into a drag-and-drop board. Cards are notes that match a **tag** and/
 
 ![Kanban board](docs/images/dashboard_kanban.png)
 
-Boards can be stored as reusable `.kanban` files under `Dashboards/Kanbans/`. Use **Create .kanban file from these settings** in the widget settings, then reference the same file from multiple dashboards. The board header also provides a temporary tag filter. Optional display fields are selected from detected frontmatter properties, support aliases or hidden labels, and expose `file.path`/`file.name`/`file.content`/`file.mtime`/`file.ctime` only when explicitly selected. A character limit can be set for `file.content`.
+Boards are stored as reusable `.kanban` files under `Dashboards/Kanbans/`. Existing inline widget definitions are migrated there automatically. Multiple dashboards can reference the same file, and changes made in one widget's settings update the shared file. The board header also provides a temporary tag filter. Optional display fields are selected from detected frontmatter properties, support aliases or hidden labels, and expose `file.path`/`file.name`/`file.content`/`file.mtime`/`file.ctime` only when explicitly selected. A character limit can be set for `file.content`.
 
 - **Title & New** — the header shows an optional board title (handy when one dashboard holds several boards) and a **New** button that opens a modal to enter a title and pick a column, then creates a note already matching the board's filters (folder, tag, status).
 - **Preview & open** — click a card to preview its note in a modal; the modal's open icon jumps to the note in a new tab.
@@ -509,7 +509,20 @@ Configure everything from the widget settings in edit mode:
 
 ## Secret Manager
 
-The Secret Manager widget stores each value as an `.encrypted` vault file using the plugin's existing encryption keys. Names, descriptions, and explicitly public metadata remain searchable; secret values are decrypted only when copied and are never persisted as plaintext. Configure encryption in plugin settings first.
+The Secret Manager widget stores each value as a separate `.encrypted` vault file using the plugin's existing encryption keys. Set up an encryption password in **Settings → Encryption** first; the chat-history and workflow-log encryption toggles do not need to be enabled.
+
+![Secret Manager](docs/images/secret_manager.png)
+
+- **Create and organize** — choose an optional root folder (the default is `Secrets`); nested folders are preserved in the widget.
+- **Search** — filter by file name, description, or custom public metadata without decrypting secret values.
+- **Unlock and copy** — enter the encryption password to view, edit, or copy a value. The password is cached for the current session.
+- **Edit secrets** — update the secret value, description, and public metadata from the detail modal; the file remains encrypted.
+- **Encrypted at rest** — plaintext values are used only in memory while unlocked and are never saved back to the vault unencrypted.
+
+![Secret Manager edit](docs/images/secret_manager_edit.png)
+
+> [!WARNING]
+> Secret names, descriptions, custom public metadata, and vault paths are stored outside the ciphertext so they can be listed and searched. Do not put passwords, tokens, or other sensitive values in those fields. Put sensitive data only in the secret value.
 
 > [!NOTE]
 > **Workflow widgets read from a cache, not live.** A workflow widget runs only on the **Run** button, the config editor's test-run, or once on open when its cached result is older than the **Auto-refresh interval** (minutes; `0` = manual only). Results are stored in a hidden sidecar file next to the dashboard, so output survives reopening. The workflow must store its Markdown/HTML output in a variable (default `result`).
