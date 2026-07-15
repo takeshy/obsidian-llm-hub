@@ -100,6 +100,7 @@ import { findFileMentionOccurrences } from "src/utils/mentionResolver";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
 import { buildBuiltinOkfSystemPrompt, buildOkfSystemPrompt, discoverOkfBundles, getBuiltinOkfBundle, isBuiltinOkfBundleId, type OkfBundle } from "src/core/okfLoader";
+import { executeReadOkfDocumentTool, READ_OKF_DOCUMENT_TOOL, READ_OKF_DOCUMENT_TOOL_NAME } from "src/core/okfDocumentTool";
 import { getInterpreter, runScript } from "src/core/scriptRunner";
 import { parseWorkflowFromMarkdown } from "src/workflow/parser";
 import { WorkflowExecutor } from "src/workflow/executor";
@@ -2183,6 +2184,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				}
 				toolsBundle.push(EXECUTE_JAVASCRIPT_TOOL);
 				toolsBundle.push(GET_WORKFLOW_SPEC_TOOL);
+				if (activeOkfBundleIds.length > 0) toolsBundle.push(READ_OKF_DOCUMENT_TOOL);
 
 				// Skill workflow / script tools
 				const llmSkillWorkflowMap = llmLoadedSkills.length > 0 ? collectSkillWorkflows(llmLoadedSkills) : new Map();
@@ -2218,6 +2220,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					}
 					if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
 						return handleGetWorkflowSpec(args, plugin);
+					}
+					if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
+						return await executeReadOkfDocumentTool(plugin.app, getOkfRoot(), activeOkfBundleIds,
+							typeof args.bundleId === "string" ? args.bundleId : "",
+							typeof args.path === "string" ? args.path : "");
 					}
 					return await obsidianToolExecutor(name, args);
 				};
@@ -2562,6 +2569,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			// Add JavaScript sandbox tool
 			tools.push(EXECUTE_JAVASCRIPT_TOOL);
 			tools.push(GET_WORKFLOW_SPEC_TOOL);
+			if (activeOkfBundleIds.length > 0) tools.push(READ_OKF_DOCUMENT_TOOL);
 
 			// Load skills for API provider mode
 			let apiLoadedSkills: LoadedSkill[] = [];
@@ -2606,6 +2614,11 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				}
 				if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
 					return handleGetWorkflowSpec(args, plugin);
+				}
+				if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
+					return await executeReadOkfDocumentTool(plugin.app, getOkfRoot(), activeOkfBundleIds,
+						typeof args.bundleId === "string" ? args.bundleId : "",
+						typeof args.path === "string" ? args.path : "");
 				}
 				return await obsidianToolExecutor(name, args);
 			};
@@ -2945,6 +2958,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				if (toolsEnabled) {
 					tools.push(EXECUTE_JAVASCRIPT_TOOL);
 					tools.push(GET_WORKFLOW_SPEC_TOOL);
+					if (activeOkfBundleIds.length > 0) tools.push(READ_OKF_DOCUMENT_TOOL);
 				}
 
 				// Create context for tools (Obsidian tools only)
@@ -3017,6 +3031,11 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						}
 						if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
 							return handleGetWorkflowSpec(args, plugin);
+						}
+						if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
+							return await executeReadOkfDocumentTool(plugin.app, getOkfRoot(), activeOkfBundleIds,
+								typeof args.bundleId === "string" ? args.bundleId : "",
+								typeof args.path === "string" ? args.path : "");
 						}
 						// Otherwise use Obsidian tool executor
 						if (obsidianToolExecutor) {
