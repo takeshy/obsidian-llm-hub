@@ -59,8 +59,34 @@ export function isRateLimitError(error: unknown): boolean {
 	);
 }
 
+/**
+ * Some 429 responses are short-lived rate limits, while others are hard quota
+ * failures (daily/monthly allowance, billing, or project quota). Retrying the
+ * latter only delays the same failure and hides Google's useful explanation.
+ */
+export function isRetryableRateLimitError(error: unknown): boolean {
+	if (!isRateLimitError(error)) return false;
+
+	const message = formatError(error);
+	return !(
+		/current quota/i.test(message) ||
+		/quota (?:has been )?exceeded/i.test(message) ||
+		/quota failure/i.test(message) ||
+		/plan and billing/i.test(message) ||
+		/billing details/i.test(message) ||
+		/(?:per day|daily|RPD|per month|monthly)/i.test(message)
+	);
+}
+
 export function buildErrorMessage(error: unknown): string {
 	if (isRateLimitError(error)) {
+		const message = formatError(error);
+		// Preserve quota/billing details returned by the provider. A generic
+		// "try another model until tomorrow" message is incorrect for monthly
+		// search quotas, billing limits, and short-lived RPM/TPM limits alike.
+		if (!isRetryableRateLimitError(error) && message) {
+			return t("chat.errorOccurred", { message });
+		}
 		return t("chat.rateLimitPaid");
 	}
 	const message = error instanceof Error ? error.message : t("chat.unknownError");

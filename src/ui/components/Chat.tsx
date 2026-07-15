@@ -116,7 +116,7 @@ import {
 	shouldUseImageModel,
 	PAID_RATE_LIMIT_RETRY_DELAYS_MS,
 	sleep,
-	isRateLimitError,
+	isRetryableRateLimitError,
 	buildErrorMessage,
 	type CliSessionInfo,
 	type ChatHistory,
@@ -3590,7 +3590,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						tracing.score(traceId, { name: "status", value: 0.5, comment: "aborted during retry" });
 						return;
 					}
-					if (isRateLimitError(error) && retryCount < retryDelays.length) {
+					if (isRetryableRateLimitError(error) && retryCount < retryDelays.length) {
 						const delayMs = retryDelays[retryCount];
 						retryCount += 1;
 						if (isActive()) {
