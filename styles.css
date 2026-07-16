@@ -4695,6 +4695,11 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   color: var(--text-normal);
 }
 
+.llm-hub-vault-tool-checkbox select {
+  width: 4.5em;
+  margin-left: auto;
+}
+
 .llm-hub-tool-settings-row select:disabled {
   opacity: 0.5;
   cursor: not-allowed;

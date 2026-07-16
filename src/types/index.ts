@@ -282,6 +282,8 @@ export interface WorkspaceState {
   selectedModel: ModelType | null;    // 現在選択中のモデル
   ragSettings: Record<string, RagSetting>;  // 設定��� -> RAG設定
   alwaysThinkModels?: string[];  // Always Think が有効なモデルID一覧
+  maxPreviousMessages?: number;  // Number of older chat messages sent with the current message (0-99)
+  sentPromptHistory?: string[];  // Recent prompts recalled with Up/Down in chat input (max 100)
   discussionSettings?: DiscussionSettings;  // Discussion tab settings
 }
 
@@ -312,6 +314,7 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   selectedRagSetting: null,
   selectedModel: null,
   ragSettings: {},
+  maxPreviousMessages: 99,
 };
 
 

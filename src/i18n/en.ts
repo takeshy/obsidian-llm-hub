@@ -385,6 +385,7 @@ export const en = {
   "input.vaultToolAll": "Vault: all",
   "input.vaultToolNoSearch": "Vault: no search",
   "input.vaultToolNone": "Vault: off",
+  "input.historyLimit": "Previous messages (0-99)",
   "input.mcpServersLabel": "External tools (mcp)",
   "input.close": "Close",
   "input.ragSettings": "Index settings",

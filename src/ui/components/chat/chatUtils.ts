@@ -31,6 +31,21 @@ export function shouldUseImageModel(message: string): boolean {
 	return IMAGE_KEYWORDS.some(kw => lower.includes(kw));
 }
 
+/** Keep the current message plus at most the requested number of older messages. */
+export function limitConversationHistory(messages: Message[], maxPreviousMessages: number): Message[] {
+	if (messages.length === 0) return [];
+	const limit = Math.max(0, Math.min(99, Math.trunc(maxPreviousMessages)));
+	return messages.slice(-(limit + 1));
+}
+
+export function isCaretOnFirstLine(value: string, caret: number): boolean {
+	return !value.slice(0, caret).includes("\n");
+}
+
+export function isCaretOnLastLine(value: string, caret: number): boolean {
+	return !value.slice(caret).includes("\n");
+}
+
 export const PAID_RATE_LIMIT_RETRY_DELAYS_MS = [10000, 30000, 60000];
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

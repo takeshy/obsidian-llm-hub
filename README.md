@@ -68,6 +68,7 @@ The AI Chat feature provides an interactive conversation interface with your cho
 - **Stop button** - Stop generation
 - **+ button** - New chat
 - **History button** - Load previous chats
+- **↑ / ↓ in the input** - Recall up to 100 sent prompts across chats and Obsidian restarts. Up recalls history only from the first line and Down advances only from the last line, preserving normal multiline cursor movement. Advancing past the newest entry restores the unsent draft.
 
 ## Slash Commands
 
@@ -130,6 +131,8 @@ When the AI handles notes in Chat, it uses Vault tools. Control which vault tool
 | **Vault: All** | Full vault access | All tools |
 | **Vault: No search** | Exclude search tools | All except `search_notes`, `list_notes` |
 | **Vault: Off** | No vault access | None |
+
+The same Database icon menu also has **Previous messages (0-99)**. This controls how many messages before the current prompt are sent to the model as conversation context. Set it to **0** to send only the current prompt, such as when processing unrelated files one at a time. The value is saved for the workspace.
 
 **When to use each mode:**
 

@@ -118,6 +118,7 @@ import {
 	sleep,
 	isRetryableRateLimitError,
 	buildErrorMessage,
+	limitConversationHistory,
 	type CliSessionInfo,
 	type ChatHistory,
 } from "./chat/chatUtils";
@@ -401,6 +402,14 @@ interface ChatProps {
 
 const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [messages, setMessages] = useState<Message[]>([]);
+	const [maxPreviousMessages, setMaxPreviousMessages] = useState(() => {
+		const saved = plugin.workspaceState.maxPreviousMessages;
+		return typeof saved === "number" ? Math.max(0, Math.min(99, Math.trunc(saved))) : 99;
+	});
+	const [sentPromptHistory, setSentPromptHistory] = useState<string[]>(() => {
+		const saved = plugin.workspaceState.sentPromptHistory;
+		return Array.isArray(saved) ? saved.filter(prompt => typeof prompt === "string" && prompt.trim()).slice(-100) : [];
+	});
 	const [activeChat, setActiveChat] = useState<TFile | null>(null);
 	const [currentChatId, setCurrentChatId] = useState<string | null>(null);
 	const [cliSession, setCliSession] = useState<CliSessionInfo | null>(null);  // CLI session for resumption
@@ -1797,7 +1806,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		});
 
 		try {
-			const allMessages = [...messages, userMessage];
+			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 
 			// Build system prompt for CLI (read-only mode)
 			const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Antigravity CLI";
@@ -2077,7 +2086,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			&& isLocalLlmToolsEnabled(llmConfig, llmConfig.model);
 
 		try {
-			const allMessages = [...messages, userMessage];
+			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 
 			// Build system prompt for local LLM. Tools-mode and marker-mode
 			// have different framing — tools-mode tells the model to use
@@ -2544,7 +2553,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			}
 
 			// Build vault tools (same as Gemini path)
-			const allMessages = [...messages, userMessage];
+			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 			let tools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false });
 			const obsidianToolExecutor = createToolExecutor(plugin.app, {
 				listNotesLimit: settings.listNotesLimit,
@@ -3358,7 +3367,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					}
 				}
 
-				const allMessages = [...messages, userMessage];
+				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 
 				// Use streaming with tools
 				let fullContent = "";
@@ -3380,6 +3389,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				// interactionId.  If it doesn't (old chat history, image generation response,
 				// CLI response, etc.) we fall back to local history replay in gemini.ts.
 				const previousInteractionId = (() => {
+					// Server-side chaining would bypass the configured local history limit.
+					if (messages.length > maxPreviousMessages) return undefined;
 					for (let i = messages.length - 1; i >= 0; i--) {
 						if (messages[i].role === "assistant") {
 							return messages[i].interactionId;  // undefined if absent → fallback
@@ -3990,6 +4001,21 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								vaultToolMode={vaultToolMode}
 								onVaultToolModeChange={handleVaultToolModeChange}
 								vaultToolModeOnlyNone={isCliMode}
+								maxPreviousMessages={maxPreviousMessages}
+								onMaxPreviousMessagesChange={(count) => {
+									setMaxPreviousMessages(count);
+									plugin.workspaceState.maxPreviousMessages = count;
+									void plugin.saveWorkspaceState();
+								}}
+								inputHistory={sentPromptHistory}
+								onInputHistoryAdd={(prompt) => {
+									setSentPromptHistory(previous => {
+										const next = [...previous, prompt].slice(-100);
+										plugin.workspaceState.sentPromptHistory = next;
+										void plugin.saveWorkspaceState();
+										return next;
+									});
+								}}
 								alwaysThinkModels={alwaysThinkModels}
 								onAlwaysThinkModelToggle={(modelId, enabled) => {
 									setAlwaysThinkModels(prev => {

@@ -10,6 +10,8 @@ timestamp: 2026-07-05T00:00:00Z
 
 Vault tools are function-calling tools used by chat to operate on the Obsidian vault. They work with all providers that support function calling (Gemini, OpenAI-compatible, Anthropic, CLI, and compatible local servers). Users control them from the Database icon tool menu.
 
+The Database icon menu also contains the chat **Previous messages (0-99)** setting. This is a conversation-context control rather than a vault permission: 0 sends only the current prompt, while a higher value includes that many preceding messages. It does not delete messages from the visible or saved chat history.
+
 # Tool Modes
 
 - Vault: all - full vault access through available tools.

@@ -379,6 +379,7 @@ export const ja: Record<string, string> = {
   "input.vaultToolAll": "Vault: 全て",
   "input.vaultToolNoSearch": "Vault: 検索なし",
   "input.vaultToolNone": "Vault: オフ",
+  "input.historyLimit": "過去メッセージ数 (0〜99)",
   "input.mcpServersLabel": "外部ツール (mcp)",
   "input.close": "閉じる",
   "input.ragSettings": "インデックス設定",

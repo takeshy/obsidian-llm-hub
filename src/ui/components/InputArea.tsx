@@ -16,6 +16,7 @@ import SkillSelector from "./SkillSelector";
 import OkfSelector from "./OkfSelector";
 import { isThinkingRequired } from "src/core/gemini";
 import { t } from "src/i18n";
+import { isCaretOnFirstLine, isCaretOnLastLine } from "./chat/chatUtils";
 
 // Built-in command definition (not user-configurable)
 interface BuiltInCommand {
@@ -40,6 +41,10 @@ interface InputAreaProps {
   vaultToolMode: VaultToolMode;
   onVaultToolModeChange: (mode: VaultToolMode) => void;
   vaultToolModeOnlyNone: boolean; // When true, only "none" option is available
+  maxPreviousMessages: number;
+  onMaxPreviousMessagesChange: (count: number) => void;
+  inputHistory: string[];
+  onInputHistoryAdd: (prompt: string) => void;
   alwaysThinkModels: Set<string>;
   onAlwaysThinkModelToggle: (modelId: string, enabled: boolean) => void;
   mcpServers: McpServerConfig[]; // MCP server configurations
@@ -84,6 +89,7 @@ const SUPPORTED_TYPES = {
 };
 
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
+const HISTORY_LIMIT_OPTIONS = Array.from({ length: 100 }, (_, index) => index);
 
 const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea({
   onSend,
@@ -100,6 +106,10 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   vaultToolMode,
   onVaultToolModeChange,
   vaultToolModeOnlyNone,
+  maxPreviousMessages,
+  onMaxPreviousMessagesChange,
+  inputHistory,
+  onInputHistoryAdd,
   alwaysThinkModels,
   onAlwaysThinkModelToggle,
   mcpServers,
@@ -135,6 +145,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionAutocompleteRef = useRef<HTMLDivElement>(null);
   const vaultToolMenuRef = useRef<HTMLDivElement>(null);
+  const historyIndexRef = useRef<number | null>(null);
+  const historyDraftRef = useRef("");
 
   // Scroll to selected mention item
   useEffect(() => {
@@ -229,6 +241,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           if (trimmed.toLowerCase().startsWith(prefix.toLowerCase()) &&
               (trimmed.length === prefix.length || trimmed[prefix.length] === " ")) {
             const userMessage = trimmed.slice(prefix.length).trim();
+            onInputHistoryAdd(input);
             void onSend(userMessage, pendingAttachments.length > 0 ? pendingAttachments : undefined, skill.folderPath);
             setInput("");
             setPendingAttachments([]);
@@ -236,7 +249,10 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           }
         }
       }
+      if (input.trim()) onInputHistoryAdd(input);
       void onSend(input, pendingAttachments.length > 0 ? pendingAttachments : undefined);
+      historyIndexRef.current = null;
+      historyDraftRef.current = "";
       setInput("");
       setPendingAttachments([]);
     }
@@ -246,6 +262,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     const value = e.target.value;
     const cursorPos = e.target.selectionStart;
     setInput(value);
+    historyIndexRef.current = null;
 
     // Check for slash command trigger (only at start of input)
     if (value.startsWith("/")) {
@@ -331,6 +348,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       if (command.id.startsWith("__skill__")) {
         const folderPath = command.id.slice("__skill__".length);
         const userMessage = input.replace(/^\/\S*\s*/, "").trim();
+        onInputHistoryAdd(input);
         void onSend(userMessage, pendingAttachments.length > 0 ? pendingAttachments : undefined, folderPath);
         setInput("");
         setPendingAttachments([]);
@@ -417,6 +435,35 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       }
       if (e.key === "Escape") {
         setShowMentionAutocomplete(false);
+        return;
+      }
+    }
+
+    // Recall sent prompts without taking arrow keys away from multiline editing.
+    // Up activates on the first line; Down activates on the last line.
+    if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && inputHistory.length > 0
+      && e.currentTarget.selectionStart === e.currentTarget.selectionEnd) {
+      const caret = e.currentTarget.selectionStart;
+      if (e.key === "ArrowUp" && isCaretOnFirstLine(input, caret)) {
+        e.preventDefault();
+        const nextIndex = historyIndexRef.current === null
+          ? inputHistory.length - 1
+          : Math.max(0, historyIndexRef.current - 1);
+        if (historyIndexRef.current === null) historyDraftRef.current = input;
+        historyIndexRef.current = nextIndex;
+        setInput(inputHistory[nextIndex]);
+        return;
+      }
+      if (e.key === "ArrowDown" && historyIndexRef.current !== null && isCaretOnLastLine(input, caret)) {
+        e.preventDefault();
+        const nextIndex = historyIndexRef.current + 1;
+        if (nextIndex >= inputHistory.length) {
+          historyIndexRef.current = null;
+          setInput(historyDraftRef.current);
+        } else {
+          historyIndexRef.current = nextIndex;
+          setInput(inputHistory[nextIndex]);
+        }
         return;
       }
     }
@@ -668,6 +715,14 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                   {t("input.vaultToolNone")}
                 </div>
                 <div className="llm-hub-vault-tool-separator" />
+                <label className="llm-hub-vault-tool-checkbox">
+                  <span>{t("input.historyLimit")}</span>
+                  <select value={maxPreviousMessages}
+                    onChange={(e) => onMaxPreviousMessagesChange(Number(e.target.value))}>
+                    {HISTORY_LIMIT_OPTIONS.map(count => <option key={count} value={count}>{count}</option>)}
+                  </select>
+                </label>
+                <div className="llm-hub-vault-tool-separator" />
                 <div className="llm-hub-vault-tool-section-label">{t("input.thinkingLabel")}</div>
                 {(() => {
                   const apiModels = availableModels.filter(m => !m.isCliModel);
@@ -708,6 +763,13 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                       <option value="all" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolAll")}</option>
                       <option value="noSearch" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolNoSearch")}</option>
                       <option value="none">{t("input.vaultToolNone")}</option>
+                    </select>
+                  </div>
+                  <div className="llm-hub-tool-settings-row">
+                    <label>{t("input.historyLimit")}</label>
+                    <select value={maxPreviousMessages}
+                      onChange={(e) => onMaxPreviousMessagesChange(Number(e.target.value))}>
+                      {HISTORY_LIMIT_OPTIONS.map(count => <option key={count} value={count}>{count}</option>)}
                     </select>
                   </div>
                   <div className="llm-hub-tool-settings-row">
