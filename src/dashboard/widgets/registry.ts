@@ -3,7 +3,7 @@
 // registerWidget.
 
 import React from "react";
-import { Clock3, Database, FileKey2, Files, Globe, Kanban, NotebookTabs, Puzzle, Workflow } from "lucide-react";
+import { CalendarDays, Clock3, Database, FileKey2, Files, Globe, Kanban, NotebookTabs, Puzzle, Workflow } from "lucide-react";
 import type { WidgetDef } from "../types";
 import BaseWidget from "./BaseWidget";
 import FileWidget from "./FileWidget";
@@ -21,6 +21,8 @@ import { KanbanConfigEditor } from "./config-editors/KanbanConfigEditor";
 import { TimelineConfigEditor } from "./config-editors/TimelineConfigEditor";
 import SecretManagerWidget from "./SecretManagerWidget";
 import { SecretManagerConfigEditor } from "./config-editors/SecretManagerConfigEditor";
+import CalendarWidget from "./CalendarWidget";
+import { CalendarConfigEditor } from "./config-editors/CalendarConfigEditor";
 
 const registry = new Map<string, WidgetDef>();
 
@@ -147,6 +149,16 @@ export function registerCoreWidgets(): void {
     render: (config, ctx) => React.createElement(TimelineWidget, { config, ctx }),
     defaultSize: { w: 6, h: 6 },
     ConfigEditor: TimelineConfigEditor,
+  });
+
+  registerWidget({
+    type: "calendar",
+    label: "Calendar",
+    icon: React.createElement(CalendarDays, { size: 16 }),
+    defaultConfig: { timelineName: "Timeline", showCreatedFiles: true },
+    render: (config, ctx) => React.createElement(CalendarWidget, { config, ctx }),
+    defaultSize: { w: 6, h: 7 },
+    ConfigEditor: CalendarConfigEditor,
   });
 
   registerWidget({
