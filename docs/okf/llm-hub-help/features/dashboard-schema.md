@@ -20,6 +20,7 @@ The dashboard stores widget definitions and responsive layout. Widget content is
 - Reading memos are stored under `Dashboards/Memos/`.
 - Timeline posts are stored under `Dashboards/Timeline/<name>/`.
 - Timeline image attachments are stored under `Dashboards/Timeline/<name>/attachments/<date>/`.
+- Reusable Kanban definitions are stored under `Dashboards/Kanbans/` as `.kanban` YAML files.
 
 # Layout and Alignment
 
@@ -49,9 +50,11 @@ Web widgets store a URL and optional header setting. Some sites cannot be embedd
 
 Workflow widgets store workflow path, output format (`Markdown` or `HTML`), output variable name, and refresh interval. They render from cache and should not rely on interactive workflow nodes.
 
-Kanban widgets store tag and folder filters, status property, title property, columns, displayed frontmatter fields, unmatched-column behavior, and manual card order.
+Kanban definitions store tag and folder filters, status property, title property, columns, displayed frontmatter fields, unmatched-column behavior, and an optional linked Timeline name (`timelineName`). Per-widget manual card order stays in the `.dashboard` file. When `timelineName` is non-empty, card moves append status-change posts to that Timeline.
 
 Timeline widgets store a timeline name, latest post count, and collapse line/character limits (`name`, `latestCount`, `collapseLineLimit`, `collapseCharLimit`). Feed filters are transient UI state and are not stored. Posts are `---`-separated blocks inside per-day Markdown files.
+
+Calendar widgets store a Timeline name and whether created files are shown (`timelineName`, `showCreatedFiles`). Calendar events are Timeline post blocks containing `<!-- calendar-event: YYYY-MM-DD -->`; changing an event date moves its block between per-day files.
 
 MemoList widgets index dashboard memo files and open selected memos inside the widget.
 

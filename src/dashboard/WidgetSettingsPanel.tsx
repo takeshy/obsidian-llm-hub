@@ -13,6 +13,7 @@ interface WidgetSettingsPanelProps {
   sourcePath: string;
   onChange: (config: unknown) => void;
   onClose: () => void;
+  onDone: () => void;
   onDelete: () => void;
 }
 
@@ -27,6 +28,7 @@ export function WidgetSettingsPanel({
   sourcePath,
   onChange,
   onClose,
+  onDone,
   onDelete,
 }: WidgetSettingsPanelProps) {
   const def = getWidgetDef(widget.type);
@@ -69,7 +71,7 @@ export function WidgetSettingsPanel({
             <Trash2 size={14} />
             {t("dashboard.deleteWidget")}
           </button>
-          <button className="llm-hub-db-primary-btn" onClick={onClose}>
+          <button className="llm-hub-db-primary-btn" onClick={onDone}>
             {t("dashboard.done")}
           </button>
         </div>

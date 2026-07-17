@@ -11504,6 +11504,37 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   background: var(--background-primary);
 }
 
+.llm-hub-db-calendar-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-modal, 50);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 55%);
+  backdrop-filter: blur(2px);
+}
+
+.llm-hub-db-calendar-modal {
+  position: relative;
+  width: min(720px, 92vw);
+  max-height: min(82vh, 820px);
+  overflow: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  background: var(--background-primary);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 35%);
+}
+
+.llm-hub-db-calendar-modal .llm-hub-db-calendar-detail { padding: 22px; border: 0; }
+.llm-hub-db-calendar-modal-close { position: sticky; z-index: 2; top: 10px; float: right; display: grid; width: 30px; height: 30px; margin: 10px 10px -40px 0; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--background-secondary); color: var(--text-muted); box-shadow: none; }
+.llm-hub-db-calendar-modal-close:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+
+@media (max-width: 560px) {
+  .llm-hub-db-calendar-modal-backdrop { align-items: end; padding: 0; }
+  .llm-hub-db-calendar-modal { width: 100vw; max-height: 88vh; border-radius: var(--radius-l) var(--radius-l) 0 0; }
+}
+
 .llm-hub-db-calendar-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .llm-hub-db-calendar-detail-heading > div { display: flex; align-items: center; gap: 6px; }
 .llm-hub-db-calendar-detail-heading > div > span { display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--background-secondary); color: var(--text-muted); font-size: var(--font-ui-smaller); }
@@ -11519,26 +11550,34 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
 
 .llm-hub-db-calendar-event-form {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) auto;
-  align-items: stretch;
-  gap: 6px;
-  margin-top: 10px;
-  padding: 9px;
-  border: 1px solid color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border));
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px 14px;
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--interactive-accent) 30%, var(--background-modifier-border));
   border-radius: var(--radius-m);
-  background: color-mix(in srgb, var(--interactive-accent) 5%, var(--background-primary));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--interactive-accent) 7%, var(--background-primary)), var(--background-primary));
+  box-shadow: 0 3px 12px rgb(0 0 0 / 6%);
 }
 
-.llm-hub-db-calendar-event-form input { align-self: start; }
-.llm-hub-db-calendar-event-form textarea { min-height: 62px; resize: vertical; }
-.llm-hub-db-calendar-event-form > button { align-self: end; white-space: nowrap; }
+.llm-hub-db-calendar-event-form-title { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--background-modifier-border); }
+.llm-hub-db-calendar-event-form-title > span { display: flex; align-items: center; gap: 7px; font-weight: var(--font-semibold); }
+.llm-hub-db-calendar-event-form-title svg { color: var(--interactive-accent); }
+.llm-hub-db-calendar-event-form-title strong { padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--interactive-accent) 13%, transparent); color: var(--interactive-accent); font-size: var(--font-ui-smaller); font-weight: var(--font-medium); }
+.llm-hub-db-calendar-event-form label { display: flex; flex-direction: column; gap: 6px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.llm-hub-db-calendar-event-time-field input { width: 100%; }
+.llm-hub-db-calendar-event-content-field textarea { min-height: 90px; resize: vertical; }
+.llm-hub-db-calendar-event-form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; padding-top: 2px; }
+.llm-hub-db-calendar-event-form-actions button { min-width: 92px; }
 .llm-hub-db-calendar-events article { border-left-color: var(--interactive-accent); }
 .llm-hub-db-calendar-events article .callout { margin: 0; }
+.llm-hub-db-calendar-event-date { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-bottom: 4px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.llm-hub-db-calendar-event-date input { height: 26px; font-size: var(--font-ui-smaller); }
 
 @media (max-width: 560px) {
   .llm-hub-db-calendar-event-form { grid-template-columns: 1fr; }
-  .llm-hub-db-calendar-event-form input { width: 120px; }
-  .llm-hub-db-calendar-event-form > button { justify-self: end; }
+  .llm-hub-db-calendar-event-form-title,
+  .llm-hub-db-calendar-event-form-actions { grid-column: 1; }
 }
 
 .llm-hub-db-calendar-file {

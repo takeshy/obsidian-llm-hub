@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, FileText, MessageCircle, Plus, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, FileText, MessageCircle, Plus, X } from "lucide-react";
 import { Notice, TFile } from "obsidian";
 import { t } from "src/i18n";
 import type { WidgetContext } from "../types";
 import { ensureVaultFolder } from "../dashboardFile";
+import { moveCalendarEvent } from "../timelineEvents";
 import ObsidianMarkdown from "./ObsidianMarkdown";
+import { TimelineLinkPreviewModal } from "./TimelineLinkPreviewModal";
 
 interface CalendarConfig {
   timelineName?: string;
@@ -88,6 +91,7 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
   const [eventTime, setEventTime] = useState("");
   const [eventText, setEventText] = useState("");
   const [savingEvent, setSavingEvent] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   useEffect(() => {
@@ -166,10 +170,19 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
       setShowEventForm(false);
       setEventText("");
       setEventTime("");
+      setEvents([]);
+      setTimelinePosts([]);
     }
     setSelected(dateKey(day));
+    setDetailOpen(true);
     if (!sameMonth(day, month)) setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
   };
+  useEffect(() => {
+    if (!detailOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setDetailOpen(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [detailOpen]);
   const goToday = () => {
     const now = new Date();
     setShowEventForm(false);
@@ -205,6 +218,22 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
       setSavingEvent(false);
     }
   };
+  const changeEventDate = async (post: CalendarPost, nextDate: string) => {
+    if (!ctx || !nextDate || nextDate === post.eventDate) return;
+    try {
+      if (await moveCalendarEvent(ctx.app.vault, timelineName, post.id, nextDate)) {
+        refresh();
+        new Notice(t("dashboard.calendarEventDateChanged"));
+      }
+    } catch (error) {
+      console.error("Calendar: failed to move event", error);
+      new Notice(t("dashboard.calendarEventSaveError"));
+    }
+  };
+  const openInternalLink = (target: string) => {
+    if (!ctx) return;
+    new TimelineLinkPreviewModal(ctx.app, target, `${TIMELINE_ROOT}/${timelineName}/${selected}.md`).open();
+  };
 
   return <div className="llm-hub-db-calendar">
     <div className="llm-hub-db-calendar-heading">
@@ -227,18 +256,24 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
         </button>;
       })}
     </div>
-    <div className="llm-hub-db-calendar-detail">
+    {detailOpen && createPortal(<div className="llm-hub-db-calendar-modal-backdrop" onMouseDown={() => setDetailOpen(false)}>
+      <div className="llm-hub-db-calendar-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button type="button" className="llm-hub-db-calendar-modal-close" aria-label={t("common.close")} onClick={() => setDetailOpen(false)}><X size={18} /></button>
+        <div className="llm-hub-db-calendar-detail">
       <div className="llm-hub-db-calendar-detail-heading"><h4>{selectedLabel}</h4><div><span>{events.length + timelinePosts.length + selectedFiles.length}</span><button type="button" title={t("dashboard.calendarAddEvent")} onClick={() => setShowEventForm((value) => !value)}>{showEventForm ? <X size={15} /> : <Plus size={15} />}{t("dashboard.calendarAddEvent")}</button></div></div>
-      {showEventForm && <div className="llm-hub-db-calendar-event-form">
-        <input type="time" value={eventTime} onChange={(event) => setEventTime(event.target.value)} aria-label={t("dashboard.calendarEventTime")} />
-        <textarea value={eventText} onChange={(event) => setEventText(event.target.value)} placeholder={t("dashboard.calendarEventPlaceholder")} autoFocus />
-        <button type="button" disabled={!eventText.trim() || savingEvent} onClick={() => void saveEvent()}>{savingEvent ? t("dashboard.calendarEventSaving") : t("dashboard.calendarEventSave")}</button>
-      </div>}
-      {events.length > 0 && ctx && <section className="llm-hub-db-calendar-events"><h5><Clock3 size={14} />{t("dashboard.calendarEvents")} <span>{events.length}</span></h5>{events.map((event) => <article key={event.id}><ObsidianMarkdown app={ctx.app} markdown={event.content} sourcePath={`${TIMELINE_ROOT}/${timelineName}/${selected}.md`} /></article>)}</section>}
+      {showEventForm && <form className="llm-hub-db-calendar-event-form" onSubmit={(event) => { event.preventDefault(); void saveEvent(); }}>
+        <div className="llm-hub-db-calendar-event-form-title"><span><CalendarPlus size={16} />{t("dashboard.calendarEventFormTitle")}</span><strong>{selected}</strong></div>
+        <label className="llm-hub-db-calendar-event-time-field"><span>{t("dashboard.calendarEventTimeOptional")}</span><input type="time" value={eventTime} onChange={(event) => setEventTime(event.target.value)} /></label>
+        <label className="llm-hub-db-calendar-event-content-field"><span>{t("dashboard.calendarEventContent")}</span><textarea value={eventText} onChange={(event) => setEventText(event.target.value)} placeholder={t("dashboard.calendarEventPlaceholder")} autoFocus /></label>
+        <div className="llm-hub-db-calendar-event-form-actions"><button type="button" onClick={() => { setShowEventForm(false); setEventText(""); setEventTime(""); }}>{t("dashboard.cancel")}</button><button type="submit" className="mod-cta" disabled={!eventText.trim() || savingEvent}>{savingEvent ? t("dashboard.calendarEventSaving") : t("dashboard.calendarEventSave")}</button></div>
+      </form>}
+      {events.length > 0 && ctx && <section className="llm-hub-db-calendar-events"><h5><Clock3 size={14} />{t("dashboard.calendarEvents")} <span>{events.length}</span></h5>{events.map((event) => <article key={event.id}><div className="llm-hub-db-calendar-event-date"><span>{t("dashboard.calendarEventDate")}</span><input type="date" value={event.eventDate} onChange={(change) => void changeEventDate(event, change.target.value)} /></div><ObsidianMarkdown app={ctx.app} markdown={event.content} sourcePath={`${TIMELINE_ROOT}/${timelineName}/${selected}.md`} onInternalLinkClick={openInternalLink} /></article>)}</section>}
       {events.length === 0 && timelinePosts.length === 0 && selectedFiles.length === 0 && !showEventForm ? <div className="llm-hub-db-widget-empty">{t("dashboard.calendarEmpty")}</div> : <>
         {selectedFiles.length > 0 && <section><h5><FileText size={14} />{t("dashboard.calendarCreatedFiles")} <span>{selectedFiles.length}</span></h5>{selectedFiles.map((file) => <button type="button" className="llm-hub-db-calendar-file" key={file.path} onClick={() => void ctx?.app.workspace.getLeaf(false).openFile(file)}><FileText size={14} /><span>{file.basename}</span><small>{file.parent?.path}</small></button>)}</section>}
-        {timelinePosts.length > 0 && ctx && <section><h5><MessageCircle size={14} />{t("dashboard.calendarTimeline")} <span>{timelinePosts.length}</span></h5>{timelinePosts.map((post) => <article key={post.id}><ObsidianMarkdown app={ctx.app} markdown={post.content} sourcePath={`${TIMELINE_ROOT}/${timelineName}/${selected}.md`} /></article>)}</section>}
+        {timelinePosts.length > 0 && ctx && <section><h5><MessageCircle size={14} />{t("dashboard.calendarTimeline")} <span>{timelinePosts.length}</span></h5>{timelinePosts.map((post) => <article key={post.id}><ObsidianMarkdown app={ctx.app} markdown={post.content} sourcePath={`${TIMELINE_ROOT}/${timelineName}/${selected}.md`} onInternalLinkClick={openInternalLink} /></article>)}</section>}
       </>}
-    </div>
+        </div>
+      </div>
+    </div>, document.body)}
   </div>;
 }

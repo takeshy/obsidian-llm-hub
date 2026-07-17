@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 import { Component, MarkdownRenderer, type App } from "obsidian";
 
 /**
@@ -24,26 +24,28 @@ export default function ObsidianMarkdown({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    let cancelled = false;
     el.innerHTML = "";
     const component = new Component();
     component.load();
-    void MarkdownRenderer.render(app, markdown, el, sourcePath, component).then(() => {
-      if (cancelled || !onInternalLinkClick || !el.isConnected) return;
-      el.querySelectorAll("a.internal-link").forEach((link) => {
-        link.addEventListener("click", (e) => {
-          e.preventDefault();
-          const href = link.getAttribute("href");
-          if (href) onInternalLinkClick(href);
-        });
-      });
-    });
+    void MarkdownRenderer.render(app, markdown, el, sourcePath, component);
     return () => {
-      cancelled = true;
       component.unload();
       el.innerHTML = "";
     };
-  }, [app, markdown, sourcePath, onInternalLinkClick]);
+  }, [app, markdown, sourcePath]);
 
-  return <div className={className}><div ref={ref} /></div>;
+  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (!onInternalLinkClick) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const link = target.closest("a.internal-link");
+    if (!(link instanceof HTMLAnchorElement) || !event.currentTarget.contains(link)) return;
+    const href = link.dataset.href || link.getAttribute("href");
+    if (!href) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onInternalLinkClick(href);
+  };
+
+  return <div className={className} onClick={handleClick}><div ref={ref} /></div>;
 }

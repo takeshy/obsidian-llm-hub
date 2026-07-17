@@ -1,7 +1,7 @@
 ---
 type: Feature
 title: Dashboard
-description: Dashboards are `.dashboard` files with responsive widget grids for Bases, files, web embeds, workflows, kanban, timelines, and memos.
+description: Dashboards are `.dashboard` files with responsive widget grids for Bases, files, web embeds, workflows, kanban, timelines, calendars, and memos.
 tags: [dashboard, widgets, bases]
 timestamp: 2026-07-04T00:00:00Z
 ---
@@ -24,7 +24,10 @@ Core widget types:
 - Workflow: runs a workflow headlessly and renders a cached Markdown or HTML result.
 - Kanban: shows notes as draggable cards grouped by a status property.
 - Timeline: stores dated microblog-style posts with image attachments and AI-assisted rewriting.
+- Calendar: shows Timeline events, Timeline activity, and created files by date in a fixed month view with modal day details.
 - MemoList: lists reading memo files across the dashboard.
+
+![Dashboard with Kanban, Calendar, and Timeline](../../../images/calendar.png)
 
 Workflow widget results are cached under `Dashboards/Data/<encoded dashboard path>.json` and refresh manually, on test run, or when stale according to the refresh interval.
 

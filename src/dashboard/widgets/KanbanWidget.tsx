@@ -11,6 +11,7 @@ import { ensureVaultFolder } from "../dashboardFile";
 import { KanbanNewCardModal, type NewCardInput } from "./KanbanNewCardModal";
 import { KanbanCardModal } from "./KanbanCardModal";
 import { parseKanbanFile, type KanbanBoardDefinition } from "../kanbanFile";
+import { appendTimelineEntry } from "../timelineEvents";
 
 interface KanbanColumn {
   value: string;
@@ -36,6 +37,7 @@ interface KanbanConfig {
   displayFields?: Array<string | KanbanDisplayField>;
   /** Stable card path order used for vertical ordering inside columns. */
   cardOrder?: string[];
+  timelineName?: string;
 }
 
 interface Card {
@@ -190,6 +192,7 @@ export default function KanbanWidget({
   }, [ctx, kanbanPath]);
   const def = (kanbanPath ? fileDefinition ?? {} : cfg) as KanbanConfig;
   const boardTitle = (def.title ?? "").trim();
+  const kanbanName = boardTitle || kanbanPath.split("/").pop()?.replace(/\.kanban$/i, "") || "Kanban";
   const tagFilter = normTag(def.tag ?? "");
   const folderFilter = (def.folder ?? "").trim();
   const statusProp = (def.statusProperty ?? "status").trim() || "status";
@@ -199,6 +202,7 @@ export default function KanbanWidget({
     displayFields.some((field) => field.field === "file.content");
   const columns = Array.isArray(def.columns) ? def.columns.filter((c) => c && typeof c.value === "string") : [];
   const showUnspecified = def.showUnspecified !== false;
+  const timelineName = (def.timelineName ?? "").trim();
 
   const [, setTick] = useState(0);
   const rerender = useCallback(() => setTick((v) => v + 1), []);
@@ -493,6 +497,9 @@ export default function KanbanWidget({
             persistCardOrder(reorderCard(card.path, target, found));
           }
           if (found != null && found !== currentCol) {
+            const oldLabel = uniqueColumns.find((column) => column.value === card.status)?.label || card.status || t("dashboard.kanbanUnspecified");
+            const nextStatus = found === UNSPECIFIED ? "" : found;
+            const nextLabel = uniqueColumns.find((column) => column.value === nextStatus)?.label || nextStatus || t("dashboard.kanbanUnspecified");
             void ctx.app.fileManager
               .processFrontMatter(card.file, (fm) => {
                 const frontmatter = fm as FrontmatterRecord;
@@ -502,7 +509,12 @@ export default function KanbanWidget({
                   frontmatter[statusProp] = found;
                 }
               })
-              .then(() => flashLanded(card.path));
+              .then(async () => {
+                flashLanded(card.path);
+                if (timelineName) {
+                  await appendTimelineEntry(ctx.app.vault, timelineName, `> [!info] Kanban · ${kanbanName}\n> [[${card.path}|${card.title}]]\n> \`${oldLabel}\` → \`${nextLabel}\``);
+                }
+              });
           }
           setDrag(null);
           setDropCol(null);
@@ -523,7 +535,7 @@ export default function KanbanWidget({
       activeWindow.addEventListener("pointermove", onMove);
       activeWindow.addEventListener("pointerup", onUp);
     },
-    [ctx, statusProp, columnForCard, flashLanded, hitTestDrop, persistCardOrder, reorderCard],
+    [ctx, statusProp, columnForCard, flashLanded, hitTestDrop, persistCardOrder, reorderCard, uniqueColumns, timelineName, kanbanName],
   );
 
   // Create a note that already matches this board's filters: dropped in the

@@ -11,7 +11,7 @@
 - **マルチプロバイダー LLM チャット** - Gemini、OpenAI、Anthropic、OpenRouter、Grok、OpenCode Zen/Go、ローカル LLM、CLI バックエンドに対応
 - **Vault 操作** - AI が Function Calling でノートの読み書き・検索・編集を実行（Gemini、OpenAI、Anthropic、OpenCode Zen/Go、および LM Studio / vLLM / AnythingLLM 経由でツール対応モデルを使うローカル LLM）
 - **ワークフロービルダー** - ビジュアルノードエディタと 25 種類のノードでマルチステップタスクを自動化
-- **ダッシュボード** - Bases ビュー、ノート、Web ページ、Timeline、ワークフロー出力をレスポンシブなウィジェットグリッドに配置
+- **ダッシュボード** - Bases ビュー、ノート、Web ページ、Timeline、カレンダー、カンバン、ワークフロー出力をレスポンシブなウィジェットグリッドに配置
 - **セマンティック検索（RAG）** - 専用検索タブ、PDF プレビュー、検索結果からチャットへの連携を備えたローカルベクトル検索
 - **AI Discussion** - 並列応答、投票、勝者決定を備えたマルチモデル討論アリーナ
 - **編集履歴** - AI による変更を差分表示で追跡・復元
@@ -471,7 +471,7 @@ Obsidian のイベントでワークフローを自動実行：
 
 # ダッシュボード
 
-ウィジェットのレスポンシブグリッドから、自分専用の**ホーム/概要ページ**を構築できます。ダッシュボードは `.dashboard` ファイルで、**Bases ビュー**・**ノート**・**Web ページ**・**ワークフロー出力**・**カンバンボード**をドラッグ＆リサイズ可能なグリッドに配置します。通常のノートと同じように開くだけで、ライブで編集可能なボードが表示されます。
+ウィジェットのレスポンシブグリッドから、自分専用の**ホーム/概要ページ**を構築できます。ダッシュボードは `.dashboard` ファイルで、**Bases ビュー**・**ノート**・**Web ページ**・**ワークフロー出力**・**カンバンボード**・**Timeline**・**カレンダー**をドラッグ＆リサイズ可能なグリッドに配置します。通常のノートと同じように開くだけで、ライブで編集可能なボードが表示されます。
 
 ![ダッシュボード](docs/images/dashboard.png)
 
@@ -493,7 +493,10 @@ Obsidian のイベントでワークフローを自動実行：
 | **Markdown** | 既存ノートをインライン表示 | ノートへの `path` |
 | **Web Embed** | iframe 内の Web ページ | `url` |
 | **Workflow** | ワークフローをヘッドレス実行した出力を Markdown または HTML で表示 | `workflow` パス、`output`、`refreshInterval` |
-| **Kanban** | ノートをドラッグ可能なカードとして、ステータス列にグループ化して表示 | `tag`/`folder` フィルター、`statusProperty`、`columns`、`displayFields` |
+| **Kanban** | ノートをステータス列のカードとして表示し、任意でstatus変更をTimelineへ記録 | `tag`/`folder`、`statusProperty`、`columns`、`displayFields`、任意の`timelineName` |
+| **Timeline** | 検索・タグ・画像・Pin・AI編集に対応した日付別のつぶやき | `name`、最新表示数、折り畳み条件 |
+| **Calendar** | Timelineの投稿・予定とVaultで作成したファイルを月表示 | `timelineName`、作成ファイル表示の有無 |
+| **MemoList** | 読書メモの検索可能な一覧 | 必須設定なし |
 | **Secret Manager** | Vault の暗号化シークレットを作成・検索・復号・コピー | 任意フォルダ配下の暗号化ファイル |
 
 **Base** と **Workflow** ウィジェットには、設定パネルを離れずに元になる `.base` ファイルやワークフローを作成できる **AI で作成** ボタンがあります。Base では、AI が作成前に読み取り専用ツールでノートを調べられます。また **AI で編集** では、適用前に差分と追加指示欄が表示され、内容を調整できます。
@@ -510,10 +513,23 @@ Obsidian のイベントでワークフローを自動実行：
 - **プレビューと遷移** — カードをクリックするとダイアログでノートをプレビューでき、ダイアログの遷移アイコンで新しいタブにノートを開きます。
 - **列** — 色分けされ、完全に設定可能です。任意の「未指定」列が、どの列にも一致しないステータスのカードを集めます。
 - **表示フィールド** — 各カードのタイトル下に表示する追加の frontmatter プロパティ（例: `priority`, `due`）を指定できます。
+- **任意のTimeline履歴** — 検索Pickerから既存のTimelineを選ぶと、`Kanban · ボード名`を見出し、Taskリンクとstatusの変更前後（例: `Todo → In Progress`）を本文にしたinfo calloutを記録します。選択をクリアするとTimeline連携は無効です。
 
 すべては編集モードのウィジェット設定から構成できます:
 
 ![カンバン設定](docs/images/dashboard_kanban_edit.png)
+
+## Timelineとカレンダー
+
+Timelineは`Dashboards/Timeline/<name>/`配下に、1日1つのMarkdownファイルとして投稿を保存します。タグ、絞り込み、Pin、画像、Wikiリンク、インライン編集、AIによる書き換えに対応します。
+
+カレンダーは指定した1つのTimelineに接続し、固定サイズの月表示を提供します。予定・作成ファイル・Timeline活動は色の異なるドットで判別できます。日付をクリックすると詳細がモーダルで開くため、記録数によってウィジェットの高さは変わりません。モーダルには予定、当日作成したファイル、Timelineのつぶやきが表示されます。選択日への予定追加と予定日の変更ができ、予定は判別可能なCalendar callout形式のTimeline投稿として保存されます。作成ファイル一覧はカレンダー設定で無効化できます。
+
+![Kanban・Timelineと組み合わせたカレンダー](docs/images/calendar.png)
+
+| 日付の詳細 | 予定を追加 |
+|---|---|
+| ![カレンダーの日付詳細](docs/images/calendar_date.png) | ![カレンダーの予定追加フォーム](docs/images/calendar_event.png) |
 
 ## Secret Manager
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
-import { TFile } from "obsidian";
+import { TFile, TFolder } from "obsidian";
 import { t } from "src/i18n";
 import type { ConfigEditorProps } from "../../types";
 import { kanbanDefinitionFromConfig, parseKanbanFile, serializeKanbanFile } from "../../kanbanFile";
@@ -22,6 +22,7 @@ interface KanbanConfig {
   showUnspecified?: boolean;
   displayFields?: Array<string | KanbanDisplayField>;
   cardOrder?: string[];
+  timelineName?: string;
 }
 
 interface KanbanDisplayField {
@@ -70,6 +71,16 @@ export function KanbanConfigEditor({ config, onChange, app }: ConfigEditorProps)
     .filter((file) => file.extension.toLocaleLowerCase() === "kanban")
     .map((file) => file.path)
     .sort(), [app, rawCfg.kanban]);
+  const timelineNames = useMemo(() => {
+    const prefix = "Dashboards/Timeline/";
+    const names = app.vault.getAllLoadedFiles()
+      .filter((entry): entry is TFolder => entry instanceof TFolder && entry.path.startsWith(prefix))
+      .map((folder) => folder.path.slice(prefix.length))
+      .filter((name) => name && !name.includes("/"));
+    const current = (fileCfg ?? rawCfg).timelineName?.trim();
+    if (current && !names.includes(current)) names.push(current);
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  }, [app, rawCfg, fileCfg]);
   useEffect(() => {
     const path = rawCfg.kanban?.trim();
     if (!path) { setFileCfg(null); setFileMissing(false); return; }
@@ -226,6 +237,18 @@ export function KanbanConfigEditor({ config, onChange, app }: ConfigEditorProps)
           {fieldNames.map((name) => <option value={name} key={name}>{name}</option>)}
         </select>
         <p className="llm-hub-db-hint">{t("dashboard.kanbanTitlePropertyHint")}</p>
+      </div>
+
+      <div className="llm-hub-db-field">
+        <label>{t("dashboard.kanbanTimelineName")}</label>
+        <FilePicker
+          value={cfg.timelineName ?? ""}
+          paths={timelineNames}
+          onChange={(timelineName) => update({ timelineName })}
+          placeholder={t("dashboard.kanbanTimelineSelect")}
+          searchPlaceholder={t("dashboard.kanbanTimelineSearch")}
+        />
+        <p className="llm-hub-db-hint">{t("dashboard.kanbanTimelineHint")}</p>
       </div>
 
       <div className="llm-hub-db-field">

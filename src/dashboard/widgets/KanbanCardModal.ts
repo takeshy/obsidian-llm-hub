@@ -35,7 +35,6 @@ export class KanbanCardModal extends Modal {
       this.close();
       this.onOpenNote();
     });
-
     const body = contentEl.createDiv({
       cls: "llm-hub-db-kanban-card-modal-body markdown-rendered",
     });

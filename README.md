@@ -11,7 +11,7 @@
 - **Multi-Provider LLM Chat** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, local LLMs, or CLI backends
 - **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, and tools-capable local LLMs via LM Studio / vLLM / AnythingLLM)
 - **Workflow Builder** - Automate multi-step tasks with visual node editor and 25 node types
-- **Dashboard** - Arrange Bases views, notes, web pages, timelines, and workflow output in a responsive widget grid
+- **Dashboard** - Arrange Bases views, notes, web pages, timelines, calendars, kanban boards, and workflow output in a responsive widget grid
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
 - **AI Discussion** - Multi-model debate arena with parallel responses, voting, and winner determination
 - **Edit History** - Track and restore AI-made changes with diff view
@@ -466,7 +466,7 @@ Workflows can be automatically triggered by Obsidian events:
 
 # Dashboard
 
-Build a personal **home / overview page** from a responsive grid of widgets. A dashboard is a `.dashboard` file that arranges **Bases views**, **notes**, **web pages**, **workflow output**, and **kanban boards** in a drag-and-resize grid — open it like any note to see a live, editable board.
+Build a personal **home / overview page** from a responsive grid of widgets. A dashboard is a `.dashboard` file that arranges **Bases views**, **notes**, **web pages**, **workflow output**, **kanban boards**, **timelines**, and **calendars** in a drag-and-resize grid — open it like any note to see a live, editable board.
 
 ![Dashboard](docs/images/dashboard.png)
 
@@ -488,7 +488,10 @@ Click **+ Add widget** in edit mode to choose a type:
 | **Markdown** | An existing note, rendered inline | `path` to the note |
 | **Web Embed** | A web page in an iframe | `url` |
 | **Workflow** | The output of a workflow, run headlessly and rendered as Markdown or HTML | `workflow` path, `output`, `refreshInterval` |
-| **Kanban** | Notes as draggable cards grouped into status columns | `tag`/`folder` filter, `statusProperty`, `columns`, `displayFields` |
+| **Kanban** | Notes as draggable cards grouped into status columns; optionally logs status changes to a Timeline | `tag`/`folder`, `statusProperty`, `columns`, `displayFields`, optional `timelineName` |
+| **Timeline** | Dated microblog-style posts with search, tags, images, pinning, and AI rewrite | `name`, latest count, collapse limits |
+| **Calendar** | Monthly view of Timeline posts, events, and files created in the vault | `timelineName`, created-file visibility |
+| **MemoList** | Searchable index of reading memos | No required settings |
 | **Secret Manager** | Create, search, decrypt, and copy encrypted vault secrets | encrypted files under an optional folder |
 
 **Base** and **Workflow** widgets include a **Create with AI** button to author the backing `.base` file or workflow without leaving the settings panel. For a base, the AI can inspect your notes with read-only tools before authoring, and **Edit with AI** shows a diff with an additional-instruction box to refine before applying.
@@ -505,10 +508,23 @@ Boards are stored as reusable `.kanban` files under `Dashboards/Kanbans/`. Exist
 - **Preview & open** — click a card to preview its note in a modal; the modal's open icon jumps to the note in a new tab.
 - **Columns** — color-coded and fully configurable; an optional "Unspecified" column collects cards whose status matches none of the columns.
 - **Display fields** — list extra frontmatter properties (e.g. `priority`, `due`) to show on each card below the title.
+- **Optional Timeline history** — choose an existing Timeline from the searchable picker to record each card move as a `Kanban · <board name>` info callout, followed by the task link and status transition (for example, `Todo → In Progress`). Clear the selection to disable Timeline integration.
 
 Configure everything from the widget settings in edit mode:
 
 ![Kanban settings](docs/images/dashboard_kanban_edit.png)
+
+## Timeline and Calendar
+
+Timeline stores posts under `Dashboards/Timeline/<name>/`, one Markdown file per day. It supports tags, filters, pinned posts, images, wikilinks, inline editing, and AI-assisted rewriting.
+
+Calendar connects to one named Timeline and displays a fixed-size month view. Colored dots distinguish events, created files, and Timeline activity. Clicking a date opens a modal—so days with many records do not resize the widget—with sections for events, files created that day, and Timeline posts. Events can be added for the selected date, moved to another date later, and remain regular Timeline posts in a recognizable calendar callout format. Created-file display can be disabled in Calendar settings.
+
+![Calendar widget with Kanban and Timeline](docs/images/calendar.png)
+
+| Day details | Add an event |
+|---|---|
+| ![Calendar day details](docs/images/calendar_date.png) | ![Calendar event form](docs/images/calendar_event.png) |
 
 ## Secret Manager
 

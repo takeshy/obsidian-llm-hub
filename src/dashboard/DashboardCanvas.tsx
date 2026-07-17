@@ -212,6 +212,14 @@ export function DashboardCanvas({
     setPendingNewWidgetId(null);
   }, [editingWidgetId, pendingNewWidgetId, data, commit]);
 
+  // Explicit Done always confirms the widget, even when its config has not
+  // changed. Emitting the current dashboard also forces TextFileView to save.
+  const handleDoneSettings = useCallback(() => {
+    setEditingWidgetId(null);
+    setPendingNewWidgetId(null);
+    commit({ ...data, widgets: [...data.widgets] });
+  }, [data, commit]);
+
   const handleUpdateWidgetConfig = useCallback(
     (widgetId: string, config: unknown) => {
       commit(
@@ -416,6 +424,7 @@ export function DashboardCanvas({
           sourcePath={sourcePath}
           onChange={(config) => handleUpdateWidgetConfig(editingWidget.id, config)}
           onClose={handleCloseSettings}
+          onDone={handleDoneSettings}
           onDelete={() => handleDeleteWidget(editingWidget.id)}
         />
       )}

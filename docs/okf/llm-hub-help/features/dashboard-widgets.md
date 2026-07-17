@@ -2,13 +2,13 @@
 type: Feature Reference
 title: Dashboard Widgets
 description: Detailed behavior, settings, storage, and caveats for every built-in dashboard widget type.
-tags: [dashboard, widgets, base, kanban, secret-manager, timeline]
+tags: [dashboard, widgets, base, kanban, secret-manager, timeline, calendar]
 timestamp: 2026-07-11T00:00:00Z
 ---
 
 # Dashboard Widgets
 
-Dashboard widgets are selected from the Add widget palette. Built-in types are `base`, `file`, `web`, `workflow`, `kanban`, `secret-manager`, `timeline`, and `memo-list`. Unknown widget types are preserved and shown as placeholders.
+Dashboard widgets are selected from the Add widget palette. Built-in types are `base`, `file`, `web`, `workflow`, `kanban`, `secret-manager`, `timeline`, `calendar`, and `memo-list`. Unknown widget types are preserved and shown as placeholders.
 
 Widgets share common dashboard controls: drag to move, resize from the corner, open settings with the gear button, maximize/restore, delete from settings, and use toolbar undo/redo. The toolbar's horizontal and vertical align actions redistribute all widgets into balanced columns or rows.
 
@@ -83,6 +83,7 @@ Settings:
 - Columns - ordered list of status values and labels.
 - Display fields - ordered frontmatter fields shown below the title, such as `priority` or `due`.
 - Show unmatched cards column - shows an "Unspecified" column for notes whose status matches no configured column.
+- Linked Timeline - optional existing Timeline selected with a searchable picker. When set, every move to a different column appends a `Kanban · <board name>` info callout with the task link and old/new status labels in its body. Clearing the picker disables Timeline integration.
 
 The New button creates a note matching the board filters: folder, tag, selected column status, and (when configured) the title property are written into the new note.
 
@@ -112,6 +113,23 @@ Settings:
 - Collapse after characters - character threshold for collapsed preview; default 440.
 
 Posts can contain tags, images, and wikilinks. Typing `[[` in the composer or inline editor opens a file suggestion popup; arrow keys or Tab navigate and Enter inserts the link. Long posts and embedded notes collapse with Show more / Show less. The composer and inline editor include Edit with AI, which sends the current draft plus the user instruction to a selectable model (any configured API provider, CLI backend, or local LLM server) and applies the rewrite only after a diff preview is accepted. Timeline image attachments are saved under `Dashboards/Timeline/<name>/attachments/<date>/`.
+
+# Calendar Widget
+
+The Calendar widget connects to one named Timeline and shows a fixed-size monthly calendar. It also optionally indexes files by vault creation time. Day markers use separate colors for scheduled events, created files, and Timeline activity.
+
+Clicking a date opens a modal instead of expanding the widget. The modal shows events scheduled for the date, vault files created on the date, and Timeline posts written on the date, in that order.
+
+![Calendar day details](../../../images/calendar_date.png)
+
+Events are stored in the selected Timeline's per-day Markdown file as normal Timeline posts with a `calendar-event` marker and an Obsidian calendar callout. Changing the event date in the modal moves the post to the corresponding day file. An event appears on its scheduled date, while its registration also appears as Timeline activity on the date it was written.
+
+Settings:
+
+- Timeline name - Timeline folder to read and write; default `Timeline`.
+- Show files created in the vault - includes or hides created-file entries and markers.
+
+![Calendar event form](../../../images/calendar_event.png)
 
 # MemoList Widget
 
