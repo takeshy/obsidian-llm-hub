@@ -35,7 +35,6 @@ export default function ObsidianMarkdown({
   }, [app, markdown, sourcePath]);
 
   const handleClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (!onInternalLinkClick) return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const link = target.closest("a.internal-link");
@@ -44,7 +43,11 @@ export default function ObsidianMarkdown({
     if (!href) return;
     event.preventDefault();
     event.stopPropagation();
-    onInternalLinkClick(href);
+    if (onInternalLinkClick) {
+      onInternalLinkClick(href);
+      return;
+    }
+    void app.workspace.openLinkText(href, sourcePath, true);
   };
 
   return <div className={className} onClick={handleClick}><div ref={ref} /></div>;

@@ -232,7 +232,13 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
   };
   const openInternalLink = (target: string) => {
     if (!ctx) return;
+    setDetailOpen(false);
     new TimelineLinkPreviewModal(ctx.app, target, `${TIMELINE_ROOT}/${timelineName}/${selected}.md`).open();
+  };
+  const openCreatedFile = (file: TFile) => {
+    if (!ctx) return;
+    setDetailOpen(false);
+    void ctx.app.workspace.getLeaf(true).openFile(file);
   };
 
   return <div className="llm-hub-db-calendar">
@@ -269,7 +275,7 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
       </form>}
       {events.length > 0 && ctx && <section className="llm-hub-db-calendar-events"><h5><Clock3 size={14} />{t("dashboard.calendarEvents")} <span>{events.length}</span></h5>{events.map((event) => <article key={event.id}><div className="llm-hub-db-calendar-event-date"><span>{t("dashboard.calendarEventDate")}</span><input type="date" value={event.eventDate} onChange={(change) => void changeEventDate(event, change.target.value)} /></div><ObsidianMarkdown app={ctx.app} markdown={event.content} sourcePath={`${TIMELINE_ROOT}/${timelineName}/${selected}.md`} onInternalLinkClick={openInternalLink} /></article>)}</section>}
       {events.length === 0 && timelinePosts.length === 0 && selectedFiles.length === 0 && !showEventForm ? <div className="llm-hub-db-widget-empty">{t("dashboard.calendarEmpty")}</div> : <>
-        {selectedFiles.length > 0 && <section><h5><FileText size={14} />{t("dashboard.calendarCreatedFiles")} <span>{selectedFiles.length}</span></h5>{selectedFiles.map((file) => <button type="button" className="llm-hub-db-calendar-file" key={file.path} onClick={() => void ctx?.app.workspace.getLeaf(false).openFile(file)}><FileText size={14} /><span>{file.basename}</span><small>{file.parent?.path}</small></button>)}</section>}
+        {selectedFiles.length > 0 && <section><h5><FileText size={14} />{t("dashboard.calendarCreatedFiles")} <span>{selectedFiles.length}</span></h5>{selectedFiles.map((file) => <button type="button" className="llm-hub-db-calendar-file" key={file.path} onClick={() => openCreatedFile(file)}><FileText size={14} /><span>{file.basename}</span><small>{file.parent?.path}</small></button>)}</section>}
         {timelinePosts.length > 0 && ctx && <section><h5><MessageCircle size={14} />{t("dashboard.calendarTimeline")} <span>{timelinePosts.length}</span></h5>{timelinePosts.map((post) => <article key={post.id}><ObsidianMarkdown app={ctx.app} markdown={post.content} sourcePath={`${TIMELINE_ROOT}/${timelineName}/${selected}.md`} onInternalLinkClick={openInternalLink} /></article>)}</section>}
       </>}
         </div>
