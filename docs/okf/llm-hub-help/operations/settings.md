@@ -62,6 +62,8 @@ The API Providers section manages multiple providers that can be configured simu
 
 Providers can be enabled, disabled, edited, and deleted from the list.
 
+For Gemini and official OpenAI or Anthropic providers, chat's search dropdown includes **Web search**. This is an explicit per-workspace selection: prompt wording does not enable it when **Search: none** is selected. Switching between supported models retains Web search; switching to an unsupported provider or an OpenAI image-generation model clears it.
+
 # Workspace Settings
 
 - Workspace folder - vault-relative folder for LLM Hub data. Defaults to `LLMHub`. Absolute paths and `..` traversal are rejected. If the old folder exists, the user can move existing data or skip moving.

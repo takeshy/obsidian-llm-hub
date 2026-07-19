@@ -15,6 +15,7 @@ import { isBuiltinSkillPath } from "src/core/builtinSkills";
 import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { t } from "src/i18n";
 import { formatError } from "src/utils/error";
+import { isSafeWebUrl } from "src/core/webSearch";
 
 interface MessageBubbleProps {
   message: Message;
@@ -473,6 +474,20 @@ export default function MessageBubble({
           <span className="llm-hub-rag-indicator">
             🌐 {t("message.webSearchUsed")}
           </span>
+          {message.webSearchSources && message.webSearchSources.length > 0 && (
+            <div className="llm-hub-rag-sources">
+              {message.webSearchSources.filter(source => isSafeWebUrl(source.url)).map((source, index) => (
+                <span
+                  key={`${source.url}-${index}`}
+                  className="llm-hub-rag-source llm-hub-tool-clickable"
+                  onClick={() => window.open(source.url, "_blank")}
+                  title={source.url}
+                >
+                  🌐 {source.title || source.url}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

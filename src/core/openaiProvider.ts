@@ -11,10 +11,11 @@
 
 import { requestUrl } from "obsidian";
 import OpenAI from "openai";
-import type { Message, StreamChunk, ToolDefinition, GeneratedImage } from "../types";
+import type { Message, StreamChunk, ToolDefinition, GeneratedImage, WebSearchCitation } from "../types";
 import { calculateCost } from "./modelPricing";
 import { parseThinkTags } from "./thinkTagParser";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
+import { continuationMatches, WEB_SEARCH_COST_PER_REQUEST } from "./webSearch";
 
 /**
  * Build the fetch implementation to hand to the OpenAI SDK. We can't rely on
@@ -310,11 +311,43 @@ function toResponsesTools(tools: ToolDefinition[]): Array<{ type: "function"; na
  */
 function buildResponsesInput(
   messages: Message[],
-): Array<{ role: "user" | "assistant" | "system"; content: string }> {
-  return messages.map(msg => ({
-    role: msg.role === "user" ? "user" as const : "assistant" as const,
-    content: msg.content,
-  }));
+  baseUrl: string,
+  model: string,
+): OpenAI.Responses.ResponseInputItem[] {
+  const result: OpenAI.Responses.ResponseInputItem[] = [];
+  for (let index = 0; index < messages.length; index++) {
+    const msg = messages[index];
+    const hasTriggeringUser = index > 0 && messages[index - 1].role === "user";
+    if (msg.role === "assistant" && hasTriggeringUser
+      && continuationMatches(msg.providerContinuation, "openai", baseUrl, model)) {
+      result.push(...msg.providerContinuation.items as OpenAI.Responses.ResponseInputItem[]);
+      continue;
+    }
+
+    const text = msg.role === "user" && msg.llmContent ? msg.llmContent : msg.content;
+    if (msg.role === "user" && msg.attachments?.some(a => a.type === "image" || a.type === "pdf")) {
+      const content: OpenAI.Responses.ResponseInputContent[] = [{ type: "input_text", text }];
+      for (const attachment of msg.attachments) {
+        if (attachment.type === "image") {
+          content.push({
+            type: "input_image",
+            detail: "auto",
+            image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
+          });
+        } else if (attachment.type === "pdf") {
+          content.push({
+            type: "input_file",
+            filename: attachment.name,
+            file_data: `data:${attachment.mimeType};base64,${attachment.data}`,
+          });
+        }
+      }
+      result.push({ role: "user", content });
+    } else {
+      result.push({ role: msg.role, content: text });
+    }
+  }
+  return result;
 }
 
 /**
@@ -323,31 +356,50 @@ function buildResponsesInput(
  */
 async function* openaiResponsesStream(
   client: OpenAI,
+  baseUrl: string,
   model: string,
   messages: Message[],
   tools: ToolDefinition[],
   systemPrompt: string,
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>,
   signal?: AbortSignal,
+  enableThinking?: boolean,
+  webSearchEnabled?: boolean,
 ): AsyncGenerator<StreamChunk> {
-  const responsesTools = tools.length > 0 ? toResponsesTools(tools) : undefined;
+  const responsesTools: OpenAI.Responses.Tool[] = [
+    ...toResponsesTools(tools),
+    ...(webSearchEnabled ? [{ type: "web_search" as const }] : []),
+  ];
   // Build input: previous messages as conversation history
-  const input: Array<{ role: "user" | "assistant" | "system"; content: string; type?: "message" } | { type: "function_call_output"; call_id: string; output: string }> = buildResponsesInput(messages);
+  const input = buildResponsesInput(messages, baseUrl, model);
+  const continuationItems: OpenAI.Responses.ResponseInputItem[] = [];
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let totalTextLength = 0;
+  let searchRequests = 0;
+  let webSearchEmitted = false;
+  const citations: WebSearchCitation[] = [];
 
   const MAX_TOOL_ROUNDS = 20;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const toolCalls: Array<{ call_id: string; name: string; arguments: string }> = [];
+    const roundTextStart = totalTextLength;
+    let roundTextLength = 0;
+    let completedResponse: OpenAI.Responses.Response | undefined;
 
     try {
       const stream = client.responses.stream({
         model,
         input,
         instructions: systemPrompt || undefined,
-        tools: responsesTools,
-        reasoning: { effort: "high", summary: "detailed" },
+        tools: responsesTools.length > 0 ? responsesTools : undefined,
+        tool_choice: webSearchEnabled ? "auto" : undefined,
+        ...(enableThinking ? { reasoning: { effort: "high", summary: "detailed" as const } } : {}),
+        // Search-capable models such as GPT-5.6 Sol may emit reasoning items
+        // even when the UI thinking toggle is off. Always retain their opaque
+        // encrypted state so our stateless history replay remains valid.
+        include: ["reasoning.encrypted_content" as const],
       }, { signal });
 
       for await (const event of stream) {
@@ -359,7 +411,14 @@ async function* openaiResponsesStream(
             yield { type: "thinking", content: event.delta };
             break;
           case "response.output_text.delta":
+            roundTextLength += event.delta.length;
             yield { type: "text", content: event.delta };
+            break;
+          case "response.web_search_call.in_progress":
+            if (!webSearchEmitted) {
+              webSearchEmitted = true;
+              yield { type: "web_search_used" };
+            }
             break;
           case "response.output_item.done": {
             const item = event.item;
@@ -373,6 +432,7 @@ async function* openaiResponsesStream(
             break;
           }
           case "response.completed": {
+            completedResponse = event.response;
             const usage = event.response?.usage;
             if (usage) {
               totalInputTokens += usage.input_tokens ?? 0;
@@ -380,6 +440,18 @@ async function* openaiResponsesStream(
             }
             break;
           }
+          case "response.failed":
+            yield { type: "error", error: event.response.error?.message || "OpenAI response failed" };
+            return;
+          case "response.incomplete":
+            yield {
+              type: "error",
+              error: `OpenAI response incomplete${event.response.incomplete_details?.reason ? `: ${event.response.incomplete_details.reason}` : ""}`,
+            };
+            return;
+          case "error":
+            yield { type: "error", error: event.message || "OpenAI streaming error" };
+            return;
         }
       }
     } catch (error) {
@@ -388,6 +460,43 @@ async function* openaiResponsesStream(
       yield { type: "error", error: msg };
       return;
     }
+
+    totalTextLength += roundTextLength;
+    if (!completedResponse) {
+      yield { type: "error", error: "OpenAI Responses API completed without a response object" };
+      return;
+    }
+
+    let responseTextOffset = 0;
+    for (const item of completedResponse.output) {
+      if (item.type === "web_search_call" && item.status === "completed") {
+        // Reasoning models can also emit open_page/find_in_page items. Only
+        // the search action is a billable search request.
+        if (item.action?.type === "search") searchRequests += 1;
+        if (!webSearchEmitted) {
+          webSearchEmitted = true;
+          yield { type: "web_search_used" };
+        }
+      }
+      if (item.type !== "message") continue;
+      for (const part of item.content) {
+        if (part.type !== "output_text") continue;
+        for (const annotation of part.annotations) {
+          if (annotation.type === "url_citation") {
+            citations.push({
+              title: annotation.title,
+              url: annotation.url,
+              startIndex: roundTextStart + responseTextOffset + annotation.start_index,
+              endIndex: roundTextStart + responseTextOffset + annotation.end_index,
+            });
+          }
+        }
+        responseTextOffset += part.text.length;
+      }
+    }
+
+    input.push(...completedResponse.output);
+    continuationItems.push(...completedResponse.output);
 
     // Emit tool calls
     for (const tc of toolCalls) {
@@ -400,7 +509,10 @@ async function* openaiResponsesStream(
     }
 
     if (toolCalls.length === 0) {
-      const cost = calculateCost(model, totalInputTokens, totalOutputTokens);
+      const tokenCost = calculateCost(model, totalInputTokens, totalOutputTokens);
+      const cost = tokenCost === undefined && searchRequests === 0
+        ? undefined
+        : (tokenCost ?? 0) + searchRequests * WEB_SEARCH_COST_PER_REQUEST;
       yield {
         type: "done",
         usage: {
@@ -408,7 +520,15 @@ async function* openaiResponsesStream(
           outputTokens: totalOutputTokens || undefined,
           totalTokens: (totalInputTokens + totalOutputTokens) || undefined,
           totalCost: cost,
+          webSearchRequests: searchRequests || undefined,
         },
+        webSearchCitations: citations.length > 0 ? citations : undefined,
+        providerContinuation: webSearchEmitted ? {
+          provider: "openai",
+          baseUrl: baseUrl.replace(/\/+$/, ""),
+          model,
+          items: continuationItems,
+        } : undefined,
       };
       return;
     }
@@ -420,10 +540,18 @@ async function* openaiResponsesStream(
         const result = await executeToolCall(tc.name, args);
         const resultStr = typeof result === "string" ? result : JSON.stringify(result);
         yield { type: "tool_result", toolResult: { toolCallId: tc.call_id, result } };
-        input.push({ type: "function_call_output", call_id: tc.call_id, output: resultStr });
+        const output: OpenAI.Responses.ResponseInputItem.FunctionCallOutput = {
+          type: "function_call_output", call_id: tc.call_id, output: resultStr,
+        };
+        input.push(output);
+        continuationItems.push(output);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
-        input.push({ type: "function_call_output", call_id: tc.call_id, output: JSON.stringify({ error: errMsg }) });
+        const output: OpenAI.Responses.ResponseInputItem.FunctionCallOutput = {
+          type: "function_call_output", call_id: tc.call_id, output: JSON.stringify({ error: errMsg }),
+        };
+        input.push(output);
+        continuationItems.push(output);
       }
     }
   }
@@ -448,6 +576,7 @@ export async function* openaiChatWithToolsStream(
   enableThinking?: boolean,
   proxyUrl?: string,
   proxyBypass?: string,
+  webSearchEnabled?: boolean,
 ): AsyncGenerator<StreamChunk> {
   const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
   const useReasoning = enableThinking === true;
@@ -456,20 +585,27 @@ export async function* openaiChatWithToolsStream(
   const isOpenAiDirect = baseUrl.replace(/\/+$/, "").includes("api.openai.com");
 
   // For reasoning-enabled requests on OpenAI direct, try Responses API first
-  if (useReasoning && isOpenAiDirect) {
+  if ((useReasoning || webSearchEnabled) && isOpenAiDirect) {
     let responsesWorked = false;
+    let initialResponsesError: StreamChunk | undefined;
     const responsesStream = openaiResponsesStream(
-      client, model, messages, tools, systemPrompt, executeToolCall, signal,
+      client, baseUrl, model, messages, tools, systemPrompt, executeToolCall, signal,
+      useReasoning, webSearchEnabled,
     );
     for await (const chunk of responsesStream) {
       // If Responses API returns an error on the first chunk, fall through to Chat Completions
       if (chunk.type === "error" && !responsesWorked) {
+        initialResponsesError = chunk;
         break;
       }
       responsesWorked = true;
       yield chunk;
     }
     if (responsesWorked) return;
+    if (webSearchEnabled) {
+      yield initialResponsesError ?? { type: "error", error: "OpenAI web search request failed" };
+      return;
+    }
     // Fall through to Chat Completions API with reasoning_effort
   }
 

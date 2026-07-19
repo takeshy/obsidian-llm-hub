@@ -32,7 +32,15 @@ Vault tools let the AI read, create, search, rename, edit, and delete notes and 
 
 The Database icon tool menu also contains **Previous messages (0-99)**. It controls how many messages before the current prompt are sent to the model. A value of 0 disables prior conversation injection and sends only the current prompt; this is useful when processing unrelated PDFs or notes one at a time. The selected value is saved in workspace state and applies across supported chat providers.
 
-Chat can also use web search, selected RAG stores, MCP servers, a sandboxed `execute_javascript` tool, active skills (via `run_skill_workflow` and `run_skill_script`), and active OKF knowledge.
+# Web Search
+
+Web search is available with Gemini and with OpenAI or Anthropic providers configured to use their official API hosts. Choose **Web search** in the search dropdown beside the model picker before sending the prompt. Asking the model to browse does not enable search when the dropdown remains **Search: none**. Enabling search makes the provider-native tool available; the model still decides whether to call it.
+
+OpenAI search uses the Responses API and Anthropic search uses its native server tool. Both can coexist with vault and MCP tools. Custom gateways, OpenRouter, local LLMs, CLI providers, and OpenAI image-generation models do not expose this option. There is no fixed chat-model allowlist: unsupported models return their provider's error. Development smoke tests covered GPT-5.6 Sol and Claude Opus 4.8, Sonnet 5, Fable 5, and Haiku 4.5.
+
+Only cited sources are shown. Citations are inserted as numbered Markdown links and deduplicated into clickable source pills beneath the **Used web search** badge. Chat history stores cited-source metadata and opaque provider continuation items for later turns. Native continuation is replayed only while the endpoint and model match and the associated user/assistant pair remains inside the configured previous-message limit; otherwise visible assistant text is used.
+
+Chat can also use selected RAG stores, MCP servers, a sandboxed `execute_javascript` tool, active skills (via `run_skill_workflow` and `run_skill_script`), and active OKF knowledge.
 
 Chat history is stored as Markdown files under the configured workspace folder when history saving is enabled. History files can optionally be encrypted with the chat history encryption setting. The saved chat remains complete even when the conversation context limit sends only a subset of its messages to the model.
 

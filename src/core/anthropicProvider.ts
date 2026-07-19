@@ -7,9 +7,10 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { Message, StreamChunk, ToolDefinition } from "../types";
+import type { Message, StreamChunk, ToolDefinition, WebSearchCitation } from "../types";
 import { calculateCost } from "./modelPricing";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
+import { continuationMatches, WEB_SEARCH_COST_PER_REQUEST } from "./webSearch";
 
 // Match openaiProvider.buildSdkFetch — see that file for rationale. Routes
 // through Node http on desktop to bypass CORS for Anthropic-compatible
@@ -109,12 +110,25 @@ function buildContent(
  * Build Anthropic messages from plugin Message array
  */
 function buildMessages(
-  messages: Message[]
+  messages: Message[],
+  baseUrl: string,
+  model: string,
 ): Anthropic.MessageParam[] {
-  return messages.map(msg => ({
-    role: msg.role === "user" ? "user" as const : "assistant" as const,
-    content: msg.role === "user" ? buildContent(msg) : msg.content,
-  }));
+  const result: Anthropic.MessageParam[] = [];
+  for (let index = 0; index < messages.length; index++) {
+    const msg = messages[index];
+    const hasTriggeringUser = index > 0 && messages[index - 1].role === "user";
+    if (msg.role === "assistant" && hasTriggeringUser
+      && continuationMatches(msg.providerContinuation, "anthropic", baseUrl, model)) {
+      result.push(...msg.providerContinuation.items as Anthropic.MessageParam[]);
+    } else {
+      result.push({
+        role: msg.role,
+        content: msg.role === "user" ? buildContent(msg) : msg.content,
+      });
+    }
+  }
+  return result;
 }
 
 /**
@@ -143,6 +157,7 @@ export async function* anthropicChatWithToolsStream(
   enableThinking?: boolean,
   proxyUrl?: string,
   proxyBypass?: string,
+  webSearchEnabled?: boolean,
 ): AsyncGenerator<StreamChunk> {
   const sdkFetch = buildSdkFetch(proxyUrl, proxyBypass);
   const client = new Anthropic({
@@ -152,9 +167,20 @@ export async function* anthropicChatWithToolsStream(
     ...(sdkFetch ? { fetch: sdkFetch } : {}),
   });
 
-  const anthropicTools = tools.length > 0 ? toAnthropicTools(tools) : undefined;
-  const conversationMessages = buildMessages(messages);
+  const anthropicTools: Anthropic.ToolUnion[] = [
+    ...toAnthropicTools(tools),
+    ...(webSearchEnabled ? [{ type: "web_search_20250305" as const, name: "web_search" as const }] : []),
+  ];
+  const conversationMessages = buildMessages(messages, baseUrl, model);
+  const continuationMessages: Anthropic.MessageParam[] = [];
   const useThinking = enableThinking === true;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let searchRequests = 0;
+  let totalTextLength = 0;
+  let webSearchEmitted = false;
+  const citations: WebSearchCitation[] = [];
+  const searchErrors: string[] = [];
 
   const THINKING_BUDGET_TOKENS = 10000;
 
@@ -162,10 +188,11 @@ export async function* anthropicChatWithToolsStream(
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     let textContent = "";
     let thinkingContent = "";
-    let thinkingSignature = "";
     const toolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
     let thinkingEnabledForAttempt = useThinking;
     let finalMessage: Anthropic.Message | undefined;
+    const roundTextStart = totalTextLength;
+    let roundTextLength = 0;
 
     for (;;) {
       try {
@@ -173,11 +200,11 @@ export async function* anthropicChatWithToolsStream(
           model,
           max_tokens: thinkingEnabledForAttempt ? THINKING_BUDGET_TOKENS + 8192 : 8192,
           system: systemPrompt || undefined,
-          messages: conversationMessages,
+          messages: [...conversationMessages],
           stream: true,
           ...(thinkingEnabledForAttempt ? { thinking: { type: "enabled" as const, budget_tokens: THINKING_BUDGET_TOKENS } } : {}),
         };
-        if (anthropicTools && anthropicTools.length > 0) {
+        if (anthropicTools.length > 0) {
           createParams.tools = anthropicTools;
         }
 
@@ -188,12 +215,20 @@ export async function* anthropicChatWithToolsStream(
 
           switch (event.type) {
             case "content_block_start": {
+              const block = event.content_block;
+              if (block.type === "server_tool_use" && block.name === "web_search" && !webSearchEmitted) {
+                webSearchEmitted = true;
+                yield { type: "web_search_used" };
+              } else if (block.type === "web_search_tool_result" && !Array.isArray(block.content)) {
+                searchErrors.push(block.content.error_code);
+              }
               break;
             }
             case "content_block_delta": {
               const delta = event.delta;
               if (delta.type === "text_delta") {
                 textContent += delta.text;
+                roundTextLength += delta.text.length;
                 yield { type: "text", content: delta.text };
               } else if (delta.type === "thinking_delta") {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -210,9 +245,7 @@ export async function* anthropicChatWithToolsStream(
               const currentMessage = stream.currentMessage;
               if (currentMessage && blockIndex < currentMessage.content.length) {
                 const block = currentMessage.content[blockIndex];
-                if (block.type === "thinking") {
-                  thinkingSignature = (block as { signature?: string }).signature || "";
-                } else if (block.type === "tool_use") {
+                if (block.type === "tool_use") {
                   toolUses.push({
                     id: block.id,
                     name: block.name,
@@ -235,7 +268,12 @@ export async function* anthropicChatWithToolsStream(
           }
         }
 
-        finalMessage = stream.currentMessage;
+        // `currentMessage` is only the in-progress snapshot. The Anthropic SDK
+        // clears it when the stream receives `message_stop`, so it is normally
+        // undefined after the async iterator completes. `finalMessage()` reads
+        // the retained completed message and also surfaces premature stream
+        // termination as an actionable SDK error.
+        finalMessage = await stream.finalMessage();
         break;
       } catch (error) {
         if (signal?.aborted) return;
@@ -254,36 +292,76 @@ export async function* anthropicChatWithToolsStream(
       }
     }
 
-      const inTok = finalMessage?.usage?.input_tokens ?? 0;
-      const outTok = finalMessage?.usage?.output_tokens ?? 0;
-      const cost = calculateCost(model, inTok, outTok);
-      const usage = finalMessage ? {
-        inputTokens: inTok || undefined,
-        outputTokens: outTok || undefined,
-        totalTokens: (inTok + outTok) || undefined,
-        totalCost: cost,
-      } : undefined;
+      if (!finalMessage) {
+        yield { type: "error", error: "Anthropic stream completed without a final message" };
+        return;
+      }
+
+      totalTextLength += roundTextLength;
+      totalInputTokens += finalMessage.usage.input_tokens ?? 0;
+      totalOutputTokens += finalMessage.usage.output_tokens ?? 0;
+      searchRequests += finalMessage.usage.server_tool_use?.web_search_requests ?? 0;
+
+      let blockOffset = 0;
+      for (const block of finalMessage.content) {
+        if (block.type === "server_tool_use" && block.name === "web_search" && !webSearchEmitted) {
+          webSearchEmitted = true;
+          yield { type: "web_search_used" };
+        }
+        if (block.type !== "text") continue;
+        for (const citation of block.citations ?? []) {
+          if (citation.type === "web_search_result_location") {
+            citations.push({
+              title: citation.title || citation.url,
+              url: citation.url,
+              startIndex: roundTextStart + blockOffset,
+              endIndex: roundTextStart + blockOffset + block.text.length,
+            });
+          }
+        }
+        blockOffset += block.text.length;
+      }
+
+      const assistantTurn: Anthropic.MessageParam = {
+        role: "assistant",
+        content: finalMessage.content as Anthropic.ContentBlockParam[],
+      };
+      conversationMessages.push(assistantTurn);
+      continuationMessages.push(assistantTurn);
 
       if (toolUses.length === 0) {
-        yield { type: "done", usage };
+        if (finalMessage.stop_reason === "pause_turn") {
+          continue;
+        }
+        if (!textContent && searchErrors.length > 0) {
+          yield { type: "error", error: `Anthropic web search failed: ${searchErrors.join(", ")}` };
+          return;
+        }
+        const tokenCost = calculateCost(model, totalInputTokens, totalOutputTokens);
+        const cost = tokenCost === undefined && searchRequests === 0
+          ? undefined
+          : (tokenCost ?? 0) + searchRequests * WEB_SEARCH_COST_PER_REQUEST;
+        yield {
+          type: "done",
+          usage: {
+            inputTokens: totalInputTokens || undefined,
+            outputTokens: totalOutputTokens || undefined,
+            totalTokens: (totalInputTokens + totalOutputTokens) || undefined,
+            totalCost: cost,
+            webSearchRequests: searchRequests || undefined,
+          },
+          webSearchCitations: citations.length > 0 ? citations : undefined,
+          providerContinuation: webSearchEmitted ? {
+            provider: "anthropic",
+            baseUrl: baseUrl.replace(/\/+$/, ""),
+            model,
+            items: continuationMessages,
+          } : undefined,
+        };
         return;
       }
 
       // Execute tool calls
-      conversationMessages.push({
-        role: "assistant",
-        content: [
-          ...(textContent ? [{ type: "text" as const, text: textContent }] : []),
-          ...(thinkingContent ? [{ type: "thinking" as const, thinking: thinkingContent, signature: thinkingSignature } as Anthropic.ContentBlockParam] : []),
-          ...toolUses.map(tu => ({
-            type: "tool_use" as const,
-            id: tu.id,
-            name: tu.name,
-            input: tu.input,
-          })),
-        ],
-      });
-
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       for (const tu of toolUses) {
         try {
@@ -306,10 +384,12 @@ export async function* anthropicChatWithToolsStream(
         }
       }
 
-      conversationMessages.push({
+      const resultTurn: Anthropic.MessageParam = {
         role: "user",
         content: toolResults,
-      });
+      };
+      conversationMessages.push(resultTurn);
+      continuationMessages.push(resultTurn);
   }
 
   yield { type: "error", error: "Maximum tool call rounds exceeded" };

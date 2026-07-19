@@ -44,6 +44,8 @@ import {
 	type VaultToolMode,
 	type McpServerConfig,
 	type McpAppInfo,
+	type WebSearchCitation,
+	type ProviderContinuation,
 	isImageGenerationModel,
 	DEFAULT_WORKSPACE_FOLDER,
 } from "src/types";
@@ -57,6 +59,7 @@ import { PersistentCliSession } from "src/core/cliProvider";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
+import { formatWebSearchCitations, modelSupportsWebSearch, providerSupportsWebSearch } from "src/core/webSearch";
 import { searchLocalRag, loadRagMediaAttachments } from "src/core/localRagStore";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import {
@@ -580,13 +583,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	// Check if configuration is ready (any CLI verified OR API provider configured)
 	const isConfigReady = anyCliVerified || hasEnabledApiProvider;
 
-	// Web Search is only available for Gemini providers (uses Gemini's grounding with Google Search)
-	const isGeminiProvider = (() => {
-		if (isAntigravityCliMode) return false;
-		const provider = getActiveApiProvider();
-		return provider?.type === "gemini";
-	})();
-	const allowWebSearch = !isCliMode && isGeminiProvider;
+	// Native web search is available on Gemini plus official OpenAI/Anthropic endpoints.
+	const activeSearchProvider = getActiveApiProvider();
+	const allowWebSearch = !isCliMode && !!activeSearchProvider
+		&& providerSupportsWebSearch(activeSearchProvider, getApiProviderModelName(currentModel) || "");
 	// Server RAG needs API mode; local RAG works everywhere
 	const allowRag = ragEnabledState;
 
@@ -1351,19 +1351,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			&& isLocalLlmToolsEnabled(newLocalLlmConfig, newLocalLlmConfig.model));
 		const isNewModelCli = model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli"
 			|| (isLocalLlmModel(model) && !isNewLocalLlmToolsCapable);
-		const isNewModelApiProvider = isApiProviderModel(model);
-
-		// Check if new model is a Gemini provider (for Web Search availability)
-		const isNewModelGemini = (() => {
-			if (model === "antigravity-cli") return false;
-			if (!isNewModelApiProvider) return false;
-			const providerId = getApiProviderId(model);
-			const provider = plugin.settings.apiProviders.find(p => p.id === providerId && p.enabled && p.verified);
-			return provider?.type === "gemini";
-		})();
-
-		// If switching to non-Gemini model while Web Search is selected, clear it
-		if (!isNewModelGemini && selectedRagSetting === "__websearch__") {
+		// Clear Web Search only when the selected model has no native search support.
+		if (!modelSupportsWebSearch(model, plugin.settings.apiProviders) && selectedRagSetting === "__websearch__") {
 			handleRagSettingChange(null);
 		}
 
@@ -1586,7 +1575,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		}
 
 		// Optionally change search setting (null = keep current, "" = None, "__websearch__" = Web Search, other = RAG setting name)
-		if (allowWebSearch && command.searchSetting !== null && command.searchSetting !== undefined) {
+		if (modelSupportsWebSearch(nextModel, plugin.settings.apiProviders)
+			&& command.searchSetting !== null && command.searchSetting !== undefined) {
 			const newSetting = command.searchSetting === "" ? null : command.searchSetting;
 			handleRagSettingChange(newSetting);
 		}
@@ -2509,7 +2499,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 		const apiTraceId = tracing.traceStart("api-provider-chat", {
 			input: resolvedContent,
-			metadata: { provider: providerConfig.name, model: resolvedModelName },
+			metadata: {
+				provider: providerConfig.name,
+				model: resolvedModelName,
+				webSearchEnabled: selectedRagSetting === "__websearch__",
+			},
 		});
 
 		try {
@@ -2641,10 +2635,16 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			const generatedImages: GeneratedImage[] = [];
 			let stopped = false;
 			let streamUsage: Message["usage"] = undefined;
+			let webSearchUsed = false;
+			let webSearchCitations: WebSearchCitation[] = [];
+			let webSearchSources: Message["webSearchSources"];
+			let providerContinuation: ProviderContinuation | undefined;
 			const startTime = Date.now();
 
 			// Route to correct provider implementation
 			const apiEnableThinking = getThinkingToggle();
+			const isWebSearch = providerSupportsWebSearch(providerConfig, resolvedModelName)
+				&& selectedRagSetting === "__websearch__";
 			const isImageGen = providerConfig.type === "openai" && isOpenAiImageModel(resolvedModelName);
 			const streamFn = isImageGen
 				? openaiGenerateImageStream(
@@ -2660,6 +2660,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						systemPrompt, executeToolCall, abortController.signal,
 						apiEnableThinking,
 						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+						isWebSearch,
 					)
 					: openaiChatWithToolsStream(
 						providerConfig.baseUrl, providerConfig.apiKey,
@@ -2667,6 +2668,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						systemPrompt, executeToolCall, abortController.signal,
 						apiEnableThinking,
 						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+						isWebSearch,
 					);
 
 			for await (const chunk of streamFn) {
@@ -2698,17 +2700,28 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						}
 						break;
 
+					case "web_search_used":
+						webSearchUsed = true;
+						break;
+
 					case "error":
 						throw new Error(chunk.error || "Unknown error");
 
 					case "done":
 						streamUsage = chunk.usage;
+						webSearchCitations = chunk.webSearchCitations ?? [];
+						providerContinuation = chunk.providerContinuation;
 						break;
 				}
 			}
 
 			if (stopped && fullContent) {
 				fullContent += `\n\n${t("chat.generationStopped")}`;
+			} else if (webSearchCitations.length > 0) {
+				const formatted = formatWebSearchCitations(fullContent, webSearchCitations);
+				fullContent = formatted.content;
+				webSearchSources = formatted.sources;
+				if (isActive()) setStreamingContent(fullContent);
 			}
 
 			// Cleanup MCP
@@ -2742,6 +2755,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				ragSources: localRagSources.length > 0 ? localRagSources : undefined,
 				generatedImages: generatedImages.length > 0 ? generatedImages : undefined,
 				imageGenerationUsed: generatedImages.length > 0 || undefined,
+				webSearchUsed: webSearchUsed || undefined,
+				webSearchSources,
+				providerContinuation,
 				usage: streamUsage,
 				elapsedMs,
 			};

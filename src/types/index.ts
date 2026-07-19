@@ -801,6 +801,8 @@ export interface Message {
   ragUsed?: boolean;  // RAG（File Search）が使用されたか
   ragSources?: string[];  // RAG検索で見つかったソースファイル
   webSearchUsed?: boolean;  // Web Searchが使用されたか
+  webSearchSources?: WebSearchSource[];  // Cited web sources in display order
+  providerContinuation?: ProviderContinuation;  // Opaque native context for stateless replay
   imageGenerationUsed?: boolean;  // Image Generationが使用されたか
   generatedImages?: GeneratedImage[];  // 生成された画像
   thinking?: string;  // モデルの思考内容（thinkingモデル用）
@@ -887,6 +889,30 @@ export interface StreamChunkUsage {
   thinkingTokens?: number;
   totalTokens?: number;
   totalCost?: number;       // USD
+  webSearchRequests?: number;
+}
+
+export interface WebSearchSource {
+  title: string;
+  url: string;
+}
+
+export interface WebSearchCitation extends WebSearchSource {
+  /** Character offsets in the streamed plain-text response. */
+  startIndex: number;
+  endIndex: number;
+}
+
+/**
+ * Provider-native response items that must be replayed verbatim for search,
+ * reasoning, and server/client-tool continuity. Kept opaque so shared types do
+ * not depend on either provider SDK.
+ */
+export interface ProviderContinuation {
+  provider: "openai" | "anthropic";
+  baseUrl: string;
+  model: string;
+  items: unknown[];
 }
 
 // Streaming chunk types
@@ -901,6 +927,9 @@ export interface StreamChunk {
   sessionId?: string;  // CLI session ID for resumption
   usage?: StreamChunkUsage;  // Token usage and cost (populated on "done" chunks)
   interactionId?: string;  // Interactions API interaction ID (populated on "done" chunks)
+  webSearchSources?: WebSearchSource[];
+  webSearchCitations?: WebSearchCitation[];
+  providerContinuation?: ProviderContinuation;
 }
 
 // Get default model: first enabled+verified API provider (first enabled model), or first verified CLI

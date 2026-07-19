@@ -8,7 +8,7 @@ timestamp: 2026-07-05T00:00:00Z
 
 # Security and Privacy
 
-LLM Hub sends chat requests, attachments, tool results, and optional feature payloads to the provider or local/CLI backend selected by the user. Gemini-specific features such as Gemini web search, Deep Research, and Gemini image generation use Google's APIs according to the user's settings and Google API behavior. RAG embedding sync sends vault file chunks to the configured embedding endpoint; the resulting vectors are stored locally.
+LLM Hub sends chat requests, attachments, tool results, and optional feature payloads to the provider or local/CLI backend selected by the user. Web search uses the selected provider's native service for Gemini or official OpenAI/Anthropic endpoints; Deep Research and Gemini image generation use Google's APIs. Search citations and opaque continuation data may be saved with chat history. RAG embedding sync sends vault file chunks to the configured embedding endpoint; the resulting vectors are stored locally.
 
 Safe editing is the default for chat tools. `propose_edit`, `bulk_propose_edit`, `propose_delete`, `bulk_propose_delete`, and `bulk_propose_rename` show confirmation UI before modifying files. The legacy direct `update_note` tool is disabled in favor of proposal-based editing.
 

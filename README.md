@@ -15,7 +15,7 @@
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
 - **AI Discussion** - Multi-model debate arena with parallel responses, voting, and winner determination
 - **Edit History** - Track and restore AI-made changes with diff view
-- **Web Search** - Access up-to-date information via Google Search (Gemini)
+- **Web Search** - Access up-to-date information with cited sources via Gemini, official OpenAI, or official Anthropic APIs
 - **Image Generation** - Create images with Gemini or DALL-E
 - **Discord Integration** - Connect your LLM to Discord as a chat bot with per-channel model/RAG switching
 - **Encryption** - Password-protect chat history and workflow execution logs
@@ -26,14 +26,16 @@
 | Provider | Chat | Vault Tools | Web Search | Image Gen | RAG |
 |----------|------|-------------|------------|-----------|-----|
 | **Gemini** (API) | ✅ Streaming | ✅ Function calling | ✅ Google Search | ✅ Gemini Image models | ✅ |
-| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ❌ | ✅ DALL-E | ✅ |
-| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ❌ | ❌ | ✅ |
+| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Native search (official API) | ✅ DALL-E | ✅ |
+| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Native search (official API) | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **Grok** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **Local LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling (auto-fallback) | ❌ | ❌ | ✅ |
 | **Local LLM** (Ollama, OpenCode) | ✅ Streaming | ❌ (marker mode) | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
+
+Web Search appears for Gemini providers and for OpenAI/Anthropic providers using their official API hosts. Select **Web search** in the search dropdown before sending the prompt; asking the model to browse does not enable the tool by itself. The model then decides whether a search is needed. Search answers include inline citation links and a compact cited-source list; custom and OpenAI-compatible gateways are not assumed to support the providers' native search tools.
 
 > [!TIP]
 > **Multiple providers can be configured simultaneously.** Switch models freely during chat — each provider has its own API key and settings.
@@ -69,6 +71,19 @@ The AI Chat feature provides an interactive conversation interface with your cho
 - **+ button** - New chat
 - **History button** - Load previous chats
 - **↑ / ↓ in the input** - Recall up to 100 sent prompts across chats and Obsidian restarts. Up recalls history only from the first line and Down advances only from the last line, preserving normal multiline cursor movement. Advancing past the newest entry restores the unsent draft.
+
+## Web Search
+
+Choose a supported API model, then change the search dropdown beside the model picker from **Search: none** to **Web search**. Prompt wording alone does not turn search on. Search remains model-controlled: enabling the tool allows the model to search, but does not force a search for every prompt.
+
+- **Gemini:** supported through Google Search grounding.
+- **OpenAI:** supported only through `api.openai.com`; search uses the Responses API and can run alongside vault and MCP function tools. OpenAI image-generation models are excluded.
+- **Anthropic:** supported only through `api.anthropic.com`; native server search can run alongside vault and MCP client tools.
+- **Other endpoints:** OpenRouter, custom gateways, local LLMs, and CLI providers are not treated as native-search providers even if they offer OpenAI-compatible chat APIs.
+
+The implementation intentionally has no chat-model allowlist. Compatible current or future models may use search, while an unsupported model returns the provider's actionable error. Live compatibility checks during development covered OpenAI GPT-5.6 Sol and Anthropic Claude Opus 4.8, Sonnet 5, Fable 5, and Haiku 4.5.
+
+Only cited sources are displayed. Provider citation positions become numbered Markdown links, and deduplicated sources appear as clickable pills beneath the **Used web search** badge. Search source metadata and provider-native continuation items are saved with chat history so later turns can retain search context when the endpoint, model, and retained message pair still match. Usage estimates add the current `$0.01` fee for each actual provider search request, plus normal token costs.
 
 ## Slash Commands
 
@@ -585,7 +600,10 @@ When a toggle is ON, thinking is always active for that model family regardless 
 
 | Model | Description |
 |-------|-------------|
-| GPT-5.4 | Latest flagship model |
+| GPT-5.6 Sol | Highest-quality GPT-5.6 tier; web search live-tested |
+| GPT-5.6 Terra | Balanced GPT-5.6 tier |
+| GPT-5.6 Luna | Fast, economical GPT-5.6 tier |
+| GPT-5.4 | Earlier flagship model |
 | GPT-5.4-mini | Cost-effective mid-tier model |
 | GPT-5.4-nano | Lightweight, fast model |
 | O3 | Reasoning model |
@@ -595,9 +613,12 @@ When a toggle is ON, thinking is always active for that model family regardless 
 
 | Model | Description |
 |-------|-------------|
+| Claude Opus 4.8 | Advanced reasoning and agentic work; web search live-tested |
+| Claude Sonnet 5 | Balanced frontier model; web search live-tested |
+| Claude Fable 5 | Advanced model; web search live-tested |
 | Claude Opus 4.6 | Most capable model, extended thinking |
 | Claude Sonnet 4.6 | Balanced performance and cost |
-| Claude Haiku 4.5 | Fast, lightweight model |
+| Claude Haiku 4.5 | Fast, lightweight model; web search live-tested |
 
 ### OpenRouter / Grok / Custom
 
@@ -1017,7 +1038,7 @@ The **Discussion** tab provides a multi-model debate arena where multiple AI mod
 
 **Data sent to LLM providers:**
 - Chat messages and file attachments are sent to the configured API provider (Gemini, OpenAI, Anthropic, OpenRouter, Grok, or custom endpoint)
-- When Web Search is enabled (Gemini only), queries are sent to Google Search
+- When Web Search is enabled, queries are sent through the selected provider's native search service (Google for Gemini, OpenAI Web Search, or Anthropic Web Search)
 - Local LLM providers send data only to your local server
 
 **Data sent to third-party services:**

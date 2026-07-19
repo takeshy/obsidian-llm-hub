@@ -10,7 +10,7 @@
 
 import { App, Notice, requestUrl } from "obsidian";
 import type { LlmHubPlugin } from "../plugin";
-import type { DiscordSettings, Message, ToolDefinition, ModelType, SlashCommand } from "../types";
+import type { DiscordSettings, Message, ToolDefinition, ModelType, SlashCommand, ProviderContinuation, WebSearchCitation, WebSearchSource } from "../types";
 import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, localLlmDisplayName } from "../types";
 import { getEnabledTools, skillScriptTool, skillWorkflowTool } from "./tools";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "../workflow/workflowSpec";
@@ -29,6 +29,7 @@ import { localLlmChatStream } from "./localLlmProvider";
 import { CliProviderManager } from "./cliProvider";
 import { searchLocalRag } from "./localRagStore";
 import { formatError } from "../utils/error";
+import { formatWebSearchCitations, modelSupportsWebSearch } from "./webSearch";
 import {
 	getPendingEdit,
 	applyEdit,
@@ -101,9 +102,16 @@ interface ChannelConversation {
   lastActivity: number;
   model: ModelType | null;       // Per-channel model override
   ragSetting: string | null;     // Per-channel RAG setting name
-  webSearch: boolean;            // Per-channel web search toggle (Gemini only)
+  webSearch: boolean;            // Per-channel native web search toggle
   activeSkillPaths: string[];    // Active folder skill paths
   lastInteractionId?: string;    // Interactions API chaining (Gemini only)
+}
+
+interface GeneratedResponse {
+  content: string;
+  webSearchUsed?: boolean;
+  webSearchSources?: WebSearchSource[];
+  providerContinuation?: ProviderContinuation;
 }
 
 const MAX_CONVERSATION_MESSAGES = 20;
@@ -528,13 +536,17 @@ export class DiscordService {
       conversation.lastActivity = Date.now();
 
       // Generate response
-      const response = await this.generateResponse(conversation);
+      const generated = await this.generateResponse(conversation);
+      const response = generated.content;
 
       // Add assistant message to conversation
       conversation.messages.push({
         role: "assistant",
         content: response,
         timestamp: Date.now(),
+        webSearchUsed: generated.webSearchUsed,
+        webSearchSources: generated.webSearchSources,
+        providerContinuation: generated.providerContinuation,
       });
 
       // Append model footer to display
@@ -623,8 +635,8 @@ export class DiscordService {
 
     conversation.model = match.name;
 
-    // Clear webSearch if new model is not Gemini API
-    if (conversation.webSearch && !this.isGeminiApiModel(match.name)) {
+    // Clear webSearch if the new model has no native search support.
+    if (conversation.webSearch && !this.supportsWebSearch(match.name)) {
       conversation.webSearch = false;
     }
 
@@ -666,13 +678,13 @@ export class DiscordService {
   private handleWebSearchCommand(channelId: string): string {
     const conversation = this.getConversation(channelId);
 
-    // Check if current model is a Gemini provider
+    // Check if the current model has a native provider search tool.
     const model: ModelType = conversation.model
       || (this.settings.model ? (this.settings.model as ModelType) : null)
       || getDefaultModel(this.plugin.settings);
 
-    if (!this.isGeminiApiModel(model)) {
-      return "Web Search is only available with Gemini API models. Current model does not support it.";
+    if (!this.supportsWebSearch(model)) {
+      return "Web Search is available with Gemini and official OpenAI or Anthropic API models. Current model does not support it.";
     }
 
     conversation.webSearch = !conversation.webSearch;
@@ -717,7 +729,7 @@ export class DiscordService {
     if (slashCommand) {
       if (slashCommand.model) {
         conversation.model = slashCommand.model;
-        if (conversation.webSearch && !this.isGeminiApiModel(slashCommand.model)) {
+        if (conversation.webSearch && !this.supportsWebSearch(slashCommand.model)) {
           conversation.webSearch = false;
         }
       }
@@ -726,8 +738,8 @@ export class DiscordService {
           const model: ModelType = conversation.model
             || (this.settings.model ? (this.settings.model as ModelType) : null)
             || getDefaultModel(this.plugin.settings);
-          if (!this.isGeminiApiModel(model)) {
-            return { reply: "Web Search is only available with Gemini API models. Current model does not support it." };
+          if (!this.supportsWebSearch(model)) {
+            return { reply: "Web Search is available with Gemini and official OpenAI or Anthropic API models. Current model does not support it." };
           }
           conversation.ragSetting = null;
           conversation.webSearch = true;
@@ -900,7 +912,7 @@ export class DiscordService {
       "- `!rag` — List RAG settings",
       "- `!rag <name>` — Switch RAG setting",
       "- `!rag off` — Disable RAG",
-      "- `!websearch` — Toggle Web Search on/off (Gemini only)",
+      "- `!websearch` — Toggle native Web Search (Gemini or official OpenAI/Anthropic APIs)",
       "- `!skill` — List available skills",
       "- `!skill <name>` — Activate a skill",
       "- `!research <query>` — Run Deep Research (runs in background, may take several minutes)",
@@ -979,21 +991,15 @@ export class DiscordService {
     return extras.length > 0 ? `${label} | ${extras.join(" | ")}` : label;
   }
 
-  private isGeminiApiModel(model: ModelType): boolean {
-    if (model === "antigravity-cli") return false;
-    if (!isApiProviderModel(model)) return false;
-    const providerId = getApiProviderId(model);
-    const provider = this.plugin.settings.apiProviders.find(
-      p => p.id === providerId && p.enabled && p.verified
-    );
-    return provider?.type === "gemini";
+  private supportsWebSearch(model: ModelType): boolean {
+    return modelSupportsWebSearch(model, this.plugin.settings.apiProviders);
   }
 
   // ========================================
   // LLM Integration
   // ========================================
 
-  private async generateResponse(conversation: ChannelConversation): Promise<string> {
+  private async generateResponse(conversation: ChannelConversation): Promise<GeneratedResponse> {
     const settings = this.plugin.settings;
     const discordSettings = this.settings;
     const messages = conversation.messages;
@@ -1183,15 +1189,16 @@ export class DiscordService {
 
     if (isCliModel) {
       conversation.lastInteractionId = undefined;
-      return await this.generateViaCli(model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath);
+      return { content: await this.generateViaCli(model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath) };
     }
 
     if (isLocalLlmModel(model)) {
       conversation.lastInteractionId = undefined;
-      return await this.generateViaLocalLlm(model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath);
+      return { content: await this.generateViaLocalLlm(model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath) };
     }
 
-    const webSearchEnabled = conversation.webSearch;
+    const webSearchEnabled = conversation.webSearch && this.supportsWebSearch(model);
+    if (conversation.webSearch && !webSearchEnabled) conversation.webSearch = false;
 
     if (isApiProviderModel(model)) {
       const providerId = getApiProviderId(model);
@@ -1210,10 +1217,10 @@ export class DiscordService {
           webSearchEnabled,
         );
         conversation.lastInteractionId = interactionId;
-        return response;
+        return { content: response, webSearchUsed: webSearchEnabled || undefined };
       }
       conversation.lastInteractionId = undefined;
-      return await this.generateViaApiProvider(model, messages, tools, systemPrompt, executeToolCall);
+      return await this.generateViaApiProvider(model, messages, tools, systemPrompt, executeToolCall, webSearchEnabled);
     }
 
     // Default: Gemini
@@ -1224,7 +1231,7 @@ export class DiscordService {
       webSearchEnabled,
     );
     conversation.lastInteractionId = interactionId;
-    return response;
+    return { content: response, webSearchUsed: webSearchEnabled || undefined };
   }
 
   private async generateViaCli(
@@ -1259,7 +1266,8 @@ export class DiscordService {
     tools: ToolDefinition[],
     systemPrompt: string,
     executeToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>,
-  ): Promise<string> {
+    webSearchEnabled?: boolean,
+  ): Promise<GeneratedResponse> {
     const providerId = getApiProviderId(model);
     const providerConfig = this.plugin.settings.apiProviders.find(
       p => p.id === providerId && p.enabled && p.verified
@@ -1274,7 +1282,7 @@ export class DiscordService {
     // (normally handled in generateResponse for Interactions API chaining, but kept as safety fallback)
     if (providerConfig.type === "gemini") {
       const { response } = await this.generateViaGemini(messages, tools, systemPrompt, executeToolCall, modelName, enableThinking);
-      return response;
+      return { content: response, webSearchUsed: webSearchEnabled || undefined };
     }
 
     const streamFn = providerConfig.type === "anthropic"
@@ -1285,6 +1293,7 @@ export class DiscordService {
           undefined,
           enableThinking,
           this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
+          webSearchEnabled,
         )
       : openaiChatWithToolsStream(
           providerConfig.baseUrl, providerConfig.apiKey,
@@ -1293,15 +1302,30 @@ export class DiscordService {
           undefined,
           enableThinking,
           this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
+          webSearchEnabled,
         );
 
     let fullResponse = "";
+    let webSearchUsed = false;
+    let citations: WebSearchCitation[] = [];
+    let providerContinuation: ProviderContinuation | undefined;
     for await (const chunk of streamFn) {
       if (chunk.type === "text") fullResponse += chunk.content;
+      else if (chunk.type === "web_search_used") webSearchUsed = true;
       else if (chunk.type === "error") throw new Error(chunk.error || "Unknown API error");
-      else if (chunk.type === "done") break;
+      else if (chunk.type === "done") {
+        citations = chunk.webSearchCitations ?? [];
+        providerContinuation = chunk.providerContinuation;
+        break;
+      }
     }
-    return fullResponse;
+    const formatted = formatWebSearchCitations(fullResponse, citations);
+    return {
+      content: formatted.content,
+      webSearchUsed: webSearchUsed || undefined,
+      webSearchSources: formatted.sources.length > 0 ? formatted.sources : undefined,
+      providerContinuation,
+    };
   }
 
   private async generateViaLocalLlm(
