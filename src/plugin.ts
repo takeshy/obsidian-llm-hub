@@ -648,6 +648,7 @@ export class LlmHubPlugin extends Plugin {
             ...p,
             enabledModels: normalizeModelList(p.enabledModels),
             availableModels: normalizeModelList(p.availableModels),
+            manualModels: normalizeModelList(p.manualModels),
           }))
         : [],
       // Deep copy MCP servers (add default transport for backward compatibility)

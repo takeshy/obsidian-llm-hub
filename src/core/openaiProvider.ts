@@ -45,43 +45,46 @@ export function isOpenAiImageModel(model: string): boolean {
   return DALLE_PATTERN.test(model);
 }
 
+/** Normalize provider roots so callers may enter URLs with or without `/v1`. */
+function openAiV1BaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, "");
+  return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
+}
+
 /**
- * Verify an OpenCode Go provider. Go does not expose `/v1/models`, so this
- * probes `/v1/chat/completions` with a known-valid model name and an empty
- * `messages` array. The server validates the API key first when the model
- * name is recognised, so an `AuthError` indicates the key is wrong.
+ * Verify an OpenAI-compatible endpoint that does not expose `/v1/models` by
+ * probing `/v1/chat/completions` with a caller-supplied model name and an
+ * empty `messages` array.
  *
  *   - 401 or 403                 → fail (treat as authentication failure
  *                                  regardless of the response body — empty
  *                                  bodies, unexpected wrappers, etc. should
  *                                  never silently pass)
- *   - 200 / any other HTTP code  → success (server is reachable; chat-time
- *                                  errors are surfaced through normal flow)
+ *   - 2xx, 400, or 422           → success (the route exists; 400/422 are
+ *                                  expected validation responses for an
+ *                                  intentionally empty message list)
+ *   - other HTTP status          → fail
  *   - DNS / connection failure   → fail (URL unreachable)
  *
- * `probeModel` is one of the documented OpenCode Go model ids so that auth
- * checking happens before model validation. If the fallback list ever drifts
- * out of sync, the worst case is the verifier degrades to "any non-401/403
- * HTTP response = success".
  */
-const OPENCODE_GO_VERIFY_PROBE_MODEL = "kimi-k2.6";
-
-export async function verifyOpencodeGo(
+async function probeOpenAiCompatibleChat(
   baseUrl: string,
   apiKey: string,
+  model: string,
   proxyUrl?: string,
   proxyBypass?: string,
+  acceptAnyNonAuthStatus = false,
 ): Promise<{ success: boolean; error?: string }> {
   if (!apiKey) {
     return { success: false, error: "API key required" };
   }
-  const url = `${baseUrl.replace(/\/+$/, "")}/v1/chat/completions`;
+  const url = `${openAiV1BaseUrl(baseUrl)}/chat/completions`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${apiKey}`,
   };
   const body = JSON.stringify({
-    model: OPENCODE_GO_VERIFY_PROBE_MODEL,
+    model,
     messages: [],
   });
 
@@ -109,7 +112,14 @@ export async function verifyOpencodeGo(
           error: `Authentication failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
         };
       }
-      return { success: res.status > 0 };
+      if (acceptAnyNonAuthStatus || (res.status >= 200 && res.status < 300) || res.status === 400 || res.status === 422) {
+        return { success: true };
+      }
+      const detail = extractDetail(text);
+      return {
+        success: false,
+        error: `Chat completions probe failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
+      };
     }
     const res = await requestUrl({ url, method: "POST", headers, body, throw: false });
     if (res.status === 401 || res.status === 403) {
@@ -119,11 +129,50 @@ export async function verifyOpencodeGo(
         error: `Authentication failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
       };
     }
-    return { success: res.status > 0 };
+    if (acceptAnyNonAuthStatus || (res.status >= 200 && res.status < 300) || res.status === 400 || res.status === 422) {
+      return { success: true };
+    }
+    const detail = extractDetail(res.text);
+    return {
+      success: false,
+      error: `Chat completions probe failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: `Cannot reach ${baseUrl}: ${message}` };
   }
+}
+
+export async function verifyOpenAiCompatibleChat(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
+): Promise<{ success: boolean; error?: string }> {
+  return probeOpenAiCompatibleChat(baseUrl, apiKey, model, proxyUrl, proxyBypass);
+}
+
+/**
+ * Verify an OpenCode Go provider. Go does not expose `/v1/models`, so use one
+ * of its documented model IDs for the generic chat-completions probe.
+ */
+const OPENCODE_GO_VERIFY_PROBE_MODEL = "kimi-k2.6";
+
+export async function verifyOpencodeGo(
+  baseUrl: string,
+  apiKey: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
+): Promise<{ success: boolean; error?: string }> {
+  return probeOpenAiCompatibleChat(
+    baseUrl,
+    apiKey,
+    OPENCODE_GO_VERIFY_PROBE_MODEL,
+    proxyUrl,
+    proxyBypass,
+    true,
+  );
 }
 
 /**
@@ -136,7 +185,7 @@ export async function verifyApiProvider(
   proxyBypass?: string,
 ): Promise<{ success: boolean; error?: string; models?: string[] }> {
   try {
-    const url = `${baseUrl.replace(/\/+$/, "")}/v1/models`;
+    const url = `${openAiV1BaseUrl(baseUrl)}/models`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
@@ -171,7 +220,7 @@ function createClient(baseUrl: string, apiKey: string, proxyUrl?: string, proxyB
   const sdkFetch = buildSdkFetch(proxyUrl, proxyBypass);
   return new OpenAI({
     apiKey,
-    baseURL: `${baseUrl.replace(/\/+$/, "")}/v1`,
+    baseURL: openAiV1BaseUrl(baseUrl),
     dangerouslyAllowBrowser: true,
     ...(sdkFetch ? { fetch: sdkFetch } : {}),
   });

@@ -2,7 +2,7 @@ import { Setting, Notice, Modal, App, Platform } from "obsidian";
 import { t } from "src/i18n";
 import type { ApiProviderConfig, ApiProviderType } from "src/types";
 import { KNOWN_PROVIDER_DEFAULTS } from "src/types";
-import { verifyApiProvider, verifyOpencodeGo } from "src/core/openaiProvider";
+import { verifyApiProvider, verifyOpenAiCompatibleChat, verifyOpencodeGo } from "src/core/openaiProvider";
 import { verifyAnthropicProvider } from "src/core/anthropicProvider";
 import { verifyGeminiProvider } from "src/core/gemini";
 import { getKnownModels, OPENCODE_GO_FALLBACK_MODELS } from "src/core/modelPricing";
@@ -91,6 +91,7 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
             apiKey: "",
             enabledModels: [],
             availableModels: [],
+            manualModels: [],
             verified: false,
             enabled: true,
           };
@@ -111,7 +112,12 @@ class ApiProviderModal extends Modal {
 
   constructor(app: App, config: ApiProviderConfig, onSave: (config: ApiProviderConfig) => Promise<void>, proxyUrl?: string, proxyBypass?: string) {
     super(app);
-    this.config = { ...config };
+    this.config = {
+      ...config,
+      enabledModels: [...config.enabledModels],
+      availableModels: [...config.availableModels],
+      manualModels: [...(config.manualModels ?? [])],
+    };
     this.onSave = onSave;
     this.proxyUrl = proxyUrl;
     this.proxyBypass = proxyBypass;
@@ -184,6 +190,24 @@ class ApiProviderModal extends Modal {
           .onChange((value) => { this.config.apiKey = value.trim(); });
         text.inputEl.type = "password";
       });
+
+    if (this.config.type === "custom") {
+      new Setting(contentEl)
+        .setName(t("settings.apiProviderManualModels"))
+        .setDesc(t("settings.apiProviderManualModels.desc"))
+        .addTextArea((text) => {
+          text
+            .setPlaceholder("model-id-1\nmodel-id-2")
+            .setValue((this.config.manualModels ?? []).join("\n"))
+            .onChange((value) => {
+              this.config.manualModels = [...new Set(
+                value.split(/[\n,]/).map(model => model.trim()).filter(Boolean),
+              )];
+              this.config.verified = false;
+            });
+          text.inputEl.rows = 3;
+        });
+    }
 
     // Model selection — checkboxes for enabling/disabling models
     const knownModels = getKnownModels(this.config.type);
@@ -266,10 +290,29 @@ class ApiProviderModal extends Modal {
               result = await verifyAnthropicProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
             } else {
               result = await verifyApiProvider(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
+              const manualModels = this.config.manualModels ?? [];
+              if (!result.success && this.config.type === "custom" && manualModels.length > 0) {
+                const probe = await verifyOpenAiCompatibleChat(
+                  this.config.baseUrl,
+                  this.config.apiKey,
+                  manualModels[0],
+                  this.proxyUrl,
+                  this.proxyBypass,
+                );
+                result = probe.success
+                  ? { success: true, models: manualModels }
+                  : { success: false, error: probe.error ?? result.error };
+              }
             }
             if (result.success) {
+              const manualModels = this.config.type === "custom" ? (this.config.manualModels ?? []) : [];
+              const availableModels = [...new Set([...(result.models ?? []), ...manualModels])];
               this.config.verified = true;
-              this.config.availableModels = result.models || [];
+              this.config.availableModels = availableModels;
+              this.config.enabledModels = [...new Set([
+                ...this.config.enabledModels.filter(model => availableModels.includes(model)),
+                ...manualModels,
+              ])];
               new Notice(t("settings.apiProviderVerified", { count: String(this.config.availableModels.length) }));
               this.onOpen(); // Re-render with models
             } else {

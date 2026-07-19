@@ -102,6 +102,8 @@ export const ja: Record<string, string> = {
   "settings.apiProviderName": "表示名",
   "settings.apiProviderBaseUrl": "ベースURL",
   "settings.apiProviderApiKey": "APIキー",
+  "settings.apiProviderManualModels": "モデルIDの手動入力",
+  "settings.apiProviderManualModels.desc": "任意。/v1/modelsを提供しないOpenAI互換エンドポイントでは、モデルIDを1行に1つ入力してください。",
   "settings.proxy": "プロキシ",
   "settings.proxyUrl": "プロキシURL",
   "settings.proxyUrl.desc": "企業ゲートウェイ用HTTP(S)プロキシ（例：http://proxy:8080）",

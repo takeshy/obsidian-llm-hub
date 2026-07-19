@@ -533,6 +533,7 @@ export interface ApiProviderConfig {
   apiKey: string;
   enabledModels: string[];       // Models the user has checked for use
   availableModels: string[];
+  manualModels?: string[];       // Model IDs entered for endpoints without /v1/models
   verified: boolean;
   enabled: boolean;
 }

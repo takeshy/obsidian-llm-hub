@@ -102,6 +102,8 @@ export const en = {
   "settings.apiProviderName": "Display name",
   "settings.apiProviderBaseUrl": "Base URL",
   "settings.apiProviderApiKey": "API key",
+  "settings.apiProviderManualModels": "Manual model IDs",
+  "settings.apiProviderManualModels.desc": "Optional. Enter one model ID per line for OpenAI-compatible endpoints that do not provide /v1/models.",
   "settings.proxy": "Proxy",
   "settings.proxyUrl": "Proxy URL",
   "settings.proxyUrl.desc": "HTTP(S) proxy for corporate gateways (e.g. http://proxy:8080)",

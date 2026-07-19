@@ -603,6 +603,8 @@ When a toggle is ON, thinking is always active for that model family regardless 
 
 Configure any OpenAI-compatible endpoint with custom base URL and models. OpenRouter provides access to hundreds of models from various providers.
 
+For proxies and gateways that support `/v1/chat/completions` but do not expose `/v1/models`, choose **Custom** and enter the model IDs manually in the provider settings. Base URLs with or without a trailing `/v1` are accepted.
+
 ### OpenCode Zen / Go
 
 OpenCode offers two hosted gateways from the same account, both selectable from the provider dropdown:
