@@ -635,11 +635,6 @@ export class DiscordService {
 
     conversation.model = match.name;
 
-    // Clear webSearch if the new model has no native search support.
-    if (conversation.webSearch && !this.supportsWebSearch(match.name)) {
-      conversation.webSearch = false;
-    }
-
     return `Model switched to **${match.displayName}** (\`${match.name}\`)`;
   }
 
@@ -683,7 +678,7 @@ export class DiscordService {
       || (this.settings.model ? (this.settings.model as ModelType) : null)
       || getDefaultModel(this.plugin.settings);
 
-    if (!this.supportsWebSearch(model)) {
+    if (!conversation.webSearch && !this.supportsWebSearch(model)) {
       return "Web Search is available with Gemini and official OpenAI, Anthropic, or Grok API models. Current model does not support it.";
     }
 
@@ -729,24 +724,10 @@ export class DiscordService {
     if (slashCommand) {
       if (slashCommand.model) {
         conversation.model = slashCommand.model;
-        if (conversation.webSearch && !this.supportsWebSearch(slashCommand.model)) {
-          conversation.webSearch = false;
-        }
       }
-      if (slashCommand.searchSetting !== null && slashCommand.searchSetting !== undefined) {
-        if (slashCommand.searchSetting === "__websearch__") {
-          const model: ModelType = conversation.model
-            || (this.settings.model ? (this.settings.model as ModelType) : null)
-            || getDefaultModel(this.plugin.settings);
-          if (!this.supportsWebSearch(model)) {
-            return { reply: "Web Search is available with Gemini and official OpenAI, Anthropic, or Grok API models. Current model does not support it." };
-          }
-          conversation.ragSetting = null;
-          conversation.webSearch = true;
-        } else {
-          conversation.ragSetting = slashCommand.searchSetting === "" ? null : slashCommand.searchSetting;
-          conversation.webSearch = false;
-        }
+      if (slashCommand.searchSelection !== null && slashCommand.searchSelection !== undefined) {
+        conversation.ragSetting = slashCommand.searchSelection.ragSetting;
+        conversation.webSearch = slashCommand.searchSelection.webSearch;
       }
       if (slashCommand.promptTemplate.includes("{selection}") || slashCommand.promptTemplate.includes("{content}")) {
         this.pendingSkills.set(channelId, slashCommand);
@@ -987,7 +968,9 @@ export class DiscordService {
     const label = found ? found.displayName : model;
     const extras: string[] = [];
     if (conversation.ragSetting) extras.push(`RAG: ${conversation.ragSetting}`);
-    if (conversation.webSearch) extras.push("WebSearch");
+    if (conversation.webSearch) {
+      extras.push(this.supportsWebSearch(model) ? "WebSearch" : "WebSearch (inactive)");
+    }
     return extras.length > 0 ? `${label} | ${extras.join(" | ")}` : label;
   }
 
@@ -1198,7 +1181,6 @@ export class DiscordService {
     }
 
     const webSearchEnabled = conversation.webSearch && this.supportsWebSearch(model);
-    if (conversation.webSearch && !webSearchEnabled) conversation.webSearch = false;
 
     if (isApiProviderModel(model)) {
       const providerId = getApiProviderId(model);

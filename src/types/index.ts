@@ -87,6 +87,12 @@ export type VaultToolMode = "all" | "noSearch" | "none";
 // "cli" = CLI mode (MCP servers also disabled)
 export type VaultToolNoneReason = "manual" | "cli";
 
+/** Independent search preferences used by Chat, slash commands, and Discord. */
+export interface SearchSelection {
+  webSearch: boolean;
+  ragSetting: string | null;
+}
+
 // Slash command definition
 export interface SlashCommand {
   id: string;
@@ -94,7 +100,10 @@ export interface SlashCommand {
   promptTemplate: string;       // テンプレート (例: "{selection}を英語に翻訳して")
   model?: ModelType | null;     // null = 現在のモデルを使用
   description?: string;         // オートコンプリートに表示
-  searchSetting?: string | null; // null = 現在の設定, "" = None, "__websearch__" = Web Search, その他 = Semantic Search設定名
+  /** null/undefined = keep the current Chat/Discord search preferences. */
+  searchSelection?: SearchSelection | null;
+  /** @deprecated Migrated to searchSelection when settings load. */
+  searchSetting?: string | null;
   confirmEdits?: boolean;       // undefined/true = 編集確認を表示, false = 自動適用
   vaultToolMode?: VaultToolMode | null; // null = 現在の設定, "all" = すべて, "noSearch" = 検索なし, "none" = オフ
   enabledMcpServers?: string[] | null;  // null = 現在の設定, [] = すべてオフ, ["name1", "name2"] = 指定のサーバーのみ有効
@@ -279,6 +288,7 @@ export interface RagSetting {
 // Workspace状態ファイル（.gemini-workspace.json）
 export interface WorkspaceState {
   selectedRagSetting: string | null;  // 現在選択中のRAG設定名
+  webSearchEnabled: boolean;  // Remembered independently from the selected RAG setting
   selectedModel: ModelType | null;    // 現在選択中のモデル
   ragSettings: Record<string, RagSetting>;  // 設定��� -> RAG設定
   alwaysThinkModels?: string[];  // Always Think が有効なモデルID一覧
@@ -312,6 +322,7 @@ export const DEFAULT_RAG_SETTING: RagSetting = {
 // デフォルトのWorkspace状態
 export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   selectedRagSetting: null,
+  webSearchEnabled: false,
   selectedModel: null,
   ragSettings: {},
   maxPreviousMessages: 99,
@@ -963,7 +974,7 @@ export const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
     promptTemplate: "Convert the following content into an HTML infographic. Output the HTML directly in your response, do not create a note:\n\n{selection}",
     model: null,
     description: "Generate HTML infographic from selection or active note",
-    searchSetting: null,
+    searchSelection: null,
   },
 ];
 

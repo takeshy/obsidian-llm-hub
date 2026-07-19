@@ -34,7 +34,9 @@ The Database icon tool menu also contains **Previous messages (0-99)**. It contr
 
 # Web Search
 
-Web search is available with Gemini and with OpenAI, Anthropic, or Grok providers configured to use their official API hosts. Choose **Web search** in the search dropdown beside the model picker before sending the prompt. Asking the model to browse does not enable search when the dropdown remains **Search: none**. Enabling search makes the provider-native tool available; the model still decides whether to call it.
+Web search is available with Gemini and with OpenAI, Anthropic, or Grok providers configured to use their official API hosts. Open the search menu beside the model picker and check **Web search** before sending the prompt. The same menu can select one Semantic Search (RAG) setting, and both may be active together. RAG context is retrieved and injected before the provider receives the prompt with its native web-search tool enabled, allowing one response to synthesize vault and web information. Asking the model to browse does not enable search by itself; the model still decides whether to call the enabled web tool.
+
+Web and RAG preferences are saved per workspace. An unsupported capability remains remembered but inactive across model switches and automatically returns when a compatible model is selected. Combined RAG settings remain the way to search several underlying indexes from Chat.
 
 OpenAI and Grok search use their providers' Responses APIs, while Anthropic search uses its native server tool. All can coexist with vault and MCP tools. Custom gateways, OpenRouter, local LLMs, CLI providers, OpenAI image-generation models, and Grok image/video-generation models do not expose this option. There is no fixed chat-model allowlist: unsupported models return their provider's error. Development smoke tests covered GPT-5.6 Sol and Claude Opus 4.8, Sonnet 5, Fable 5, and Haiku 4.5; automated Responses-stream tests cover Grok 4.5.
 

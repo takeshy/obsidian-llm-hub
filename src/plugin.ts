@@ -47,6 +47,7 @@ import { DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETT
 import { initLocale, t } from "src/i18n";
 import { registerWorkflowCodeBlockProcessor } from "src/ui/workflowCodeBlock";
 import { initDiscordService, resetDiscordService } from "src/core/discordService";
+import { getSlashCommandSearchSelection } from "src/core/webSearch";
 
 function normaliseCliConfig(loaded: Record<string, unknown>): CliProviderConfig {
   const raw = (loaded.cliConfig ?? {}) as Record<string, unknown>;
@@ -637,10 +638,15 @@ export class LlmHubPlugin extends Plugin {
       // Deep copy arrays to avoid mutating DEFAULT_SETTINGS
       // Use loaded commands if present, otherwise use default commands
       slashCommands: loaded.slashCommands
-        ? (loaded.slashCommands as SlashCommand[]).map(cmd => ({
-            ...cmd,
-            model: normalizeModelSetting(cmd.model),
-          }))
+        ? (loaded.slashCommands as SlashCommand[]).map(cmd => {
+            const searchSelection = getSlashCommandSearchSelection(cmd);
+            const { searchSetting: _legacySearchSetting, ...rest } = cmd;
+            return {
+              ...rest,
+              model: normalizeModelSetting(cmd.model),
+              searchSelection,
+            };
+          })
         : [...DEFAULT_SETTINGS.slashCommands],
       // Deep copy API providers (ensure enabledModels exists)
       apiProviders: loaded.apiProviders
@@ -808,6 +814,10 @@ export class LlmHubPlugin extends Plugin {
     return this.wsManager.selectRagSetting(name);
   }
 
+  async selectSearchSelection(selection: import("./types").SearchSelection): Promise<void> {
+    return this.wsManager.selectSearchSelection(selection);
+  }
+
   async selectModel(model: ModelType): Promise<void> {
     return this.wsManager.selectModel(model);
   }
@@ -853,7 +863,7 @@ export class LlmHubPlugin extends Plugin {
         promptTemplate: "Convert the following content into an HTML infographic. Output the HTML directly in your response, do not create a note:\n\n{selection}",
         model: null,
         description: "Generate HTML infographic from selection or active note",
-        searchSetting: null,
+        searchSelection: null,
       });
       await this.saveSettings();
     }

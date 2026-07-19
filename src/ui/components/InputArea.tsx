@@ -8,7 +8,7 @@ import Database from "lucide-react/dist/esm/icons/database";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { Notice, Platform, type App } from "obsidian";
-import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type VaultToolMode } from "src/types";
+import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode } from "src/types";
 import { RagSourceModal } from "./RagSourceModal";
 import type { SkillMetadata } from "src/core/skillsLoader";
 import type { OkfBundle } from "src/core/okfLoader";
@@ -34,10 +34,11 @@ interface InputAreaProps {
   onModelChange: (model: ModelType) => void;
   availableModels: ModelInfo[];
   allowWebSearch: boolean;
+  webSearchEnabled: boolean;
   ragEnabled: boolean;
   ragSettings: string[];
   selectedRagSetting: string | null;
-  onRagSettingChange: (setting: string | null) => void;
+  onSearchSelectionChange: (selection: SearchSelection) => void;
   vaultToolMode: VaultToolMode;
   onVaultToolModeChange: (mode: VaultToolMode) => void;
   vaultToolModeOnlyNone: boolean; // When true, only "none" option is available
@@ -99,10 +100,11 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   onModelChange,
   availableModels,
   allowWebSearch,
+  webSearchEnabled,
   ragEnabled,
   ragSettings,
   selectedRagSetting,
-  onRagSettingChange,
+  onSearchSelectionChange,
   vaultToolMode,
   onVaultToolModeChange,
   vaultToolModeOnlyNone,
@@ -141,10 +143,13 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   const [filteredMentions, setFilteredMentions] = useState<MentionItem[]>([]);
   const [mentionStartPos, setMentionStartPos] = useState(0);
   const [showVaultToolMenu, setShowVaultToolMenu] = useState(false);
+  const [showSearchMenu, setShowSearchMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionAutocompleteRef = useRef<HTMLDivElement>(null);
   const vaultToolMenuRef = useRef<HTMLDivElement>(null);
+  const searchMenuRef = useRef<HTMLDivElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
   const historyIndexRef = useRef<number | null>(null);
   const historyDraftRef = useRef("");
 
@@ -170,6 +175,28 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showVaultToolMenu]);
+
+  useEffect(() => {
+    if (!showSearchMenu) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchMenuRef.current && !searchMenuRef.current.contains(event.target as Node)) {
+        setShowSearchMenu(false);
+      }
+    };
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowSearchMenu(false);
+        searchButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    setTimeout(() => searchMenuRef.current?.querySelector<HTMLInputElement>("input:not(:disabled)")?.focus(), 0);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [showSearchMenu]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -912,30 +939,65 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
               </option>
             ))}
           </select>
-          <select
-            className="llm-hub-model-select llm-hub-rag-select"
-            value={(allowWebSearch || ragEnabled) ? (selectedRagSetting || "") : ""}
-            onChange={(e) => onRagSettingChange(e.target.value || null)}
-            disabled={isLoading || (!allowWebSearch && !ragEnabled)}
-          >
-            <option value="">{t("input.searchNone")}</option>
-            {allowWebSearch && (
-              <option
-                value="__websearch__"
-              >
-                {t("input.webSearch")}
-              </option>
+          <div className="llm-hub-search-selector" ref={searchMenuRef}>
+            <button
+              ref={searchButtonRef}
+              type="button"
+              className="llm-hub-model-select llm-hub-rag-select llm-hub-search-selector-button"
+              onClick={() => setShowSearchMenu(open => !open)}
+              disabled={isLoading}
+              aria-haspopup="menu"
+              aria-expanded={showSearchMenu}
+            >
+              {webSearchEnabled && selectedRagSetting
+                ? `${t("input.webSearch")} + ${selectedRagSetting}`
+                : webSearchEnabled
+                  ? t("input.webSearch")
+                  : selectedRagSetting
+                    ? t("input.rag", { name: selectedRagSetting })
+                    : t("input.searchNone")}
+              <ChevronDown size={13} aria-hidden="true" />
+            </button>
+            {showSearchMenu && (
+              <div className="llm-hub-search-selector-menu" role="menu">
+                <label className={`llm-hub-search-selector-option ${!allowWebSearch ? "disabled" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={webSearchEnabled}
+                    disabled={!allowWebSearch}
+                    onChange={(event) => onSearchSelectionChange({
+                      webSearch: event.target.checked,
+                      ragSetting: selectedRagSetting,
+                    })}
+                  />
+                  <span>{t("input.webSearch")}</span>
+                </label>
+                <div className="llm-hub-search-selector-separator" />
+                <label className={`llm-hub-search-selector-option ${!ragEnabled || isImageGenerationModel(model) ? "disabled" : ""}`}>
+                  <input
+                    type="radio"
+                    name="llm-hub-rag-setting"
+                    checked={selectedRagSetting === null}
+                    disabled={!ragEnabled || isImageGenerationModel(model)}
+                    onChange={() => onSearchSelectionChange({ webSearch: webSearchEnabled, ragSetting: null })}
+                  />
+                  <span>{t("input.rag", { name: t("common.none") })}</span>
+                </label>
+                {ragSettings.map((name) => (
+                  <label key={name} className={`llm-hub-search-selector-option ${!ragEnabled || isImageGenerationModel(model) ? "disabled" : ""}`}>
+                    <input
+                      type="radio"
+                      name="llm-hub-rag-setting"
+                      checked={selectedRagSetting === name}
+                      disabled={!ragEnabled || isImageGenerationModel(model)}
+                      onChange={() => onSearchSelectionChange({ webSearch: webSearchEnabled, ragSetting: name })}
+                    />
+                    <span>{t("input.rag", { name })}</span>
+                  </label>
+                ))}
+              </div>
             )}
-            {ragEnabled && ragSettings.map((name) => (
-              <option
-                key={name}
-                value={name}
-                disabled={isImageGenerationModel(model)}
-              >
-                {t("input.rag", { name })}
-              </option>
-            ))}
-          </select>
+          </div>
         </div>
       )}
       {!isCollapsed && availableSkills.length > 0 && (

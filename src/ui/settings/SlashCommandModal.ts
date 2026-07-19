@@ -15,7 +15,6 @@ export class SlashCommandModal extends Modal {
   private ragEnabled: boolean;
   private ragSettings: string[];
   private availableModels: ModelInfo[];
-  private allowWebSearch: boolean;
   private mcpServers: McpServerConfig[];
 
   constructor(
@@ -24,7 +23,7 @@ export class SlashCommandModal extends Modal {
     ragEnabled: boolean,
     ragSettings: string[],
     availableModels: ModelInfo[],
-    allowWebSearch: boolean,
+    _allowWebSearch: boolean,
     mcpServers: McpServerConfig[],
     onSubmit: (command: SlashCommand) => void | Promise<void>
   ) {
@@ -33,7 +32,6 @@ export class SlashCommandModal extends Modal {
     this.ragEnabled = ragEnabled;
     this.ragSettings = ragSettings;
     this.availableModels = availableModels;
-    this.allowWebSearch = allowWebSearch;
     this.mcpServers = mcpServers;
     this.command = command
       ? { ...command }
@@ -43,7 +41,7 @@ export class SlashCommandModal extends Modal {
           promptTemplate: "",
           model: null,
           description: "",
-          searchSetting: null,
+          searchSelection: null,
           vaultToolMode: null,
           enabledMcpServers: null,
         };
@@ -127,31 +125,41 @@ export class SlashCommandModal extends Modal {
         });
       });
 
-    // Search setting (optional)
+    // Search preferences (optional). One dropdown keeps Obsidian's settings UI
+    // compact while still representing every Web + single-RAG combination.
     new Setting(contentEl)
       .setName(t("settings.searchOptional"))
       .setDesc(t("settings.searchOptional.desc"))
       .addDropdown((dropdown) => {
         dropdown.addOption("__current__", t("settings.useCurrentSetting"));
-        dropdown.addOption("", t("common.none"));
-        if (this.allowWebSearch) {
-          dropdown.addOption("__websearch__", t("input.webSearch"));
-        }
+        dropdown.addOption("__none__", t("common.none"));
+        dropdown.addOption("__web__", t("input.webSearch"));
         if (this.ragEnabled) {
           this.ragSettings.forEach((name) => {
-            dropdown.addOption(name, t("input.rag", { name }));
+            const encoded = encodeURIComponent(name);
+            dropdown.addOption(`rag:${encoded}`, t("input.rag", { name }));
+            dropdown.addOption(`both:${encoded}`, `${t("input.webSearch")} + ${name}`);
           });
         }
-        if (!this.allowWebSearch && this.command.searchSetting) {
-          this.command.searchSetting = "";
-        }
-        // Map stored value to dropdown value
-        const storedValue = this.command.searchSetting;
-        const dropdownValue = storedValue === null || storedValue === undefined ? "__current__" : storedValue;
+        const selection = this.command.searchSelection;
+        const dropdownValue = selection === null || selection === undefined
+          ? "__current__"
+          : selection.ragSetting
+            ? `${selection.webSearch ? "both" : "rag"}:${encodeURIComponent(selection.ragSetting)}`
+            : selection.webSearch ? "__web__" : "__none__";
         dropdown.setValue(dropdownValue);
         dropdown.onChange((value) => {
-          // Map dropdown value back to stored value
-          this.command.searchSetting = value === "__current__" ? null : value;
+          if (value === "__current__") this.command.searchSelection = null;
+          else if (value === "__none__") this.command.searchSelection = { webSearch: false, ragSetting: null };
+          else if (value === "__web__") this.command.searchSelection = { webSearch: true, ragSetting: null };
+          else {
+            const separator = value.indexOf(":");
+            const mode = value.slice(0, separator);
+            this.command.searchSelection = {
+              webSearch: mode === "both",
+              ragSetting: decodeURIComponent(value.slice(separator + 1)),
+            };
+          }
         });
       });
 

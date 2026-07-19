@@ -62,7 +62,7 @@ The API Providers section manages multiple providers that can be configured simu
 
 Providers can be enabled, disabled, edited, and deleted from the list.
 
-For Gemini and official OpenAI, Anthropic, or Grok providers, chat's search dropdown includes **Web search**. This is an explicit per-workspace selection: prompt wording does not enable it when **Search: none** is selected. Switching between supported models retains Web search; switching to an unsupported provider, an OpenAI image-generation model, or a Grok image/video-generation model clears it.
+For Gemini and official OpenAI, Anthropic, or Grok providers, Chat's search menu includes an independent **Web search** checkbox and one Semantic Search selection. Both can be active together and are saved per workspace. Prompt wording does not enable Web Search by itself. Switching to an unsupported provider or media-generation model keeps the preference remembered but inactive so it returns automatically with a compatible model.
 
 # Workspace Settings
 
@@ -89,7 +89,7 @@ The Slash Commands section manages reusable `/command` prompts. Each command can
 - Description - optional autocomplete/help text.
 - Prompt template - required prompt body; can use placeholders such as `{selection}` and `{content}`.
 - Model - optional fixed model, or use the current model.
-- Search setting - current setting, none, web search when available, or a configured RAG setting.
+- Search setting - current preferences or an explicit combination of none, Web Search, one configured RAG setting, or Web plus RAG.
 - Confirm edits - whether edits triggered by the command require confirmation.
 - Vault tool mode - current setting, all tools, no search tools, or no vault tools.
 - MCP servers - current setting or an explicit subset of configured MCP servers.

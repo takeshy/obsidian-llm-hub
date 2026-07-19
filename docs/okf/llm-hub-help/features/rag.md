@@ -10,7 +10,7 @@ timestamp: 2026-07-05T00:00:00Z
 
 RAG is LLM Hub's semantic search feature. It chunks selected vault files, generates embeddings, and stores them in a local vector index. Before the main chat response, the user message is embedded and matched against the index by cosine similarity; the top-scoring chunks are appended to the system prompt and reported back to the UI as RAG sources.
 
-Because retrieval happens locally before the LLM call, RAG works with every chat provider — API providers, CLI backends, and local LLM servers — and can be combined with function calling (vault tools). Non-text results (images, PDF pages, audio, video) are additionally attached to the LLM call as files so the model can see the actual content.
+Because retrieval happens locally before the LLM call, RAG works with every chat provider — API providers, CLI backends, and local LLM servers — and can be combined with function calling (vault tools). With a supported API model, Chat can also keep Web Search enabled alongside one RAG setting so the response synthesizes current web information with retrieved vault context. Non-text results (images, PDF pages, audio, video) are additionally attached to the LLM call as files so the model can see the actual content.
 
 Use RAG when the user wants broad retrieval over notes, PDFs, images, or audio/video. Use vault tools when the target file is known or exact file operations are needed. Use OKF for curated concepts and stable domain knowledge.
 

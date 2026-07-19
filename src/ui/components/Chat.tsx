@@ -59,7 +59,7 @@ import { PersistentCliSession } from "src/core/cliProvider";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
-import { formatWebSearchCitations, modelSupportsWebSearch, providerSupportsWebSearch } from "src/core/webSearch";
+import { formatWebSearchCitations, providerSupportsWebSearch } from "src/core/webSearch";
 import { searchLocalRag, loadRagMediaAttachments } from "src/core/localRagStore";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import {
@@ -429,6 +429,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(
 		plugin.workspaceState.selectedRagSetting
 	);
+	const [webSearchEnabled, setWebSearchEnabled] = useState(plugin.workspaceState.webSearchEnabled === true);
 
 	// Vault tool mode: "all" = use all tools, "noSearch" = exclude search_notes/list_notes, "none" = no vault tools
 	// Gemma 4 + RAG/Web Search: must disable function calling tools (mutually exclusive)
@@ -445,7 +446,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		|| initialModel === "codex-cli"
 		|| (isLocalLlmModel(initialModel) && !initialLocalLlmToolsCapable);
 	const initialGemma4Rag = initialModel.toLowerCase().includes("gemma-4")
-		&& plugin.workspaceState.selectedRagSetting != null;
+		&& (plugin.workspaceState.selectedRagSetting != null || plugin.workspaceState.webSearchEnabled === true);
 	const [vaultToolMode, setVaultToolMode] = useState<"all" | "noSearch" | "none">(
 		(isInitialCli || initialGemma4Rag) ? "none" : "all"
 	);
@@ -467,6 +468,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const preSlashSettingsRef = useRef<{
 		model: ModelType;
 		ragSetting: string | null;
+		webSearch: boolean;
 		vaultToolMode: VaultToolMode;
 		vaultToolNoneReason: VaultToolNoneReason | null;
 		mcpServers: McpServerConfig[];
@@ -643,7 +645,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		addAttachments: (attachments: Attachment[]) => inputAreaRef.current?.addAttachments(attachments),
 		clearRagSetting: () => {
 			setSelectedRagSetting(null);
-			plugin.workspaceState.selectedRagSetting = null;
+			void plugin.selectSearchSelection({ ragSetting: null, webSearch: webSearchEnabled });
 		},
 		askSelection: (selection: { text: string; sourcePath?: string }) => {
 			const text = selection.text.trim();
@@ -1237,18 +1239,25 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		const handleWorkspaceStateLoaded = () => {
 			setRagSettingNames(plugin.getRagSettingNames());
 			setSelectedRagSetting(plugin.workspaceState.selectedRagSetting);
+			setWebSearchEnabled(plugin.workspaceState.webSearchEnabled === true);
 		};
 
 		const handleRagSettingChanged = (name: string | null) => {
 			setSelectedRagSetting(name);
 		};
+		const handleSearchSelectionChanged = (selection: import("src/types").SearchSelection) => {
+			setSelectedRagSetting(selection.ragSetting);
+			setWebSearchEnabled(selection.webSearch);
+		};
 
 		plugin.settingsEmitter.on("workspace-state-loaded", handleWorkspaceStateLoaded);
 		plugin.settingsEmitter.on("rag-setting-changed", handleRagSettingChanged);
+		plugin.settingsEmitter.on("search-selection-changed", handleSearchSelectionChanged);
 
 		return () => {
 			plugin.settingsEmitter.off("workspace-state-loaded", handleWorkspaceStateLoaded);
 			plugin.settingsEmitter.off("rag-setting-changed", handleRagSettingChanged);
+			plugin.settingsEmitter.off("search-selection-changed", handleSearchSelectionChanged);
 		};
 	}, [plugin]);
 
@@ -1295,12 +1304,16 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		return model.toLowerCase().includes("gemma-4");
 	};
 
-	// Handle RAG setting change from UI
-	const handleRagSettingChange = (name: string | null) => {
-		setSelectedRagSetting(name);
-		void plugin.selectRagSetting(name);
+	const handleSearchSelectionChange = (
+		selection: import("src/types").SearchSelection,
+		persist = true,
+		model = currentModel,
+	) => {
+		setSelectedRagSetting(selection.ragSetting);
+		setWebSearchEnabled(selection.webSearch);
+		if (persist) void plugin.selectSearchSelection(selection);
 		// Gemma 4: RAG or Web Search selected → disable function calling tools
-		if (isGemma4(currentModel) && name) {
+		if (isGemma4(model) && (selection.ragSetting || selection.webSearch)) {
 			setVaultToolMode("none");
 			setVaultToolNoneReason("manual");
 			setMcpServers(servers => servers.map(s => ({ ...s, enabled: false })));
@@ -1312,9 +1325,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		setVaultToolMode(mode);
 		setVaultToolNoneReason(mode === "none" ? "manual" : null);
 		// Gemma 4: vault tools enabled → clear RAG/Web Search
-		if (isGemma4(currentModel) && mode !== "none" && selectedRagSetting) {
-			setSelectedRagSetting(null);
-			void plugin.selectRagSetting(null);
+		if (isGemma4(currentModel) && mode !== "none" && (selectedRagSetting || webSearchEnabled)) {
+			handleSearchSelectionChange({ ragSetting: null, webSearch: false });
 		}
 	};
 
@@ -1325,9 +1337,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			plugin.settings.mcpServers = updated;
 			void plugin.saveSettings();
 			// Gemma 4: MCP server enabled → clear RAG/Web Search
-			if (isGemma4(currentModel) && enabled && selectedRagSetting) {
-				setSelectedRagSetting(null);
-				void plugin.selectRagSetting(null);
+			if (isGemma4(currentModel) && enabled && (selectedRagSetting || webSearchEnabled)) {
+				handleSearchSelectionChange({ ragSetting: null, webSearch: false });
 			}
 			return updated;
 		});
@@ -1351,11 +1362,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			&& isLocalLlmToolsEnabled(newLocalLlmConfig, newLocalLlmConfig.model));
 		const isNewModelCli = model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli"
 			|| (isLocalLlmModel(model) && !isNewLocalLlmToolsCapable);
-		// Clear Web Search only when the selected model has no native search support.
-		if (!modelSupportsWebSearch(model, plugin.settings.apiProviders) && selectedRagSetting === "__websearch__") {
-			handleRagSettingChange(null);
-		}
-
 		// Auto-adjust search setting and vault tool mode for CLI mode and special models
 		if (isNewModelCli) {
 			// CLI mode: disable vault tools and MCP
@@ -1363,15 +1369,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			setVaultToolNoneReason("cli");
 			setMcpServers(servers => servers.map(s => ({ ...s, enabled: false })));
 		} else if (isImageGenerationModel(model)) {
-			// Image models: Web Search only → keep if Web Search, else None
-			if (selectedRagSetting !== null && selectedRagSetting !== "__websearch__") {
-				handleRagSettingChange(null);
-			}
+			// Image models leave RAG remembered but inactive.
 			setVaultToolMode("all");
 			setVaultToolNoneReason(null);
 		} else if (isGemma4(model)) {
 			// Gemma 4: RAG/Web Search and function calling are mutually exclusive
-			if (selectedRagSetting) {
+			if (selectedRagSetting || webSearchEnabled) {
 				// RAG or Web Search active → disable vault tools
 				setVaultToolMode("none");
 				setVaultToolNoneReason("manual");
@@ -1558,6 +1561,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		preSlashSettingsRef.current = {
 			model: currentModel,
 			ragSetting: selectedRagSetting,
+			webSearch: webSearchEnabled,
 			vaultToolMode,
 			vaultToolNoneReason,
 			mcpServers: mcpServers.map(s => ({ ...s })),
@@ -1574,11 +1578,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			}
 		}
 
-		// Optionally change search setting (null = keep current, "" = None, "__websearch__" = Web Search, other = RAG setting name)
-		if (modelSupportsWebSearch(nextModel, plugin.settings.apiProviders)
-			&& command.searchSetting !== null && command.searchSetting !== undefined) {
-			const newSetting = command.searchSetting === "" ? null : command.searchSetting;
-			handleRagSettingChange(newSetting);
+		// Slash overrides are temporary and must not overwrite workspace preferences.
+		if (command.searchSelection !== null && command.searchSelection !== undefined) {
+			handleSearchSelectionChange(command.searchSelection, false, nextModel);
 		}
 
 		// Optionally change vault tool mode (null = keep current)
@@ -1826,7 +1828,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
-			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
+			if (selectedRagSetting) {
 				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
@@ -2113,7 +2115,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
-			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
+			if (selectedRagSetting) {
 				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
@@ -2502,7 +2504,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			metadata: {
 				provider: providerConfig.name,
 				model: resolvedModelName,
-				webSearchEnabled: selectedRagSetting === "__websearch__",
+				webSearchEnabled: allowWebSearch && webSearchEnabled,
 			},
 		});
 
@@ -2519,7 +2521,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
-			if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
+			if (selectedRagSetting && !isImageGenerationModel(currentModel)) {
 				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
@@ -2644,7 +2646,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			// Route to correct provider implementation
 			const apiEnableThinking = getThinkingToggle();
 			const isWebSearch = providerSupportsWebSearch(providerConfig, resolvedModelName)
-				&& selectedRagSetting === "__websearch__";
+				&& webSearchEnabled;
 			const isImageGen = providerConfig.type === "openai" && isOpenAiImageModel(resolvedModelName);
 			const streamFn = isImageGen
 				? openaiGenerateImageStream(
@@ -2790,32 +2792,46 @@ Always be helpful and provide clear, concise responses. When working with notes,
 	const sendMessage = async (content: string, attachments?: Attachment[], skillPath?: string) => {
 		if ((!content.trim() && !skillPath && (!attachments || attachments.length === 0)) || isLoading) return;
 
-		// Use API provider if in api-provider mode
-		if (isApiProviderMode) {
-			// Check if this is a Gemini provider → route to Gemini path
-			const provider = getActiveApiProvider();
-			if (provider?.type === "gemini") {
-				await sendMessageViaGemini(content, attachments, skillPath, provider);
+		try {
+			// Use API provider if in api-provider mode
+			if (isApiProviderMode) {
+				// Check if this is a Gemini provider → route to Gemini path
+				const provider = getActiveApiProvider();
+				if (provider?.type === "gemini") {
+					await sendMessageViaGemini(content, attachments, skillPath, provider);
+					return;
+				}
+				await sendMessageViaApiProvider(content, attachments, skillPath);
 				return;
 			}
-			await sendMessageViaApiProvider(content, attachments, skillPath);
-			return;
-		}
 
-		// Use Local LLM provider if in local LLM mode
-		if (isLocalLlmMode) {
-			await sendMessageViaLocalLlm(content, attachments, skillPath);
-			return;
-		}
+			if (isLocalLlmMode) {
+				await sendMessageViaLocalLlm(content, attachments, skillPath);
+				return;
+			}
 
-		// Use CLI provider if in CLI mode
-		if (isCliMode) {
-			await sendMessageViaCli(content, attachments, skillPath);
-			return;
-		}
+			if (isCliMode) {
+				await sendMessageViaCli(content, attachments, skillPath);
+				return;
+			}
 
-		// No provider matched - show error
-		new Notice(t("chat.clientNotInitialized"));
+			new Notice(t("chat.clientNotInitialized"));
+		} finally {
+			currentSlashCommandRef.current = null;
+			if (preSlashSettingsRef.current) {
+				const saved = preSlashSettingsRef.current;
+				preSlashSettingsRef.current = null;
+				setCurrentModel(saved.model);
+				if (persistentCliRef.current) {
+					persistentCliRef.current.terminate();
+					persistentCliRef.current = null;
+				}
+				handleSearchSelectionChange({ ragSetting: saved.ragSetting, webSearch: saved.webSearch }, false);
+				setVaultToolMode(saved.vaultToolMode);
+				setVaultToolNoneReason(saved.vaultToolNoneReason);
+				setMcpServers(saved.mcpServers);
+			}
+		}
 	};
 
 	// Send message via Gemini provider (uses @google/genai SDK)
@@ -2878,7 +2894,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			metadata: {
 				model: allowedModel,
 				ragEnabled: allowRag,
-				webSearchEnabled: selectedRagSetting === "__websearch__",
+				webSearchEnabled: allowWebSearch && webSearchEnabled,
 				toolsEnabled: !isImageGenerationModel(allowedModel),
 				isImageGeneration: isImageGenerationModel(allowedModel),
 				pluginVersion: plugin.manifest.version,
@@ -3316,7 +3332,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					: undefined;
 
 					// Check if Web Search or Image Generation model is selected
-				const isWebSearch = allowWebSearch && selectedRagSetting === "__websearch__"
+				const isWebSearch = allowWebSearch && webSearchEnabled
 					&& (toolsEnabled || isImageGenerationModel(allowedModel));
 				const isImageGeneration = isImageGenerationModel(allowedModel);
 
@@ -3357,7 +3373,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 				// Local RAG: search and inject context into system prompt
 				let localRagSources: string[] = [];
-				if (selectedRagSetting && selectedRagSetting !== "__websearch__") {
+				if (selectedRagSetting && !isImageGenerationModel(allowedModel)) {
 					const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 					if (ragSettingObj) {
 						try {
@@ -3525,25 +3541,6 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				const pendingEdits = getPendingInfos(processedEdits);
 				const pendingDeletes = getPendingInfos(processedDeletes);
 				const pendingRenames = getPendingInfos(processedRenames);
-
-				// Always clear the slash command ref after message processing
-				currentSlashCommandRef.current = null;
-
-				// Restore chat settings that were overridden by the slash command
-				if (isActive() && preSlashSettingsRef.current) {
-					const saved = preSlashSettingsRef.current;
-					preSlashSettingsRef.current = null;
-					setCurrentModel(saved.model);
-					// Terminate persistent CLI session when restoring model after slash command
-					if (persistentCliRef.current) {
-						persistentCliRef.current.terminate();
-						persistentCliRef.current = null;
-					}
-					handleRagSettingChange(saved.ragSetting);
-					setVaultToolMode(saved.vaultToolMode);
-					setVaultToolNoneReason(saved.vaultToolNoneReason);
-					setMcpServers(saved.mcpServers);
-				}
 
 				// Add assistant message
 				const assistantMessage: Message = {
@@ -4011,10 +4008,11 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								onModelChange={handleModelChange}
 								availableModels={availableModels}
 								allowWebSearch={allowWebSearch}
+								webSearchEnabled={webSearchEnabled}
 								ragEnabled={allowRag}
 								ragSettings={allowRag ? ragSettingNames : []}
 								selectedRagSetting={selectedRagSetting}
-								onRagSettingChange={handleRagSettingChange}
+								onSearchSelectionChange={handleSearchSelectionChange}
 								vaultToolMode={vaultToolMode}
 								onVaultToolModeChange={handleVaultToolModeChange}
 								vaultToolModeOnlyNone={isCliMode}

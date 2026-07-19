@@ -35,7 +35,7 @@
 | **Local LLM** (Ollama, OpenCode) | ✅ Streaming | ❌ (marker mode) | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
-Web Search appears for Gemini providers and for OpenAI, Anthropic, or Grok providers using their official API hosts. Select **Web search** in the search dropdown before sending the prompt; asking the model to browse does not enable the tool by itself. The model then decides whether a search is needed. Search answers include inline citation links and a compact cited-source list; custom and OpenAI-compatible gateways are not assumed to support the providers' native search tools.
+Web Search appears for Gemini providers and for OpenAI, Anthropic, or Grok providers using their official API hosts. Open the search menu and check **Web search** before sending the prompt; asking the model to browse does not enable the tool by itself. Web Search and one Semantic Search (RAG) setting can be enabled together so the model can synthesize current web information with retrieved vault context. The model decides whether a web search is needed. Search answers include inline citation links and a compact cited-source list; custom and OpenAI-compatible gateways are not assumed to support the providers' native search tools.
 
 > [!TIP]
 > **Multiple providers can be configured simultaneously.** Switch models freely during chat — each provider has its own API key and settings.
@@ -74,7 +74,9 @@ The AI Chat feature provides an interactive conversation interface with your cho
 
 ## Web Search
 
-Choose a supported API model, then change the search dropdown beside the model picker from **Search: none** to **Web search**. Prompt wording alone does not turn search on. Search remains model-controlled: enabling the tool allows the model to search, but does not force a search for every prompt.
+Choose a supported API model, then open the search menu beside the model picker and check **Web search**. You may also select one Semantic Search setting in the same menu; when both are active, matching vault context is injected before the provider receives the prompt with its native web-search tool enabled. Prompt wording alone does not turn search on. Search remains model-controlled: enabling the tool allows the model to search, but does not force a search for every prompt.
+
+The Web and RAG choices are saved per workspace. Switching to a model that cannot use one of them leaves the preference visibly selected but inactive, and it automatically becomes active again when you return to a compatible model. Use a combined RAG setting when several indexes should be searched together.
 
 - **Gemini:** supported through Google Search grounding.
 - **OpenAI:** supported only through `api.openai.com`; search uses the Responses API and can run alongside vault and MCP function tools. OpenAI image-generation models are excluded.
@@ -930,7 +932,7 @@ Local vector-based search that injects relevant vault content into LLM conversat
    - **Default (Gemini):** Leave Embedding Base URL empty — uses Gemini Embedding API with your Gemini API key
    - **Custom server (Ollama etc.):** Set Embedding Base URL and select a model
 4. Click **Sync** to build the vector index from your vault
-5. Select the RAG setting in the dropdown to activate it
+5. Select the RAG setting in the search menu to activate it; Web Search can remain checked at the same time
 
 | Setting | Description | Default |
 |---------|-------------|---------|
