@@ -8,6 +8,7 @@ import type {
 import { getApiProviderId, getApiProviderModelName, isApiProviderModel } from "../types";
 
 export const WEB_SEARCH_COST_PER_REQUEST = 10 / 1000;
+export const XAI_WEB_SEARCH_COST_PER_REQUEST = 5 / 1000;
 
 function normalizedHostname(baseUrl: string): string | null {
   try {
@@ -25,9 +26,21 @@ export function isOfficialAnthropicProvider(provider: ApiProviderConfig): boolea
   return provider.type === "anthropic" && normalizedHostname(provider.baseUrl) === "api.anthropic.com";
 }
 
+export function isOfficialGrokProvider(provider: ApiProviderConfig): boolean {
+  return provider.type === "grok" && normalizedHostname(provider.baseUrl) === "api.x.ai";
+}
+
+export function getOfficialResponsesProvider(baseUrl: string): "openai" | "xai" | null {
+  const hostname = normalizedHostname(baseUrl);
+  if (hostname === "api.openai.com") return "openai";
+  if (hostname === "api.x.ai") return "xai";
+  return null;
+}
+
 export function providerSupportsWebSearch(provider: ApiProviderConfig, modelName: string): boolean {
   if (provider.type === "gemini") return true;
   if (isOfficialOpenAiProvider(provider)) return !/^(?:dall-e|gpt-image)/i.test(modelName);
+  if (isOfficialGrokProvider(provider)) return !/^grok-imagine-(?:image|video)/i.test(modelName);
   return isOfficialAnthropicProvider(provider);
 }
 
@@ -103,4 +116,16 @@ export function formatWebSearchCitations(
   }
 
   return { content: formatted, sources };
+}
+
+/** Validate and deduplicate already-linked provider sources in display order. */
+export function deduplicateWebSearchSources(sources: WebSearchSource[]): WebSearchSource[] {
+  const result: WebSearchSource[] = [];
+  const seen = new Set<string>();
+  for (const source of sources) {
+    if (!isSafeWebUrl(source.url) || seen.has(source.url)) continue;
+    seen.add(source.url);
+    result.push({ title: source.title || source.url, url: source.url });
+  }
+  return result;
 }

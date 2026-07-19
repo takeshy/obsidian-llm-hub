@@ -684,7 +684,7 @@ export class DiscordService {
       || getDefaultModel(this.plugin.settings);
 
     if (!this.supportsWebSearch(model)) {
-      return "Web Search is available with Gemini and official OpenAI or Anthropic API models. Current model does not support it.";
+      return "Web Search is available with Gemini and official OpenAI, Anthropic, or Grok API models. Current model does not support it.";
     }
 
     conversation.webSearch = !conversation.webSearch;
@@ -739,7 +739,7 @@ export class DiscordService {
             || (this.settings.model ? (this.settings.model as ModelType) : null)
             || getDefaultModel(this.plugin.settings);
           if (!this.supportsWebSearch(model)) {
-            return { reply: "Web Search is available with Gemini and official OpenAI or Anthropic API models. Current model does not support it." };
+            return { reply: "Web Search is available with Gemini and official OpenAI, Anthropic, or Grok API models. Current model does not support it." };
           }
           conversation.ragSetting = null;
           conversation.webSearch = true;
@@ -912,7 +912,7 @@ export class DiscordService {
       "- `!rag` — List RAG settings",
       "- `!rag <name>` — Switch RAG setting",
       "- `!rag off` — Disable RAG",
-      "- `!websearch` — Toggle native Web Search (Gemini or official OpenAI/Anthropic APIs)",
+      "- `!websearch` — Toggle native Web Search (Gemini or official OpenAI/Anthropic/xAI APIs)",
       "- `!skill` — List available skills",
       "- `!skill <name>` — Activate a skill",
       "- `!research <query>` — Run Deep Research (runs in background, may take several minutes)",
@@ -1308,6 +1308,7 @@ export class DiscordService {
     let fullResponse = "";
     let webSearchUsed = false;
     let citations: WebSearchCitation[] = [];
+    let directSources: WebSearchSource[] = [];
     let providerContinuation: ProviderContinuation | undefined;
     for await (const chunk of streamFn) {
       if (chunk.type === "text") fullResponse += chunk.content;
@@ -1315,11 +1316,14 @@ export class DiscordService {
       else if (chunk.type === "error") throw new Error(chunk.error || "Unknown API error");
       else if (chunk.type === "done") {
         citations = chunk.webSearchCitations ?? [];
+        directSources = chunk.webSearchSources ?? [];
         providerContinuation = chunk.providerContinuation;
         break;
       }
     }
-    const formatted = formatWebSearchCitations(fullResponse, citations);
+    const formatted = directSources.length > 0
+      ? { content: fullResponse, sources: directSources }
+      : formatWebSearchCitations(fullResponse, citations);
     return {
       content: formatted.content,
       webSearchUsed: webSearchUsed || undefined,

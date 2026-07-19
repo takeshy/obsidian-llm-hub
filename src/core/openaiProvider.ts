@@ -11,11 +11,17 @@
 
 import { requestUrl } from "obsidian";
 import OpenAI from "openai";
-import type { Message, StreamChunk, ToolDefinition, GeneratedImage, WebSearchCitation } from "../types";
+import type { Message, StreamChunk, ToolDefinition, GeneratedImage, WebSearchCitation, WebSearchSource } from "../types";
 import { calculateCost } from "./modelPricing";
 import { parseThinkTags } from "./thinkTagParser";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
-import { continuationMatches, WEB_SEARCH_COST_PER_REQUEST } from "./webSearch";
+import {
+  continuationMatches,
+  deduplicateWebSearchSources,
+  getOfficialResponsesProvider,
+  WEB_SEARCH_COST_PER_REQUEST,
+  XAI_WEB_SEARCH_COST_PER_REQUEST,
+} from "./webSearch";
 
 /**
  * Build the fetch implementation to hand to the OpenAI SDK. We can't rely on
@@ -313,13 +319,14 @@ function buildResponsesInput(
   messages: Message[],
   baseUrl: string,
   model: string,
+  continuationProvider: "openai" | "xai",
 ): OpenAI.Responses.ResponseInputItem[] {
   const result: OpenAI.Responses.ResponseInputItem[] = [];
   for (let index = 0; index < messages.length; index++) {
     const msg = messages[index];
     const hasTriggeringUser = index > 0 && messages[index - 1].role === "user";
     if (msg.role === "assistant" && hasTriggeringUser
-      && continuationMatches(msg.providerContinuation, "openai", baseUrl, model)) {
+      && continuationMatches(msg.providerContinuation, continuationProvider, baseUrl, model)) {
       result.push(...msg.providerContinuation.items as OpenAI.Responses.ResponseInputItem[]);
       continue;
     }
@@ -350,9 +357,66 @@ function buildResponsesInput(
   return result;
 }
 
+interface XaiResponseMetadata {
+  usage?: OpenAI.Responses.ResponseUsage & {
+    cost_in_usd_ticks?: number | string;
+    server_side_tool_usage?: Record<string, number>;
+  };
+  server_side_tool_usage?: Record<string, number>;
+  citations?: string[];
+}
+
+function getXaiResponseMetrics(response: OpenAI.Responses.Response): {
+  searchRequests: number;
+  cost?: number;
+} {
+  const metadata = response as unknown as XaiResponseMetadata;
+  const toolUsage = metadata.server_side_tool_usage ?? metadata.usage?.server_side_tool_usage;
+  const searchRequests = toolUsage?.SERVER_SIDE_TOOL_WEB_SEARCH ?? 0;
+  const rawTicks = metadata.usage?.cost_in_usd_ticks;
+  const ticks = typeof rawTicks === "string" ? Number(rawTicks) : rawTicks;
+  return {
+    searchRequests,
+    cost: typeof ticks === "number" && Number.isFinite(ticks) ? ticks / 10_000_000_000 : undefined,
+  };
+}
+
+/** xAI Responses already embeds [[N]](url) links; collect pills without reinserting links. */
+function extractXaiWebSearchSources(response: OpenAI.Responses.Response): WebSearchSource[] {
+  const annotationSources: WebSearchSource[] = [];
+  const titleByUrl = new Map<string, string>();
+  const inlineSources: WebSearchSource[] = [];
+
+  for (const item of response.output) {
+    if (item.type !== "message") continue;
+    for (const part of item.content) {
+      if (part.type !== "output_text") continue;
+      const annotations = (part as unknown as {
+        annotations?: Array<{ type?: string; url?: string; title?: string }>;
+      }).annotations ?? [];
+      for (const annotation of annotations) {
+        if (annotation.type !== "url_citation" || !annotation.url) continue;
+        const source = { title: annotation.title || annotation.url, url: annotation.url };
+        annotationSources.push(source);
+        if (!titleByUrl.has(source.url)) titleByUrl.set(source.url, source.title);
+      }
+
+      const citationPattern = /\[\[\d+\]\]\((https?:\/\/[^)\s]+)\)/g;
+      for (const match of part.text.matchAll(citationPattern)) {
+        const url = match[1];
+        inlineSources.push({ title: titleByUrl.get(url) || url, url });
+      }
+    }
+  }
+
+  const metadata = response as unknown as XaiResponseMetadata;
+  const responseSources = (metadata.citations ?? []).map(url => ({ title: titleByUrl.get(url) || url, url }));
+  return deduplicateWebSearchSources([...inlineSources, ...annotationSources, ...responseSources]);
+}
+
 /**
- * Stream via Responses API (supports reasoning for gpt-5+ models).
- * Falls back to Chat Completions API on failure.
+ * Stream via the OpenAI-compatible Responses API used by OpenAI and xAI.
+ * Callers decide whether a failed non-search request may fall back to Chat Completions.
  */
 async function* openaiResponsesStream(
   client: OpenAI,
@@ -365,21 +429,26 @@ async function* openaiResponsesStream(
   signal?: AbortSignal,
   enableThinking?: boolean,
   webSearchEnabled?: boolean,
+  continuationProvider: "openai" | "xai" = "openai",
 ): AsyncGenerator<StreamChunk> {
+  const providerLabel = continuationProvider === "xai" ? "xAI" : "OpenAI";
   const responsesTools: OpenAI.Responses.Tool[] = [
     ...toResponsesTools(tools),
     ...(webSearchEnabled ? [{ type: "web_search" as const }] : []),
   ];
   // Build input: previous messages as conversation history
-  const input = buildResponsesInput(messages, baseUrl, model);
+  const input = buildResponsesInput(messages, baseUrl, model, continuationProvider);
   const continuationItems: OpenAI.Responses.ResponseInputItem[] = [];
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalTextLength = 0;
   let searchRequests = 0;
+  let exactProviderCost = 0;
+  let hasExactProviderCost = false;
   let webSearchEmitted = false;
   const citations: WebSearchCitation[] = [];
+  const sources: WebSearchSource[] = [];
 
   const MAX_TOOL_ROUNDS = 20;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -441,16 +510,16 @@ async function* openaiResponsesStream(
             break;
           }
           case "response.failed":
-            yield { type: "error", error: event.response.error?.message || "OpenAI response failed" };
+            yield { type: "error", error: event.response.error?.message || `${providerLabel} response failed` };
             return;
           case "response.incomplete":
             yield {
               type: "error",
-              error: `OpenAI response incomplete${event.response.incomplete_details?.reason ? `: ${event.response.incomplete_details.reason}` : ""}`,
+              error: `${providerLabel} response incomplete${event.response.incomplete_details?.reason ? `: ${event.response.incomplete_details.reason}` : ""}`,
             };
             return;
           case "error":
-            yield { type: "error", error: event.message || "OpenAI streaming error" };
+            yield { type: "error", error: event.message || `${providerLabel} streaming error` };
             return;
         }
       }
@@ -463,8 +532,22 @@ async function* openaiResponsesStream(
 
     totalTextLength += roundTextLength;
     if (!completedResponse) {
-      yield { type: "error", error: "OpenAI Responses API completed without a response object" };
+      yield { type: "error", error: `${providerLabel} Responses API completed without a response object` };
       return;
+    }
+
+    if (continuationProvider === "xai") {
+      const metrics = getXaiResponseMetrics(completedResponse);
+      searchRequests += metrics.searchRequests;
+      if (metrics.cost !== undefined) {
+        exactProviderCost += metrics.cost;
+        hasExactProviderCost = true;
+      }
+      sources.push(...extractXaiWebSearchSources(completedResponse));
+      if (metrics.searchRequests > 0 && !webSearchEmitted) {
+        webSearchEmitted = true;
+        yield { type: "web_search_used" };
+      }
     }
 
     let responseTextOffset = 0;
@@ -472,7 +555,7 @@ async function* openaiResponsesStream(
       if (item.type === "web_search_call" && item.status === "completed") {
         // Reasoning models can also emit open_page/find_in_page items. Only
         // the search action is a billable search request.
-        if (item.action?.type === "search") searchRequests += 1;
+        if (continuationProvider === "openai" && item.action?.type === "search") searchRequests += 1;
         if (!webSearchEmitted) {
           webSearchEmitted = true;
           yield { type: "web_search_used" };
@@ -482,7 +565,7 @@ async function* openaiResponsesStream(
       for (const part of item.content) {
         if (part.type !== "output_text") continue;
         for (const annotation of part.annotations) {
-          if (annotation.type === "url_citation") {
+          if (continuationProvider === "openai" && annotation.type === "url_citation") {
             citations.push({
               title: annotation.title,
               url: annotation.url,
@@ -510,9 +593,13 @@ async function* openaiResponsesStream(
 
     if (toolCalls.length === 0) {
       const tokenCost = calculateCost(model, totalInputTokens, totalOutputTokens);
-      const cost = tokenCost === undefined && searchRequests === 0
+      const estimatedSearchCost = searchRequests * (continuationProvider === "xai"
+        ? XAI_WEB_SEARCH_COST_PER_REQUEST
+        : WEB_SEARCH_COST_PER_REQUEST);
+      const estimatedCost = tokenCost === undefined && searchRequests === 0
         ? undefined
-        : (tokenCost ?? 0) + searchRequests * WEB_SEARCH_COST_PER_REQUEST;
+        : (tokenCost ?? 0) + estimatedSearchCost;
+      const cost = hasExactProviderCost ? exactProviderCost : estimatedCost;
       yield {
         type: "done",
         usage: {
@@ -523,8 +610,9 @@ async function* openaiResponsesStream(
           webSearchRequests: searchRequests || undefined,
         },
         webSearchCitations: citations.length > 0 ? citations : undefined,
+        webSearchSources: sources.length > 0 ? deduplicateWebSearchSources(sources) : undefined,
         providerContinuation: webSearchEmitted ? {
-          provider: "openai",
+          provider: continuationProvider,
           baseUrl: baseUrl.replace(/\/+$/, ""),
           model,
           items: continuationItems,
@@ -581,16 +669,20 @@ export async function* openaiChatWithToolsStream(
   const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
   const useReasoning = enableThinking === true;
 
-  // Responses API is only available on OpenAI's official API, not on compatible providers (OpenRouter, etc.)
-  const isOpenAiDirect = baseUrl.replace(/\/+$/, "").includes("api.openai.com");
+  // Native search uses Responses on the official OpenAI and xAI endpoints.
+  // Other compatible gateways continue to use Chat Completions.
+  const responsesProvider = getOfficialResponsesProvider(baseUrl);
 
-  // For reasoning-enabled requests on OpenAI direct, try Responses API first
-  if ((useReasoning || webSearchEnabled) && isOpenAiDirect) {
+  // Preserve existing non-search behavior: only OpenAI reasoning requests use
+  // Responses automatically, while search forces Responses for OpenAI or xAI.
+  const shouldUseResponses = (useReasoning && responsesProvider === "openai")
+    || (webSearchEnabled === true && responsesProvider !== null);
+  if (shouldUseResponses && responsesProvider) {
     let responsesWorked = false;
     let initialResponsesError: StreamChunk | undefined;
     const responsesStream = openaiResponsesStream(
       client, baseUrl, model, messages, tools, systemPrompt, executeToolCall, signal,
-      useReasoning, webSearchEnabled,
+      useReasoning, webSearchEnabled, responsesProvider,
     );
     for await (const chunk of responsesStream) {
       // If Responses API returns an error on the first chunk, fall through to Chat Completions
@@ -603,7 +695,7 @@ export async function* openaiChatWithToolsStream(
     }
     if (responsesWorked) return;
     if (webSearchEnabled) {
-      yield initialResponsesError ?? { type: "error", error: "OpenAI web search request failed" };
+      yield initialResponsesError ?? { type: "error", error: "Native web search request failed" };
       return;
     }
     // Fall through to Chat Completions API with reasoning_effort
@@ -659,7 +751,7 @@ export async function* openaiChatWithToolsStream(
         if (delta?.content) {
           // If no native reasoning field, parse <think> tags from content
           // (used by Qwen, MiniMax, Seed, StepFun, etc. on OpenRouter)
-          if (!hasNativeReasoning && !isOpenAiDirect) {
+          if (!hasNativeReasoning && responsesProvider !== "openai") {
             const parsed = parseThinkTags(delta.content, inThinkTag, tagBuffer);
             inThinkTag = parsed.inThinkTag;
             tagBuffer = parsed.tagBuffer;

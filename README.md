@@ -15,7 +15,7 @@
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
 - **AI Discussion** - Multi-model debate arena with parallel responses, voting, and winner determination
 - **Edit History** - Track and restore AI-made changes with diff view
-- **Web Search** - Access up-to-date information with cited sources via Gemini, official OpenAI, or official Anthropic APIs
+- **Web Search** - Access up-to-date information with cited sources via Gemini and the official OpenAI, Anthropic, or xAI APIs
 - **Image Generation** - Create images with Gemini or DALL-E
 - **Discord Integration** - Connect your LLM to Discord as a chat bot with per-channel model/RAG switching
 - **Encryption** - Password-protect chat history and workflow execution logs
@@ -29,13 +29,13 @@
 | **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Native search (official API) | ✅ DALL-E | ✅ |
 | **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Native search (official API) | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
-| **Grok** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
+| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ Native search (official xAI API) | ❌ | ✅ |
 | **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **Local LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling (auto-fallback) | ❌ | ❌ | ✅ |
 | **Local LLM** (Ollama, OpenCode) | ✅ Streaming | ❌ (marker mode) | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
-Web Search appears for Gemini providers and for OpenAI/Anthropic providers using their official API hosts. Select **Web search** in the search dropdown before sending the prompt; asking the model to browse does not enable the tool by itself. The model then decides whether a search is needed. Search answers include inline citation links and a compact cited-source list; custom and OpenAI-compatible gateways are not assumed to support the providers' native search tools.
+Web Search appears for Gemini providers and for OpenAI, Anthropic, or Grok providers using their official API hosts. Select **Web search** in the search dropdown before sending the prompt; asking the model to browse does not enable the tool by itself. The model then decides whether a search is needed. Search answers include inline citation links and a compact cited-source list; custom and OpenAI-compatible gateways are not assumed to support the providers' native search tools.
 
 > [!TIP]
 > **Multiple providers can be configured simultaneously.** Switch models freely during chat — each provider has its own API key and settings.
@@ -79,11 +79,12 @@ Choose a supported API model, then change the search dropdown beside the model p
 - **Gemini:** supported through Google Search grounding.
 - **OpenAI:** supported only through `api.openai.com`; search uses the Responses API and can run alongside vault and MCP function tools. OpenAI image-generation models are excluded.
 - **Anthropic:** supported only through `api.anthropic.com`; native server search can run alongside vault and MCP client tools.
+- **Grok:** supported only through `api.x.ai`; search uses xAI's Responses API and can run alongside vault and MCP function tools. Grok image/video-generation models are excluded.
 - **Other endpoints:** OpenRouter, custom gateways, local LLMs, and CLI providers are not treated as native-search providers even if they offer OpenAI-compatible chat APIs.
 
-The implementation intentionally has no chat-model allowlist. Compatible current or future models may use search, while an unsupported model returns the provider's actionable error. Live compatibility checks during development covered OpenAI GPT-5.6 Sol and Anthropic Claude Opus 4.8, Sonnet 5, Fable 5, and Haiku 4.5.
+The implementation intentionally has no chat-model allowlist. Compatible current or future models may use search, while an unsupported model returns the provider's actionable error. Live compatibility checks during development covered OpenAI GPT-5.6 Sol and Anthropic Claude Opus 4.8, Sonnet 5, Fable 5, and Haiku 4.5; automated Responses-stream coverage includes Grok 4.5.
 
-Only cited sources are displayed. Provider citation positions become numbered Markdown links, and deduplicated sources appear as clickable pills beneath the **Used web search** badge. Search source metadata and provider-native continuation items are saved with chat history so later turns can retain search context when the endpoint, model, and retained message pair still match. Usage estimates add the current `$0.01` fee for each actual provider search request, plus normal token costs.
+Only cited sources are displayed. Provider citation positions become numbered Markdown links, while xAI's native inline Markdown citations are preserved; deduplicated sources appear as clickable pills beneath the **Used web search** badge. Search source metadata and provider-native continuation items are saved with chat history so later turns can retain search context when the endpoint, model, and retained message pair still match. Usage estimates add the current `$0.01` OpenAI/Anthropic search fee per request; xAI responses use the provider's exact billed cost (currently `$0.005` per web-search invocation), including token and tool charges.
 
 ## Slash Commands
 
@@ -1038,7 +1039,7 @@ The **Discussion** tab provides a multi-model debate arena where multiple AI mod
 
 **Data sent to LLM providers:**
 - Chat messages and file attachments are sent to the configured API provider (Gemini, OpenAI, Anthropic, OpenRouter, Grok, or custom endpoint)
-- When Web Search is enabled, queries are sent through the selected provider's native search service (Google for Gemini, OpenAI Web Search, or Anthropic Web Search)
+- When Web Search is enabled, queries are sent through the selected provider's native search service (Google for Gemini, OpenAI Web Search, Anthropic Web Search, or xAI Web Search)
 - Local LLM providers send data only to your local server
 
 **Data sent to third-party services:**

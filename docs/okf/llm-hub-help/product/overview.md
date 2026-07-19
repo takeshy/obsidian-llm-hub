@@ -21,7 +21,7 @@ Main feature areas:
 - Dashboard files with responsive widget grids for Bases, files, web pages, workflows, kanban, timelines, and memos.
 - Edit history, safe edit confirmations, AI folder access limits, and optional encryption.
 
-Provider API keys and local/CLI configuration determine which models and capabilities are available. Native web search is available through Gemini and official OpenAI/Anthropic API endpoints; Deep Research and Gemini image generation remain Gemini-specific.
+Provider API keys and local/CLI configuration determine which models and capabilities are available. Native web search is available through Gemini and official OpenAI, Anthropic, or xAI API endpoints; Deep Research and Gemini image generation remain Gemini-specific.
 
 # Citations
 

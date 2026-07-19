@@ -62,7 +62,7 @@ The API Providers section manages multiple providers that can be configured simu
 
 Providers can be enabled, disabled, edited, and deleted from the list.
 
-For Gemini and official OpenAI or Anthropic providers, chat's search dropdown includes **Web search**. This is an explicit per-workspace selection: prompt wording does not enable it when **Search: none** is selected. Switching between supported models retains Web search; switching to an unsupported provider or an OpenAI image-generation model clears it.
+For Gemini and official OpenAI, Anthropic, or Grok providers, chat's search dropdown includes **Web search**. This is an explicit per-workspace selection: prompt wording does not enable it when **Search: none** is selected. Switching between supported models retains Web search; switching to an unsupported provider, an OpenAI image-generation model, or a Grok image/video-generation model clears it.
 
 # Workspace Settings
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ApiProviderConfig, ModelType } from "../types";
 import {
   continuationMatches,
+  deduplicateWebSearchSources,
   formatWebSearchCitations,
   modelSupportsWebSearch,
   providerSupportsWebSearch,
@@ -23,13 +24,16 @@ function provider(overrides: Partial<ApiProviderConfig>): ApiProviderConfig {
 }
 
 describe("web search capability", () => {
-  it("allows Gemini and only official OpenAI/Anthropic endpoints", () => {
+  it("allows Gemini and only official OpenAI/Anthropic/xAI endpoints", () => {
     expect(providerSupportsWebSearch(provider({ type: "gemini", baseUrl: "https://example.test" }), "gemini-3.5-flash")).toBe(true);
     expect(providerSupportsWebSearch(provider({}), "gpt-5.4")).toBe(true);
     expect(providerSupportsWebSearch(provider({ baseUrl: "https://api.openai.com/" }), "gpt-5.4")).toBe(true);
     expect(providerSupportsWebSearch(provider({ baseUrl: "https://openai.proxy.test" }), "gpt-5.4")).toBe(false);
     expect(providerSupportsWebSearch(provider({ type: "anthropic", baseUrl: "https://api.anthropic.com/v1" }), "claude-sonnet-4-6")).toBe(true);
     expect(providerSupportsWebSearch(provider({ type: "anthropic", baseUrl: "https://claude.proxy.test" }), "claude-sonnet-4-6")).toBe(false);
+    expect(providerSupportsWebSearch(provider({ type: "grok", baseUrl: "https://api.x.ai/v1" }), "grok-4.5")).toBe(true);
+    expect(providerSupportsWebSearch(provider({ type: "grok", baseUrl: "https://xai.proxy.test" }), "grok-4.5")).toBe(false);
+    expect(providerSupportsWebSearch(provider({ type: "grok", baseUrl: "https://api.x.ai" }), "grok-imagine-image")).toBe(false);
     expect(providerSupportsWebSearch(provider({}), "dall-e-3")).toBe(false);
     expect(providerSupportsWebSearch(provider({}), "gpt-image-1")).toBe(false);
   });
@@ -40,8 +44,11 @@ describe("web search capability", () => {
     ["anthropic", "claude-sonnet-5"],
     ["anthropic", "claude-fable-5"],
     ["anthropic", "claude-haiku-4-5"],
+    ["grok", "grok-4.5"],
   ] as const)("enables search for official %s model %s", (type, model) => {
-    const baseUrl = type === "openai" ? "https://api.openai.com" : "https://api.anthropic.com";
+    const baseUrl = type === "openai"
+      ? "https://api.openai.com"
+      : type === "anthropic" ? "https://api.anthropic.com" : "https://api.x.ai";
     expect(providerSupportsWebSearch(provider({ type, baseUrl }), model)).toBe(true);
   });
 
@@ -65,6 +72,18 @@ describe("formatWebSearchCitations", () => {
     expect(result.sources).toEqual([
       { title: "A", url: "https://a.example" },
       { title: "B", url: "https://b.example" },
+    ]);
+  });
+
+  it("validates and deduplicates provider-linked sources", () => {
+    expect(deduplicateWebSearchSources([
+      { title: "First", url: "https://example.com/one" },
+      { title: "Duplicate", url: "https://example.com/one" },
+      { title: "Unsafe", url: "javascript:alert(1)" },
+      { title: "Second", url: "http://example.com/two" },
+    ])).toEqual([
+      { title: "First", url: "https://example.com/one" },
+      { title: "Second", url: "http://example.com/two" },
     ]);
   });
 

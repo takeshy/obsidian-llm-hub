@@ -583,7 +583,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	// Check if configuration is ready (any CLI verified OR API provider configured)
 	const isConfigReady = anyCliVerified || hasEnabledApiProvider;
 
-	// Native web search is available on Gemini plus official OpenAI/Anthropic endpoints.
+	// Native web search is available on Gemini plus official OpenAI, Anthropic, and xAI endpoints.
 	const activeSearchProvider = getActiveApiProvider();
 	const allowWebSearch = !isCliMode && !!activeSearchProvider
 		&& providerSupportsWebSearch(activeSearchProvider, getApiProviderModelName(currentModel) || "");
@@ -2710,6 +2710,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					case "done":
 						streamUsage = chunk.usage;
 						webSearchCitations = chunk.webSearchCitations ?? [];
+						webSearchSources = chunk.webSearchSources ?? webSearchSources;
 						providerContinuation = chunk.providerContinuation;
 						break;
 				}
@@ -2717,7 +2718,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 			if (stopped && fullContent) {
 				fullContent += `\n\n${t("chat.generationStopped")}`;
-			} else if (webSearchCitations.length > 0) {
+			} else if (!webSearchSources && webSearchCitations.length > 0) {
 				const formatted = formatWebSearchCitations(fullContent, webSearchCitations);
 				fullContent = formatted.content;
 				webSearchSources = formatted.sources;

@@ -909,7 +909,7 @@ export interface WebSearchCitation extends WebSearchSource {
  * not depend on either provider SDK.
  */
 export interface ProviderContinuation {
-  provider: "openai" | "anthropic";
+  provider: "openai" | "anthropic" | "xai";
   baseUrl: string;
   model: string;
   items: unknown[];

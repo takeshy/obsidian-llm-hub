@@ -152,6 +152,87 @@ describe("OpenAI native web search", () => {
   });
 });
 
+describe("xAI native web search", () => {
+  beforeEach(() => {
+    mocks.openAiResponsesStream.mockReset();
+    mocks.openAiChatCreate.mockReset();
+  });
+
+  it("forces Responses, combines tools, retains inline citations, and uses exact usage cost", async () => {
+    const response = {
+      output: [
+        { type: "reasoning", id: "rs_1", status: "completed", encrypted_content: "opaque", summary: [] },
+        {
+          id: "msg_1",
+          type: "message",
+          role: "assistant",
+          status: "completed",
+          content: [{
+            type: "output_text",
+            text: "Fresh news [[1]](https://example.com/news)",
+            annotations: [{ type: "url_citation", title: "Example News", url: "https://example.com/news" }],
+          }],
+        },
+      ],
+      usage: { input_tokens: 20, output_tokens: 8, cost_in_usd_ticks: 60_000_000 },
+      server_side_tool_usage: { SERVER_SIDE_TOOL_WEB_SEARCH: 1 },
+    };
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([
+      { type: "response.output_text.delta", delta: "Fresh news [[1]](https://example.com/news)" },
+      { type: "response.completed", response },
+    ]));
+
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://api.x.ai", "key", "grok-4.5",
+      [{ role: "user", content: "latest", timestamp: 1 }], [tool], "system", vi.fn(),
+      undefined, undefined, undefined, undefined, true,
+    ));
+
+    expect(mocks.openAiChatCreate).not.toHaveBeenCalled();
+    const request = mocks.openAiResponsesStream.mock.calls[0][0];
+    expect(request.tools.map((item: { type: string }) => item.type)).toEqual(["function", "web_search"]);
+    expect(request.include).toEqual(["reasoning.encrypted_content"]);
+    expect(chunks.some(chunk => chunk.type === "web_search_used")).toBe(true);
+    const done = chunks.find(chunk => chunk.type === "done");
+    expect(done?.webSearchCitations).toBeUndefined();
+    expect(done?.webSearchSources).toEqual([{ title: "Example News", url: "https://example.com/news" }]);
+    expect(done?.usage?.webSearchRequests).toBe(1);
+    expect(done?.usage?.totalCost).toBe(0.006);
+    expect(done?.providerContinuation).toEqual({
+      provider: "xai", baseUrl: "https://api.x.ai", model: "grok-4.5", items: response.output,
+    });
+  });
+
+  it("replays only matching xAI native continuation items", async () => {
+    const priorItem = { id: "prior", type: "reasoning", status: "completed", encrypted_content: "opaque", summary: [] };
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{
+      type: "response.completed",
+      response: { output: [], usage: { input_tokens: 1, output_tokens: 1 } },
+    }]));
+    const messages: Message[] = [
+      { role: "user", content: "first", timestamp: 1 },
+      {
+        role: "assistant", content: "answer", timestamp: 2,
+        providerContinuation: {
+          provider: "xai", baseUrl: "https://api.x.ai", model: "grok-4.5", items: [priorItem],
+        },
+      },
+      { role: "user", content: "follow up", timestamp: 3 },
+    ];
+
+    await collect(openaiChatWithToolsStream(
+      "https://api.x.ai", "key", "grok-4.5", messages, [], "system", vi.fn(),
+      undefined, undefined, undefined, undefined, true,
+    ));
+
+    expect(mocks.openAiResponsesStream.mock.calls[0][0].input).toEqual([
+      { role: "user", content: "first" },
+      priorItem,
+      { role: "user", content: "follow up" },
+    ]);
+  });
+});
+
 describe("Anthropic native web search", () => {
   beforeEach(() => mocks.anthropicStream.mockReset());
 

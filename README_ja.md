@@ -15,7 +15,7 @@
 - **セマンティック検索（RAG）** - 専用検索タブ、PDF プレビュー、検索結果からチャットへの連携を備えたローカルベクトル検索
 - **AI Discussion** - 並列応答、投票、勝者決定を備えたマルチモデル討論アリーナ
 - **編集履歴** - AI による変更を差分表示で追跡・復元
-- **Web 検索** - Gemini、OpenAI 公式 API、Anthropic 公式 API から引用付きの最新情報を取得
+- **Web 検索** - Gemini、OpenAI 公式 API、Anthropic 公式 API、xAI 公式 API から引用付きの最新情報を取得
 - **画像生成** - Gemini または DALL-E で画像を作成
 - **Discord 連携** - LLM を Discord の chat bot として接続し、チャンネルごとにモデル/RAG を切り替え可能
 - **暗号化** - チャット履歴とワークフロー実行ログをパスワード保護
@@ -29,13 +29,13 @@
 | **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ ネイティブ検索（公式 API） | ✅ DALL-E | ✅ |
 | **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ ネイティブ検索（公式 API） | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
-| **Grok** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
+| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ ネイティブ検索（xAI 公式 API） | ❌ | ✅ |
 | **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **ローカル LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling（自動フォールバック） | ❌ | ❌ | ✅ |
 | **ローカル LLM** (Ollama, OpenCode) | ✅ Streaming | ❌（マーカーモード） | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
-Web 検索は Gemini、および公式 API ホストを使用する OpenAI / Anthropic プロバイダーで表示されます。プロンプトを送信する前に、検索ドロップダウンで **Web search** を選択してください。モデルに検索を依頼するだけではツールは有効になりません。有効化後も検索するかどうかはモデルが判断します。回答にはインラインの引用リンクと、引用元をまとめたクリック可能な一覧が表示されます。カスタムゲートウェイや OpenAI 互換ゲートウェイは、プロバイダー固有のネイティブ検索には対応扱いになりません。
+Web 検索は Gemini、および公式 API ホストを使用する OpenAI / Anthropic / Grok プロバイダーで表示されます。プロンプトを送信する前に、検索ドロップダウンで **Web search** を選択してください。モデルに検索を依頼するだけではツールは有効になりません。有効化後も検索するかどうかはモデルが判断します。回答にはインラインの引用リンクと、引用元をまとめたクリック可能な一覧が表示されます。カスタムゲートウェイや OpenAI 互換ゲートウェイは、プロバイダー固有のネイティブ検索には対応扱いになりません。
 
 > [!TIP]
 > **複数のプロバイダーを同時に設定可能。** チャット中にモデルを自由に切り替えられます — 各プロバイダーは独自の API キーと設定を持ちます。
@@ -79,11 +79,12 @@ AI チャット機能は、Obsidian Vault と統合された、選択した LLM 
 - **Gemini:** Google Search Grounding を使用します。
 - **OpenAI:** `api.openai.com` のみ対応し、Responses API で検索します。Vault / MCP の Function Tool と併用できます。画像生成モデルは対象外です。
 - **Anthropic:** `api.anthropic.com` のみ対応し、ネイティブの Server Tool で検索します。Vault / MCP の Client Tool と併用できます。
+- **Grok:** `api.x.ai` のみ対応し、xAI の Responses API で検索します。Vault / MCP の Function Tool と併用できます。画像・動画生成モデルは対象外です。
 - **その他:** OpenRouter、カスタムゲートウェイ、ローカル LLM、CLI プロバイダーはネイティブ検索の対象外です。
 
-チャットモデルの固定許可リストはありません。互換性のある現在および将来のモデルは検索を利用でき、非対応モデルではプロバイダーのエラーがそのまま表示されます。開発時のライブ確認では OpenAI GPT-5.6 Sol、Anthropic Claude Opus 4.8、Sonnet 5、Fable 5、Haiku 4.5 を検証しました。
+チャットモデルの固定許可リストはありません。互換性のある現在および将来のモデルは検索を利用でき、非対応モデルではプロバイダーのエラーがそのまま表示されます。開発時のライブ確認では OpenAI GPT-5.6 Sol、Anthropic Claude Opus 4.8、Sonnet 5、Fable 5、Haiku 4.5 を検証し、Grok 4.5 は Responses ストリームの自動テストで確認しています。
 
-表示されるのは引用されたソースのみです。引用位置には番号付き Markdown リンクが挿入され、重複を除いたソースが **Used web search** バッジの下にクリック可能な項目として表示されます。検索ソースとプロバイダー固有の継続データはチャット履歴に保存され、エンドポイント、モデル、履歴範囲が一致する後続ターンで再利用されます。使用量の見積もりには、実際の検索リクエストごとに現在の `$0.01` と通常のトークン料金が加算されます。
+表示されるのは引用されたソースのみです。引用位置には番号付き Markdown リンクが挿入され、xAI が返すインライン Markdown 引用はそのまま保持されます。重複を除いたソースは **Used web search** バッジの下にクリック可能な項目として表示されます。検索ソースとプロバイダー固有の継続データはチャット履歴に保存され、エンドポイント、モデル、履歴範囲が一致する後続ターンで再利用されます。OpenAI / Anthropic の検索料金は現在 1 回 `$0.01` として見積もり、xAI はレスポンスに含まれる正確な請求額（Web 検索は現在 1 回 `$0.005`）を使用します。
 
 ## スラッシュコマンド
 
@@ -1056,7 +1057,7 @@ Vault からの同期の代わりに、事前構築済みのインデックス�
 **LLM プロバイダーに送信されるデータ：**
 
 - チャットメッセージと添付ファイルは、設定された API プロバイダー（Gemini、OpenAI、Anthropic、OpenRouter、Grok、またはカスタムエンドポイント）に送信されます
-- Web 検索を有効にすると、検索クエリが選択したプロバイダーのネイティブ検索サービス（Gemini は Google、OpenAI は OpenAI Web Search、Anthropic は Anthropic Web Search）に送信されます
+- Web 検索を有効にすると、検索クエリが選択したプロバイダーのネイティブ検索サービス（Gemini は Google、OpenAI は OpenAI Web Search、Anthropic は Anthropic Web Search、Grok は xAI Web Search）に送信されます
 - ローカル LLM プロバイダーはローカルサーバーにのみデータを送信します
 
 **サードパーティサービスへの送信：**
