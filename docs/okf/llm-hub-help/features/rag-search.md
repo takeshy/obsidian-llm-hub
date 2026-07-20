@@ -8,7 +8,7 @@ timestamp: 2026-07-05T00:00:00Z
 
 # RAG Search Tab
 
-The RAG Search tab is the manual counterpart to the Chat RAG dropdown. It lets users choose a RAG setting, run semantic search, adjust Top K and score threshold, filter returned chunks by keywords, edit context before sending, and hand selected results to Chat or Discussion.
+The RAG Search tab is the manual counterpart to Chat's search menu. It lets users choose a RAG setting, run semantic search, adjust Top K and score threshold, filter returned chunks by keywords, edit context before sending, and hand selected results to Chat or Discussion.
 
 # Search and Filtering
 
@@ -28,7 +28,7 @@ Each keyword field can use AI keyword suggestion. The sparkle button asks the co
 
 Users select result rows with checkboxes, then send selected items to:
 
-- Chat - results become input attachments, and the Chat RAG dropdown is cleared to avoid duplicate context injection.
+- Chat - results become input attachments, and Chat's semantic-search selection is cleared to avoid duplicate context injection; the independent Web Search preference is preserved.
 - Discussion - results become Discussion attachments and the UI switches to the Discussion panel.
 
 Text results are editable text attachments. Media results such as images, PDFs, audio, and video are attached as binary files. In Chat, text attachments with source paths can be clicked to review and edit the content in a modal before sending.
@@ -84,7 +84,7 @@ For internal (plugin-managed) RAG settings only:
 
 # Chat RAG vs Search Handoff
 
-Chat RAG dropdown is automatic context injection: the plugin retrieves context and injects it into the system prompt. It is convenient but not editable before sending.
+Chat's semantic-search selection is automatic context injection: the plugin retrieves context and injects it into the system prompt. It can remain active alongside Web Search, but the retrieved context is not editable before sending.
 
 Search -> Chat or Search -> Discussion is explicit context handoff: the user controls Top K, threshold, keyword filtering, result selection, adjacent chunk loading, and AI refinement. Results become user-visible attachments.
 
@@ -101,4 +101,4 @@ RAG context and attachments are sent only in the first discussion turn. Later tu
 
 - [RAG Semantic Search](./rag.md) explains store modes, sync, metadata, and chat retrieval.
 - [Settings](../operations/settings.md) lists RAG configuration settings.
-- [Chat](./chat.md) explains Chat attachments and RAG dropdown behavior.
+- [Chat](./chat.md) explains Chat attachments and combined Web/RAG selection behavior.

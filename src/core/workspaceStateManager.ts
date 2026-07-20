@@ -5,6 +5,7 @@ import {
   type WorkspaceState,
   type RagSetting,
   type ModelType,
+  type SearchSelection,
   DEFAULT_WORKSPACE_STATE,
   DEFAULT_RAG_SETTING,
   DEFAULT_WORKSPACE_FOLDER,
@@ -17,6 +18,7 @@ import {
   normalizeDeprecatedModelIdentifier,
 } from "../types";
 import { formatError } from "../utils/error";
+import { searchSelectionFromWorkspace } from "./webSearch";
 
 const WORKSPACE_STATE_FILENAME = "gemini-workspace.json";
 const OLD_WORKSPACE_STATE_FILENAME = ".gemini-workspace.json";
@@ -84,6 +86,13 @@ export class WorkspaceStateManager {
     const content = await this.app.vault.adapter.read(filePath);
     const loaded = JSON.parse(content) as Partial<WorkspaceState>;
     this.workspaceState = { ...DEFAULT_WORKSPACE_STATE, ragSettings: {}, ...loaded };
+    const legacyWebSearch = this.workspaceState.selectedRagSetting === "__websearch__";
+    const selection = searchSelectionFromWorkspace(
+      this.workspaceState.selectedRagSetting,
+      loaded.webSearchEnabled,
+    );
+    this.workspaceState.selectedRagSetting = selection.ragSetting;
+    this.workspaceState.webSearchEnabled = selection.webSearch;
     if (this.workspaceState.selectedModel) {
       this.workspaceState.selectedModel = normalizeDeprecatedModelIdentifier(this.workspaceState.selectedModel) as ModelType;
     }
@@ -94,6 +103,10 @@ export class WorkspaceStateManager {
         ...DEFAULT_RAG_SETTING,
         ...setting,
       };
+    }
+
+    if (legacyWebSearch) {
+      await this.app.vault.adapter.write(filePath, JSON.stringify(this.workspaceState, null, 2));
     }
   }
 
@@ -145,6 +158,13 @@ export class WorkspaceStateManager {
     this.workspaceState.selectedRagSetting = name;
     await this.saveWorkspaceState();
     this.settingsEmitter.emit("rag-setting-changed", name);
+  }
+
+  async selectSearchSelection(selection: SearchSelection): Promise<void> {
+    this.workspaceState.selectedRagSetting = selection.ragSetting;
+    this.workspaceState.webSearchEnabled = selection.webSearch;
+    await this.saveWorkspaceState();
+    this.settingsEmitter.emit("search-selection-changed", { ...selection });
   }
 
   // Select a model

@@ -10,6 +10,8 @@ timestamp: 2026-07-05T00:00:00Z
 
 If image generation is unavailable, check that an image-capable model is selected on a provider that supports it, such as Gemini image models or DALL-E via OpenAI.
 
+If a model says it cannot browse or only has vault tools, open the search menu beside the model picker and confirm **Web search** is checked and active; asking for current information in the prompt does not enable the tool automatically. Web and one RAG setting may be selected together. Web search is active for Gemini and for official OpenAI (`api.openai.com`), Anthropic (`api.anthropic.com`), or Grok (`api.x.ai`) API providers. A remembered Web selection is disabled while the current model is incompatible and reactivates after switching back. When a response actually searches it shows the **Used web search** badge and cited-source links. Provider errors are shown directly when a selected model does not support its provider's native search tool.
+
 If the AI cannot find vault content, check vault tool mode, AI Folder Access restrictions, RAG selection, and whether the file was explicitly attached or mentioned. Vault: Off disables vault tools. Vault: No search disables search and list tools.
 
 If RAG misses content, check whether the target folder is included, the file type is supported, exclude patterns do not match the file, and sync has run after the latest edits. Also confirm the RAG setting's embedding endpoint is reachable and the embedding model exists; embedding API rate limits can slow or fail sync. If a PDF is synced but never retrieved, text extraction may have produced no content (for example image-only scanned PDFs).

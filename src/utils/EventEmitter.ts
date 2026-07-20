@@ -1,8 +1,11 @@
+import type { SearchSelection } from "../types";
+
 // Simple browser-compatible EventEmitter with type-safe events
 export interface EventMap {
   "settings-updated": [settings: unknown];
   "workspace-state-loaded": [state: unknown];
   "rag-setting-changed": [name: string | null];
+  "search-selection-changed": [selection: SearchSelection];
   "chat-activated": [];
   "file-restored": [path: string];
   "execution-history-saved": [workflowPath: string];

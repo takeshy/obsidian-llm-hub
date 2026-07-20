@@ -3,6 +3,7 @@
 //   Gemini: https://ai.google.dev/pricing
 //   OpenAI: https://platform.openai.com/docs/pricing
 //   Anthropic: https://docs.anthropic.com/en/docs/about-claude/models
+//   xAI: https://docs.x.ai/developers/pricing
 
 export interface TokenPricing {
   input: number;
@@ -37,6 +38,11 @@ export const MODEL_PRICING: Record<string, TokenPricing> = {
   "claude-opus-4-5":   { input: 5.00 / 1e6, output: 25.00 / 1e6 },
   "claude-sonnet-4-5": { input: 3.00 / 1e6, output: 15.00 / 1e6 },
   "claude-haiku-4-5":  { input: 1.00 / 1e6, output:  5.00 / 1e6 },
+
+  // xAI models (used only as a fallback; xAI normally returns exact billed cost)
+  "grok-4.5":  { input: 2.00 / 1e6, output: 6.00 / 1e6 },
+  "grok-4.3":  { input: 1.25 / 1e6, output: 2.50 / 1e6 },
+  "grok-4.20": { input: 1.25 / 1e6, output: 2.50 / 1e6 },
 };
 
 /**
@@ -72,6 +78,7 @@ const KNOWN_MODELS_BY_PROVIDER: Record<string, string[]> = {
   gemini: Object.keys(MODEL_PRICING).filter(k => k.startsWith("gemini-")),
   openai: Object.keys(MODEL_PRICING).filter(k => k.startsWith("gpt-") || /^o\d/.test(k)),
   anthropic: Object.keys(MODEL_PRICING).filter(k => k.startsWith("claude-")),
+  grok: Object.keys(MODEL_PRICING).filter(k => k.startsWith("grok-")),
   opencodego: OPENCODE_GO_FALLBACK_MODELS,
 };
 

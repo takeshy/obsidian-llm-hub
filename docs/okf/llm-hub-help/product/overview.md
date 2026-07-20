@@ -12,7 +12,7 @@ LLM Hub is a free and open-source desktop Obsidian plugin for using multiple AI 
 
 Main feature areas:
 
-- AI Chat with streaming responses, file attachments, slash commands, mentions, vault tools, web search, MCP tools, and optional RAG.
+- AI Chat with streaming responses, file attachments, slash commands, mentions, vault tools, MCP tools, and independent Web Search plus optional RAG that can be used together.
 - Agent Skills with built-in Obsidian Markdown, Canvas, Bases, and Dashboard skills, plus vault-authored and external skills.
 - Workflow Builder for multi-step automations defined in Markdown `workflow` code blocks and edited visually.
 - RAG using local embedding vector search for semantic retrieval across vault content.
@@ -21,7 +21,7 @@ Main feature areas:
 - Dashboard files with responsive widget grids for Bases, files, web pages, workflows, kanban, timelines, and memos.
 - Edit history, safe edit confirmations, AI folder access limits, and optional encryption.
 
-Provider API keys and local/CLI configuration determine which models and capabilities are available. Gemini-specific features include Gemini web search, Deep Research, and Gemini image generation.
+Provider API keys and local/CLI configuration determine which models and capabilities are available. Native web search is available through Gemini and official OpenAI, Anthropic, or xAI API endpoints and can synthesize provider search results with locally retrieved RAG context; Deep Research and Gemini image generation remain Gemini-specific.
 
 # Citations
 

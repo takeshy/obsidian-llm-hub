@@ -15,7 +15,7 @@
 - **セマンティック検索（RAG）** - 専用検索タブ、PDF プレビュー、検索結果からチャットへの連携を備えたローカルベクトル検索
 - **AI Discussion** - 並列応答、投票、勝者決定を備えたマルチモデル討論アリーナ
 - **編集履歴** - AI による変更を差分表示で追跡・復元
-- **Web 検索** - Google 検索で最新情報を取得（Gemini）
+- **Web 検索** - Gemini、OpenAI 公式 API、Anthropic 公式 API、xAI 公式 API から引用付きの最新情報を取得
 - **画像生成** - Gemini または DALL-E で画像を作成
 - **Discord 連携** - LLM を Discord の chat bot として接続し、チャンネルごとにモデル/RAG を切り替え可能
 - **暗号化** - チャット履歴とワークフロー実行ログをパスワード保護
@@ -26,14 +26,16 @@
 | プロバイダー | チャット | Vault ツール | Web 検索 | 画像生成 | RAG |
 |----------|------|-------------|------------|-----------|-----|
 | **Gemini** (API) | ✅ Streaming | ✅ Function calling | ✅ Google Search | ✅ Gemini 画像モデル | ✅ |
-| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ❌ | ✅ DALL-E | ✅ |
-| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ❌ | ❌ | ✅ |
+| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ ネイティブ検索（公式 API） | ✅ DALL-E | ✅ |
+| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ ネイティブ検索（公式 API） | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
-| **Grok** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
+| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ ネイティブ検索（xAI 公式 API） | ❌ | ✅ |
 | **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
 | **ローカル LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling（自動フォールバック） | ❌ | ❌ | ✅ |
 | **ローカル LLM** (Ollama, OpenCode) | ✅ Streaming | ❌（マーカーモード） | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
+
+Web 検索は Gemini、および公式 API ホストを使用する OpenAI / Anthropic / Grok プロバイダーで表示されます。プロンプトを送信する前に検索メニューを開き、**Web search** をチェックしてください。Web 検索と 1 つのセマンティック検索（RAG）設定を同時に有効にできるため、モデルは最新の Web 情報と Vault から取得したコンテキストを統合できます。モデルに検索を依頼するだけではツールは有効になりません。有効化後も検索するかどうかはモデルが判断します。回答にはインラインの引用リンクと、引用元をまとめたクリック可能な一覧が表示されます。カスタムゲートウェイや OpenAI 互換ゲートウェイは、プロバイダー固有のネイティブ検索には対応扱いになりません。
 
 > [!TIP]
 > **複数のプロバイダーを同時に設定可能。** チャット中にモデルを自由に切り替えられます — 各プロバイダーは独自の API キーと設定を持ちます。
@@ -69,6 +71,22 @@ AI チャット機能は、Obsidian Vault と統合された、選択した LLM 
 - **+ ボタン** - 新規チャット
 - **履歴ボタン** - 過去のチャットを読み込み
 - **入力欄の ↑ / ↓** - チャットやObsidianの再起動をまたいで、送信済みプロンプトを最大100件遡ります。↑は先頭行、↓は末尾行にカーソルがある場合だけ履歴移動するため、複数行では通常どおりカーソルを移動できます。最新より先へ進むと未送信の下書きに戻ります。
+
+## Web 検索
+
+対応する API モデルを選び、モデル選択の横にある検索メニューを開いて **Web search** をチェックしてから送信します。同じメニューで 1 つのセマンティック検索設定も選択できます。両方が有効な場合、Vault から取得したコンテキストを追加したうえで、プロバイダーのネイティブ Web 検索ツールを利用できます。プロンプトに「Web を検索して」と書くだけでは検索は有効になりません。
+
+Web と RAG の選択はワークスペースごとに保存されます。非対応モデルへ切り替えた場合も設定は保持され、一時的に無効として表示されます。対応モデルへ戻ると自動的に再有効化されます。複数のインデックスを検索する場合は、既存の結合 RAG 設定を使用してください。
+
+- **Gemini:** Google Search Grounding を使用します。
+- **OpenAI:** `api.openai.com` のみ対応し、Responses API で検索します。Vault / MCP の Function Tool と併用できます。画像生成モデルは対象外です。
+- **Anthropic:** `api.anthropic.com` のみ対応し、ネイティブの Server Tool で検索します。Vault / MCP の Client Tool と併用できます。
+- **Grok:** `api.x.ai` のみ対応し、xAI の Responses API で検索します。Vault / MCP の Function Tool と併用できます。画像・動画生成モデルは対象外です。
+- **その他:** OpenRouter、カスタムゲートウェイ、ローカル LLM、CLI プロバイダーはネイティブ検索の対象外です。
+
+チャットモデルの固定許可リストはありません。互換性のある現在および将来のモデルは検索を利用でき、非対応モデルではプロバイダーのエラーがそのまま表示されます。開発時のライブ確認では OpenAI GPT-5.6 Sol、Anthropic Claude Opus 4.8、Sonnet 5、Fable 5、Haiku 4.5 を検証し、Grok 4.5 は Responses ストリームの自動テストで確認しています。
+
+表示されるのは引用されたソースのみです。引用位置には番号付き Markdown リンクが挿入され、xAI が返すインライン Markdown 引用はそのまま保持されます。重複を除いたソースは **Used web search** バッジの下にクリック可能な項目として表示されます。検索ソースとプロバイダー固有の継続データはチャット履歴に保存され、エンドポイント、モデル、履歴範囲が一致する後続ターンで再利用されます。OpenAI / Anthropic の検索料金は現在 1 回 `$0.01` として見積もり、xAI はレスポンスに含まれる正確な請求額（Web 検索は現在 1 回 `$0.005`）を使用します。
 
 ## スラッシュコマンド
 
@@ -590,7 +608,10 @@ Secret Manager ウィジェットは、プラグインの既存の暗号化鍵�
 
 | モデル | 説明 |
 |-------|-------------|
-| GPT-5.4 | 最新のフラッグシップモデル |
+| GPT-5.6 Sol | GPT-5.6 の最高品質モデル、Web 検索をライブ検証済み |
+| GPT-5.6 Terra | 性能とコストのバランスを重視した GPT-5.6 モデル |
+| GPT-5.6 Luna | 高速・低コストの GPT-5.6 モデル |
+| GPT-5.4 | 以前のフラッグシップモデル |
 | GPT-5.4-mini | コスト効率の高い中間モデル |
 | GPT-5.4-nano | 軽量・高速モデル |
 | O3 | 推論モデル |
@@ -600,9 +621,12 @@ Secret Manager ウィジェットは、プラグインの既存の暗号化鍵�
 
 | モデル | 説明 |
 |-------|-------------|
+| Claude Opus 4.8 | 高度な推論とエージェント処理、Web 検索をライブ検証済み |
+| Claude Sonnet 5 | バランスの取れたフロンティアモデル、Web 検索をライブ検証済み |
+| Claude Fable 5 | 高性能モデル、Web 検索をライブ検証済み |
 | Claude Opus 4.6 | 最高性能モデル、拡張思考 |
 | Claude Sonnet 4.6 | パフォーマンスとコストのバランス |
-| Claude Haiku 4.5 | 高速・軽量モデル |
+| Claude Haiku 4.5 | 高速・軽量モデル、Web 検索をライブ検証済み |
 
 ### OpenRouter / Grok / カスタム
 
@@ -923,7 +947,7 @@ Vault のコンテンツを LLM の会話に注入するローカルベクトル
    - **デフォルト（Gemini）：** Embedding Base URL を空のまま — Gemini API キーで Gemini Embedding API を使用
    - **カスタムサーバー（Ollama 等）：** Embedding Base URL を設定してモデルを選択
 4. **Sync** をクリックして Vault からベクトルインデックスを構築
-5. ドロップダウンで RAG 設定を選択して有効化
+5. 検索メニューで RAG 設定を選択して有効化（Web Search は同時にチェック可能）
 
 | 設定 | 説明 | デフォルト |
 |------|------|-----------|
@@ -1035,7 +1059,7 @@ Vault からの同期の代わりに、事前構築済みのインデックス�
 **LLM プロバイダーに送信されるデータ：**
 
 - チャットメッセージと添付ファイルは、設定された API プロバイダー（Gemini、OpenAI、Anthropic、OpenRouter、Grok、またはカスタムエンドポイント）に送信されます
-- Web 検索を有効にすると（Gemini のみ）、検索クエリが Google Search に送信されます
+- Web 検索を有効にすると、検索クエリが選択したプロバイダーのネイティブ検索サービス（Gemini は Google、OpenAI は OpenAI Web Search、Anthropic は Anthropic Web Search、Grok は xAI Web Search）に送信されます
 - ローカル LLM プロバイダーはローカルサーバーにのみデータを送信します
 
 **サードパーティサービスへの送信：**

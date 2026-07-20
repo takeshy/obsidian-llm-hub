@@ -32,7 +32,17 @@ Vault tools let the AI read, create, search, rename, edit, and delete notes and 
 
 The Database icon tool menu also contains **Previous messages (0-99)**. It controls how many messages before the current prompt are sent to the model. A value of 0 disables prior conversation injection and sends only the current prompt; this is useful when processing unrelated PDFs or notes one at a time. The selected value is saved in workspace state and applies across supported chat providers.
 
-Chat can also use web search, selected RAG stores, MCP servers, a sandboxed `execute_javascript` tool, active skills (via `run_skill_workflow` and `run_skill_script`), and active OKF knowledge.
+# Web Search
+
+Web search is available with Gemini and with OpenAI, Anthropic, or Grok providers configured to use their official API hosts. Open the search menu beside the model picker and check **Web search** before sending the prompt. The same menu can select one Semantic Search (RAG) setting, and both may be active together. RAG context is retrieved and injected before the provider receives the prompt with its native web-search tool enabled, allowing one response to synthesize vault and web information. Asking the model to browse does not enable search by itself; the model still decides whether to call the enabled web tool.
+
+Web and RAG preferences are saved per workspace. An unsupported capability remains remembered but inactive across model switches and automatically returns when a compatible model is selected. Combined RAG settings remain the way to search several underlying indexes from Chat.
+
+OpenAI and Grok search use their providers' Responses APIs, while Anthropic search uses its native server tool. All can coexist with vault and MCP tools. Custom gateways, OpenRouter, local LLMs, CLI providers, OpenAI image-generation models, and Grok image/video-generation models do not expose this option. There is no fixed chat-model allowlist: unsupported models return their provider's error. Development smoke tests covered GPT-5.6 Sol and Claude Opus 4.8, Sonnet 5, Fable 5, and Haiku 4.5; automated Responses-stream tests cover Grok 4.5.
+
+Only cited sources are shown. OpenAI and Anthropic citation positions are rendered as numbered Markdown links; xAI's native inline Markdown citations are preserved. Sources are deduplicated into clickable pills beneath the **Used web search** badge. Chat history stores cited-source metadata and opaque provider continuation items for later turns. Native continuation is replayed only while the endpoint and model match and the associated user/assistant pair remains inside the configured previous-message limit; otherwise visible assistant text is used. xAI's exact billed cost is used when present, including token and server-tool charges.
+
+Chat can also use selected RAG stores, MCP servers, a sandboxed `execute_javascript` tool, active skills (via `run_skill_workflow` and `run_skill_script`), and active OKF knowledge.
 
 Chat history is stored as Markdown files under the configured workspace folder when history saving is enabled. History files can optionally be encrypted with the chat history encryption setting. The saved chat remains complete even when the conversation context limit sends only a subset of its messages to the model.
 
