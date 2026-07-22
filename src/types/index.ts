@@ -621,7 +621,8 @@ export function getApiProviderModelName(model: string): string {
 
 export function normalizeDeprecatedGeminiModelName(model: string): string {
   if (model === "gemini-3-flash-preview") return "gemini-3.6-flash";
-  if (model === "gemini-3.1-flash-lite-preview") return "gemini-3.1-flash-lite";
+  if (model === "gemini-3.1-flash-lite-preview") return "gemini-3.5-flash-lite";
+  if (model === "gemini-3.1-flash-lite" || model === "gemini-2.5-flash-lite") return "gemini-3.5-flash-lite";
   return model;
 }
 

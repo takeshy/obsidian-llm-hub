@@ -228,11 +228,10 @@ function collectWebSources(value: unknown, sources: WebSearchSource[]): void {
 // Source: https://ai.google.dev/pricing
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   "gemini-2.5-flash":       { input: 0.30 / 1e6, output: 2.50 / 1e6 },
-  "gemini-2.5-flash-lite":  { input: 0.10 / 1e6, output: 0.40 / 1e6 },
   "gemini-2.5-pro":         { input: 1.25 / 1e6, output: 10.00 / 1e6 },
   "gemini-3.6-flash": { input: 1.50 / 1e6, output: 7.50 / 1e6 },
   "gemini-3.5-flash": { input: 0.50 / 1e6, output: 3.00 / 1e6 },
-  "gemini-3.1-flash-lite": { input: 0.25 / 1e6, output: 1.50 / 1e6 },
+  "gemini-3.5-flash-lite": { input: 0.30 / 1e6, output: 2.50 / 1e6 },
   "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3-pro-image-preview": { input: 2.00 / 1e6, output: 120.00 / 1e6 },
@@ -249,9 +248,8 @@ const SEARCH_GROUNDING_COST: Record<string, number> = {
   "gemini-3.1-pro-preview-customtools": 14 / 1000,
   "gemini-3-pro-image-preview": 14 / 1000,
   "gemini-3.1-flash-image-preview": 14 / 1000,
-  "gemini-3.1-flash-lite": 14 / 1000,
+  "gemini-3.5-flash-lite": 14 / 1000,
   "gemini-2.5-flash":       35 / 1000,
-  "gemini-2.5-flash-lite":  35 / 1000,
   "gemini-2.5-pro":         35 / 1000,
 };
 
@@ -499,7 +497,8 @@ export class GeminiClient {
         ? { includeThoughts: true, thinkingLevel: "HIGH" as ThinkingLevel }
         : { thinkingLevel: "LOW" as ThinkingLevel };
     }
-    if (modelLower.includes("gemini-3.1-flash-lite")) {
+    // Gemini 3.5 Flash Lite uses thinkingLevel; minimal is the API default.
+    if (modelLower.includes("gemini-3.5-flash-lite")) {
       if (!enableThinking) return undefined;
       return { includeThoughts: true, thinkingLevel: "HIGH" as ThinkingLevel };
     }
@@ -507,11 +506,6 @@ export class GeminiClient {
     // gemini-3-pro / gemini-3.1-pro models require thinking — cannot disable
     const thinkingRequired = modelLower.includes("gemini-3-pro") || modelLower.includes("gemini-3.1-pro");
     if (!enableThinking && !thinkingRequired) return { thinkingBudget: 0 };
-
-    // gemini-2.5-flash-lite requires thinkingBudget: -1 to enable
-    if (modelLower === "gemini-2.5-flash-lite") {
-      return { includeThoughts: true, thinkingBudget: -1 };
-    }
 
     return { includeThoughts: true };
   }
@@ -1288,7 +1282,9 @@ export class GeminiClient {
       // Gemma 4: thinking config not supported via Interactions API
       if (modelLower.includes("gemma-4")) return undefined;
       // Gemini 3.6 Flash currently accepts low/high (not medium).
-      if (modelLower.includes("gemini-3.6-flash")) return enableThinking ? "high" : "low";
+      if (modelLower.includes("gemini-3.6-flash") || modelLower.includes("gemini-3.5-flash-lite")) {
+        return enableThinking ? "high" : "low";
+      }
       // Pro models require thinking — always return high
       const thinkingRequired = modelLower.includes("gemini-3-pro") || modelLower.includes("gemini-3.1-pro");
       if (thinkingRequired) return "high";

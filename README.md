@@ -580,7 +580,7 @@ The Secret Manager widget stores each value as a separate `.encrypted` vault fil
 | Gemini 3.1 Pro Preview (Custom Tools) | Optimized for agentic workflows with custom tools and bash |
 | Gemini 3.6 Flash | Latest GA Flash model, 1M context, optimized for agentic and multimodal tasks |
 | Gemini 3.5 Flash | Fast model, 1M context, best cost-performance |
-| Gemini 3.1 Flash Lite | Most cost-effective model with high performance |
+| Gemini 3.5 Flash Lite | Latest fast, low-cost model with 1M context |
 | Gemini 2.5 Flash | Fast model, 1M context |
 | Gemini 2.5 Pro | Pro model, 1M context |
 | Gemini 3 Pro (Image) | Pro image generation, 4K |

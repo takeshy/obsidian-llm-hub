@@ -26,6 +26,21 @@ function createManager(initialContent: string) {
 }
 
 describe("WorkspaceStateManager combined search persistence", () => {
+  it.each([
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+  ])("migrates deprecated Gemini Flash Lite model %s", async (legacyModel) => {
+    const harness = createManager(JSON.stringify({
+      selectedModel: `api:gemini:${legacyModel}`,
+      ragSettings: {},
+    }));
+
+    await harness.manager.loadWorkspaceState();
+
+    expect(harness.manager.workspaceState.selectedModel).toBe("api:gemini:gemini-3.5-flash-lite");
+  });
+
   it("migrates and rewrites the legacy Web-only sentinel", async () => {
     const harness = createManager(JSON.stringify({
       selectedRagSetting: "__websearch__",

@@ -500,7 +500,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [decryptPassword, setDecryptPassword] = useState("");
 	// Pending feedback for edit rejection (to be sent after state update)
 	const [pendingEditFeedback, setPendingEditFeedback] = useState<{ filePath: string; request: string } | null>(null);
-	// Per-model always-think toggles (set of full model IDs, e.g. "api:gemini:gemini-2.5-flash-lite")
+	// Per-model always-think toggles (set of full model IDs, e.g. "api:gemini:gemini-3.5-flash-lite")
 	const [alwaysThinkModels, setAlwaysThinkModels] = useState<Set<string>>(() => {
 		// Load from workspace state if available
 		const saved = plugin.workspaceState.alwaysThinkModels;
