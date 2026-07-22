@@ -134,6 +134,9 @@ export interface LlmHubSettings {
 
   // Workspace settings
   workspaceFolder: string;
+  skillsFolder: string;
+  // Legacy field — renamed to `skillsFolder` at load time and then dropped.
+  skillsFolderPath?: string;
   hideWorkspaceFolder: boolean;
   saveChatHistory: boolean;
   systemPrompt: string;
@@ -980,7 +983,7 @@ export const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
 
 /** Default workspace folder name. */
 export const DEFAULT_WORKSPACE_FOLDER = "LLMHub";
-/** Fixed skills folder name. */
+/** Default skills folder path. */
 export const SKILLS_FOLDER = "skills";
 /** Fixed workflows folder name. */
 export const WORKFLOWS_FOLDER = "workflows";
@@ -990,6 +993,7 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   cliConfig: DEFAULT_CLI_CONFIG,
   localLlmConfigs: [],
   workspaceFolder: DEFAULT_WORKSPACE_FOLDER,
+  skillsFolder: SKILLS_FOLDER,
   hideWorkspaceFolder: true,
   saveChatHistory: true,
   systemPrompt: "",

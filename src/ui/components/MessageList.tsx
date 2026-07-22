@@ -22,6 +22,7 @@ interface MessageListProps {
   alwaysThink?: boolean;
   app: App;
   localLlmConfigs?: LocalLlmConfig[];
+  skillsFolder?: string;
   currentDashboard?: DashboardLink | null;
   onOpenDashboard?: () => void;
   onCreateDashboard?: () => void;
@@ -50,6 +51,7 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
   alwaysThink,
   app,
   localLlmConfigs,
+  skillsFolder,
   currentDashboard,
   onOpenDashboard,
   onCreateDashboard,
@@ -160,6 +162,7 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
           onDiscardEdit={onDiscardEdit ? () => onDiscardEdit(index) : undefined}
           app={app}
           localLlmConfigs={localLlmConfigs}
+          skillsFolder={skillsFolder}
         />
       ))}
 
@@ -174,6 +177,7 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
           isStreaming
           app={app}
           localLlmConfigs={localLlmConfigs}
+          skillsFolder={skillsFolder}
         />
       )}
 

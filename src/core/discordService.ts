@@ -11,7 +11,7 @@
 import { App, Notice, requestUrl } from "obsidian";
 import type { LlmHubPlugin } from "../plugin";
 import type { DiscordSettings, Message, ToolDefinition, ModelType, SlashCommand, ProviderContinuation, WebSearchCitation, WebSearchSource } from "../types";
-import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, localLlmDisplayName } from "../types";
+import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, localLlmDisplayName, SKILLS_FOLDER } from "../types";
 import { getEnabledTools, skillScriptTool, skillWorkflowTool } from "./tools";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "../workflow/workflowSpec";
 import { createToolExecutor } from "../vault/toolExecutor";
@@ -690,7 +690,7 @@ export class DiscordService {
 
   private async handleSkillCommand(arg: string, channelId: string): Promise<{ reply: string; overrideContent?: string }> {
     const slashCommands = this.plugin.settings.slashCommands || [];
-    const folderSkills = await discoverSkills(this.app);
+    const folderSkills = await discoverSkills(this.app, this.plugin.settings.skillsFolder || SKILLS_FOLDER);
     const conversation = this.getConversation(channelId);
 
     if (!arg) {
@@ -1024,7 +1024,7 @@ export class DiscordService {
     const loadedSkills: LoadedSkill[] = [];
     const activeSkillPaths = conversation.activeSkillPaths || [];
     if (activeSkillPaths.length > 0) {
-      const allSkills = await discoverSkills(this.app);
+      const allSkills = await discoverSkills(this.app, this.plugin.settings.skillsFolder || SKILLS_FOLDER);
       for (const path of activeSkillPaths) {
         const meta = allSkills.find(s => s.folderPath === path);
         if (meta) {

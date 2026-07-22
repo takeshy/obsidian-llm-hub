@@ -11,6 +11,7 @@ import {
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { t } from "src/i18n";
 import { formatError } from "src/utils/error";
+import { SKILLS_FOLDER } from "src/types";
 import type { SettingsContext } from "./settingsContext";
 
 // Fetched once per Obsidian session (on the first settings open after startup)
@@ -24,6 +25,12 @@ let loading = false;
 let loadError: string | null = null;
 let selectedSkillId = "";
 
+export function invalidateExternalSkillSettings(): void {
+  installedCache = null;
+  loadSucceeded = false;
+  loadError = null;
+}
+
 async function loadState(ctx: SettingsContext, force: boolean): Promise<void> {
   if (loading) return;
   if (!force && loadSucceeded) return;
@@ -32,7 +39,7 @@ async function loadState(ctx: SettingsContext, force: boolean): Promise<void> {
   try {
     const [catalog, installed] = await Promise.all([
       fetchSkillCatalog(ctx.plugin.manifest.id, ctx.plugin.manifest.version),
-      listInstalledSkills(ctx.plugin.app),
+      listInstalledSkills(ctx.plugin.app, ctx.plugin.settings.skillsFolder || SKILLS_FOLDER),
     ]);
     catalogCache = catalog;
     installedCache = installed;
@@ -63,6 +70,7 @@ async function installSkill(ctx: SettingsContext, id: string): Promise<void> {
       [id],
       ctx.plugin.manifest.id,
       ctx.plugin.manifest.version,
+      ctx.plugin.settings.skillsFolder || SKILLS_FOLDER,
     );
     if (result.installed.includes(id)) {
       ctx.plugin.settingsEmitter.emit("skills-changed");

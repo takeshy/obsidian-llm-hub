@@ -7,7 +7,7 @@ import XCircle from "lucide-react/dist/esm/icons/x-circle";
 import Download from "lucide-react/dist/esm/icons/download";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import type { Message, ToolCall, ToolResult, LocalLlmConfig } from "src/types";
-import { isApiProviderModel, isLocalLlmModel, getLocalLlmId, getLocalLlmModelName, localLlmDisplayName } from "src/types";
+import { isApiProviderModel, isLocalLlmModel, getLocalLlmId, getLocalLlmModelName, localLlmDisplayName, SKILLS_FOLDER } from "src/types";
 import { HTMLPreviewModal, extractHtmlFromCodeBlock } from "./HTMLPreviewModal";
 import { McpAppRenderer } from "./McpAppRenderer";
 import { discoverSkills } from "src/core/skillsLoader";
@@ -25,6 +25,7 @@ interface MessageBubbleProps {
   onDiscardEdit?: () => void;
   app: App;
   localLlmConfigs?: LocalLlmConfig[];
+  skillsFolder?: string;
 }
 
 export default function MessageBubble({
@@ -35,6 +36,7 @@ export default function MessageBubble({
   onDiscardEdit,
   app,
   localLlmConfigs,
+  skillsFolder,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
@@ -502,7 +504,7 @@ export default function MessageBubble({
 
       {/* Skills used indicator — vault skills are clickable to open SKILL.md; built-in skills are displayed as plain labels */}
       {message.skillsUsed && message.skillsUsed.length > 0 && (
-        <SkillsUsedIndicator skillNames={message.skillsUsed} app={app} />
+        <SkillsUsedIndicator skillNames={message.skillsUsed} app={app} skillsFolder={skillsFolder} />
       )}
 
       {/* Semantic search indicator with sources */}
@@ -834,12 +836,12 @@ export default function MessageBubble({
  * Built-in skills (bundled with the plugin) are rendered as plain chips
  * because they have no vault file to open.
  */
-function SkillsUsedIndicator({ skillNames, app }: { skillNames: string[]; app: App }) {
+function SkillsUsedIndicator({ skillNames, app, skillsFolder }: { skillNames: string[]; app: App; skillsFolder?: string }) {
   const [skillMap, setSkillMap] = useState<Map<string, { path: string; builtin: boolean }>>(new Map());
 
   useEffect(() => {
     let cancelled = false;
-    void discoverSkills(app).then((skills) => {
+    void discoverSkills(app, skillsFolder || SKILLS_FOLDER).then((skills) => {
       if (cancelled) return;
       const map = new Map<string, { path: string; builtin: boolean }>();
       for (const s of skills) {
@@ -848,7 +850,7 @@ function SkillsUsedIndicator({ skillNames, app }: { skillNames: string[]; app: A
       setSkillMap(map);
     });
     return () => { cancelled = true; };
-  }, [app, skillNames]);
+  }, [app, skillNames, skillsFolder]);
 
   return (
     <div className="llm-hub-skills-used">

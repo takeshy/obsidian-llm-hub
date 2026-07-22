@@ -493,7 +493,7 @@ export class AIWorkflowModal extends Modal {
       const pathContainer = contentEl.createDiv({ cls: "ai-workflow-input-row" });
       pathContainer.createEl("label", { text: t("aiWorkflow.outputPath") });
       const defaultPath = this.forceSkill
-        ? `${SKILLS_FOLDER}/{{name}}`
+        ? `${this.plugin.settings.skillsFolder || SKILLS_FOLDER}/{{name}}`
         : this.defaultOutputPath || `${WORKFLOWS_FOLDER}/{{name}}`;
       this.outputPathEl = pathContainer.createEl("input", {
         type: "text",

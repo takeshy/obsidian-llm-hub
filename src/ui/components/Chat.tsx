@@ -48,6 +48,7 @@ import {
 	type ProviderContinuation,
 	isImageGenerationModel,
 	DEFAULT_WORKSPACE_FOLDER,
+	SKILLS_FOLDER,
 } from "src/types";
 import { getGeminiClient, isThinkingRequired } from "src/core/gemini";
 import { tracing } from "src/core/tracingHooks";
@@ -964,7 +965,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 	// Discover skills (on mount + when skills-changed is emitted)
 	const refreshSkills = useCallback(() => {
-		void discoverSkills(plugin.app).then(setAvailableSkills);
+		void discoverSkills(plugin.app, plugin.settings.skillsFolder || SKILLS_FOLDER).then(setAvailableSkills);
 	}, [plugin]);
 
 	useEffect(() => {
@@ -3988,6 +3989,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 							alwaysThink={getThinkingToggle() === true}
 							app={plugin.app}
 							localLlmConfigs={plugin.settings.localLlmConfigs}
+							skillsFolder={plugin.settings.skillsFolder}
 							currentDashboard={currentDashboard ? {
 								basename: currentDashboard.basename,
 								path: currentDashboard.path,

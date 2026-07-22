@@ -11,6 +11,7 @@ import { displayEncryptionSettings } from "src/ui/settings/encryptionSettings";
 import { displayLangfuseSettings } from "src/ui/settings/langfuseSettings";
 import { displaySlashCommandSettings } from "src/ui/settings/slashCommandSettings";
 import { displayExternalSkillSettings } from "src/ui/settings/externalSkillSettings";
+import { displaySkillsSettings } from "src/ui/settings/skillsSettings";
 import { displayRagSettings } from "src/ui/settings/ragSettings";
 import { displayMcpServersSettings } from "src/ui/settings/mcpServersSettings";
 import { displayApiProviderSettings } from "src/ui/settings/apiProviderSettings";
@@ -47,6 +48,7 @@ export class SettingsTab extends PluginSettingTab {
     displayEncryptionSettings(containerEl, ctx);
     displayLangfuseSettings(containerEl, ctx);
     displaySlashCommandSettings(containerEl, ctx);
+    displaySkillsSettings(containerEl, ctx);
     displayExternalSkillSettings(containerEl, ctx);
     displayRagSettings(containerEl, ctx);
     displayMcpServersSettings(containerEl, ctx);

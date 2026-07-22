@@ -358,7 +358,9 @@ export class WorkspaceStateManager {
       delete data.chatsFolder;
       needsSave = true;
     }
-    if (data.skillsFolderPath !== undefined) {
+    // Restore the pre-1.10 configurable skills folder under its current name.
+    if (typeof data.skillsFolderPath === "string" && data.skillsFolder === undefined) {
+      data.skillsFolder = data.skillsFolderPath;
       delete data.skillsFolderPath;
       needsSave = true;
     }

@@ -634,6 +634,11 @@ export class LlmHubPlugin extends Plugin {
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...loaded,
+      skillsFolder: typeof loaded.skillsFolder === "string"
+        ? loaded.skillsFolder
+        : (typeof loaded.skillsFolderPath === "string" ? loaded.skillsFolderPath : DEFAULT_SETTINGS.skillsFolder),
+      // Explicitly clear the pre-migration key so it doesn't get persisted back by saveSettings.
+      skillsFolderPath: undefined,
       cliConfig: normaliseCliConfig(loaded),
       // Deep copy arrays to avoid mutating DEFAULT_SETTINGS
       // Use loaded commands if present, otherwise use default commands

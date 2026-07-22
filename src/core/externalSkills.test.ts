@@ -68,11 +68,15 @@ describe("compareVersions", () => {
 describe("getSafeSkillTargetPath", () => {
   it("keeps normal files under the skill folder", () => {
     expect(getSafeSkillTargetPath("code-review", "code-review/SKILL.md")).toBe("skills/code-review/SKILL.md");
+    expect(getSafeSkillTargetPath("code-review", "code-review/SKILL.md", "System/skills"))
+      .toBe("System/skills/code-review/SKILL.md");
   });
 
   it("rejects paths that escape the skill folder", () => {
     expect(getSafeSkillTargetPath("code-review", "code-review/../other.md")).toBeNull();
     expect(getSafeSkillTargetPath("code-review", "../code-review/SKILL.md")).toBeNull();
+    expect(getSafeSkillTargetPath("code-review", "code-review/SKILL.md", "../skills")).toBeNull();
+    expect(getSafeSkillTargetPath("code-review", "code-review/SKILL.md", "./skills")).toBeNull();
   });
 });
 
