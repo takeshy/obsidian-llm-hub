@@ -2847,7 +2847,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 		// Initialize a GeminiClient with this provider's API key
 		const { GeminiClient } = await import("src/core/gemini");
-		const modelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "gemini-3.5-flash";
+		const modelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "gemini-3.6-flash";
 		const client = new GeminiClient(apiKey, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
 
 		let allowedModel = modelName as ModelType;
@@ -3412,6 +3412,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				let ragUsed = localRagSources.length > 0;
 				const ragSources: string[] = [...localRagSources];
 				let webSearchUsed = false;
+				let webSearchSources: Message["webSearchSources"];
 				let imageGenerationUsed = false;
 				const generatedImages: GeneratedImage[] = [];
 				let streamUsage: Message["usage"] = undefined;
@@ -3526,6 +3527,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						if (chunk.interactionId) {
 							streamInteractionId = chunk.interactionId;
 						}
+						webSearchSources = chunk.webSearchSources ?? webSearchSources;
 						break;
 				}
 			}
@@ -3562,6 +3564,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					ragUsed: ragUsed || undefined,
 					ragSources: ragSources.length > 0 ? ragSources : undefined,
 					webSearchUsed: webSearchUsed || undefined,
+					webSearchSources,
 					imageGenerationUsed: imageGenerationUsed || undefined,
 					generatedImages: generatedImages.length > 0 ? generatedImages : undefined,
 					thinking: thinkingContent || undefined,

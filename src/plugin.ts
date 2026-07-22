@@ -880,7 +880,7 @@ export class LlmHubPlugin extends Plugin {
     if (geminiApiKey) {
       // Use first available model from Gemini provider, or a reasonable default
       const geminiProvider = this.settings.apiProviders.find(p => p.type === "gemini" && p.enabled);
-      const defaultModel = geminiProvider?.enabledModels[0] || "gemini-3.5-flash";
+      const defaultModel = geminiProvider?.enabledModels[0] || "gemini-3.6-flash";
       initGeminiClient(geminiApiKey, defaultModel as ModelType, this.settings.proxyUrl, this.settings.proxyBypass);
     }
     initLangfuse(this.settings.langfuse);

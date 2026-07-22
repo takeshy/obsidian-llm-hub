@@ -12,6 +12,7 @@ import {
   type Chat,
   type ThinkingLevel,
   type Interactions,
+  ToolType,
 } from "@google/genai";
 import {
   DEFAULT_SETTINGS,
@@ -23,6 +24,7 @@ import {
   type ToolCall,
   type ModelType,
   type GeneratedImage,
+  type WebSearchSource,
 } from "src/types";
 import { tracing, type TracingUsage } from "src/core/tracingHooks";
 import { formatError } from "src/utils/error";
@@ -188,12 +190,47 @@ function corsFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   return nodeFetch(input, init);
 }
 
+function collectWebSources(value: unknown, sources: WebSearchSource[]): void {
+  if (typeof value === "string") {
+    // Server-side Google Search returns search_suggestions as an HTML snippet.
+    // In some tool-combination turns this is the only URL-bearing attribution.
+    const anchorPattern = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    for (const match of value.matchAll(anchorPattern)) {
+      const url = match[1].replace(/&amp;/g, "&");
+      const title = match[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim() || url;
+      if (/^https?:\/\//i.test(url) && !sources.some(source => source.url === url)) {
+        sources.push({ title, url });
+      }
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectWebSources(item, sources);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+
+  const record = value as Record<string, unknown>;
+  const rawUrl = [record.url, record.uri, record.link].find(candidate => typeof candidate === "string");
+  if (typeof rawUrl === "string" && /^https?:\/\//i.test(rawUrl)) {
+    const rawTitle = [record.title, record.name].find(candidate => typeof candidate === "string");
+    if (!sources.some(source => source.url === rawUrl)) {
+      sources.push({ title: typeof rawTitle === "string" ? rawTitle : rawUrl, url: rawUrl });
+    }
+  }
+
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === "object") collectWebSources(nested, sources);
+  }
+}
+
 // Model pricing per token (USD)
 // Source: https://ai.google.dev/pricing
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   "gemini-2.5-flash":       { input: 0.30 / 1e6, output: 2.50 / 1e6 },
   "gemini-2.5-flash-lite":  { input: 0.10 / 1e6, output: 0.40 / 1e6 },
   "gemini-2.5-pro":         { input: 1.25 / 1e6, output: 10.00 / 1e6 },
+  "gemini-3.6-flash": { input: 1.50 / 1e6, output: 7.50 / 1e6 },
   "gemini-3.5-flash": { input: 0.50 / 1e6, output: 3.00 / 1e6 },
   "gemini-3.1-flash-lite": { input: 0.25 / 1e6, output: 1.50 / 1e6 },
   "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
@@ -206,6 +243,7 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 // Gemini 3 models: $14/1K queries, Gemini 2.x: $35/1K prompts
 // Approximated as per-prompt since exact query count is not exposed by the API
 const SEARCH_GROUNDING_COST: Record<string, number> = {
+  "gemini-3.6-flash": 14 / 1000,
   "gemini-3.5-flash": 14 / 1000,
   "gemini-3.1-pro-preview": 14 / 1000,
   "gemini-3.1-pro-preview-customtools": 14 / 1000,
@@ -404,7 +442,7 @@ export class GeminiClient {
   private ai: GoogleGenAI;
   private model: ModelType;
 
-  constructor(apiKey: string, model: ModelType = "gemini-3.5-flash" as ModelType, proxyUrl?: string, proxyBypass?: string) {
+  constructor(apiKey: string, model: ModelType = "gemini-3.6-flash" as ModelType, proxyUrl?: string, proxyBypass?: string) {
     this.ai = new GoogleGenAI({ apiKey });
     this.model = model;
 
@@ -454,7 +492,13 @@ export class GeminiClient {
     // Gemma 4: thinking config not supported
     if (modelLower.includes("gemma-4")) return undefined;
 
-    // gemini-3.1-flash-lite: uses thinkingLevel instead of thinkingBudget
+    // New Gemini models use thinkingLevel instead of thinkingBudget.
+    // Gemini 3.6 Flash accepts LOW/HIGH (the API currently rejects MEDIUM).
+    if (modelLower.includes("gemini-3.6-flash")) {
+      return enableThinking
+        ? { includeThoughts: true, thinkingLevel: "HIGH" as ThinkingLevel }
+        : { thinkingLevel: "LOW" as ThinkingLevel };
+    }
     if (modelLower.includes("gemini-3.1-flash-lite")) {
       if (!enableThinking) return undefined;
       return { includeThoughts: true, thinkingLevel: "HIGH" as ThinkingLevel };
@@ -820,9 +864,19 @@ export class GeminiClient {
     return [{ functionDeclarations }];
   }
 
-  private shouldUseGenerateContentToolsApi(tools: ToolDefinition[], ragStoreIds?: string[]): boolean {
+  private shouldUseGenerateContentToolsApi(
+    tools: ToolDefinition[],
+    ragStoreIds?: string[],
+    webSearchEnabled?: boolean,
+  ): boolean {
     const modelLower = this.model.toLowerCase();
     if (ragStoreIds && ragStoreIds.length > 0) return false;
+    // Gemini 3.6 currently requires GenerateContent's
+    // includeServerSideToolInvocations opt-in when combining Google Search
+    // with client-side function calling.
+    if (modelLower.includes("gemini-3.6-flash") && webSearchEnabled && tools.length > 0) {
+      return true;
+    }
     if (!(modelLower.includes("gemini-3.1-pro") || modelLower.includes("gemini-3-pro"))) {
       return false;
     }
@@ -863,10 +917,13 @@ export class GeminiClient {
     let accumulatedOutput = "";
     let roundNumber = 0;
     let toolCallTraceCount = 0;
+    let webSearchUsed = false;
+    const webSearchSources: WebSearchSource[] = [];
 
     let contents = this.messagesToContents(messages);
     const generationTools = this.buildGenerateContentTools(tools, webSearchEnabled);
     const thinkingConfig = this.buildThinkingConfig(options?.enableThinking ?? true);
+    const combinesBuiltInAndFunctionTools = !!webSearchEnabled && tools.length > 0;
 
     try {
       while (true) {
@@ -877,6 +934,9 @@ export class GeminiClient {
           config: {
             systemInstruction: systemPrompt,
             tools: options?.disableTools ? undefined : generationTools,
+            toolConfig: combinesBuiltInAndFunctionTools
+              ? { includeServerSideToolInvocations: true }
+              : undefined,
             safetySettings: DEFAULT_SAFETY_SETTINGS,
             thinkingConfig,
           },
@@ -886,11 +946,31 @@ export class GeminiClient {
         const functionCalls: Array<{ id?: string; name: string; args: Record<string, unknown> }> = [];
         let roundUsage: TracingUsage | undefined;
         let hasReceivedChunk = false;
+        let webSearchUsedInRound = false;
 
         for await (const chunk of response) {
           hasReceivedChunk = true;
+          const groundingMetadata = chunk.candidates?.[0]?.groundingMetadata;
+          const groundedWebSources = (groundingMetadata?.groundingChunks ?? [])
+            .map(groundingChunk => groundingChunk.web)
+            .filter((web): web is NonNullable<typeof web> => !!web?.uri);
+          const searchWasUsed = (groundingMetadata?.webSearchQueries?.length ?? 0) > 0
+            || groundedWebSources.length > 0;
+          if (searchWasUsed) {
+            webSearchUsedInRound = true;
+            if (!webSearchUsed) {
+              webSearchUsed = true;
+              yield { type: "web_search_used" };
+            }
+            for (const source of groundedWebSources) {
+              const url = source.uri!;
+              if (!webSearchSources.some(existing => existing.url === url)) {
+                webSearchSources.push({ title: source.title || url, url });
+              }
+            }
+          }
           if (chunk.usageMetadata) {
-            roundUsage = extractUsage(chunk.usageMetadata, { model: this.model, webSearchUsed: !!webSearchEnabled });
+            roundUsage = extractUsage(chunk.usageMetadata, { model: this.model, webSearchUsed: webSearchUsedInRound });
           }
 
           const blockReason = checkFinishReason(chunk.candidates);
@@ -918,6 +998,9 @@ export class GeminiClient {
                 args: part.functionCall.args ?? {},
               });
             }
+            if (part.toolResponse?.toolType === ToolType.GOOGLE_SEARCH_WEB) {
+              collectWebSources(part.toolResponse.response, webSearchSources);
+            }
           }
         }
 
@@ -942,6 +1025,7 @@ export class GeminiClient {
           yield {
             type: "done",
             usage: toStreamChunkUsage(totalUsage.total ? totalUsage : undefined),
+            webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
           };
           return;
         }
@@ -1132,7 +1216,7 @@ export class GeminiClient {
     webSearchEnabled?: boolean,
     options?: ChatWithToolsOptions
   ): AsyncGenerator<StreamChunk> {
-    if (!options?.disableTools && this.shouldUseGenerateContentToolsApi(tools, ragStoreIds)) {
+    if (!options?.disableTools && this.shouldUseGenerateContentToolsApi(tools, ragStoreIds, webSearchEnabled)) {
       yield* this.chatWithToolsStreamGenerateContent(
         messages,
         tools,
@@ -1182,6 +1266,7 @@ export class GeminiClient {
       );
       if (interactionTools.length === 0) interactionTools = undefined;
     }
+    const combinesBuiltInAndFunctionTools = effectiveWebSearch && hasFunctionTools;
 
     // Get the last user message
     const lastMessage = messages[messages.length - 1];
@@ -1202,6 +1287,8 @@ export class GeminiClient {
       const modelLower = this.model.toLowerCase();
       // Gemma 4: thinking config not supported via Interactions API
       if (modelLower.includes("gemma-4")) return undefined;
+      // Gemini 3.6 Flash currently accepts low/high (not medium).
+      if (modelLower.includes("gemini-3.6-flash")) return enableThinking ? "high" : "low";
       // Pro models require thinking — always return high
       const thinkingRequired = modelLower.includes("gemini-3-pro") || modelLower.includes("gemini-3.1-pro");
       if (thinkingRequired) return "high";
@@ -1210,8 +1297,16 @@ export class GeminiClient {
     };
 
     const thinkingLevel = getThinkingLevel();
-    const generationConfig = thinkingLevel
-      ? { thinking_level: thinkingLevel, thinking_summaries: "auto" as const }
+    const generationConfig = thinkingLevel || combinesBuiltInAndFunctionTools
+      ? {
+          ...(thinkingLevel
+            ? { thinking_level: thinkingLevel, thinking_summaries: "auto" as const }
+            : {}),
+          // Interactions tool-context circulation uses validated choice. The
+          // legacy GenerateContent include_server_side_tool_invocations flag
+          // is not part of the Interactions request schema.
+          ...(combinesBuiltInAndFunctionTools ? { tool_choice: "validated" as const } : {}),
+        }
       : undefined;
 
     // Resolve previous_interaction_id for conversation chaining
@@ -1441,8 +1536,8 @@ export class GeminiClient {
             }
 
             case "interaction.status_update": {
-              if (event.metadata?.usage) {
-                roundUsage = extractInteractionsUsage(event.metadata.usage, interactionModel);
+              if (event.metadata?.total_usage) {
+                roundUsage = extractInteractionsUsage(event.metadata.total_usage, interactionModel);
               }
               break;
             }

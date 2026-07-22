@@ -18,6 +18,7 @@ export const MODEL_PRICING: Record<string, TokenPricing> = {
   "gemini-2.5-flash":                    { input: 0.30  / 1e6, output:   2.50 / 1e6 },
   "gemini-2.5-flash-lite":               { input: 0.10  / 1e6, output:   0.40 / 1e6 },
   "gemini-2.5-pro":                      { input: 1.25  / 1e6, output:  10.00 / 1e6 },
+  "gemini-3.6-flash":                    { input: 1.50  / 1e6, output:   7.50 / 1e6 },
   "gemini-3.5-flash":                    { input: 0.50  / 1e6, output:   3.00 / 1e6 },
   "gemini-3.1-flash-lite":               { input: 0.25  / 1e6, output:   1.50 / 1e6 },
   "gemini-3.1-pro-preview":              { input: 2.00  / 1e6, output:  12.00 / 1e6 },
