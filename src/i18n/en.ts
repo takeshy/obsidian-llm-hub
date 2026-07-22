@@ -444,6 +444,7 @@ export const en = {
   "message.requestChanges": "Request changes",
   "message.regenerate": "Regenerate",
   "message.additionalPlaceholder": "Describe what changes you want...",
+  "message.openFileAfterApply": "Open file after applying",
   "message.editFeedbackHeader": "The proposed edit to \"{{filePath}}\" was rejected.",
   "message.editFeedbackUserRequest": "Feedback:",
   "message.editFeedbackRetry": "Please try again with a different approach.",

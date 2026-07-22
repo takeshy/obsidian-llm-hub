@@ -555,9 +555,29 @@ export async function proposeEdit(
   }
 }
 
+// Whether to open/focus the file after applying an edit.
+// Remembered per-vault via Obsidian's local storage so the confirm dialog's
+// checkbox defaults to the user's last choice.
+const OPEN_FILE_AFTER_APPLY_KEY = "llm-hub-open-file-after-apply";
+
+export function getOpenFileAfterApplyPreference(app: App): boolean {
+  const stored = app.loadLocalStorage(OPEN_FILE_AFTER_APPLY_KEY);
+  return stored === false || stored === "false" ? false : true;
+}
+
+export function setOpenFileAfterApplyPreference(app: App, value: boolean): void {
+  // Store as a string: Obsidian's saveLocalStorage treats falsy data as
+  // "clear the entry", so a boolean false would be silently removed.
+  app.saveLocalStorage(OPEN_FILE_AFTER_APPLY_KEY, value ? "true" : "false");
+}
+
 // Apply the pending edit - actually writes to file
+// `options.openFile` defaults to true (preserving prior behavior for headless/automated
+// callers like Discord and workflow automation). Interactive chat call sites pass the
+// user's remembered checkbox preference explicitly via getOpenFileAfterApplyPreference().
 export async function applyEdit(
-  app: App
+  app: App,
+  options?: { openFile?: boolean }
 ): Promise<{ success: boolean; path?: string; error?: string; message?: string }> {
   if (!pendingEdit) {
     return {
@@ -605,9 +625,11 @@ export async function applyEdit(
     // Write the new content to file
     await app.vault.modify(file, pendingEdit.newContent);
 
-    // Open the file to show changes
-    const leaf = app.workspace.getLeaf(false);
-    await leaf.openFile(file);
+    // Open the file to show changes, unless the caller opted out
+    if (options?.openFile ?? true) {
+      const leaf = app.workspace.getLeaf(false);
+      await leaf.openFile(file);
+    }
 
     const appliedPath = pendingEdit.originalPath;
     pendingEdit = null;

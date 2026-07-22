@@ -67,6 +67,7 @@ import {
 	getPendingEdit,
 	applyEdit,
 	discardEdit,
+	getOpenFileAfterApplyPreference,
 	getPendingDelete,
 	applyDelete,
 	discardDelete,
@@ -257,7 +258,7 @@ function createConfirmingToolExecutor(
 					app, pending.originalPath, pending.newContent, "overwrite", pending.originalContent,
 				);
 				if (confirmResult.confirmed) {
-					const applyResult = await applyEdit(app);
+					const applyResult = await applyEdit(app, { openFile: getOpenFileAfterApplyPreference(app) });
 					if (applyResult.success) {
 						processedEdits.push({ originalPath: pending.originalPath, status: "applied" });
 						return { ...result, applied: true, message: `Applied changes to "${pending.originalPath}"` };
@@ -3129,7 +3130,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 									);
 
 									if (confirmResult.confirmed) {
-										const applyResult = await applyEdit(plugin.app);
+										const applyResult = await applyEdit(plugin.app, { openFile: getOpenFileAfterApplyPreference(plugin.app) });
 										if (applyResult.success) {
 											processedEdits.push({ originalPath: pending.originalPath, status: "applied" });
 											return { ...result, applied: true, message: `Applied changes to "${pending.originalPath}"` };
@@ -3771,7 +3772,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 	// Handle apply edit button click
 	const handleApplyEdit = async (messageIndex: number) => {
 		try {
-			const result = await applyEdit(plugin.app);
+			const result = await applyEdit(plugin.app, { openFile: getOpenFileAfterApplyPreference(plugin.app) });
 
 			if (result.success) {
 				// Update message status

@@ -438,6 +438,7 @@ export const ja: Record<string, string> = {
   "message.requestChanges": "変更をリクエスト",
   "message.regenerate": "再生成",
   "message.additionalPlaceholder": "変更内容を説明してください...",
+  "message.openFileAfterApply": "適用後にファイルを開く",
   "message.editFeedbackHeader": "「{{filePath}}」への編集提案は却下されました。",
   "message.editFeedbackUserRequest": "フィードバック:",
   "message.editFeedbackRetry": "別のアプローチで再度お試しください。",

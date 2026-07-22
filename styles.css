@@ -3040,6 +3040,7 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
 .llm-hub-edit-confirm-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   padding: 16px;
   border-top: 1px solid var(--background-modifier-border);
@@ -3049,6 +3050,23 @@ body.llm-hub-hide-workspace-folder .nav-folder:has(> [data-path="LLMHub"]) {
   padding: 8px 16px;
   font-size: 13px;
   border-radius: 4px;
+  cursor: pointer;
+}
+
+.llm-hub-edit-confirm-open-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.llm-hub-edit-confirm-open-file input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.llm-hub-edit-confirm-open-file label {
   cursor: pointer;
 }
 

@@ -1,6 +1,7 @@
 import { Modal, App, MarkdownRenderer, Component } from "obsidian";
 import { t } from "src/i18n";
 import { renderDiffView, formatLineComments, createDiffViewToggle, type DiffRendererState } from "./DiffRenderer";
+import { getOpenFileAfterApplyPreference, setOpenFileAfterApplyPreference } from "src/vault/notes";
 
 /**
  * Diff line types
@@ -209,6 +210,19 @@ export class EditConfirmationModal extends Modal {
     // Action buttons
     const actions = contentEl.createDiv({
       cls: "llm-hub-edit-confirm-actions",
+    });
+
+    // "Open file after applying" checkbox - remembers the user's choice for next time
+    const openFileContainer = actions.createDiv({ cls: "llm-hub-edit-confirm-open-file" });
+    const openFileCheckbox = openFileContainer.createEl("input", { type: "checkbox" });
+    openFileCheckbox.id = "llm-hub-open-file-after-apply";
+    openFileCheckbox.checked = getOpenFileAfterApplyPreference(this.app);
+    openFileContainer.createEl("label", {
+      text: t("message.openFileAfterApply"),
+      attr: { for: "llm-hub-open-file-after-apply" },
+    });
+    openFileCheckbox.addEventListener("change", () => {
+      setOpenFileAfterApplyPreference(this.app, openFileCheckbox.checked);
     });
 
     const cancelBtn = actions.createEl("button", { text: t("workflowModal.cancel") });

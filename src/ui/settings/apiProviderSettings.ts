@@ -1,7 +1,7 @@
 import { Setting, Notice, Modal, App, Platform } from "obsidian";
 import { t } from "src/i18n";
 import type { ApiProviderConfig, ApiProviderType } from "src/types";
-import { KNOWN_PROVIDER_DEFAULTS } from "src/types";
+import { KNOWN_PROVIDER_DEFAULTS, normalizeDeprecatedGeminiModelName } from "src/types";
 import { verifyApiProvider, verifyOpencodeGo } from "src/core/openaiProvider";
 import { verifyAnthropicProvider } from "src/core/anthropicProvider";
 import { verifyGeminiProvider } from "src/core/gemini";
@@ -188,9 +188,13 @@ class ApiProviderModal extends Modal {
     // Model selection — checkboxes for enabling/disabling models
     const knownModels = getKnownModels(this.config.type);
     const fetchedModels = this.config.availableModels;
-    // Merge: known models first, then any fetched models not in known list
+    // Merge: known models first, then any fetched models not in the known list.
+    // Deprecated Gemini model names (e.g. "gemini-2.5-flash-lite") are excluded here
+    // since their replacement is already in knownModels — selecting the old name
+    // directly would bypass normalizeDeprecatedGeminiModelName() and lose behavior
+    // tied to the new model id (e.g. thinking config).
     const modelChoices = knownModels.length > 0
-      ? [...knownModels, ...fetchedModels.filter(m => !knownModels.includes(m))]
+      ? [...knownModels, ...fetchedModels.filter(m => !knownModels.includes(m) && normalizeDeprecatedGeminiModelName(m) === m)]
       : fetchedModels;
 
     if (modelChoices.length > 0) {
