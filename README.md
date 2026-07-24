@@ -490,6 +490,14 @@ See the [Dashboard Hub documentation](https://github.com/takeshy/obsidian-dashbo
 
 ---
 
+# Discussion Hub Integration
+
+AI Discussion is provided by the separate [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) plugin. When both plugins are enabled, LLM Hub supplies Discussion Hub with its configured API, CLI, and local text models. Models contributed by Gemini Helper and Local LLM Hub can participate in the same discussion.
+
+See the [Discussion Hub documentation](https://github.com/takeshy/obsidian-discussion-hub) for discussion features, configuration, and usage details.
+
+---
+
 # Common
 
 ## Supported Models
@@ -904,42 +912,6 @@ The **RAG Search** tab provides a dedicated interface for searching, filtering, 
 - **Index settings** (gear icon) — configure chunk size, overlap, target folders, sync, and more
 
 > For full details, see [RAG Search Documentation](docs/okf/llm-hub-help/features/rag-search.md)
-
-### AI Discussion
-
-AI Discussion is provided by the separate [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) plugin. When both plugins are enabled, LLM Hub automatically registers all configured API, CLI, and local text models with Discussion Hub. Models contributed by Gemini Helper and Local LLM Hub can participate in the same discussion. No additional integration settings are required.
-
-![AI Discussion](docs/images/ai-discussion.png)
-
-**How it works:**
-
-1. Install and enable [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub)
-2. Open Discussion Hub from its ribbon icon or the **Open Discussion Hub** command
-3. Enter a discussion theme
-4. Add participants from any connected AI plugin, or add yourself
-5. Optionally assign roles and configure separate voters
-6. Set the number of turns and click **Start discussion**
-
-![Discussion Setup](docs/images/ai-discussion-start.png)
-
-**Discussion flow:**
-
-1. **Discussion turns** — All participants respond in parallel. Each turn builds on previous responses.
-2. **Conclusion** — In the final turn, each participant provides their conclusion.
-3. **Voting** — Vote participants evaluate all conclusions and vote for the best one.
-4. **Result** — The winner (or draw) is announced. Save the full transcript as a Markdown note.
-
-![Voting Results](docs/images/ai-discussion-voting.png)
-
-**Features:**
-
-- **Cross-plugin participants** — Mix LLM Hub, Gemini Helper, and Local LLM Hub models in one discussion
-- **User participation** — Add yourself as a participant or voter for human-in-the-loop discussions
-- **Role assignment** — Give each participant a perspective (e.g., "Optimist", "Skeptic")
-- **Separate vote participants** — Configure voters independently from discussion participants
-- **Persistent configuration** — Participants and voters are saved and restored across sessions
-- **Discussion Hub settings** — Configure system, conclusion, and vote prompts, output folder, and default turns in Discussion Hub settings
-- **Save as note** — Export the complete discussion (turns, conclusions, votes, winner) as a Markdown file
 
 ### Slash Commands
 - Define custom prompt templates triggered by `/`

@@ -495,6 +495,14 @@ Obsidian のイベントでワークフローを自動実行：
 
 ---
 
+# Discussion Hub 連携
+
+AI Discussion は、別プラグインの [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) が提供します。両方のプラグインを有効にすると、LLM Hub は Discussion Hub に設定済みの API、CLI、ローカルテキストモデルを提供します。Gemini Helper や Local LLM Hub が提供するモデルも同じ討論に参加できます。
+
+討論機能、設定、使い方については [Discussion Hub のドキュメント](https://github.com/takeshy/obsidian-discussion-hub) を参照してください。
+
+---
+
 # 共通
 
 ## 対応モデル
@@ -918,42 +926,6 @@ Vault からの同期の代わりに、事前構築済みのインデックス�
 - **インデックス設定**（歯車アイコン）— チャンクサイズ、オーバーラップ、対象フォルダ、同期などを設定
 
 > 詳細は [RAG Search ドキュメント](docs/okf/llm-hub-help/features/rag-search.md)をご覧ください。
-
-### AI Discussion
-
-AI Discussion は別プラグインの [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) が提供します。両方のプラグインを有効にすると、LLM Hubは設定済みのAPI、CLI、ローカルテキストモデルをDiscussion Hubへ自動登録します。Gemini HelperやLocal LLM Hubが提供するモデルも同じ討論へ参加できます。連携専用の追加設定は不要です。
-
-![AI Discussion](docs/images/ai-discussion.png)
-
-**使い方：**
-
-1. [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub)をインストールして有効化
-2. Discussion Hubのリボンアイコン、または **Open Discussion Hub** コマンドから開く
-3. 討論のテーマを入力
-4. 接続された任意のAIプラグインから参加者を追加、または自分自身を追加
-5. 必要に応じて役割と投票参加者を個別に設定
-6. ターン数を設定して **Start discussion** をクリック
-
-![Discussion Setup](docs/images/ai-discussion-start.png)
-
-**討論の流れ：**
-
-1. **討論ターン** — 全参加者が並列に応答。各ターンはそれまでの応答を踏まえて進行。
-2. **結論** — 最終ターンで各参加者が結論を提示。
-3. **投票** — 投票参加者が全結論を評価し、最良のものに投票。
-4. **結果** — 勝者（または引き分け）が発表。完全なトランスクリプトを Markdown ノートとして保存可能。
-
-![Voting Results](docs/images/ai-discussion-voting.png)
-
-**機能：**
-
-- **プラグイン横断の参加者** — LLM Hub、Gemini Helper、Local LLM Hubのモデルを同じ討論で組み合わせ可能
-- **User の参加** — 自分自身を参加者や投票者として追加し、人間参加型の討論が可能
-- **役割の割り当て** — 各参加者に視点を設定（例：「楽観主義者」「懐疑論者」）
-- **投票参加者の個別設定** — 討論参加者とは独立して投票者を設定可能
-- **設定の永続化** — 参加者と投票者はセッション間で保存・復元
-- **Discussion Hub設定** — Discussion Hubの設定でシステム、結論、投票プロンプト、出力フォルダ、デフォルトターン数を設定
-- **ノートとして保存** — 完全な討論内容（ターン、結論、投票、勝者）を Markdown ファイルとしてエクスポート
 
 ### スラッシュコマンド
 
