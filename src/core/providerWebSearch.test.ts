@@ -328,4 +328,52 @@ describe("Anthropic native web search", () => {
     expect(chunks.at(-1)?.type).toBe("done");
     expect(chunks.some(chunk => chunk.type === "error")).toBe(false);
   });
+
+  it("uses adaptive thinking and high effort for Claude Opus 5", async () => {
+    const completed = {
+      content: [{ type: "text", text: "Done", citations: [] }],
+      usage: { input_tokens: 10, output_tokens: 5 },
+      stop_reason: "end_turn",
+    };
+    mocks.anthropicStream.mockReturnValue({
+      ...asyncEvents([{ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Done" } }]),
+      currentMessage: undefined,
+      finalMessage: vi.fn().mockResolvedValue(completed),
+    });
+
+    const chunks = await collect(anthropicChatWithToolsStream(
+      "https://api.anthropic.com", "key", "claude-opus-5",
+      [{ role: "user", content: "Think carefully", timestamp: 1 }], [], "system", vi.fn(),
+      undefined, true,
+    ));
+
+    const request = mocks.anthropicStream.mock.calls[0][0];
+    expect(request.thinking).toEqual({ type: "adaptive" });
+    expect(request.output_config).toEqual({ effort: "high" });
+    expect(request.thinking).not.toHaveProperty("budget_tokens");
+    expect(chunks.at(-1)?.type).toBe("done");
+  });
+
+  it("keeps fixed-budget thinking for Claude 4.5 models", async () => {
+    const completed = {
+      content: [{ type: "text", text: "Done", citations: [] }],
+      usage: { input_tokens: 10, output_tokens: 5 },
+      stop_reason: "end_turn",
+    };
+    mocks.anthropicStream.mockReturnValue({
+      ...asyncEvents([{ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Done" } }]),
+      currentMessage: undefined,
+      finalMessage: vi.fn().mockResolvedValue(completed),
+    });
+
+    await collect(anthropicChatWithToolsStream(
+      "https://api.anthropic.com", "key", "claude-opus-4-5",
+      [{ role: "user", content: "Think carefully", timestamp: 1 }], [], "system", vi.fn(),
+      undefined, true,
+    ));
+
+    const request = mocks.anthropicStream.mock.calls[0][0];
+    expect(request.thinking).toEqual({ type: "enabled", budget_tokens: 10000 });
+    expect(request.output_config).toBeUndefined();
+  });
 });

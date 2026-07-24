@@ -547,6 +547,7 @@ When a toggle is ON, thinking is always active for that model family regardless 
 
 | Model | Description |
 |-------|-------------|
+| Claude Opus 5 | Complex agentic coding and enterprise work; adaptive thinking |
 | Claude Opus 4.8 | Advanced reasoning and agentic work; web search live-tested |
 | Claude Sonnet 5 | Balanced frontier model; web search live-tested |
 | Claude Fable 5 | Advanced model; web search live-tested |

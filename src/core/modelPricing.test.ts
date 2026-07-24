@@ -23,3 +23,17 @@ describe("Gemini 3.5 Flash Lite", () => {
     expect(calculateCost("gemini-3.5-flash-lite", 1_000_000, 1_000_000)).toBe(2.8);
   });
 });
+
+describe("Claude Opus 5", () => {
+  it("is offered as a known Anthropic model", () => {
+    expect(getKnownModels("anthropic")).toContain("claude-opus-5");
+  });
+
+  it("uses the published token pricing", () => {
+    expect(calculateCost("claude-opus-5", 1_000_000, 1_000_000)).toBe(30);
+  });
+
+  it("prices dated model variants through prefix matching", () => {
+    expect(calculateCost("claude-opus-5-20260724", 1_000_000, 1_000_000)).toBe(30);
+  });
+});

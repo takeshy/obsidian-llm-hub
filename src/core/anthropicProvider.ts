@@ -34,6 +34,24 @@ function isThinkingParameterError(message: string): boolean {
 }
 
 /**
+ * Claude 4.6 and newer models use adaptive thinking. Claude 4.5 and older
+ * models only support the legacy fixed `budget_tokens` configuration.
+ * Fable and Mythos were introduced after adaptive thinking became the
+ * default API shape.
+ */
+function usesAdaptiveThinking(model: string): boolean {
+  const normalized = model.toLowerCase();
+  if (/^claude-(?:fable|mythos)-/.test(normalized)) return true;
+
+  const version = normalized.match(/^claude-(?:opus|sonnet)-(\d+)(?:-(\d+))?/);
+  if (!version) return false;
+
+  const major = Number(version[1]);
+  const minor = version[2] === undefined ? 0 : Number(version[2]);
+  return major > 4 || (major === 4 && minor >= 6);
+}
+
+/**
  * Verify connection to Anthropic API
  */
 export async function verifyAnthropicProvider(
@@ -183,6 +201,7 @@ export async function* anthropicChatWithToolsStream(
   const searchErrors: string[] = [];
 
   const THINKING_BUDGET_TOKENS = 10000;
+  const adaptiveThinking = useThinking && usesAdaptiveThinking(model);
 
   const MAX_TOOL_ROUNDS = 20;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -202,7 +221,14 @@ export async function* anthropicChatWithToolsStream(
           system: systemPrompt || undefined,
           messages: [...conversationMessages],
           stream: true,
-          ...(thinkingEnabledForAttempt ? { thinking: { type: "enabled" as const, budget_tokens: THINKING_BUDGET_TOKENS } } : {}),
+          ...(thinkingEnabledForAttempt
+            ? adaptiveThinking
+              ? {
+                  thinking: { type: "adaptive" as const },
+                  output_config: { effort: "high" as const },
+                }
+              : { thinking: { type: "enabled" as const, budget_tokens: THINKING_BUDGET_TOKENS } }
+            : {}),
         };
         if (anthropicTools.length > 0) {
           createParams.tools = anthropicTools;

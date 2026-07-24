@@ -45,6 +45,7 @@ describe("web search capability", () => {
 
   it.each([
     ["openai", "gpt-5.6-sol"],
+    ["anthropic", "claude-opus-5"],
     ["anthropic", "claude-opus-4-8"],
     ["anthropic", "claude-sonnet-5"],
     ["anthropic", "claude-fable-5"],

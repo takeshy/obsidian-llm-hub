@@ -551,6 +551,7 @@ AI Discussion は、別プラグインの [Discussion Hub](https://github.com/ta
 
 | モデル | 説明 |
 |-------|-------------|
+| Claude Opus 5 | 複雑なエージェント型コーディングと業務用途、Adaptive Thinking対応 |
 | Claude Opus 4.8 | 高度な推論とエージェント処理、Web 検索をライブ検証済み |
 | Claude Sonnet 5 | バランスの取れたフロンティアモデル、Web 検索をライブ検証済み |
 | Claude Fable 5 | 高性能モデル、Web 検索をライブ検証済み |

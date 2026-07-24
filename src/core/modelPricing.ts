@@ -33,6 +33,7 @@ export const MODEL_PRICING: Record<string, TokenPricing> = {
   "o3":            { input:  2.00  / 1e6, output:  8.00 / 1e6 },
 
   // Anthropic models
+  "claude-opus-5":     { input: 5.00 / 1e6, output: 25.00 / 1e6 },
   "claude-opus-4-6":   { input: 5.00 / 1e6, output: 25.00 / 1e6 },
   "claude-sonnet-4-6": { input: 3.00 / 1e6, output: 15.00 / 1e6 },
   "claude-opus-4-5":   { input: 5.00 / 1e6, output: 25.00 / 1e6 },
