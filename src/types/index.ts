@@ -102,7 +102,7 @@ export interface SlashCommand {
   description?: string;         // オートコンプリートに表示
   /** null/undefined = keep the current Chat/Discord search preferences. */
   searchSelection?: SearchSelection | null;
-  /** @deprecated Migrated to searchSelection when settings load. */
+  /** Legacy value migrated to searchSelection when settings load. */
   searchSetting?: string | null;
   confirmEdits?: boolean;       // undefined/true = 編集確認を表示, false = 自動適用
   vaultToolMode?: VaultToolMode | null; // null = 現在の設定, "all" = すべて, "noSearch" = 検索なし, "none" = オフ
@@ -183,6 +183,9 @@ export interface LlmHubSettings {
 
   // Last selected workflow path in Run Workflow modal
   lastSelectedWorkflowPath?: string;
+
+  // One-time migration notices
+  dashboardHubMigrationNoticeShown: boolean;
 
   // Discord integration
   discord: DiscordSettings;
@@ -888,6 +891,8 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   encryption: DEFAULT_ENCRYPTION_SETTINGS,
   // Langfuse
   langfuse: DEFAULT_LANGFUSE_SETTINGS,
+  // One-time migration notices
+  dashboardHubMigrationNoticeShown: false,
   // Discord
   discord: DEFAULT_DISCORD_SETTINGS,
 };

@@ -362,7 +362,7 @@ function displayLocalStoreSettings(
       .addButton((btn) =>
         btn
           .setButtonText(t("settings.localClearIndex"))
-          .setWarning()
+          .setDestructive()
           .onClick(() => {
             void (async () => {
               const confirmed = await new ConfirmModal(
@@ -513,7 +513,6 @@ function displayEmbeddingSettings(
       slider
         .setLimits(100, 2000, 50)
         .setValue(ragSetting.chunkSize)
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             await plugin.updateRagSetting(name, { chunkSize: value });
@@ -529,7 +528,6 @@ function displayEmbeddingSettings(
       slider
         .setLimits(0, 500, 10)
         .setValue(ragSetting.chunkOverlap)
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             await plugin.updateRagSetting(name, { chunkOverlap: value });
@@ -545,7 +543,6 @@ function displayEmbeddingSettings(
       slider
         .setLimits(1, 6, 1)
         .setValue(ragSetting.pdfChunkPages ?? 6)
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             await plugin.updateRagSetting(name, { pdfChunkPages: value });
@@ -603,7 +600,6 @@ function displayTopKSetting(
       slider
         .setLimits(1, 20, 1)
         .setValue(ragSetting.topK)
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             await plugin.updateRagSetting(name, { topK: value });
@@ -639,7 +635,6 @@ function displayScoreThresholdSetting(
       slider
         .setLimits(0, 10, 1)
         .setValue(Math.round(currentValue * 10))
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             await plugin.updateRagSetting(name, { scoreThreshold: value / 10 });
@@ -723,7 +718,7 @@ function displaySyncControls(
       cancelBtn = btn.buttonEl;
       btn
         .setButtonText(t("settings.cancelSync"))
-        .setWarning()
+        .setDestructive()
         .onClick(() => {
           syncCancelRef.value = true;
           new Notice(t("settings.cancellingSync"));
@@ -802,7 +797,7 @@ function displaySyncControls(
               btn.setButtonText(t("settings.localSyncBtn"));
               if (cancelBtn) cancelBtn.addClass("llm-hub-hidden");
               syncCancelRef.value = false;
-              setTimeout(() => {
+              window.setTimeout(() => {
                 progressContainer.addClass("llm-hub-hidden");
                 display();
               }, 2000);

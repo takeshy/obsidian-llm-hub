@@ -102,7 +102,7 @@ export class WorkflowGenerationModal extends Modal {
     // Execution history info (if steps are selected)
     if (this.executionStepsCount > 0) {
       const historySection = contentEl.createDiv({ cls: "workflow-generation-history-info" });
-      historySection.createEl("span", {
+      historySection.createSpan({
         cls: "workflow-generation-history-badge",
         text: t("workflow.generation.executionHistoryIncluded", { count: this.executionStepsCount }),
       });
@@ -294,7 +294,7 @@ export class WorkflowGenerationModal extends Modal {
       this.thinkingSectionEl.removeClass("is-hidden");
     }
     if (this.pendingThinkingSeparator && this.thinkingContainerEl) {
-      const sep = document.createElement("div");
+      const sep = createDiv();
       sep.className = "workflow-generation-thinking-separator";
       sep.textContent = `── ${this.pendingThinkingSeparator} ──`;
       this.thinkingContainerEl.appendChild(sep);
@@ -302,7 +302,7 @@ export class WorkflowGenerationModal extends Modal {
     }
     this.thinkingText += content;
     if (this.thinkingContainerEl) {
-      const span = document.createElement("span");
+      const span = createSpan();
       span.textContent = content;
       this.thinkingContainerEl.appendChild(span);
       // Auto-scroll to bottom
@@ -325,7 +325,7 @@ export class WorkflowGenerationModal extends Modal {
   appendPlan(content: string): void {
     this.planText += content;
     if (this.planContainerEl) {
-      const span = document.createElement("span");
+      const span = createSpan();
       span.textContent = content;
       this.planContainerEl.appendChild(span);
       this.planContainerEl.scrollTop = this.planContainerEl.scrollHeight;
@@ -338,7 +338,7 @@ export class WorkflowGenerationModal extends Modal {
   appendReview(content: string): void {
     this.reviewText += content;
     if (this.reviewContainerEl) {
-      const span = document.createElement("span");
+      const span = createSpan();
       span.textContent = content;
       this.reviewContainerEl.appendChild(span);
       this.reviewContainerEl.scrollTop = this.reviewContainerEl.scrollHeight;
@@ -362,7 +362,7 @@ export class WorkflowGenerationModal extends Modal {
       void navigator.clipboard.writeText(text).then(() => {
         const original = btn.textContent;
         btn.textContent = "✓";
-        setTimeout(() => { btn.textContent = original; }, 1200);
+        window.setTimeout(() => { btn.textContent = original; }, 1200);
       });
     });
   }
@@ -687,7 +687,7 @@ export class WorkflowGenerationModal extends Modal {
       void navigator.clipboard.writeText(response).then(() => {
         const original = copyBtn.textContent;
         copyBtn.textContent = "✓";
-        setTimeout(() => { copyBtn.textContent = original; }, 1200);
+        window.setTimeout(() => { copyBtn.textContent = original; }, 1200);
       });
     });
 

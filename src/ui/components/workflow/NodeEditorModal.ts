@@ -678,11 +678,11 @@ export class NodeEditorModal extends Modal {
       if (suggestions.length === 0) return;
 
       currentSuggestions = suggestions;
-      suggestionContainer = document.createElement("div");
+      suggestionContainer = createDiv();
       suggestionContainer.addClass("workflow-path-suggestions");
 
       suggestions.forEach((suggestion, index) => {
-        const item = document.createElement("div");
+        const item = createDiv();
         item.addClass("workflow-path-suggestion-item");
         if (index === selectedIndex) {
           item.addClass("is-selected");
@@ -780,7 +780,7 @@ export class NodeEditorModal extends Modal {
 
     inputEl.addEventListener("blur", () => {
       // Delay to allow click events on suggestions
-      setTimeout(() => hideSuggestions(), 200);
+      window.setTimeout(() => hideSuggestions(), 200);
     });
   }
 

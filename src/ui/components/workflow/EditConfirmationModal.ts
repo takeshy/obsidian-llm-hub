@@ -150,14 +150,14 @@ export class EditConfirmationModal extends Modal {
     titleRow.createEl("h3", { text: t("workflowModal.confirmFileWrite") });
 
     const modeLabel = this.getModeLabel();
-    titleRow.createEl("span", {
+    titleRow.createSpan({
       text: modeLabel,
       cls: "llm-hub-edit-confirm-mode",
     });
 
     // File path display
     const pathRow = header.createDiv({ cls: "llm-hub-edit-confirm-path" });
-    pathRow.createEl("span", { text: t("workflowModal.file") });
+    pathRow.createSpan({ text: t("workflowModal.file") });
     pathRow.createEl("strong", { text: this.filePath });
 
     // Content preview
@@ -168,7 +168,7 @@ export class EditConfirmationModal extends Modal {
     const previewLabel = previewContainer.createDiv({
       cls: "llm-hub-edit-confirm-preview-label",
     });
-    previewLabel.createEl("span", { text: t("workflowModal.changes") });
+    previewLabel.createSpan({ text: t("workflowModal.changes") });
 
     const previewContent = previewContainer.createDiv({
       cls: "llm-hub-edit-confirm-preview-content",
@@ -281,25 +281,25 @@ export class EditConfirmationModal extends Modal {
       const hasText = (this.additionalRequestEl?.value || "").trim().length > 0;
       if (hasComments || hasText) {
         // Warn when there are unsubmitted line comments
-        const overlay = document.createElement("div");
+        const overlay = createDiv();
         overlay.className = "llm-hub-diff-confirm-overlay";
 
-        const dialog = document.createElement("div");
+        const dialog = createDiv();
         dialog.className = "llm-hub-diff-confirm-dialog";
 
-        const msg = document.createElement("p");
+        const msg = createEl("p");
         msg.textContent = t("diff.applyWithCommentsConfirm");
         dialog.appendChild(msg);
 
-        const btns = document.createElement("div");
+        const btns = createDiv();
         btns.className = "llm-hub-diff-confirm-dialog-actions";
 
-        const dialogCancelBtn = document.createElement("button");
+        const dialogCancelBtn = createEl("button");
         dialogCancelBtn.textContent = t("workflowModal.cancel");
         dialogCancelBtn.addEventListener("click", () => overlay.remove());
         btns.appendChild(dialogCancelBtn);
 
-        const applyBtn = document.createElement("button");
+        const applyBtn = createEl("button");
         applyBtn.textContent = t("message.apply");
         applyBtn.className = "mod-cta";
         applyBtn.addEventListener("click", () => {
@@ -341,7 +341,7 @@ export class EditConfirmationModal extends Modal {
   private addResizeHandles(modalEl: HTMLElement) {
     const directions = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
     for (const dir of directions) {
-      const handle = document.createElement("div");
+      const handle = createDiv();
       handle.className = `llm-hub-resize-handle llm-hub-resize-${dir}`;
       handle.dataset.direction = dir;
       modalEl.appendChild(handle);
@@ -559,7 +559,7 @@ export class DeleteConfirmationModal extends Modal {
     const titleRow = header.createDiv({ cls: "llm-hub-edit-confirm-title-row" });
     titleRow.createEl("h3", { text: t("workflowModal.confirmFileDeletion") });
 
-    const warningLabel = titleRow.createEl("span", {
+    const warningLabel = titleRow.createSpan({
       cls: "llm-hub-delete-confirm-warning-label",
     });
     warningLabel.createSpan({ text: "⚠️ " });
@@ -568,7 +568,7 @@ export class DeleteConfirmationModal extends Modal {
 
     // File path display
     const pathRow = header.createDiv({ cls: "llm-hub-edit-confirm-path" });
-    pathRow.createEl("span", { text: t("workflowModal.file") });
+    pathRow.createSpan({ text: t("workflowModal.file") });
     pathRow.createEl("strong", { text: this.filePath });
 
     // Content preview
@@ -579,7 +579,7 @@ export class DeleteConfirmationModal extends Modal {
     const previewLabel = previewContainer.createDiv({
       cls: "llm-hub-edit-confirm-preview-label",
     });
-    previewLabel.createEl("span", { text: t("workflowModal.contentToBeDeleted") });
+    previewLabel.createSpan({ text: t("workflowModal.contentToBeDeleted") });
 
     const previewContent = previewContainer.createDiv({
       cls: "llm-hub-edit-confirm-preview-content",
@@ -625,7 +625,7 @@ export class DeleteConfirmationModal extends Modal {
   private addResizeHandles(modalEl: HTMLElement) {
     const directions = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
     for (const dir of directions) {
-      const handle = document.createElement("div");
+      const handle = createDiv();
       handle.className = `llm-hub-resize-handle llm-hub-resize-${dir}`;
       handle.dataset.direction = dir;
       modalEl.appendChild(handle);
@@ -922,10 +922,10 @@ export class BulkEditConfirmationModal extends Modal {
       const fileInfo = fileRow.createDiv({ cls: "llm-hub-bulk-file-info" });
 
       const pathEl = fileInfo.createDiv({ cls: "llm-hub-bulk-file-path" });
-      pathEl.createEl("span", { text: item.path });
+      pathEl.createSpan({ text: item.path });
 
       const modeLabel = this.getModeLabel(item.mode);
-      pathEl.createEl("span", {
+      pathEl.createSpan({
         text: modeLabel,
         cls: "llm-hub-bulk-file-mode",
       });
@@ -995,7 +995,7 @@ export class BulkEditConfirmationModal extends Modal {
   private addResizeHandles(modalEl: HTMLElement) {
     const directions = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
     for (const dir of directions) {
-      const handle = document.createElement("div");
+      const handle = createDiv();
       handle.className = `llm-hub-resize-handle llm-hub-resize-${dir}`;
       handle.dataset.direction = dir;
       modalEl.appendChild(handle);
@@ -1207,7 +1207,7 @@ export class BulkDeleteConfirmationModal extends Modal {
     const titleRow = header.createDiv({ cls: "llm-hub-edit-confirm-title-row" });
     titleRow.createEl("h3", { text: t("workflowModal.confirmBulkDelete", { count: String(this.items.length) }) });
 
-    const warningLabel = titleRow.createEl("span", {
+    const warningLabel = titleRow.createSpan({
       cls: "llm-hub-delete-confirm-warning-label",
     });
     warningLabel.createSpan({ text: "⚠️ " });
@@ -1290,7 +1290,7 @@ export class BulkDeleteConfirmationModal extends Modal {
       const fileInfo = fileRow.createDiv({ cls: "llm-hub-bulk-file-info" });
 
       const pathEl = fileInfo.createDiv({ cls: "llm-hub-bulk-file-path" });
-      pathEl.createEl("span", { text: item.path });
+      pathEl.createSpan({ text: item.path });
 
       // Expand/collapse button
       const expandBtn = fileInfo.createEl("button", {
@@ -1356,7 +1356,7 @@ export class BulkDeleteConfirmationModal extends Modal {
   private addResizeHandles(modalEl: HTMLElement) {
     const directions = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
     for (const dir of directions) {
-      const handle = document.createElement("div");
+      const handle = createDiv();
       handle.className = `llm-hub-resize-handle llm-hub-resize-${dir}`;
       handle.dataset.direction = dir;
       modalEl.appendChild(handle);
@@ -1540,9 +1540,9 @@ export class RenameConfirmationModal extends Modal {
 
     // Path display
     const pathRow = header.createDiv({ cls: "llm-hub-edit-confirm-path" });
-    pathRow.createEl("span", { text: "📁 " });
+    pathRow.createSpan({ text: "📁 " });
     pathRow.createEl("strong", { text: this.originalPath });
-    pathRow.createEl("span", { text: " → " });
+    pathRow.createSpan({ text: " → " });
     pathRow.createEl("strong", { text: this.newPath });
 
     // Buttons
@@ -1736,9 +1736,9 @@ export class BulkRenameConfirmationModal extends Modal {
       // Rename info
       const fileInfo = fileRow.createDiv({ cls: "llm-hub-bulk-file-info" });
       const pathEl = fileInfo.createDiv({ cls: "llm-hub-bulk-file-path" });
-      pathEl.createEl("span", { text: item.originalPath });
-      pathEl.createEl("span", { text: " → ", cls: "llm-hub-rename-arrow" });
-      pathEl.createEl("span", { text: item.newPath, cls: "llm-hub-rename-new-path" });
+      pathEl.createSpan({ text: item.originalPath });
+      pathEl.createSpan({ text: " → ", cls: "llm-hub-rename-arrow" });
+      pathEl.createSpan({ text: item.newPath, cls: "llm-hub-rename-new-path" });
     }
   }
 
@@ -1765,7 +1765,7 @@ export class BulkRenameConfirmationModal extends Modal {
   private addResizeHandles(modalEl: HTMLElement) {
     const directions = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
     for (const dir of directions) {
-      const handle = document.createElement("div");
+      const handle = createDiv();
       handle.className = `llm-hub-resize-handle llm-hub-resize-${dir}`;
       handle.dataset.direction = dir;
       modalEl.appendChild(handle);

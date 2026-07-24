@@ -85,7 +85,7 @@ class CopyInputModal extends Modal {
     });
 
     // Focus input after modal opens
-    setTimeout(() => {
+    window.setTimeout(() => {
       this.inputEl?.focus();
     }, 50);
   }
@@ -324,7 +324,7 @@ export class EditHistoryModal extends Modal {
       .addButton((btn) =>
         btn
           .setButtonText(t("editHistoryModal.clearAll"))
-          .setWarning()
+          .setDestructive()
           .onClick(() => {
             new ConfirmModal(this.app, t("editHistoryModal.confirmClear"), async () => {
               let restoredContent: string | null = null;

@@ -10,7 +10,6 @@ import {
   type SafetySetting,
   type Schema,
   type Chat,
-  type ThinkingLevel,
   type Interactions,
   ToolType,
 } from "@google/genai";
@@ -37,11 +36,11 @@ import { createProxyFetch } from "./proxyFetch";
 // ---------------------------------------------------------------------------
 
 // Desktop (Electron / Node.js): streaming via https module
-// globalThis.require loads Node.js builtins without triggering the ESM loader (which
+// window.require loads Node.js builtins without triggering the ESM loader (which
 // cannot resolve Node builtins in Electron's renderer process).
 async function nodeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const https = (globalThis as unknown as { require: (id: string) => typeof import("https") }).require("https");
-  const url = typeof input === "string" ? new globalThis.URL(input) : input instanceof globalThis.URL ? input : new globalThis.URL(input.url);
+  const https = (window as unknown as { require: (id: string) => typeof import("https") }).require("https");
+  const url = typeof input === "string" ? new window.URL(input) : input instanceof window.URL ? input : new window.URL(input.url);
   const method = init?.method ?? "GET";
   const headers: Record<string, string> = {};
   if (init?.headers) {
@@ -110,7 +109,7 @@ async function nodeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
 
 // Mobile: buffered fetch via Obsidian's requestUrl (bypasses CORS, no streaming)
 async function mobileFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const url = typeof input === "string" ? input : input instanceof globalThis.URL ? input.toString() : input.url;
+  const url = typeof input === "string" ? input : input instanceof window.URL ? input.toString() : input.url;
   const method = init?.method ?? "GET";
   const headers: Record<string, string> = {};
   if (init?.headers) {
@@ -494,13 +493,13 @@ export class GeminiClient {
     // Gemini 3.6 Flash accepts LOW/HIGH (the API currently rejects MEDIUM).
     if (modelLower.includes("gemini-3.6-flash")) {
       return enableThinking
-        ? { includeThoughts: true, thinkingLevel: "HIGH" as ThinkingLevel }
-        : { thinkingLevel: "LOW" as ThinkingLevel };
+        ? { includeThoughts: true, thinkingLevel: "HIGH" }
+        : { thinkingLevel: "LOW" };
     }
     // Gemini 3.5 Flash Lite uses thinkingLevel; minimal is the API default.
     if (modelLower.includes("gemini-3.5-flash-lite")) {
       if (!enableThinking) return undefined;
-      return { includeThoughts: true, thinkingLevel: "HIGH" as ThinkingLevel };
+      return { includeThoughts: true, thinkingLevel: "HIGH" };
     }
 
     // gemini-3-pro / gemini-3.1-pro models require thinking — cannot disable
@@ -548,7 +547,7 @@ export class GeminiClient {
       const s: Record<string, unknown> = { type: p.type, description: p.description };
       if (p.enum) s.enum = p.enum;
       if (p.type === "array" && p.items) {
-        const items = p.items as ToolPropertyDefinition | { type: string; properties?: Record<string, ToolPropertyDefinition>; required?: string[] };
+        const items = p.items;
         if (items.type === "object" && items.properties) {
           const nested: Record<string, unknown> = {};
           for (const [k, v] of Object.entries(items.properties)) nested[k] = convertProp(v);
@@ -586,27 +585,27 @@ export class GeminiClient {
     // Function tools — Interactions API allows function tools + file search together
     for (const tool of tools) {
       result.push({
-        type: "function" as const,
+        type: "function",
         name: tool.name,
         description: tool.description,
         parameters: GeminiClient.toJsonSchema(tool.parameters),
-      } as Interactions.Tool);
+      });
     }
 
     // File Search RAG
     if (ragStoreIds && ragStoreIds.length > 0) {
       result.push({
-        type: "file_search" as const,
+        type: "file_search",
         file_search_store_names: ragStoreIds,
         top_k: ragTopK,
-      } as Interactions.Tool);
+      });
     }
 
     // Google Search
     if (webSearchEnabled) {
       result.push({
-        type: "google_search" as const,
-      } as Interactions.Tool);
+        type: "google_search",
+      });
     }
 
     return result;
@@ -705,42 +704,42 @@ export class GeminiClient {
     for (const attachment of msg.attachments) {
       if (attachment.type === "image") {
         contents.push({
-          type: "image" as const,
+          type: "image",
           data: attachment.data,
           mime_type: attachment.mimeType,
-        } as Interactions.Content);
+        });
       } else if (attachment.type === "audio") {
         contents.push({
-          type: "audio" as const,
+          type: "audio",
           data: attachment.data,
           mime_type: attachment.mimeType,
-        } as Interactions.Content);
+        });
       } else if (attachment.type === "video") {
         contents.push({
-          type: "video" as const,
+          type: "video",
           data: attachment.data,
           mime_type: attachment.mimeType,
-        } as Interactions.Content);
+        });
       } else if (attachment.type === "pdf") {
         contents.push({
-          type: "document" as const,
+          type: "document",
           data: attachment.data,
           mime_type: attachment.mimeType,
-        } as Interactions.Content);
+        });
       } else {
         // Text files — include as text
         if (attachment.data) {
           try {
             const decoded = atob(attachment.data);
-            contents.push({ type: "text" as const, text: `[File: ${attachment.name}]\n${decoded}` } as Interactions.Content);
+            contents.push({ type: "text", text: `[File: ${attachment.name}]\n${decoded}` });
           } catch {
-            contents.push({ type: "text" as const, text: `[File: ${attachment.name}]` } as Interactions.Content);
+            contents.push({ type: "text", text: `[File: ${attachment.name}]` });
           }
         }
       }
     }
     if (msg.content) {
-      contents.push({ type: "text" as const, text: msg.content } as Interactions.Content);
+      contents.push({ type: "text", text: msg.content });
     }
     return contents;
   }
@@ -777,13 +776,13 @@ export class GeminiClient {
 
     // Multimodal: history as text prefix, then attachments + text from the last message
     const contents: Interactions.Content[] = [
-      { type: "text" as const, text: historyText } as Interactions.Content,
+      { type: "text", text: historyText },
     ];
     const lastParts = GeminiClient.buildInteractionInput(lastMessage);
     if (Array.isArray(lastParts)) {
       contents.push(...lastParts);
     } else {
-      contents.push({ type: "text" as const, text: lastParts } as Interactions.Content);
+      contents.push({ type: "text", text: lastParts });
     }
     return contents;
   }
@@ -799,11 +798,7 @@ export class GeminiClient {
 
       // Handle array items
       if (value.type === "array" && value.items) {
-        const items = value.items as ToolPropertyDefinition | {
-          type: string;
-          properties?: Record<string, ToolPropertyDefinition>;
-          required?: string[];
-        };
+        const items = value.items;
 
         if (items.type === "object" && items.properties) {
           // Nested object in array
@@ -1697,7 +1692,7 @@ export class GeminiClient {
               call_id: fc.id,
               name: fc.name,
               result: serializedResult,
-            } as Interactions.Step);
+            });
           }
 
           functionCallCount += callsToExecute.length;
@@ -1715,7 +1710,7 @@ export class GeminiClient {
             functionResults.push({
               type: "user_input",
               content: [{ type: "text", text: "[System: Function call limit reached. Please provide a final answer based on the information gathered so far.]" }],
-            } as Interactions.Step);
+            });
             nextInput = functionResults;
             tracing.spanEnd(roundSpanId, { metadata: { reason: "function_call_limit_with_skipped", usage: roundUsage } });
 
@@ -1755,7 +1750,7 @@ export class GeminiClient {
             functionResults.push({
               type: "user_input",
               content: [{ type: "text", text: `[System: You have ${remainingAfter} function calls remaining. Please complete your task efficiently or provide a summary.]` }],
-            } as Interactions.Step);
+            });
           }
 
           // Send function results back — next iteration creates a new interaction chained via previous_interaction_id
@@ -1937,7 +1932,7 @@ export class GeminiClient {
       // Poll for completion
       const maxPolls = 180;  // 30 min max (10s intervals)
       for (let i = 0; i < maxPolls; i++) {
-        await new Promise(resolve => setTimeout(resolve, 10000));
+        await new Promise(resolve => window.setTimeout(resolve, 10000));
 
         const result = await this.ai.interactions.get(interactionId);
 

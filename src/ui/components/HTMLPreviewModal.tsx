@@ -94,7 +94,7 @@ export class HTMLPreviewModal extends Modal {
   private addResizeHandles(modalEl: HTMLElement) {
     const directions = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
     for (const dir of directions) {
-      const handle = document.createElement("div");
+      const handle = createDiv();
       handle.className = `llm-hub-resize-handle llm-hub-resize-${dir}`;
       handle.dataset.direction = dir;
       modalEl.appendChild(handle);
@@ -251,7 +251,7 @@ export class HTMLPreviewModal extends Modal {
       // Desktop: Download file
       const blob = new Blob([this.htmlContent], { type: "text/html" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
+      const link = createEl("a");
       link.href = url;
       link.download = `infographic-${this.baseName}-${Date.now()}.html`;
       link.click();

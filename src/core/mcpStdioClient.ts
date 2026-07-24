@@ -153,13 +153,13 @@ export class McpStdioClient implements IMcpClient {
 
     if (proc && !proc.killed) {
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
+        const timer = window.setTimeout(() => {
           if (!proc.killed) {
             proc.kill("SIGKILL");
           }
         }, 3000);
         proc.on("close", () => {
-          clearTimeout(timer);
+          window.clearTimeout(timer);
           resolve();
         });
         proc.kill("SIGTERM");
@@ -191,7 +191,6 @@ export class McpStdioClient implements IMcpClient {
     this.process.stderr!.on("data", (data: Buffer) => {
       const msg = data.toString("utf8").trim();
       if (msg) {
-        console.debug("[MCP stderr]", this.config.name, msg);
         this.stderrLog.push(msg);
         if (this.stderrLog.length > 20) this.stderrLog.shift();
       }
@@ -207,7 +206,6 @@ export class McpStdioClient implements IMcpClient {
     });
 
     this.process.on("close", (code: number | null) => {
-      console.debug("[MCP process closed]", this.config.name, code);
       this.initialized = false;
       const stderrMsg = this.stderrLog.join("\n");
       // Reject all pending requests
@@ -258,7 +256,7 @@ export class McpStdioClient implements IMcpClient {
       };
 
       const effectiveTimeout = timeoutMs ?? (method === "initialize" ? 120000 : 30000);
-      const timeout = setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
           reject(new Error(`MCP request timed out: ${method}`));
@@ -267,11 +265,11 @@ export class McpStdioClient implements IMcpClient {
 
       this.pending.set(id, {
         resolve: (value) => {
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           resolve(value);
         },
         reject: (reason) => {
-          clearTimeout(timeout);
+          window.clearTimeout(timeout);
           reject(reason);
         },
       });

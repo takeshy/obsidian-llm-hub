@@ -1,4 +1,5 @@
-import { PluginSettingTab, App } from "obsidian";
+import { PluginSettingTab, App, type SettingDefinitionItem } from "obsidian";
+import { t } from "src/i18n";
 import type { LlmHubPlugin } from "src/plugin";
 import type { SettingsContext } from "src/ui/settings/settingsContext";
 
@@ -28,43 +29,53 @@ export class SettingsTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-
+  getSettingDefinitions(): SettingDefinitionItem[] {
     const ctx: SettingsContext = {
       plugin: this.plugin,
-      display: () => this.display(),
+      display: () => this.update(),
       syncCancelRef: this.syncCancelRef,
     };
 
-    displayCliSettings(containerEl, ctx);
-    displayLocalLlmSettings(containerEl, ctx);
-    displayApiProviderSettings(containerEl, ctx);
-    displayProxySettings(containerEl, ctx);
-    displayWorkspaceSettings(containerEl, ctx);
-    displayKnowledgeSettings(containerEl, ctx);
-    displayEditHistorySettings(containerEl, ctx);
-    displayEncryptionSettings(containerEl, ctx);
-    displayLangfuseSettings(containerEl, ctx);
-    displaySlashCommandSettings(containerEl, ctx);
-    displaySkillsSettings(containerEl, ctx);
-    displayExternalSkillSettings(containerEl, ctx);
-    displayRagSettings(containerEl, ctx);
-    displayMcpServersSettings(containerEl, ctx);
-    displayDiscordSettings(containerEl, ctx);
-
-    // Refresh the tab when settings change elsewhere (e.g. chat-side
-    // auto-disable of tools for a Local LLM model). Without this, the
-    // user could open the tab, edit a config, and unknowingly clobber
-    // the chat-side update on save. Re-register on every display() so
-    // we use the freshest closure; deregister the previous listener
-    // first to avoid leaks when display() is called repeatedly.
+    // Refresh definitions when settings change elsewhere (for example when
+    // Chat automatically disables tools for a Local LLM model).
     if (this.settingsListener) {
       this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
     }
-    this.settingsListener = () => this.display();
+    this.settingsListener = () => this.update();
     this.plugin.settingsEmitter.on("settings-updated", this.settingsListener);
+
+    const sections: Array<{
+      name: string;
+      render: (containerEl: HTMLElement, context: SettingsContext) => void;
+    }> = [
+      { name: t("settings.cliProviders"), render: displayCliSettings },
+      { name: t("settings.localLlm"), render: displayLocalLlmSettings },
+      { name: t("settings.apiProviders"), render: displayApiProviderSettings },
+      { name: t("settings.proxy"), render: displayProxySettings },
+      { name: t("settings.workspace"), render: displayWorkspaceSettings },
+      { name: t("settings.knowledge"), render: displayKnowledgeSettings },
+      { name: t("settings.encryption"), render: displayEncryptionSettings },
+      { name: t("settings.langfuse"), render: displayLangfuseSettings },
+      { name: t("settings.slashCommands"), render: displaySlashCommandSettings },
+      { name: t("settings.skills"), render: displaySkillsSettings },
+      { name: t("settings.externalSkills"), render: displayExternalSkillSettings },
+      { name: t("settings.rag"), render: displayRagSettings },
+      { name: t("settings.mcpServers"), render: displayMcpServersSettings },
+      { name: t("settings.discord"), render: displayDiscordSettings },
+    ];
+
+    // This section has no UI, but still normalizes legacy edit-history data.
+    displayEditHistorySettings(this.containerEl, ctx);
+
+    return sections.map((section) => ({
+      name: section.name,
+      render: (setting) => {
+        const containerEl = setting.settingEl;
+        containerEl.empty();
+        containerEl.removeClass("setting-item");
+        section.render(containerEl, ctx);
+      },
+    }));
   }
 
   hide(): void {

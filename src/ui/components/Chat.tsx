@@ -689,7 +689,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			await plugin.app.vault.create(fileName, markdown);
 			new Notice(t("chat.savedAsNote", { path: fileName }));
 			setSaveNoteState("saved");
-			setTimeout(() => setSaveNoteState("idle"), 3000);
+			window.setTimeout(() => setSaveNoteState("idle"), 3000);
 		} catch (error) {
 			new Notice(t("common.error") + ": " + formatError(error));
 			setSaveNoteState("idle");
@@ -1150,7 +1150,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	useEffect(() => {
 		const handleLeafChange = () => {
 			// Small delay to let selection capture complete
-			setTimeout(() => {
+			window.setTimeout(() => {
 				const selection = plugin.getLastSelection();
 				setHasSelection(!!selection);
 				// Skip auto-focus on mobile - iOS doesn't allow programmatic focus without user interaction
@@ -1169,13 +1169,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	// Auto-scroll to bottom when messages change
 	useEffect(() => {
 		// Delay scroll to ensure MarkdownRenderer has finished rendering
-		const timer = setTimeout(() => {
+		const timer = window.setTimeout(() => {
 			const container = messagesContainerRef.current;
 			if (container) {
 				container.scrollTop = container.scrollHeight;
 			}
 		}, 150);
-		return () => clearTimeout(timer);
+		return () => window.clearTimeout(timer);
 	}, [messages, streamingContent]);
 
 	// Handle iOS keyboard visibility using focus events
@@ -1203,7 +1203,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			// Track focusout from textarea within our chat input area
 			if (target.tagName === "TEXTAREA" && target.closest(".llm-hub-input-container")) {
 				// Small delay to avoid flickering
-				setTimeout(() => {
+				window.setTimeout(() => {
 					const active = document.activeElement as HTMLElement | null;
 					const isStillInInput = active?.tagName === "TEXTAREA" && active?.closest(".llm-hub-input-container");
 					const isInDecryptForm = active?.tagName === "INPUT" && active?.closest(".llm-hub-decrypt-form");
@@ -1214,7 +1214,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			}
 			// Track focusout from decrypt form password input
 			if (target.tagName === "INPUT" && target.closest(".llm-hub-decrypt-form")) {
-				setTimeout(() => {
+				window.setTimeout(() => {
 					const active = document.activeElement as HTMLElement | null;
 					const isStillInDecrypt = active?.tagName === "INPUT" && active?.closest(".llm-hub-decrypt-form");
 					const isInChatInput = active?.tagName === "TEXTAREA" && active?.closest(".llm-hub-input-container");
@@ -1961,8 +1961,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				// Feed results back to the CLI on the next iteration
 				conversationHistory = [
 					...conversationHistory,
-					{ role: "assistant", content: iterationContent, timestamp: Date.now() } as Message,
-					{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() } as Message,
+						{ role: "assistant", content: iterationContent, timestamp: Date.now() },
+						{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() },
 				];
 				iterationUserContent = markerResult.followUpMessage;
 			}
@@ -2424,8 +2424,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 				conversationHistory = [
 					...conversationHistory,
-					{ role: "assistant", content: iterationContent, timestamp: Date.now() } as Message,
-					{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() } as Message,
+						{ role: "assistant", content: iterationContent, timestamp: Date.now() },
+						{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() },
 				];
 			}
 

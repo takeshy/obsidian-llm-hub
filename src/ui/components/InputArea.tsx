@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from "react";
 import Send from "lucide-react/dist/esm/icons/send";
 import Paperclip from "lucide-react/dist/esm/icons/paperclip";
 import StopCircle from "lucide-react/dist/esm/icons/stop-circle";
@@ -183,7 +183,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
         setShowSearchMenu(false);
       }
     };
-    const handleEscape = (event: globalThis.KeyboardEvent) => {
+    const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setShowSearchMenu(false);
         searchButtonRef.current?.focus();
@@ -191,7 +191,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     };
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
-    setTimeout(() => searchMenuRef.current?.querySelector<HTMLInputElement>("input:not(:disabled)")?.focus(), 0);
+    window.setTimeout(() => searchMenuRef.current?.querySelector<HTMLInputElement>("input:not(:disabled)")?.focus(), 0);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
@@ -397,14 +397,14 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     setInput(newInput);
     setShowMentionAutocomplete(false);
     // Set cursor position after the inserted mention
-    setTimeout(() => {
+    window.setTimeout(() => {
       const newPos = mentionStartPos + inserted.length;
       textareaRef.current?.setSelectionRange(newPos, newPos);
       textareaRef.current?.focus();
     }, 0);
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     // Slash command autocomplete
     if (showAutocomplete) {
       if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
@@ -451,7 +451,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
         if (mention && mention.kind !== "variable") {
           void app.workspace.openLinkText(mention.value, "", true);
           // Return focus to textarea after opening
-          setTimeout(() => textareaRef.current?.focus(), 100);
+          window.setTimeout(() => textareaRef.current?.focus(), 100);
         }
         return;
       }
@@ -675,7 +675,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                     onClick={(e) => {
                       e.stopPropagation();
                       void app.workspace.openLinkText(mention.value, "", true);
-                      setTimeout(() => textareaRef.current?.focus(), 100);
+                      window.setTimeout(() => textareaRef.current?.focus(), 100);
                     }}
                     title={t("input.openFile")}
                   >
@@ -808,7 +808,11 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                           ? t("input.mcpToolHint", { count: String(toolCount), tools: server.toolHints?.slice(0, 3).join(", ") + (toolCount > 3 ? ", ..." : "") })
                           : "";
                         return (
-                          <label key={server.name} className="llm-hub-mcp-server-item" title={server.toolHints?.join(", ") || ""}>
+                          <label
+                            key={server.name}
+                            className={`llm-hub-mcp-server-item${vaultToolModeOnlyNone ? " is-disabled" : ""}`}
+                            title={server.toolHints?.join(", ") || ""}
+                          >
                             <input
                               type="checkbox"
                               checked={!vaultToolModeOnlyNone && server.enabled}
@@ -839,7 +843,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                             {models.map(m => {
                               const required = isThinkingRequired(m.name);
                               return (
-                                <label key={m.name} className="llm-hub-mcp-server-item">
+                                <label key={m.name} className={`llm-hub-mcp-server-item${required ? " is-disabled" : ""}`}>
                                   <input type="checkbox" checked={required || alwaysThinkModels.has(m.name)} onChange={(e) => onAlwaysThinkModelToggle(m.name, e.target.checked)} disabled={required} />
                                   <span className="llm-hub-mcp-server-name">{m.displayName}</span>
                                 </label>

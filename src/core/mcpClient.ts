@@ -322,16 +322,13 @@ export class McpHttpClient implements IMcpClient {
   }
 }
 
-/** @deprecated Use McpHttpClient instead */
-export const McpClient = McpHttpClient;
-
 /**
  * Factory function to create the appropriate MCP client based on transport type
  */
 export function createMcpClient(config: McpServerConfig): IMcpClient {
   if (config.transport === "stdio") {
     // Dynamic import to avoid loading child_process on mobile
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep stdio-only Node code out of the mobile startup path.
     const { McpStdioClient } = require("./mcpStdioClient") as typeof import("./mcpStdioClient");
     return new McpStdioClient(config);
   }

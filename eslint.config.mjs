@@ -51,7 +51,7 @@ const SENTENCE_CASE_IGNORES = [
 
 export default tseslint.config(
   {
-    ignores: ['main.js', 'node_modules/**', 'pdfjs/**', 'scripts/*.mjs', '*.js', '*.mjs', 'vitest.config.ts', 'src/**/*.test.ts'],
+    ignores: ['main.js', 'node_modules/**', 'pdfjs/**', 'scripts/*.mjs', 'test/**', '*.js', '*.mjs', 'vitest.config.ts', 'src/**/*.test.ts'],
   },
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -73,6 +73,8 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-call': 'error',
       '@typescript-eslint/no-unsafe-argument': 'error',
       '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-deprecated': 'warn',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'warn',
 
       // Obsidian plugin rules (from recommended config)
       'obsidianmd/commands/no-command-in-command-id': 'error',
@@ -82,10 +84,14 @@ export default tseslint.config(
       'obsidianmd/commands/no-plugin-name-in-command-name': 'error',
       'obsidianmd/settings-tab/no-manual-html-headings': 'error',
       'obsidianmd/settings-tab/no-problematic-settings-headings': 'error',
+      'obsidianmd/settings-tab/prefer-setting-definitions': 'warn',
+      'obsidianmd/settings-tab/prefer-update-over-display': 'warn',
+      'obsidianmd/settings-tab/no-deprecated-display': 'warn',
       'obsidianmd/vault/iterate': 'error',
       'obsidianmd/detach-leaves': 'error',
       'obsidianmd/hardcoded-config-path': 'error',
       'obsidianmd/no-forbidden-elements': 'error',
+      'obsidianmd/no-global-this': 'warn',
       'obsidianmd/no-plugin-as-component': 'error',
       'obsidianmd/no-sample-code': 'error',
       'obsidianmd/no-tfile-tfolder-cast': 'error',
@@ -94,6 +100,8 @@ export default tseslint.config(
       'obsidianmd/object-assign': 'error',
       'obsidianmd/platform': 'error',
       'obsidianmd/prefer-file-manager-trash-file': 'warn',
+      'obsidianmd/prefer-create-el': 'warn',
+      'obsidianmd/prefer-window-timers': 'warn',
       'obsidianmd/prefer-abstract-input-suggest': 'error',
       'obsidianmd/regex-lookbehind': 'error',
       'obsidianmd/sample-names': 'error',
@@ -113,6 +121,7 @@ export default tseslint.config(
 
       // Additional strict rules
       'no-case-declarations': 'error',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-useless-escape': 'error',
     },
   },

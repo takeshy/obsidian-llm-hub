@@ -51,7 +51,7 @@ export default function SkillSelector({
       }
     };
     document.addEventListener("mousedown", handleClick);
-    requestAnimationFrame(updatePosition);
+    window.requestAnimationFrame(updatePosition);
     window.addEventListener("resize", updatePosition);
     return () => {
       document.removeEventListener("mousedown", handleClick);

@@ -28,7 +28,7 @@ const MAX_CHANGED_FILES_PER_SYNC = 50;
 const SCAN_YIELD_INTERVAL = 25;
 
 async function yieldToEventLoop(): Promise<void> {
-  await new Promise<void>(resolve => setTimeout(resolve, 0));
+  await new Promise<void>(resolve => window.setTimeout(resolve, 0));
 }
 
 function parseExternalIndexPaths(value: string): string[] {
@@ -1008,8 +1008,8 @@ export async function loadRagMediaAttachments(
 
       if (isAbsolute) {
         // External RAG: read from filesystem using Node.js fs
-        const fs = (globalThis as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
-        const nodePath = (globalThis as { require?: (id: string) => { basename: (p: string) => string; extname: (p: string) => string } }).require?.("path");
+        const fs = (window as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
+        const nodePath = (window as { require?: (id: string) => { basename: (p: string) => string; extname: (p: string) => string } }).require?.("path");
         if (!fs || !nodePath) continue;
 
         const buffer = await fs.promises.readFile(ref.filePath);
@@ -1105,8 +1105,8 @@ export async function extractPdfPages(
 
   const isAbsolute = filePath.startsWith("/") || /^[A-Z]:\\/i.test(filePath);
   if (isAbsolute) {
-    const fs = (globalThis as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
-    const nodePath = (globalThis as { require?: (id: string) => { basename: (p: string) => string } }).require?.("path");
+    const fs = (window as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
+    const nodePath = (window as { require?: (id: string) => { basename: (p: string) => string } }).require?.("path");
     if (!fs || !nodePath) return null;
     const buffer = await fs.promises.readFile(filePath);
     pdfBytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);

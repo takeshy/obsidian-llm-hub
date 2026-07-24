@@ -30,8 +30,8 @@ const PROVIDER_LABELS: Record<TerminalProvider, string> = {
 function getNodeModule<T>(id: string): T {
   const loader =
     (typeof require === "function" ? require : undefined) ||
-    (globalThis as unknown as { require?: (moduleId: string) => unknown }).require ||
-    (globalThis as unknown as { module?: { require?: (moduleId: string) => unknown } }).module?.require;
+    (window as unknown as { require?: (moduleId: string) => unknown }).require ||
+    (window as unknown as { module?: { require?: (moduleId: string) => unknown } }).module?.require;
   if (!loader) throw new Error("CommonJS require is not available");
   return loader(id) as T;
 }
@@ -42,8 +42,8 @@ function getPluginNodeModule<T>(plugin: LlmHubPlugin, id: string): T {
   } catch (firstError) {
     const loader =
       (typeof require === "function" ? require : undefined) ||
-      (globalThis as unknown as { require?: (moduleId: string) => unknown }).require ||
-      (globalThis as unknown as { module?: { require?: (moduleId: string) => unknown } }).module?.require;
+      (window as unknown as { require?: (moduleId: string) => unknown }).require ||
+      (window as unknown as { module?: { require?: (moduleId: string) => unknown } }).module?.require;
     if (!loader) throw firstError;
 
     const vaultBasePath = (plugin.app.vault.adapter as { basePath?: string }).basePath;
@@ -200,8 +200,8 @@ export default function CliTerminalPanel({
     const resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit();
-      } catch (e) {
-        console.debug("LLM Hub: Failed to fit CLI terminal:", formatError(e));
+      } catch {
+        // The terminal may be detached while the resize callback is queued.
       }
     });
     resizeObserver.observe(terminalHost);

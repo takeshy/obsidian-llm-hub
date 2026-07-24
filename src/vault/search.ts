@@ -32,7 +32,7 @@ export async function extractPdfText(
   try {
     let buffer: ArrayBuffer;
     if (isAbsolute) {
-      const fs = (globalThis as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
+      const fs = (window as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
       if (!fs) return null;
       const nodeBuffer = await fs.promises.readFile(filePath);
       buffer = nodeBuffer.buffer.slice(nodeBuffer.byteOffset, nodeBuffer.byteOffset + nodeBuffer.byteLength) as ArrayBuffer;

@@ -40,8 +40,8 @@ export function getChildProcess(): typeof import("child_process") {
 
 function getNodeModule<T>(id: string): T {
   const loader =
-    (globalThis as unknown as { require?: (id: string) => unknown }).require ||
-    (globalThis as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
+    (window as unknown as { require?: (id: string) => unknown }).require ||
+    (window as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
   if (!loader) {
     throw new Error(`${id} is not available in this environment`);
   }
@@ -301,8 +301,8 @@ function formatWindowsCliError(message: string | undefined): string | undefined 
 function fileExistsSync(path: string): boolean {
   try {
     const loader =
-      (globalThis as unknown as { require?: (id: string) => unknown }).require ||
-      (globalThis as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
+      (window as unknown as { require?: (id: string) => unknown }).require ||
+      (window as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
     if (!loader) return false;
     const fs = loader("fs") as typeof import("fs");
     return fs.existsSync(path);
@@ -598,7 +598,7 @@ abstract class BaseCliProvider implements CliProviderInterface {
           });
 
           // Timeout after 30 seconds
-          setTimeout(() => {
+          window.setTimeout(() => {
             proc.kill();
             resolve(false);
           }, 30000);
@@ -1586,7 +1586,7 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
         resolve({ success: false, error: formatWindowsCliError(err.message) });
       });
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         proc.kill();
         resolve({ success: false, error: formatWindowsCliError("Timeout") });
       }, 30000);
@@ -1627,7 +1627,7 @@ export async function verifyCli(customPath?: string): Promise<CliVerifyResult> {
         resolve({ success: false, error: formatWindowsCliError(err.message) });
       });
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         proc.kill();
         resolve({ success: false, error: formatWindowsCliError("Timeout - CLI may not be logged in") });
       }, 30000);
@@ -1685,7 +1685,7 @@ export async function verifyClaudeCli(customPath?: string): Promise<CliVerifyRes
         resolve({ success: false, error: formatWindowsClaudeCliError(err.message) });
       });
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         proc.kill();
         resolve({ success: false, error: formatWindowsClaudeCliError("Timeout") });
       }, 30000);
@@ -1733,7 +1733,7 @@ export async function verifyClaudeCli(customPath?: string): Promise<CliVerifyRes
         resolve({ success: false, error: formatWindowsClaudeCliError(err.message) });
       });
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         proc.kill();
         resolve({ success: false, error: formatWindowsClaudeCliError("Timeout - CLI may not be logged in") });
       }, 30000);
@@ -1791,7 +1791,7 @@ export async function verifyCodexCli(customPath?: string): Promise<CliVerifyResu
         resolve({ success: false, error: formatWindowsCodexCliError(err.message) });
       });
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         proc.kill();
         resolve({ success: false, error: formatWindowsCodexCliError("Timeout") });
       }, 30000);
@@ -1839,7 +1839,7 @@ export async function verifyCodexCli(customPath?: string): Promise<CliVerifyResu
         resolve({ success: false, error: formatWindowsCodexCliError(err.message) });
       });
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         proc.kill();
         resolve({ success: false, error: formatWindowsCodexCliError("Timeout - CLI may not be logged in") });
       }, 60000);

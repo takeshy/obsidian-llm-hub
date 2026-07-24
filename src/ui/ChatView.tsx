@@ -29,6 +29,7 @@ export class ChatView extends ItemView {
 
   async onOpen(): Promise<void> {
     await Promise.resolve();
+    this.containerEl.addClass("llm-hub-chat-view");
     const container = this.containerEl.children[1];
     container.empty();
     container.addClass("llm-hub-chat-container");
@@ -49,6 +50,7 @@ export class ChatView extends ItemView {
     // Clear selection highlight when chat view is closed
     this.plugin.clearSelectionHighlight();
     this.reactRoot?.unmount();
+    this.containerEl.removeClass("llm-hub-chat-view");
     await Promise.resolve();
   }
 

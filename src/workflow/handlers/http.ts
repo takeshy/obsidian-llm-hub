@@ -1,7 +1,7 @@
 import { App, requestUrl } from "obsidian";
 import type { LlmHubPlugin } from "../../plugin";
 import type { McpAppInfo } from "../../types";
-import { McpClient } from "../../core/mcpClient";
+import { McpHttpClient } from "../../core/mcpClient";
 import { WorkflowNode, ExecutionContext, FileExplorerData } from "../types";
 import { parseJsonRecord, replaceVariables } from "./utils";
 
@@ -459,7 +459,7 @@ export async function handleMcpNode(
   }
 
   // Create MCP client for this URL (workflow MCP nodes are always HTTP transport)
-  const client = new McpClient({
+  const client = new McpHttpClient({
     name: url,
     transport: "http",
     url: url,

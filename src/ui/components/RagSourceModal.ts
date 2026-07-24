@@ -30,7 +30,7 @@ export class RagSourceModal extends Modal {
     const header = contentEl.createDiv({ cls: "llm-hub-rag-text-modal-header" });
     header.createEl("h3", { text: att.name });
     if (att.sourcePath) {
-      const pathEl = header.createEl("div", {
+      const pathEl = header.createDiv({
         cls: "llm-hub-rag-text-modal-path",
         text: att.sourcePath,
       });
@@ -54,7 +54,7 @@ export class RagSourceModal extends Modal {
       cls: "mod-cta",
     });
     saveBtn.addEventListener("click", () => {
-      const newData = btoa(unescape(encodeURIComponent(textarea.value)));
+      const newData = encodeAttachmentText(textarea.value);
       this.onResult({ attachment: { ...att, data: newData } });
       this.close();
     });
@@ -66,7 +66,7 @@ export class RagSourceModal extends Modal {
       this.close();
     });
 
-    setTimeout(() => textarea.focus(), 50);
+    window.setTimeout(() => textarea.focus(), 50);
   }
 
   onClose() {
@@ -76,8 +76,17 @@ export class RagSourceModal extends Modal {
 
 function decodeAttachmentText(base64: string): string {
   try {
-    return decodeURIComponent(escape(atob(base64)));
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
   } catch {
     return atob(base64);
   }
+}
+
+function encodeAttachmentText(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }

@@ -255,7 +255,7 @@ function toOpenAiTools(tools: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
     function: {
       name: tool.name,
       description: tool.description,
-      parameters: tool.parameters as Record<string, unknown>,
+      parameters: tool.parameters,
     },
   }));
 }
@@ -309,7 +309,7 @@ function toResponsesTools(tools: ToolDefinition[]): Array<{ type: "function"; na
     type: "function" as const,
     name: tool.name,
     description: tool.description,
-    parameters: tool.parameters as Record<string, unknown>,
+    parameters: tool.parameters,
     strict: false,
   }));
 }

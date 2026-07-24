@@ -172,7 +172,6 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
       slider
         .setLimits(1, 50, 1)
         .setValue(plugin.settings.maxFunctionCalls)
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             plugin.settings.maxFunctionCalls = value;
@@ -210,7 +209,6 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
       slider
         .setLimits(1, 50, 1)
         .setValue(plugin.settings.functionCallWarningThreshold)
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             const maxAllowed = plugin.settings.maxFunctionCalls;
@@ -243,7 +241,6 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
       slider
         .setLimits(10, 200, 10)
         .setValue(plugin.settings.listNotesLimit)
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             plugin.settings.listNotesLimit = value;
@@ -271,7 +268,6 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
       slider
         .setLimits(1000, 100000, 1000)
         .setValue(plugin.settings.maxNoteChars)
-        .setDynamicTooltip()
         .onChange((value) => {
           void (async () => {
             plugin.settings.maxNoteChars = value;

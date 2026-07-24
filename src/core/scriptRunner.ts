@@ -92,7 +92,7 @@ export function runScript(options: RunScriptOptions): Promise<RunScriptResult> {
         stderr += data.toString();
       });
 
-      const timer = setTimeout(() => {
+      const timer = window.setTimeout(() => {
         if (settled) return;
         settled = true;
         proc.kill();
@@ -108,7 +108,7 @@ export function runScript(options: RunScriptOptions): Promise<RunScriptResult> {
       proc.on("close", (code: number | null) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        window.clearTimeout(timer);
         resolve({
           success: code === 0,
           stdout: stdout.trim(),
@@ -120,7 +120,7 @@ export function runScript(options: RunScriptOptions): Promise<RunScriptResult> {
       proc.on("error", (err: Error) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        window.clearTimeout(timer);
         resolve({
           success: false,
           stdout: stdout.trim(),

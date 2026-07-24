@@ -84,14 +84,14 @@ export function executeSandboxedJS(
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    const iframe = document.createElement("iframe");
+    const iframe = createEl("iframe");
     iframe.sandbox.add("allow-scripts");
     iframe.setCssStyles({ display: "none" });
 
     let settled = false;
 
-    const cleanup = (timer: ReturnType<typeof setTimeout>) => {
-      clearTimeout(timer);
+    const cleanup = (timer: number) => {
+      window.clearTimeout(timer);
       window.removeEventListener("message", handler);
       if (iframe.parentNode) {
         iframe.parentNode.removeChild(iframe);
@@ -125,7 +125,7 @@ export function executeSandboxedJS(
 
     window.addEventListener("message", handler);
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       if (!settled) {
         settled = true;
         cleanup(timer);

@@ -125,11 +125,11 @@ class WorkflowConfirmModal extends Modal {
     // can see what was asked without re-prefilling the refinement textarea.
     if (this.userRequest?.trim()) {
       const requestContainer = scrollable.createDiv({ cls: "ai-workflow-confirm-user-request" });
-      requestContainer.createEl("div", {
+      requestContainer.createDiv({
         cls: "ai-workflow-confirm-user-request-label",
         text: t("workflow.generation.yourRequest"),
       });
-      requestContainer.createEl("div", {
+      requestContainer.createDiv({
         cls: "ai-workflow-confirm-user-request-body",
         text: this.userRequest.trim(),
       });
@@ -152,7 +152,7 @@ class WorkflowConfirmModal extends Modal {
         void navigator.clipboard.writeText(explanation).then(() => {
           const original = copyBtn.textContent;
           copyBtn.textContent = "✓";
-          setTimeout(() => { copyBtn.textContent = original; }, 1200);
+          window.setTimeout(() => { copyBtn.textContent = original; }, 1200);
         });
       });
       explanationContainer.createEl("p", { text: this.explanation });
@@ -162,7 +162,7 @@ class WorkflowConfirmModal extends Modal {
     // the user can see both instruction-body changes and workflow YAML changes.
     if (this.isSkill && this.newInstructions !== undefined) {
       const instrLabel = scrollable.createDiv({ cls: "llm-hub-edit-confirm-preview-label" });
-      instrLabel.createEl("span", { text: t("aiWorkflow.skillInstructionsChanges") });
+      instrLabel.createSpan({ text: t("aiWorkflow.skillInstructionsChanges") });
       const instrUnchanged = (this.oldInstructions ?? "") === this.newInstructions;
       if (instrUnchanged) {
         scrollable.createDiv({
@@ -183,7 +183,7 @@ class WorkflowConfirmModal extends Modal {
 
     // Create diff view with toggle
     const diffLabel = scrollable.createDiv({ cls: "llm-hub-edit-confirm-preview-label" });
-    diffLabel.createEl("span", {
+    diffLabel.createSpan({
       text: this.isSkill && this.newInstructions !== undefined
         ? t("aiWorkflow.workflowYamlChanges")
         : t("workflowModal.changes"),
@@ -504,7 +504,7 @@ export class AIWorkflowModal extends Modal {
       if (this.forceSkill) {
         this.outputPathEl.disabled = true;
       }
-      pathContainer.createEl("div", {
+      pathContainer.createDiv({
         cls: "ai-workflow-hint",
         text: t("aiWorkflow.pathHint"),
       });
@@ -561,7 +561,7 @@ export class AIWorkflowModal extends Modal {
     this.setupMentionAutocomplete();
 
     // Hint for @ mention
-    contentEl.createEl("div", {
+    contentEl.createDiv({
       cls: "ai-workflow-hint",
       text: t("aiWorkflow.mentionHint"),
     });
@@ -741,9 +741,9 @@ export class AIWorkflowModal extends Modal {
 
     // Focus appropriate field
     if (this.mode === "create") {
-      setTimeout(() => this.nameInputEl?.focus(), 50);
+      window.setTimeout(() => this.nameInputEl?.focus(), 50);
     } else {
-      setTimeout(() => this.descriptionEl?.focus(), 50);
+      window.setTimeout(() => this.descriptionEl?.focus(), 50);
     }
   }
 
@@ -853,7 +853,7 @@ export class AIWorkflowModal extends Modal {
     // Show paste response section, scroll it into view, and focus the textarea
     this.pasteSectionEl?.removeClass("is-hidden");
     this.pasteSectionEl?.scrollIntoView({ behavior: "smooth", block: "end" });
-    setTimeout(() => this.pasteTextareaEl?.focus(), 100);
+    window.setTimeout(() => this.pasteTextareaEl?.focus(), 100);
 
     new Notice(t("aiWorkflow.promptCopied"));
   }
@@ -2296,7 +2296,7 @@ ${formattedSteps}
   private addResizeHandles(modalEl: HTMLElement): void {
     const directions = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
     for (const dir of directions) {
-      const handle = document.createElement("div");
+      const handle = createDiv();
       handle.className = `llm-hub-resize-handle llm-hub-resize-${dir}`;
       handle.dataset.direction = dir;
       modalEl.appendChild(handle);
@@ -2810,7 +2810,7 @@ export function renderGenerationContext(
       void navigator.clipboard.writeText(section.content).then(() => {
         const original = copyBtn.textContent;
         copyBtn.textContent = "✓";
-        setTimeout(() => { copyBtn.textContent = original; }, 1200);
+        window.setTimeout(() => { copyBtn.textContent = original; }, 1200);
       });
     });
     if (section.kind === "markdown") {

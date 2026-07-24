@@ -296,7 +296,7 @@ export class WorkflowPreviewModal extends Modal {
         void navigator.clipboard.writeText(section.content).then(() => {
           const original = copyBtn.textContent;
           copyBtn.textContent = "✓";
-          setTimeout(() => { copyBtn.textContent = original; }, 1200);
+          window.setTimeout(() => { copyBtn.textContent = original; }, 1200);
         });
       });
       if (section.kind === "markdown") {

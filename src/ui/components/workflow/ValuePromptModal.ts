@@ -85,7 +85,7 @@ export class ValuePromptModal extends Modal {
     });
 
     // Focus input
-    setTimeout(() => this.inputEl?.focus(), 50);
+    window.setTimeout(() => this.inputEl?.focus(), 50);
   }
 
   private confirmValue(): void {

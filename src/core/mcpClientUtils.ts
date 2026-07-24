@@ -46,7 +46,7 @@ export function createClientFromAppInfo(
   serverHeaders?: Record<string, string>,
 ): IMcpClient {
   // Lazy import to avoid circular dependency
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Resolve the circular client dependency only when an MCP app is created.
   const { createMcpClient, McpHttpClient } = require("./mcpClient") as typeof import("./mcpClient");
   if (serverConfig) {
     return createMcpClient(serverConfig);

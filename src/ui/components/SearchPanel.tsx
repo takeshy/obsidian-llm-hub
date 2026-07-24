@@ -55,6 +55,13 @@ interface SearchPanelProps {
   onDiscussionWithResults?: (attachments: Attachment[]) => void;
 }
 
+function encodeUtf8Base64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 function getAvailableModels(plugin: LlmHubPlugin): ModelInfo[] {
   const cliConfig = plugin.settings.cliConfig;
   const enabledApiProviders = !Platform.isMobile ? plugin.settings.apiProviders.filter(p => p.enabled && p.verified) : [];
@@ -436,8 +443,8 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
           let bytes: Uint8Array;
           let ext: string;
           if (isAbsolute) {
-            const fs = (globalThis as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
-            const nodePath = (globalThis as { require?: (id: string) => { extname: (p: string) => string } }).require?.("path");
+            const fs = (window as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
+            const nodePath = (window as { require?: (id: string) => { extname: (p: string) => string } }).require?.("path");
             if (!fs || !nodePath) return;
             const buffer = await fs.promises.readFile(result.filePath);
             bytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -611,7 +618,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
         name: nameWithChunk,
         type: "text",
         mimeType: "text/plain",
-        data: btoa(unescape(encodeURIComponent(content))),
+        data: encodeUtf8Base64(content),
         sourcePath: result.filePath,
         pageLabel: result.pageLabel,
       });
@@ -853,7 +860,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                             if (file) {
                               void plugin.app.workspace.openLinkText(f.filePath, "", false);
                             } else {
-                              const { shell } = (globalThis as { require?: (id: string) => { shell: { openPath: (p: string) => void } } }).require?.("electron") ?? {};
+                              const { shell } = (window as { require?: (id: string) => { shell: { openPath: (p: string) => void } } }).require?.("electron") ?? {};
                               if (shell) {
                                 void shell.openPath(f.filePath);
                               } else {
@@ -1101,7 +1108,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                         void plugin.app.workspace.openLinkText(linkPath, "", false);
                       } else {
                         // External RAG: open with OS default app
-                        const { shell } = (globalThis as { require?: (id: string) => { shell: { openPath: (p: string) => void } } }).require?.("electron") ?? {};
+                        const { shell } = (window as { require?: (id: string) => { shell: { openPath: (p: string) => void } } }).require?.("electron") ?? {};
                         if (shell) {
                           void shell.openPath(result.filePath);
                         } else {

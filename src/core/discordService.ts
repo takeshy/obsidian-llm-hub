@@ -120,7 +120,7 @@ const SNOWFLAKE_RE = /^\d{17,20}$/;
 
 export class DiscordService {
   private ws: WebSocket | null = null;
-  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private heartbeatInterval: number | null = null;
   private lastSequence: number | null = null;
   private sessionId: string | null = null;
   private resumeGatewayUrl: string | null = null;
@@ -153,7 +153,6 @@ export class DiscordService {
     }
 
     if (this.isConnected) {
-      console.log("Discord bot is already connected");
       return;
     }
 
@@ -174,7 +173,6 @@ export class DiscordService {
       handle.stop();
     }
     this.runningDiscussions.clear();
-    console.log("LLM Hub: Discord bot stopped");
   }
 
   /**
@@ -218,10 +216,6 @@ export class DiscordService {
       return;
     }
 
-    this.ws.onopen = () => {
-      console.log("LLM Hub: Discord Gateway WebSocket opened");
-    };
-
     this.ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data as string) as GatewayPayload;
@@ -236,8 +230,6 @@ export class DiscordService {
       this.stopHeartbeat();
 
       const code = event.code;
-      console.log(`LLM Hub: Discord Gateway closed (code: ${code})`);
-
       // Non-recoverable close codes
       if (code === 4004) {
         console.error("LLM Hub: Discord authentication failed - invalid bot token");
@@ -286,7 +278,6 @@ export class DiscordService {
         break;
 
       case GatewayOp.RECONNECT:
-        console.log("LLM Hub: Discord Gateway requested reconnect");
         this.ws?.close();
         break;
 
@@ -298,7 +289,7 @@ export class DiscordService {
         }
         // Close existing WebSocket before reconnecting
         this.cleanup();
-        setTimeout(() => {
+        window.setTimeout(() => {
           if (this.shouldReconnect) {
             this.connect();
           }
@@ -325,7 +316,6 @@ export class DiscordService {
         this.botUserId = readyData.user.id;
         this.isConnected = true;
         this.reconnectAttempts = 0;
-        console.log(`LLM Hub: Discord bot connected as ${readyData.user.username}`);
         new Notice(`Discord bot connected as ${readyData.user.username}`);
         break;
       }
@@ -333,7 +323,6 @@ export class DiscordService {
       case "RESUMED":
         this.isConnected = true;
         this.reconnectAttempts = 0;
-        console.log("LLM Hub: Discord session resumed");
         break;
 
       case "MESSAGE_CREATE": {
@@ -380,9 +369,9 @@ export class DiscordService {
     this.stopHeartbeat();
     this.heartbeatAcked = true;
     // Send first heartbeat after jitter
-    setTimeout(() => {
+    window.setTimeout(() => {
       this.sendHeartbeat();
-      this.heartbeatInterval = setInterval(() => {
+      this.heartbeatInterval = window.setInterval(() => {
         if (!this.heartbeatAcked) {
           // Zombie connection — no ACK received since last heartbeat
           console.warn("LLM Hub: Discord heartbeat ACK not received, reconnecting");
@@ -396,7 +385,7 @@ export class DiscordService {
 
   private stopHeartbeat(): void {
     if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
+      window.clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
   }
@@ -422,8 +411,7 @@ export class DiscordService {
 
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
     this.reconnectAttempts++;
-    console.log(`LLM Hub: Discord reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (this.shouldReconnect) {
         this.connect();
       }
@@ -1645,7 +1633,7 @@ export class DiscordService {
         : undefined;
       const waitMs = retryAfter ? retryAfter * 1000 : 5000;
       console.warn(`LLM Hub: Discord rate limited, retrying in ${waitMs}ms`);
-      await new Promise(resolve => setTimeout(resolve, waitMs));
+      await new Promise(resolve => window.setTimeout(resolve, waitMs));
       return this.sendDiscordMessage(channelId, content, replyToId);
     }
 

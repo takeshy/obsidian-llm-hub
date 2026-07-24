@@ -176,8 +176,8 @@ function sanitizeSettingName(settingName: string): string {
  */
 export async function loadExternalRagIndex(dirPath: string): Promise<LocalRagIndex | null> {
   try {
-    const fs = (globalThis as { require?: (id: string) => { promises: { readFile: (p: string, e: string) => Promise<string> } } }).require?.("fs");
-    const path = (globalThis as { require?: (id: string) => { join: (...args: string[]) => string } }).require?.("path");
+    const fs = (window as { require?: (id: string) => { promises: { readFile: (p: string, e: string) => Promise<string> } } }).require?.("fs");
+    const path = (window as { require?: (id: string) => { join: (...args: string[]) => string } }).require?.("path");
     if (!fs || !path) return null;
     const content = await fs.promises.readFile(path.join(dirPath, INDEX_FILENAME), "utf-8");
     return normalizeExternalRagIndex(JSON.parse(content));
@@ -191,8 +191,8 @@ export async function loadExternalRagIndex(dirPath: string): Promise<LocalRagInd
  */
 export async function loadExternalRagVectors(dirPath: string): Promise<Float32Array | null> {
   try {
-    const fs = (globalThis as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
-    const path = (globalThis as { require?: (id: string) => { join: (...args: string[]) => string } }).require?.("path");
+    const fs = (window as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
+    const path = (window as { require?: (id: string) => { join: (...args: string[]) => string } }).require?.("path");
     if (!fs || !path) return null;
     const buffer = await fs.promises.readFile(path.join(dirPath, VECTORS_FILENAME));
     return new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4);

@@ -155,7 +155,7 @@ function toAnthropicTools(tools: ToolDefinition[]): Anthropic.Tool[] {
   return tools.map(tool => ({
     name: tool.name,
     description: tool.description,
-    input_schema: tool.parameters as Anthropic.Tool.InputSchema,
+    input_schema: tool.parameters,
   }));
 }
 
@@ -348,7 +348,7 @@ export async function* anthropicChatWithToolsStream(
 
       const assistantTurn: Anthropic.MessageParam = {
         role: "assistant",
-        content: finalMessage.content as Anthropic.ContentBlockParam[],
+        content: finalMessage.content,
       };
       conversationMessages.push(assistantTurn);
       continuationMessages.push(assistantTurn);

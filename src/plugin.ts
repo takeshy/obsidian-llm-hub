@@ -351,6 +351,7 @@ export class LlmHubPlugin extends Plugin {
       // Notify UI components that settings are ready (fixes race condition where
       // ChatView renders before loadSettings() completes, e.g. after BRAT hot-reload)
       this.settingsEmitter.emit("settings-updated", this.settings);
+      this.notifyDashboardHubMigration();
     }).catch((e) => {
       console.error("LLM Hub: Failed to load settings:", formatError(e));
     });
@@ -360,7 +361,6 @@ export class LlmHubPlugin extends Plugin {
     this.registerRuntimeSkillContributions();
     this.registerDashboardHubIntegration();
     registerDiscussionHubIntegration(this);
-    this.notifyDashboardHubMigration();
     // Compatibility command: preserve existing hotkeys while Dashboard Hub
     // remains the sole owner of .dashboard files and dashboard creation.
     this.addCommand({
@@ -1048,16 +1048,12 @@ export class LlmHubPlugin extends Plugin {
       };
       if (app.plugins?.plugins?.["dashboard-hub"] || app.plugins?.enabledPlugins?.has("dashboard-hub")) return;
       if (!app.vault.getFiles().some((file) => file.extension === "dashboard")) return;
+      if (this.settings.dashboardHubMigrationNoticeShown) return;
 
-      const storageKey = `dashboard-hub:migration-notice:${app.vault.getName()}`;
-      try {
-        if (window.localStorage.getItem(storageKey)) return;
-        window.localStorage.setItem(storageKey, "shown");
-      } catch {
-        const shared = globalThis as typeof globalThis & { __dashboardHubMigrationNoticeShown?: boolean };
-        if (shared.__dashboardHubMigrationNoticeShown) return;
-        shared.__dashboardHubMigrationNoticeShown = true;
-      }
+      this.settings.dashboardHubMigrationNoticeShown = true;
+      void this.saveSettings().catch((error) => {
+        console.error("LLM Hub: Failed to persist Dashboard Hub migration notice:", formatError(error));
+      });
       new Notice("Existing .dashboard files now require the separate Dashboard Hub plugin. Install and enable Dashboard Hub to open them.", 15000);
     });
   }

@@ -9,8 +9,8 @@
  */
 function nodeRequire<T>(id: string): T {
   const loader =
-    (globalThis as unknown as { require?: (id: string) => unknown }).require ||
-    (globalThis as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
+    (window as unknown as { require?: (id: string) => unknown }).require ||
+    (window as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
   if (!loader) {
     throw new Error(`${id} is not available in this environment`);
   }
@@ -53,13 +53,13 @@ function connectTunnel(
       headers,
     });
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       connectReq.destroy();
       reject(new Error(`Proxy CONNECT timed out after ${CONNECT_TIMEOUT_MS}ms`));
     }, CONNECT_TIMEOUT_MS);
 
     connectReq.on("connect", (res, socket) => {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
       if (res.statusCode !== 200) {
         socket.destroy();
         reject(new Error(`Proxy CONNECT failed: ${res.statusCode} ${res.statusMessage}`));
@@ -69,7 +69,7 @@ function connectTunnel(
     });
 
     connectReq.on("error", (err) => {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
       reject(err);
     });
     connectReq.end();
@@ -273,7 +273,7 @@ export function createProxyFetch(
 
     // Bypass proxy for matching hosts
     if (proxyBypass && shouldBypass(reqUrl.hostname, proxyBypass)) {
-      return globalThis.fetch(input, init);
+      return window.fetch(input, init);
     }
 
     const isTargetHttps = reqUrl.protocol === "https:";

@@ -614,9 +614,9 @@ export class StreamSignal {
   async wait(timeoutMs: number): Promise<boolean> {
     const vBefore = this.version;
     return new Promise<boolean>((res) => {
-      const timer = setTimeout(() => { this.resolve = null; res(false); }, timeoutMs);
-      this.resolve = () => { clearTimeout(timer); this.resolve = null; res(true); };
-      if (this.version !== vBefore) { clearTimeout(timer); this.resolve = null; res(true); }
+      const timer = window.setTimeout(() => { this.resolve = null; res(false); }, timeoutMs);
+      this.resolve = () => { window.clearTimeout(timer); this.resolve = null; res(true); };
+      if (this.version !== vBefore) { window.clearTimeout(timer); this.resolve = null; res(true); }
     });
   }
 }
@@ -624,8 +624,8 @@ export class StreamSignal {
 /** Load Node.js http or https module (desktop only, bypasses CORS). */
 export function getHttpModule(protocol: string): typeof import("http") {
   const loader =
-    (globalThis as unknown as { require?: (id: string) => unknown }).require ||
-    (globalThis as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
+    (window as unknown as { require?: (id: string) => unknown }).require ||
+    (window as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
   if (!loader) {
     throw new Error("Node.js http module is not available in this environment");
   }

@@ -50,7 +50,7 @@ export class McpServerModal extends Modal {
       ? { ...server }
       : {
           name: "",
-          transport: "http" as McpTransport,
+          transport: "http",
           url: "",
           headers: undefined,
           enabled: true,

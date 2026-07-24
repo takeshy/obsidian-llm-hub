@@ -1,6 +1,6 @@
 {
   "name": "obsidian-llm-hub",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "description": "AI-powered assistant using Google Gemini with File Search RAG capabilities",
   "main": "main.js",
   "scripts": {
@@ -36,9 +36,8 @@
     "@eslint/json": "^0.14.0",
     "@types/diff": "^7.0.2",
     "@types/node": "^20.0.0",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2",
-    "builtin-modules": "3.3.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
     "esbuild": "^0.28.1",
     "eslint-plugin-obsidianmd": "^0.4.1",
     "langfuse": "^3.38.6",
@@ -56,8 +55,8 @@
     "lucide-react": "^0.503.0",
     "openai": "^6.32.0",
     "pdf-lib": "^1.17.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "optionalDependencies": {
     "node-pty": "^1.0.0",

@@ -124,7 +124,7 @@ export async function handleWorkflowNode(
 
 // Handle rag-sync node - previously synced notes to server RAG store (now removed)
 // Server RAG has been removed. This node is now a no-op that logs a warning.
-// eslint-disable-next-line @typescript-eslint/require-await
+// eslint-disable-next-line @typescript-eslint/require-await -- Preserve the async handler contract for legacy rag-sync workflow nodes.
 export async function handleRagSyncNode(
   node: WorkflowNode,
   context: ExecutionContext,
@@ -199,7 +199,7 @@ export async function handleObsidianCommandNode(
       app.workspace.setActiveLeaf(newLeaf, { focus: true });
     }
     // Wait for the workspace to settle before executing command
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => window.setTimeout(resolve, 100));
   }
 
   // Execute the command
