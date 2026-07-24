@@ -921,14 +921,14 @@ Vault からの同期の代わりに、事前構築済みのインデックス�
 
 ### AI Discussion
 
-AI Discussion は別プラグインの [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) が提供します。両方のプラグインを有効にすると、LLM Hubは設定済みのAPI、CLI、ローカルテキストモデルを自動登録し、LLM Hubの **Discussion** タブから共有Discussion Hubビューを開きます。Gemini HelperやLocal LLM Hubが提供するモデルも同じ討論へ参加できます。連携専用の追加設定は不要です。
+AI Discussion は別プラグインの [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) が提供します。両方のプラグインを有効にすると、LLM Hubは設定済みのAPI、CLI、ローカルテキストモデルをDiscussion Hubへ自動登録します。Gemini HelperやLocal LLM Hubが提供するモデルも同じ討論へ参加できます。連携専用の追加設定は不要です。
 
 ![AI Discussion](docs/images/ai-discussion.png)
 
 **使い方：**
 
 1. [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub)をインストールして有効化
-2. LLM Hubの **Discussion** タブ、またはDiscussion Hubのリボンアイコンを開く
+2. Discussion Hubのリボンアイコン、または **Open Discussion Hub** コマンドから開く
 3. 討論のテーマを入力
 4. 接続された任意のAIプラグインから参加者を追加、または自分自身を追加
 5. 必要に応じて役割と投票参加者を個別に設定

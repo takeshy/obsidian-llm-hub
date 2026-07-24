@@ -297,7 +297,7 @@ export interface WorkspaceState {
   alwaysThinkModels?: string[];  // Always Think が有効なモデルID一覧
   maxPreviousMessages?: number;  // Number of older chat messages sent with the current message (0-99)
   sentPromptHistory?: string[];  // Recent prompts recalled with Up/Down in chat input (max 100)
-  discussionSettings?: DiscussionSettings;  // Discussion tab settings
+  discussionSettings?: DiscussionSettings;  // Legacy settings migrated to Discussion Hub
 }
 
 /** Default Gemini embedding model (used when embeddingModel is empty and no custom baseUrl) */

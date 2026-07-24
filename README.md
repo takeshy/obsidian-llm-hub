@@ -907,14 +907,14 @@ The **RAG Search** tab provides a dedicated interface for searching, filtering, 
 
 ### AI Discussion
 
-AI Discussion is provided by the separate [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) plugin. When both plugins are enabled, LLM Hub automatically registers all configured API, CLI, and local text models, and its **Discussion** tab opens the shared Discussion Hub view. Models contributed by Gemini Helper and Local LLM Hub can participate in the same discussion. No additional integration settings are required.
+AI Discussion is provided by the separate [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) plugin. When both plugins are enabled, LLM Hub automatically registers all configured API, CLI, and local text models with Discussion Hub. Models contributed by Gemini Helper and Local LLM Hub can participate in the same discussion. No additional integration settings are required.
 
 ![AI Discussion](docs/images/ai-discussion.png)
 
 **How it works:**
 
 1. Install and enable [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub)
-2. Open the **Discussion** tab in LLM Hub or the Discussion Hub ribbon icon
+2. Open Discussion Hub from its ribbon icon or the **Open Discussion Hub** command
 3. Enter a discussion theme
 4. Add participants from any connected AI plugin, or add yourself
 5. Optionally assign roles and configure separate voters

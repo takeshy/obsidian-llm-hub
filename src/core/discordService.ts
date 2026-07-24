@@ -811,7 +811,7 @@ export class DiscordService {
 
   private handleDiscussCommand(theme: string, channelId: string): { reply: string } {
     if (!theme) {
-      return { reply: "Usage: `!discuss <theme>` — Start an AI Discussion on a topic.\nConfigure participants in the Discussion tab settings." };
+      return { reply: "Usage: `!discuss <theme>` — Start an AI Discussion on a topic.\nConfigure participants in Discussion Hub." };
     }
 
     if (this.runningDiscussions.has(channelId) && this.runningDiscussions.get(channelId)) {
@@ -828,10 +828,10 @@ export class DiscordService {
     const voters = config.voters.filter((person) => !isHuman(person));
 
     if (participants.length < 1) {
-      return { reply: "No AI participants configured (user participants are excluded in Discord). Open the Discussion tab in Obsidian and add AI participants." };
+      return { reply: "No AI participants configured (user participants are excluded in Discord). Open Discussion Hub in Obsidian and add AI participants." };
     }
     if (voters.length < 1) {
-      return { reply: "No AI voters configured (user voters are excluded in Discord). Open the Discussion tab in Obsidian and add AI voters." };
+      return { reply: "No AI voters configured (user voters are excluded in Discord). Open Discussion Hub in Obsidian and add AI voters." };
     }
 
     const turns = config.defaultTurns || 2;
@@ -888,7 +888,7 @@ export class DiscordService {
       "- `!skill` — List available skills",
       "- `!skill <name>` — Activate a skill",
       "- `!research <query>` — Run Deep Research (runs in background, may take several minutes)",
-      "- `!discuss <theme>` — Start AI Discussion (uses configured participants from Discussion tab)",
+      "- `!discuss <theme>` — Start AI Discussion (uses participants configured in Discussion Hub)",
       "- `!reset` — Clear conversation history",
       "- `!help` — Show this help",
     ];

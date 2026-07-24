@@ -7,7 +7,7 @@ import SearchPanel from "./SearchPanel";
 import WorkflowPanel from "./workflow/WorkflowPanel";
 import { t } from "src/i18n";
 
-export type TabType = "chat" | "search" | "discussion" | "workflow";
+export type TabType = "chat" | "search" | "workflow";
 
 export interface TabContainerRef {
   getActiveChat: () => TFile | null;
@@ -29,10 +29,7 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
     useImperativeHandle(ref, () => ({
       getActiveChat: () => chatRef.current?.getActiveChat() ?? null,
       setActiveChat: (chat: TFile | null) => chatRef.current?.setActiveChat(chat),
-      setActiveTab: (tab: TabType) => {
-        if (tab === "discussion") void plugin.openDiscussionHub();
-        else setActiveTab(tab);
-      },
+      setActiveTab: (tab: TabType) => setActiveTab(tab),
       askSelection: (selection) => {
         setActiveTab("chat");
         chatRef.current?.askSelection(selection);
@@ -73,12 +70,6 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
             onClick={() => setActiveTab("search")}
           >
             {t("search.tab")}
-          </button>
-          <button
-            className="llm-hub-tab"
-            onClick={() => void plugin.openDiscussionHub()}
-          >
-            {t("discussion.tab")}
           </button>
         </div>
         <div className="llm-hub-tab-content">
