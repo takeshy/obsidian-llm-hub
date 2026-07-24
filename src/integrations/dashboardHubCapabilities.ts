@@ -45,9 +45,9 @@ export function listDashboardModels(plugin: LlmHubPlugin): DashboardAiModel[] {
 }
 
 function headlessCallbacks(): PromptCallbacks {
-  return { promptForFile: async () => null, promptForAnyFile: async () => null, promptForNewFilePath: async () => null,
-    promptForSelection: async () => null, promptForValue: async () => null,
-    promptForConfirmation: async () => ({ confirmed: false }), promptForDialog: async () => null, promptForPassword: async () => null };
+  return { promptForFile: () => Promise.resolve(null), promptForAnyFile: () => Promise.resolve(null), promptForNewFilePath: () => Promise.resolve(null),
+    promptForSelection: () => Promise.resolve(null), promptForValue: () => Promise.resolve(null),
+    promptForConfirmation: () => Promise.resolve({ confirmed: false }), promptForDialog: () => Promise.resolve(null), promptForPassword: () => Promise.resolve(null) };
 }
 
 function extractString(values: Map<string, string | number>, name?: string): string | null {
