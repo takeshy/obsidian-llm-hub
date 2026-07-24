@@ -4,7 +4,6 @@ import type { TFile } from "obsidian";
 import type { Attachment } from "src/types";
 import Chat, { ChatRef } from "./Chat";
 import SearchPanel from "./SearchPanel";
-import DiscussionPanel, { DiscussionPanelRef } from "./DiscussionPanel";
 import WorkflowPanel from "./workflow/WorkflowPanel";
 import { t } from "src/i18n";
 
@@ -26,12 +25,14 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
   ({ plugin }, ref) => {
     const [activeTab, setActiveTab] = useState<TabType>("chat");
     const chatRef = useRef<ChatRef>(null);
-    const discussionRef = useRef<DiscussionPanelRef>(null);
 
     useImperativeHandle(ref, () => ({
       getActiveChat: () => chatRef.current?.getActiveChat() ?? null,
       setActiveChat: (chat: TFile | null) => chatRef.current?.setActiveChat(chat),
-      setActiveTab: (tab: TabType) => setActiveTab(tab),
+      setActiveTab: (tab: TabType) => {
+        if (tab === "discussion") void plugin.openDiscussionHub();
+        else setActiveTab(tab);
+      },
       askSelection: (selection) => {
         setActiveTab("chat");
         chatRef.current?.askSelection(selection);
@@ -49,9 +50,8 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
     }, []);
 
     const handleDiscussionWithResults = useCallback((attachments: Attachment[]) => {
-      discussionRef.current?.addAttachments(attachments);
-      setActiveTab("discussion");
-    }, []);
+      void plugin.openDiscussionHub({ attachments });
+    }, [plugin]);
 
     return (
       <div className="llm-hub-tab-container">
@@ -75,8 +75,8 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
             {t("search.tab")}
           </button>
           <button
-            className={`llm-hub-tab ${activeTab === "discussion" ? "active" : ""}`}
-            onClick={() => setActiveTab("discussion")}
+            className="llm-hub-tab"
+            onClick={() => void plugin.openDiscussionHub()}
           >
             {t("discussion.tab")}
           </button>
@@ -90,9 +90,6 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
           </div>
           <div className={`llm-hub-tab-panel ${activeTab === "search" ? "is-active" : ""}`}>
             <SearchPanel plugin={plugin} onChatWithResults={handleChatWithResults} onDiscussionWithResults={handleDiscussionWithResults} />
-          </div>
-          <div className={`llm-hub-tab-panel ${activeTab === "discussion" ? "is-active" : ""}`}>
-            <DiscussionPanel ref={discussionRef} plugin={plugin} />
           </div>
         </div>
       </div>

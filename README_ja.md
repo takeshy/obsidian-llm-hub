@@ -13,7 +13,7 @@
 - **ワークフロービルダー** - ビジュアルノードエディタと 25 種類のノードでマルチステップタスクを自動化
 - **Dashboard Hub 連携** - 別プラグインの [Dashboard Hub](https://github.com/takeshy/obsidian-dashboard-hub) に AI モデル、チャット、Base 生成、ワークフロー実行機能を提供
 - **セマンティック検索（RAG）** - 専用検索タブ、PDF プレビュー、検索結果からチャットへの連携を備えたローカルベクトル検索
-- **AI Discussion** - 並列応答、投票、勝者決定を備えたマルチモデル討論アリーナ
+- **Discussion Hub 連携** - 別プラグインのマルチプロバイダー [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) に API、CLI、ローカルモデルを提供
 - **編集履歴** - AI による変更を差分表示で追跡・復元
 - **Web 検索** - Gemini、OpenAI 公式 API、Anthropic 公式 API、xAI 公式 API から引用付きの最新情報を取得
 - **画像生成** - Gemini または DALL-E で画像を作成
@@ -921,18 +921,18 @@ Vault からの同期の代わりに、事前構築済みのインデックス�
 
 ### AI Discussion
 
-**Discussion** タブは、複数の AI モデルがトピックについて並行して議論し、結論を導き出し、最良の回答に投票するマルチモデル討論アリーナを提供します。
+AI Discussion は別プラグインの [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) が提供します。両方のプラグインを有効にすると、LLM Hubは設定済みのAPI、CLI、ローカルテキストモデルを自動登録し、LLM Hubの **Discussion** タブから共有Discussion Hubビューを開きます。Gemini HelperやLocal LLM Hubが提供するモデルも同じ討論へ参加できます。連携専用の追加設定は不要です。
 
 ![AI Discussion](docs/images/ai-discussion.png)
 
 **使い方：**
 
-1. **Discussion** タブを開く
-2. 討論のテーマを入力
-3. 参加者を追加 — 利用可能な任意のモデル（API、CLI、ローカル LLM）または User を選択
-4. 必要に応じて参加者に役割を割り当て（例：「肯定派」「批判派」）
-5. ターン数を設定
-6. **Start Discussion** をクリック
+1. [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub)をインストールして有効化
+2. LLM Hubの **Discussion** タブ、またはDiscussion Hubのリボンアイコンを開く
+3. 討論のテーマを入力
+4. 接続された任意のAIプラグインから参加者を追加、または自分自身を追加
+5. 必要に応じて役割と投票参加者を個別に設定
+6. ターン数を設定して **Start discussion** をクリック
 
 ![Discussion Setup](docs/images/ai-discussion-start.png)
 
@@ -947,12 +947,12 @@ Vault からの同期の代わりに、事前構築済みのインデックス�
 
 **機能：**
 
-- **任意のモデルを参加者に** — モデルを自由に組み合わせ可能（例：Gemini vs Claude vs GPT）
+- **プラグイン横断の参加者** — LLM Hub、Gemini Helper、Local LLM Hubのモデルを同じ討論で組み合わせ可能
 - **User の参加** — 自分自身を参加者や投票者として追加し、人間参加型の討論が可能
 - **役割の割り当て** — 各参加者に視点を設定（例：「楽観主義者」「懐疑論者」）
-- **投票参加者の個別設定** — 投票参加者は討論参加者から自動同期されるが、個別にカスタマイズも可能
+- **投票参加者の個別設定** — 討論参加者とは独立して投票者を設定可能
 - **設定の永続化** — 参加者と投票者はセッション間で保存・復元
-- **設定モーダル** — 歯車アイコン（⚙️）をクリックしてシステムプロンプト、結論プロンプト、投票プロンプト、出力フォルダ、デフォルトターン数を設定
+- **Discussion Hub設定** — Discussion Hubの設定でシステム、結論、投票プロンプト、出力フォルダ、デフォルトターン数を設定
 - **ノートとして保存** — 完全な討論内容（ターン、結論、投票、勝者）を Markdown ファイルとしてエクスポート
 
 ### スラッシュコマンド

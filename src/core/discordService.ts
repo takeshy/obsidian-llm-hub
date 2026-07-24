@@ -818,14 +818,14 @@ export class DiscordService {
       return { reply: "A discussion is already running in this channel. Please wait for it to complete." };
     }
 
-    const ds = this.plugin.workspaceState.discussionSettings;
-    if (!ds) {
-      return { reply: "No Discussion settings found. Open the Discussion tab in Obsidian and configure participants first." };
-    }
+    const hub = this.plugin.getDiscussionHubApi();
+    if (!hub) return { reply: "Discussion Hub is not installed or enabled." };
+    const config = hub.getConfiguration();
 
     // Filter out "user" type — no UI to collect user input from Discord
-    const participants = (ds.participants || []).filter(p => p.model !== ("user" as ModelType));
-    const voters = (ds.voters || []).filter(v => v.model !== ("user" as ModelType));
+    const isHuman = (person: { providerId: string; modelId: string }) => person.providerId === "discussion-hub" && person.modelId === "user";
+    const participants = config.participants.filter((person) => !isHuman(person));
+    const voters = config.voters.filter((person) => !isHuman(person));
 
     if (participants.length < 1) {
       return { reply: "No AI participants configured (user participants are excluded in Discord). Open the Discussion tab in Obsidian and add AI participants." };
@@ -834,35 +834,26 @@ export class DiscordService {
       return { reply: "No AI voters configured (user voters are excluded in Discord). Open the Discussion tab in Obsidian and add AI voters." };
     }
 
-    const turns = ds.defaultTurns || 2;
+    const turns = config.defaultTurns || 2;
 
     // Fire-and-forget: run discussion in background
-    // Placeholder — will be replaced once engine is created
-    this.runningDiscussions.set(channelId, { stop: () => {} });
+    const abortController = new AbortController();
+    this.runningDiscussions.set(channelId, { stop: () => abortController.abort() });
     void (async () => {
       try {
-        const { DiscussionEngine } = await import("./discussionEngine");
-        const engine = new DiscussionEngine(this.plugin.settings, ds);
-        this.runningDiscussions.set(channelId, { stop: () => engine.stop() });
-
-        // Notify on each turn completion
-        engine.setCallbacks({
-          onTurnStart: (turnNumber: number) => {
-            void this.sendDiscordMessage(channelId, `**Turn ${turnNumber}/${turns}** — Participants are responding...`);
-          },
-          onPhaseChange: (phase: string) => {
-            if (phase === "concluding") {
-              void this.sendDiscordMessage(channelId, "**Drawing conclusions...**");
-            } else if (phase === "voting") {
-              void this.sendDiscordMessage(channelId, "**Voting phase started...**");
-            }
-          },
-        });
-
-        const result = await engine.runDiscussion(theme, turns, participants, voters);
-
-        // Format result for Discord
-        const markdown = DiscussionEngine.generateMarkdownNote(result);
+        await this.sendDiscordMessage(channelId, `**Discussion Hub is running ${turns} turn${turns === 1 ? "" : "s"}...**`);
+        const result = await hub.runDiscussion({ theme, turns, participants, voters, abortSignal: abortController.signal });
+        const lines = [`# AI Discussion: ${result.theme}`, "", "## Discussion", ""];
+        for (const turn of result.turns) {
+          lines.push(`### Turn ${turn.turnNumber}`, "");
+          for (const response of turn.responses) lines.push(`#### ${response.displayName}`, "", response.error ? `> Error: ${response.error}` : response.content, "");
+        }
+        lines.push("## Conclusions", "");
+        for (const conclusion of result.conclusions) lines.push(`### ${conclusion.displayName}`, "", conclusion.content, "");
+        lines.push("## Voting Results", "");
+        for (const vote of result.votes) lines.push(`- **${vote.voterDisplayName}** → **${vote.votedForDisplayName}**${vote.reason ? `: ${vote.reason}` : ""}`);
+        lines.push("", "## Final Conclusion", "", result.finalConclusion || "No winner");
+        const markdown = lines.join("\n");
 
         // Send result (may be split across multiple messages)
         await this.sendResponse(channelId, markdown);

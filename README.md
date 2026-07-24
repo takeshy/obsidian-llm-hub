@@ -13,7 +13,7 @@
 - **Workflow Builder** - Automate multi-step tasks with visual node editor and 25 node types
 - **Dashboard Hub Integration** - Supply AI models, Chat, Base generation, and Workflow execution to the separate [Dashboard Hub](https://github.com/takeshy/obsidian-dashboard-hub) plugin
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
-- **AI Discussion** - Multi-model debate arena with parallel responses, voting, and winner determination
+- **Discussion Hub Integration** - Supply API, CLI, and local models to the separate multi-provider [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) plugin
 - **Edit History** - Track and restore AI-made changes with diff view
 - **Web Search** - Access up-to-date information with cited sources via Gemini and the official OpenAI, Anthropic, or xAI APIs
 - **Image Generation** - Create images with Gemini or DALL-E
@@ -907,18 +907,18 @@ The **RAG Search** tab provides a dedicated interface for searching, filtering, 
 
 ### AI Discussion
 
-The **Discussion** tab provides a multi-model debate arena where multiple AI models discuss a topic in parallel, draw conclusions, and vote on the best answer.
+AI Discussion is provided by the separate [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) plugin. When both plugins are enabled, LLM Hub automatically registers all configured API, CLI, and local text models, and its **Discussion** tab opens the shared Discussion Hub view. Models contributed by Gemini Helper and Local LLM Hub can participate in the same discussion. No additional integration settings are required.
 
 ![AI Discussion](docs/images/ai-discussion.png)
 
 **How it works:**
 
-1. Open the **Discussion** tab
-2. Enter a discussion theme
-3. Add participants — choose any available model (API, CLI, Local LLM) or User
-4. Optionally assign roles to participants (e.g., "Affirmative", "Critical")
-5. Set the number of turns
-6. Click **Start Discussion**
+1. Install and enable [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub)
+2. Open the **Discussion** tab in LLM Hub or the Discussion Hub ribbon icon
+3. Enter a discussion theme
+4. Add participants from any connected AI plugin, or add yourself
+5. Optionally assign roles and configure separate voters
+6. Set the number of turns and click **Start discussion**
 
 ![Discussion Setup](docs/images/ai-discussion-start.png)
 
@@ -933,12 +933,12 @@ The **Discussion** tab provides a multi-model debate arena where multiple AI mod
 
 **Features:**
 
-- **Any model as participant** — Mix models freely (e.g., Gemini vs Claude vs GPT)
+- **Cross-plugin participants** — Mix LLM Hub, Gemini Helper, and Local LLM Hub models in one discussion
 - **User participation** — Add yourself as a participant or voter for human-in-the-loop discussions
 - **Role assignment** — Give each participant a perspective (e.g., "Optimist", "Skeptic")
-- **Separate vote participants** — Vote participants are auto-synced from discussion participants but can be customized independently
+- **Separate vote participants** — Configure voters independently from discussion participants
 - **Persistent configuration** — Participants and voters are saved and restored across sessions
-- **Settings modal** — Click the gear icon (⚙️) to configure system prompt, conclusion prompt, vote prompt, output folder, and default turns
+- **Discussion Hub settings** — Configure system, conclusion, and vote prompts, output folder, and default turns in Discussion Hub settings
 - **Save as note** — Export the complete discussion (turns, conclusions, votes, winner) as a Markdown file
 
 ### Slash Commands

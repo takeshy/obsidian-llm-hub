@@ -58,6 +58,7 @@ import {
   registerRuntimeSkill,
   unregisterRuntimeSkill,
 } from "src/core/runtimeSkills";
+import { registerDiscussionHubIntegration } from "src/integrations/discussionHubCapabilities";
 
 interface DashboardHubIntegration {
   protocolVersion: 1;
@@ -84,6 +85,45 @@ interface DashboardWorkspaceEvents {
     (name: "dashboard-hub:register-integration", integration: DashboardHubIntegration): void;
     (name: "dashboard-hub:unregister-integration", request: { id: string; integration: DashboardHubIntegration }): void;
   };
+}
+
+interface DiscussionHubApi {
+  openDiscussion: (request?: { theme?: string; attachments?: import("src/types").Attachment[] }) => Promise<void>;
+  getConfiguration: () => DiscussionHubConfiguration;
+  runDiscussion: (request: {
+    theme: string;
+    turns?: number;
+    participants?: DiscussionHubPerson[];
+    voters?: DiscussionHubPerson[];
+    abortSignal?: AbortSignal;
+  }) => Promise<DiscussionHubResult>;
+}
+
+export interface DiscussionHubPerson {
+  id: string;
+  providerId: string;
+  modelId: string;
+  displayName: string;
+  role?: string;
+}
+
+export interface DiscussionHubConfiguration {
+  defaultTurns: number;
+  participants: DiscussionHubPerson[];
+  voters: DiscussionHubPerson[];
+}
+
+export interface DiscussionHubResult {
+  theme: string;
+  turns: Array<{ turnNumber: number; responses: Array<{ displayName: string; content: string; error?: string }> }>;
+  conclusions: Array<{ displayName: string; content: string }>;
+  votes: Array<{ voterDisplayName: string; votedForDisplayName: string; reason?: string }>;
+  winnerId: string | null;
+  winnerIds: string[];
+  isDraw: boolean;
+  finalConclusion: string;
+  startTime: number;
+  participants: DiscussionHubPerson[];
 }
 
 function normaliseCliConfig(loaded: Record<string, unknown>): CliProviderConfig {
@@ -319,6 +359,7 @@ export class LlmHubPlugin extends Plugin {
     this.addSettingTab(new SettingsTab(this.app, this));
     this.registerRuntimeSkillContributions();
     this.registerDashboardHubIntegration();
+    registerDiscussionHubIntegration(this);
     this.notifyDashboardHubMigration();
     // Compatibility command: preserve existing hotkeys while Dashboard Hub
     // remains the sole owner of .dashboard files and dashboard creation.
@@ -326,6 +367,11 @@ export class LlmHubPlugin extends Plugin {
       id: "create-dashboard",
       name: t("command.createDashboard"),
       callback: () => { void this.createDashboard(); },
+    });
+    this.addCommand({
+      id: "open-discussion-hub",
+      name: "Open Discussion Hub",
+      callback: () => { void this.openDiscussionHub(); },
     });
 
     // Register chat view
@@ -1077,6 +1123,20 @@ export class LlmHubPlugin extends Plugin {
     if (leaf) {
       void workspace.revealLeaf(leaf);
     }
+  }
+
+  async openDiscussionHub(request: { theme?: string; attachments?: import("src/types").Attachment[] } = {}): Promise<void> {
+    const hub = this.getDiscussionHubApi();
+    if (!hub?.openDiscussion) {
+      new Notice("Install and enable Discussion Hub to use AI Discussion.");
+      return;
+    }
+    await hub.openDiscussion(request);
+  }
+
+  getDiscussionHubApi(): DiscussionHubApi | null {
+    const app = this.app as typeof this.app & { plugins?: { plugins?: Record<string, unknown> } };
+    return (app.plugins?.plugins?.["discussion-hub"] as DiscussionHubApi | undefined) ?? null;
   }
 
   async askChatAboutSelection(selection: { text: string; sourcePath?: string }): Promise<void> {
