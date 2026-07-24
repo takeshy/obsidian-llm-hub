@@ -104,6 +104,7 @@ import { formatError } from "src/utils/error";
 import { findFileMentionOccurrences } from "src/utils/mentionResolver";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
+import { runtimeSkillPath } from "src/core/runtimeSkills";
 import { buildBuiltinOkfSystemPrompt, buildOkfSystemPrompt, discoverOkfBundles, getBuiltinOkfBundle, isBuiltinOkfBundleId, type OkfBundle } from "src/core/okfLoader";
 import { executeReadOkfDocumentTool, READ_OKF_DOCUMENT_TOOL, READ_OKF_DOCUMENT_TOOL_NAME } from "src/core/okfDocumentTool";
 import { getInterpreter, runScript } from "src/core/scriptRunner";
@@ -147,7 +148,7 @@ function didToolCallFail(result: Record<string, unknown>): boolean {
 }
 
 const MARKDOWN_SKILL_PATH = builtinFolderPath("obsidian-markdown");
-const DASHBOARD_SKILL_PATH = builtinFolderPath("dashboard");
+const DASHBOARD_SKILL_PATH = runtimeSkillPath("dashboard-hub", "dashboard");
 const CANVAS_SKILL_PATH = builtinFolderPath("json-canvas");
 const BASE_SKILL_PATH = builtinFolderPath("base");
 const CONTEXT_SKILL_BY_EXTENSION: Record<string, string> = {

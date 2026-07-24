@@ -8,7 +8,7 @@ timestamp: 2026-07-05T00:00:00Z
 
 # Privacy and Data Flow
 
-Data stored locally includes provider credentials in Obsidian settings, chat history Markdown files when saving is enabled, workflow execution history, workspace RAG state, dashboard YAML files, dashboard sidecar data, and encryption settings. Chat and workflow history can be encrypted.
+Data stored locally includes provider credentials in Obsidian settings, chat history Markdown files when saving is enabled, workflow execution history, workspace RAG state, and encryption settings. Chat and workflow history can be encrypted. Data owned by integrated plugins such as Dashboard Hub is covered by those plugins' documentation.
 
 Data sent to configured AI providers can include chat messages, selected context, tool results included in the model conversation, and file attachments. RAG sync sends vault file chunks to the configured embedding API (Gemini-native or an OpenAI-compatible endpoint, which can be local); the resulting vectors are stored locally, and retrieved chunks are appended to prompts sent to the chat provider. When RAG and Web Search are both active, those retrieved vault chunks are sent in the same request that exposes the provider's native search service (Google for Gemini, OpenAI Web Search, Anthropic Web Search, or xAI Web Search). Cited source metadata and provider-native continuation blocks may be stored in chat history so later turns retain search context.
 

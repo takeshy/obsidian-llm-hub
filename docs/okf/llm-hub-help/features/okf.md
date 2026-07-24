@@ -77,7 +77,7 @@ The loader limits each selected bundle to 24 Markdown documents and each body ex
 
 # Built-In OKF
 
-LLM Hub ships a built-in OKF bundle about this plugin. It is always available as the `LLM Hub Help` OKF option in chat, independently of the external OKF setting, but it is injected only after the user selects it or clicks the help question button. Users can then ask chat about LLM Hub setup, chat tools, skills, workflows, RAG, OKF, MCP, dashboards, settings, security, and troubleshooting without configuring an OKF directory.
+LLM Hub ships a built-in OKF bundle about this plugin. It is always available as the `LLM Hub Help` OKF option in chat, independently of the external OKF setting, but it is injected only after the user selects it or clicks the help question button. Users can then ask chat about LLM Hub setup, chat tools, skills, workflows, RAG, OKF, MCP, settings, security, and troubleshooting without configuring an OKF directory.
 
 The source copy for the built-in bundle is the English OKF bundle under `docs/okf/llm-hub-help/`. During `npm run build` and `npm run dev`, `scripts/generate-builtin-okf.mjs` reads that bundle, skips `log.md`, compacts each document, writes a gzip+base64 generated module, and the chat loader expands it as the built-in `llm-hub-help` bundle.
 

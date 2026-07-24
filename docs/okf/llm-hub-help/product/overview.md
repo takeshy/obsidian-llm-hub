@@ -1,7 +1,7 @@
 ---
 type: Product
 title: LLM Hub for Obsidian
-description: Free Obsidian plugin that adds multi-provider AI chat, vault tools, workflows, RAG, OKF knowledge, MCP, skills, encryption, edit history, and dashboards.
+description: Free Obsidian plugin that adds multi-provider AI chat, vault tools, workflows, RAG, OKF knowledge, MCP, skills, encryption, and edit history.
 tags: [llm-hub, obsidian, overview]
 timestamp: 2026-07-05T00:00:00Z
 ---
@@ -13,12 +13,12 @@ LLM Hub is a free and open-source desktop Obsidian plugin for using multiple AI 
 Main feature areas:
 
 - AI Chat with streaming responses, file attachments, slash commands, mentions, vault tools, MCP tools, and independent Web Search plus optional RAG that can be used together.
-- Agent Skills with built-in Obsidian Markdown, Canvas, Bases, and Dashboard skills, plus vault-authored and external skills.
+- Agent Skills with built-in Obsidian Markdown, Canvas, and Bases skills, Dashboard Hub's dynamically contributed Dashboard skill, plus vault-authored and external skills.
 - Workflow Builder for multi-step automations defined in Markdown `workflow` code blocks and edited visually.
 - RAG using local embedding vector search for semantic retrieval across vault content.
 - OKF Knowledge Sources that inject compact Open Knowledge Format bundle summaries into chat context.
 - MCP support for Streamable HTTP and stdio MCP servers, workflow MCP nodes, and sandboxed MCP Apps.
-- Dashboard files with responsive widget grids for Bases, files, web pages, workflows, kanban, timelines, and memos.
+- Optional Dashboard Hub integration that supplies configured AI models, Chat handoff, Base generation, text rewriting, and Workflow generation/execution to that separate plugin.
 - Edit history, safe edit confirmations, AI folder access limits, and optional encryption.
 
 Provider API keys and local/CLI configuration determine which models and capabilities are available. Native web search is available through Gemini and official OpenAI, Anthropic, or xAI API endpoints and can synthesize provider search results with locally retrieved RAG context; Deep Research and Gemini image generation remain Gemini-specific.

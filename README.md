@@ -11,7 +11,7 @@
 - **Multi-Provider LLM Chat** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, local LLMs, or CLI backends
 - **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, and tools-capable local LLMs via LM Studio / vLLM / AnythingLLM)
 - **Workflow Builder** - Automate multi-step tasks with visual node editor and 25 node types
-- **Dashboard** - Arrange Bases views, notes, web pages, timelines, calendars, kanban boards, and workflow output in a responsive widget grid
+- **Dashboard Hub Integration** - Supply AI models, Chat, Base generation, and Workflow execution to the separate [Dashboard Hub](https://github.com/takeshy/obsidian-dashboard-hub) plugin
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
 - **AI Discussion** - Multi-model debate arena with parallel responses, voting, and winner determination
 - **Edit History** - Track and restore AI-made changes with diff view
@@ -482,89 +482,11 @@ Workflows can be automatically triggered by Obsidian events:
 
 ---
 
-# Dashboard
+# Dashboard Hub Integration
 
-Build a personal **home / overview page** from a responsive grid of widgets. A dashboard is a `.dashboard` file that arranges **Bases views**, **notes**, **web pages**, **workflow output**, **kanban boards**, **timelines**, and **calendars** in a drag-and-resize grid — open it like any note to see a live, editable board.
+Dashboard functionality is provided by the separate [Dashboard Hub](https://github.com/takeshy/obsidian-dashboard-hub) plugin. When both plugins are enabled, LLM Hub supplies Dashboard Hub with its configured AI models, Chat handoff, Base generation, text rewriting, and Workflow generation/execution. Dashboard Hub also contributes its `dashboard` Agent Skill to LLM Hub at runtime.
 
-![Dashboard](docs/images/dashboard.png)
-
-**Create a dashboard:**
-- Command: **"LLM Hub: Create dashboard"** — creates a new board under `Dashboards/` and opens it
-- Or ask the AI in chat (the built-in **dashboard** agent skill authors `.dashboard` files, and the backing `.base` files, for you)
-
-**Edit mode:** Click **Edit** to drag, resize, add, and configure widgets; **Done** to view. The grid is responsive — widgets reflow into a single column on narrow screens. All edits save automatically.
-
-## Widget Types
-
-Click **+ Add widget** in edit mode to choose a type:
-
-![Add widget](docs/images/dashboard_widgets.png)
-
-| Widget | Shows | Key config |
-|--------|-------|------------|
-| **Base** | A named view of a `.base` file via Obsidian's native Bases UI (table / cards / list) | `base` path, `view` name |
-| **Markdown** | An existing note, rendered inline | `path` to the note |
-| **Web Embed** | A web page in an iframe | `url` |
-| **Workflow** | The output of a workflow, run headlessly and rendered as Markdown or HTML | `workflow` path, `output`, `refreshInterval` |
-| **Kanban** | Notes as draggable cards grouped into status columns; optionally logs status changes to a Timeline | `tag`/`folder`, `statusProperty`, `columns`, `displayFields`, optional `timelineName` |
-| **Timeline** | Dated microblog-style posts with search, tags, images, pinning, and AI rewrite | `name`, latest count, collapse limits |
-| **Calendar** | Monthly view of Timeline posts, events, and files created in the vault | `timelineName`, created-file visibility |
-| **MemoList** | Searchable index of reading memos | No required settings |
-| **Secret Manager** | Create, search, decrypt, and copy encrypted vault secrets | encrypted files under an optional folder |
-
-**Base** and **Workflow** widgets include a **Create with AI** button to author the backing `.base` file or workflow without leaving the settings panel. For a base, the AI can inspect your notes with read-only tools before authoring, and **Edit with AI** shows a diff with an additional-instruction box to refine before applying.
-
-## Kanban Board
-
-Turn notes into a drag-and-drop board. Cards are notes that match a **tag** and/or **folder** filter, grouped into columns by a frontmatter **status property**. Drag a card to another column to update that note's status — written straight back to the note's frontmatter. The board is fully interactive in **view mode**; no need to enter edit mode to move cards.
-
-![Kanban board](docs/images/dashboard_kanban.png)
-
-Boards are stored as reusable `.kanban` files under `Dashboards/Kanbans/`. Existing inline widget definitions are migrated there automatically. Multiple dashboards can reference the same file, and changes made in one widget's settings update the shared file. The board header also provides a temporary tag filter. Optional display fields are selected from detected frontmatter properties, support aliases or hidden labels, and expose `file.path`/`file.name`/`file.content`/`file.mtime`/`file.ctime` only when explicitly selected. A character limit can be set for `file.content`.
-
-- **Title & New** — the header shows an optional board title (handy when one dashboard holds several boards) and a **New** button that opens a modal to enter a title and pick a column, then creates a note already matching the board's filters (folder, tag, status).
-- **Preview & open** — click a card to preview its note in a modal; the modal's open icon jumps to the note in a new tab.
-- **Columns** — color-coded and fully configurable; an optional "Unspecified" column collects cards whose status matches none of the columns.
-- **Display fields** — list extra frontmatter properties (e.g. `priority`, `due`) to show on each card below the title.
-- **Optional Timeline history** — choose an existing Timeline from the searchable picker to record each card move as a `Kanban · <board name>` info callout, followed by the task link and status transition (for example, `Todo → In Progress`). Clear the selection to disable Timeline integration.
-
-Configure everything from the widget settings in edit mode:
-
-![Kanban settings](docs/images/dashboard_kanban_edit.png)
-
-## Timeline and Calendar
-
-Timeline stores posts under `Dashboards/Timeline/<name>/`, one Markdown file per day. It supports tags, filters, pinned posts, images, wikilinks, inline editing, and AI-assisted rewriting.
-
-Calendar connects to one named Timeline and displays a fixed-size month view. Colored dots distinguish events, created files, and Timeline activity. Clicking a date opens a modal—so days with many records do not resize the widget—with sections for events, files created that day, and Timeline posts. Events can be added for the selected date, moved to another date later, and remain regular Timeline posts in a recognizable calendar callout format. Created-file display can be disabled in Calendar settings.
-
-![Calendar widget with Kanban and Timeline](docs/images/calendar.png)
-
-| Day details | Add an event |
-|---|---|
-| ![Calendar day details](docs/images/calendar_date.png) | ![Calendar event form](docs/images/calendar_event.png) |
-
-## Secret Manager
-
-The Secret Manager widget stores each value as a separate `.encrypted` vault file using the plugin's existing encryption keys. Set up an encryption password in **Settings → Encryption** first; the chat-history and workflow-log encryption toggles do not need to be enabled.
-
-![Secret Manager](docs/images/secret_manager.png)
-
-- **Create and organize** — choose an optional root folder (the default is `Secrets`); nested folders are preserved in the widget.
-- **Search** — filter by file name, description, or custom public metadata without decrypting secret values.
-- **Unlock and copy** — enter the encryption password to view, edit, or copy a value. The password is cached for the current session.
-- **Edit secrets** — update the secret value, description, and public metadata from the detail modal; the file remains encrypted.
-- **Encrypted at rest** — plaintext values are used only in memory while unlocked and are never saved back to the vault unencrypted.
-
-![Secret Manager edit](docs/images/secret_manager_edit.png)
-
-> [!WARNING]
-> Secret names, descriptions, custom public metadata, and vault paths are stored outside the ciphertext so they can be listed and searched. Do not put passwords, tokens, or other sensitive values in those fields. Put sensitive data only in the secret value.
-
-> [!NOTE]
-> **Workflow widgets read from a cache, not live.** A workflow widget runs only on the **Run** button, the config editor's test-run, or once on open when its cached result is older than the **Auto-refresh interval** (minutes; `0` = manual only). Results are stored in a hidden sidecar file next to the dashboard, so output survives reopening. The workflow must store its Markdown/HTML output in a variable (default `result`).
-
-> **For the `.dashboard` file format, the full YAML schema, and AI-generation tips, see [Dashboard Documentation](docs/okf/llm-hub-help/features/dashboard.md)**
+See the [Dashboard Hub documentation](https://github.com/takeshy/obsidian-dashboard-hub/blob/main/docs/dashboard.md) for dashboard features, widgets, storage, and schema details.
 
 ---
 

@@ -1535,8 +1535,8 @@ export class GeminiClient {
             }
 
             case "interaction.status_update": {
-              if (event.metadata?.total_usage) {
-                roundUsage = extractInteractionsUsage(event.metadata.total_usage, interactionModel);
+              if (event.metadata?.usage) {
+                roundUsage = extractInteractionsUsage(event.metadata.usage, interactionModel);
               }
               break;
             }
