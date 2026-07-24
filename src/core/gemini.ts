@@ -1535,8 +1535,12 @@ export class GeminiClient {
             }
 
             case "interaction.status_update": {
-              if (event.metadata?.usage) {
-                roundUsage = extractInteractionsUsage(event.metadata.usage, interactionModel);
+              // The API can include usage in status-update metadata, but some
+              // @google/genai releases type this metadata as StreamMetadata
+              // without the runtime `usage` field.
+              const usage = (event.metadata as { usage?: Interactions.Usage } | undefined)?.usage;
+              if (usage) {
+                roundUsage = extractInteractionsUsage(usage, interactionModel);
               }
               break;
             }
