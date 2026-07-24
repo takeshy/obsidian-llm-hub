@@ -61,8 +61,8 @@ export class FilePromptModal extends Modal {
     this.component.load();
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     // Title
     contentEl.createEl("h2", { text: this.title || t("workflowModal.selectFile") });
@@ -219,8 +219,8 @@ class AnyFilePromptModal extends Modal {
     this.component.load();
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     // Title
     contentEl.createEl("h2", { text: this.title || t("workflowModal.selectFile") });
@@ -381,8 +381,8 @@ class NewFilePathModal extends Modal {
     contentEl.addClass("workflow-file-prompt-modal");
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     // Title
     contentEl.createEl("h2", { text: this.title || t("workflowModal.enterFilePath") });

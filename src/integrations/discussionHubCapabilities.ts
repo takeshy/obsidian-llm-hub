@@ -1,5 +1,5 @@
 import type { EventRef } from "obsidian";
-import { streamChatForModel } from "src/core/discussionEngine";
+import { streamChatForModel } from "src/core/modelStreaming";
 import { listDashboardModels } from "src/integrations/dashboardHubCapabilities";
 import type { LlmHubPlugin } from "src/plugin";
 import type { Attachment, Message, ModelType } from "src/types";

@@ -4,6 +4,18 @@ import { createMcpClient } from "src/core/mcpClient";
 import { formatError } from "src/utils/error";
 import { t } from "src/i18n";
 
+function parseStringRecord(json: string): Record<string, string> {
+  const parsed = JSON.parse(json) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Expected a JSON object");
+  }
+  const entries = Object.entries(parsed);
+  if (!entries.every((entry): entry is [string, string] => typeof entry[1] === "string")) {
+    throw new Error("Expected string values");
+  }
+  return Object.fromEntries(entries);
+}
+
 export class McpServerModal extends Modal {
   private server: McpServerConfig;
   private isNew: boolean;
@@ -255,7 +267,7 @@ export class McpServerModal extends Modal {
             // Parse env
             if (this.envText.trim()) {
               try {
-                this.server.env = JSON.parse(this.envText);
+                this.server.env = parseStringRecord(this.envText);
               } catch {
                 new Notice(t("settings.mcpServerInvalidEnv"));
                 return;
@@ -267,7 +279,7 @@ export class McpServerModal extends Modal {
             // Parse headers
             if (this.headersText.trim()) {
               try {
-                this.server.headers = JSON.parse(this.headersText);
+                this.server.headers = parseStringRecord(this.headersText);
               } catch {
                 new Notice(t("settings.mcpServerInvalidHeaders"));
                 return;
@@ -318,7 +330,7 @@ export class McpServerModal extends Modal {
         let env: Record<string, string> | undefined;
         if (this.envText.trim()) {
           try {
-            env = JSON.parse(this.envText);
+            env = parseStringRecord(this.envText);
           } catch {
             statusEl.addClass("llm-hub-mcp-status--error");
             statusEl.setText(t("settings.mcpServerInvalidEnv"));
@@ -342,7 +354,7 @@ export class McpServerModal extends Modal {
         let headers: Record<string, string> | undefined;
         if (this.headersText.trim()) {
           try {
-            headers = JSON.parse(this.headersText);
+            headers = parseStringRecord(this.headersText);
           } catch {
             statusEl.addClass("llm-hub-mcp-status--error");
             statusEl.setText(t("settings.mcpServerInvalidHeaders"));

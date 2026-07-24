@@ -256,7 +256,7 @@ function displayLocalStoreSettings(
             })();
           });
         text.inputEl.rows = 4;
-        text.inputEl.addClass("gemini-helper-settings-textarea");
+        text.inputEl.addClass("llm-hub-settings-textarea");
       });
 
     // Embedding server URL for query embedding
@@ -330,7 +330,7 @@ function displayLocalStoreSettings(
       .setName(t("settings.excludedPatterns"))
       .setDesc(t("settings.excludedPatterns.desc"));
 
-    excludePatternsSetting.settingEl.addClass("gemini-helper-settings-textarea-container");
+    excludePatternsSetting.settingEl.addClass("llm-hub-settings-textarea-container");
 
     excludePatternsSetting.addTextArea((text) => {
       text
@@ -346,7 +346,7 @@ function displayLocalStoreSettings(
           })();
         });
       text.inputEl.rows = 4;
-      text.inputEl.addClass("gemini-helper-settings-textarea");
+      text.inputEl.addClass("llm-hub-settings-textarea");
     });
 
     // Index status
@@ -705,13 +705,13 @@ function displaySyncControls(
   const { plugin, display, syncCancelRef } = ctx;
 
   const progressContainer = containerEl.createDiv({
-    cls: "gemini-helper-sync-progress",
+    cls: "llm-hub-sync-progress",
   });
-  progressContainer.addClass("gemini-helper-hidden");
+  progressContainer.addClass("llm-hub-hidden");
 
   const progressText = progressContainer.createDiv();
   const progressBar = progressContainer.createEl("progress");
-  progressBar.addClass("gemini-helper-progress-bar");
+  progressBar.addClass("llm-hub-progress-bar");
 
   let cancelBtn: HTMLButtonElement | null = null;
 
@@ -728,7 +728,7 @@ function displaySyncControls(
           syncCancelRef.value = true;
           new Notice(t("settings.cancellingSync"));
         });
-      btn.buttonEl.addClass("gemini-helper-hidden");
+      btn.buttonEl.addClass("llm-hub-hidden");
     })
     .addButton((btn) =>
       btn
@@ -740,9 +740,9 @@ function displaySyncControls(
             syncCancelRef.value = false;
             btn.setDisabled(true);
             btn.setButtonText(t("settings.localSyncing"));
-            if (cancelBtn) cancelBtn.removeClass("gemini-helper-hidden");
-            progressContainer.removeClass("gemini-helper-hidden");
-            progressText.removeClass("gemini-helper-progress-error");
+            if (cancelBtn) cancelBtn.removeClass("llm-hub-hidden");
+            progressContainer.removeClass("llm-hub-hidden");
+            progressText.removeClass("llm-hub-progress-error");
             progressText.textContent = t("settings.syncPreparing");
             progressBar.value = 0;
             progressBar.max = 100;
@@ -795,15 +795,15 @@ function displaySyncControls(
               } else {
                 new Notice(t("settings.syncFailed", { error: msg }));
                 progressText.textContent = `${t("common.error")}${msg}`;
-                progressText.addClass("gemini-helper-progress-error");
+                progressText.addClass("llm-hub-progress-error");
               }
             } finally {
               btn.setDisabled(false);
               btn.setButtonText(t("settings.localSyncBtn"));
-              if (cancelBtn) cancelBtn.addClass("gemini-helper-hidden");
+              if (cancelBtn) cancelBtn.addClass("llm-hub-hidden");
               syncCancelRef.value = false;
               setTimeout(() => {
-                progressContainer.addClass("gemini-helper-hidden");
+                progressContainer.addClass("llm-hub-hidden");
                 display();
               }, 2000);
             }

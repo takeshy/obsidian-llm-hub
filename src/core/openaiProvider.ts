@@ -53,10 +53,10 @@ export function isOpenAiImageModel(model: string): boolean {
 }
 
 /**
- * Verify an OpenCode Go provider. Go does not expose `/v1/models`, so this
- * probes `/v1/chat/completions` with a known-valid model name and an empty
- * `messages` array. The server validates the API key first when the model
- * name is recognised, so an `AuthError` indicates the key is wrong.
+ * Verify an OpenCode Go provider. Fetch the live model catalog first, then
+ * probe `/v1/chat/completions` with one of the returned model IDs. The models
+ * endpoint changes as OpenCode adds or retires Go models, while the chat probe
+ * ensures a public catalog response cannot make an invalid API key look valid.
  *
  *   - 401 or 403                 → fail (treat as authentication failure
  *                                  regardless of the response body — empty
@@ -66,29 +66,32 @@ export function isOpenAiImageModel(model: string): boolean {
  *                                  errors are surfaced through normal flow)
  *   - DNS / connection failure   → fail (URL unreachable)
  *
- * `probeModel` is one of the documented OpenCode Go model ids so that auth
- * checking happens before model validation. If the fallback list ever drifts
- * out of sync, the worst case is the verifier degrades to "any non-401/403
- * HTTP response = success".
+ * The OpenCode config uses `opencode-go/<model-id>`, but its OpenAI-compatible
+ * API returns and accepts bare model IDs.
  */
-const OPENCODE_GO_VERIFY_PROBE_MODEL = "kimi-k2.6";
-
 export async function verifyOpencodeGo(
   baseUrl: string,
   apiKey: string,
   proxyUrl?: string,
   proxyBypass?: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; models?: string[] }> {
   if (!apiKey) {
     return { success: false, error: "API key required" };
   }
+  const discovery = await verifyApiProvider(baseUrl, apiKey, proxyUrl, proxyBypass);
+  if (!discovery.success) return discovery;
+  const models = discovery.models ?? [];
+  if (models.length === 0) {
+    return { success: false, error: "OpenCode Go returned no models" };
+  }
+
   const url = `${baseUrl.replace(/\/+$/, "")}/v1/chat/completions`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${apiKey}`,
   };
   const body = JSON.stringify({
-    model: OPENCODE_GO_VERIFY_PROBE_MODEL,
+    model: models[0],
     messages: [],
   });
 
@@ -116,7 +119,7 @@ export async function verifyOpencodeGo(
           error: `Authentication failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
         };
       }
-      return { success: res.status > 0 };
+      return { success: res.status > 0, models };
     }
     const res = await requestUrl({ url, method: "POST", headers, body, throw: false });
     if (res.status === 401 || res.status === 403) {
@@ -126,7 +129,7 @@ export async function verifyOpencodeGo(
         error: `Authentication failed (HTTP ${res.status})${detail ? `: ${detail}` : ""}`,
       };
     }
-    return { success: res.status > 0 };
+    return { success: res.status > 0, models };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: `Cannot reach ${baseUrl}: ${message}` };
@@ -229,8 +232,7 @@ function buildMessages(
                 filename: att.name,
                 file_data: `data:${att.mimeType};base64,${att.data}`,
               },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any);
+            });
           }
         }
         result.push({ role, content: parts });

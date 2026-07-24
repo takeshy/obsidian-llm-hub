@@ -1,6 +1,6 @@
 import { App, TFile } from "obsidian";
 import { WorkflowNode, ExecutionContext, PromptCallbacks } from "../types";
-import { replaceVariables, getVariable } from "./utils";
+import { replaceVariables, getVariable, parseJsonRecord } from "./utils";
 import { isEncryptedFile, decryptFileContent } from "../../core/crypto";
 import { cryptoCache } from "../../core/cryptoCache";
 import { CLOUD_VAULT_SCOPE_DENIED_MSG, isFileAllowedForCloudVaultTools, isPathInAllowedVaultFolders } from "../../vault/cloudVaultScope";
@@ -13,6 +13,12 @@ function createFileInfo(filePath: string): { path: string; basename: string; nam
   const name = lastDotIndex > 0 ? basename.substring(0, lastDotIndex) : basename;
   const extension = lastDotIndex > 0 ? basename.substring(lastDotIndex + 1) : "";
   return { path: filePath, basename, name, extension };
+}
+
+function parseFilePath(value: string | number): string | undefined {
+  const parsed = JSON.parse(String(value)) as unknown;
+  if (!parsed || typeof parsed !== "object" || !("path" in parsed)) return undefined;
+  return typeof parsed.path === "string" ? parsed.path : undefined;
 }
 
 function hasWorkflowVaultScope(context: ExecutionContext): boolean {
@@ -76,20 +82,14 @@ export async function handlePromptFileNode(
   } else if (hotkeyActiveFile) {
     // Hotkey mode: use active file without showing dialog
     try {
-      const fileInfo = JSON.parse(String(hotkeyActiveFile));
-      if (fileInfo.path) {
-        filePath = fileInfo.path as string;
-      }
+      filePath = parseFilePath(hotkeyActiveFile) ?? filePath;
     } catch {
       // Invalid JSON, fall through to dialog
     }
   } else if (eventFile) {
     // Event mode: use event file without showing dialog
     try {
-      const fileInfo = JSON.parse(String(eventFile));
-      if (fileInfo.path) {
-        filePath = fileInfo.path as string;
-      }
+      filePath = parseFilePath(eventFile) ?? filePath;
     } catch {
       // Invalid JSON, fall through to dialog
     }
@@ -194,10 +194,10 @@ export async function handlePromptSelectionNode(
     // Create selection info for full file
     if (saveSelectionTo && hotkeyActiveFile) {
       try {
-        const fileInfo = JSON.parse(String(hotkeyActiveFile));
+        const activeFilePath = parseFilePath(hotkeyActiveFile);
         const lines = fullContent.split("\n");
         context.variables.set(saveSelectionTo, JSON.stringify({
-          filePath: fileInfo.path,
+          filePath: activeFilePath,
           startLine: 1,
           endLine: lines.length,
           start: 0,
@@ -238,10 +238,10 @@ export async function handlePromptSelectionNode(
   // Event mode without content (e.g., delete event) - try to read from event file
   if (eventFile) {
     try {
-      const fileInfo = JSON.parse(String(eventFile));
-      if (fileInfo.path) {
-        assertWorkflowPathAllowed(context, fileInfo.path);
-        const file = app.vault.getAbstractFileByPath(fileInfo.path);
+      const eventFilePath = parseFilePath(eventFile);
+      if (eventFilePath) {
+        assertWorkflowPathAllowed(context, eventFilePath);
+        const file = app.vault.getAbstractFileByPath(eventFilePath);
         if (file && file instanceof TFile) {
           assertWorkflowFileAllowed(context, file);
           const content = await app.vault.read(file);
@@ -250,7 +250,7 @@ export async function handlePromptSelectionNode(
           if (saveSelectionTo) {
             const lines = content.split("\n");
             context.variables.set(saveSelectionTo, JSON.stringify({
-              filePath: fileInfo.path,
+              filePath: eventFilePath,
               startLine: 1,
               endLine: lines.length,
               start: 0,
@@ -340,10 +340,12 @@ export async function handleDialogNode(
   let defaults: { input?: string; selected?: string[] } | undefined;
   if (defaultsProp) {
     try {
-      const parsed = JSON.parse(replaceVariables(defaultsProp, context));
+      const parsed = parseJsonRecord(replaceVariables(defaultsProp, context));
       defaults = {
-        input: parsed.input,
-        selected: Array.isArray(parsed.selected) ? parsed.selected : undefined,
+        input: typeof parsed.input === "string" ? parsed.input : undefined,
+        selected: Array.isArray(parsed.selected)
+          ? parsed.selected.filter((value): value is string => typeof value === "string")
+          : undefined,
       };
     } catch {
       // Invalid JSON, ignore defaults

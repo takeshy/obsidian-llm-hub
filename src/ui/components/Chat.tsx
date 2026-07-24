@@ -2191,8 +2191,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				if (activeOkfBundleIds.length > 0) toolsBundle.push(READ_OKF_DOCUMENT_TOOL);
 
 				// Skill workflow / script tools
-				const llmSkillWorkflowMap = llmLoadedSkills.length > 0 ? collectSkillWorkflows(llmLoadedSkills) : new Map();
-				const llmSkillScriptMap = llmLoadedSkills.length > 0 ? collectSkillScripts(llmLoadedSkills) : new Map();
+				const llmSkillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
+				const llmSkillScriptMap = collectSkillScripts(llmLoadedSkills);
 				if (llmLoadedSkills.some(s => s.workflows.length > 0)) toolsBundle.push(skillWorkflowTool);
 				if (llmLoadedSkills.some(s => s.scripts.length > 0)) toolsBundle.push(skillScriptTool);
 
@@ -2600,8 +2600,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				tools.push(skillScriptTool);
 			}
 
-			const apiSkillWorkflowMap = apiLoadedSkills.length > 0 ? collectSkillWorkflows(apiLoadedSkills) : new Map();
-			const apiSkillScriptMap = apiLoadedSkills.length > 0 ? collectSkillScripts(apiLoadedSkills) : new Map();
+			const apiSkillWorkflowMap = collectSkillWorkflows(apiLoadedSkills);
+			const apiSkillScriptMap = collectSkillScripts(apiLoadedSkills);
 
 			const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
 				if (name.startsWith("mcp_") && mcpToolExecutor) {
@@ -3026,12 +3026,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				const pendingAdditionalRequestRef: { current: { filePath: string; request: string } | null } = { current: null };
 
 				// Build skill workflow/script maps for tool execution
-				const skillWorkflowMap = loadedSkillsList.length > 0
-					? collectSkillWorkflows(loadedSkillsList)
-					: new Map();
-				const skillScriptMap = loadedSkillsList.length > 0
-					? collectSkillScripts(loadedSkillsList)
-					: new Map();
+				const skillWorkflowMap = collectSkillWorkflows(loadedSkillsList);
+				const skillScriptMap = collectSkillScripts(loadedSkillsList);
 
 				// Combined tool executor that routes to Obsidian, MCP, or Skill Workflow/Script based on tool name
 				const baseToolExecutor = (obsidianToolExecutor || mcpToolExecutor || skillWorkflowMap.size > 0 || skillScriptMap.size > 0)
@@ -3836,7 +3832,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 	}, [plugin, currentDashboard]);
 
 	const handleCreateDashboard = useCallback(() => {
-		void promptForValue(plugin.app, t("dashboard.createNamePrompt"), "Dashboard", false).then((name) => {
+		void promptForValue(plugin.app, t("chat.dashboardCreateNamePrompt"), "Dashboard", false).then((name) => {
 			if (name === null) return;
 			void plugin.createDashboard(name).then((file) => {
 				if (file) {
@@ -4230,7 +4226,7 @@ async function executeSkillScript(
 	let scriptArgs: string[] = [];
 	if (argsJson) {
 		try {
-			const parsed = JSON.parse(argsJson);
+			const parsed = JSON.parse(argsJson) as unknown;
 			if (Array.isArray(parsed)) {
 				scriptArgs = parsed.map(String);
 			}

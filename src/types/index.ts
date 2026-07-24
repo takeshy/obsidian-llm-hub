@@ -297,7 +297,7 @@ export interface WorkspaceState {
   alwaysThinkModels?: string[];  // Always Think が有効なモデルID一覧
   maxPreviousMessages?: number;  // Number of older chat messages sent with the current message (0-99)
   sentPromptHistory?: string[];  // Recent prompts recalled with Up/Down in chat input (max 100)
-  discussionSettings?: DiscussionSettings;  // Legacy settings migrated to Discussion Hub
+  discussionSettings?: unknown;  // Legacy settings migrated to Discussion Hub
 }
 
 /** Default Gemini embedding model (used when embeddingModel is empty and no custom baseUrl) */
@@ -331,134 +331,6 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   maxPreviousMessages: 99,
 };
 
-
-// ==================== Discussion types ====================
-
-// Discussion participant (uses any model, not just CLI)
-export interface DiscussionParticipant {
-  id: string;                // Unique ID (e.g., "p-1712345678")
-  model: ModelType;          // Any available model
-  displayName: string;       // Display name shown in UI
-  role?: string;             // Optional role (e.g., "Affirmative", "Critical")
-}
-
-// Discussion voter
-export interface DiscussionVoter {
-  id: string;
-  model: ModelType;
-  displayName: string;
-}
-
-// Discussion phase
-export type DiscussionPhase =
-  | "idle"
-  | "thinking"
-  | "turn_complete"
-  | "concluding"
-  | "voting"
-  | "complete"
-  | "error";
-
-// Discussion turn
-export interface DiscussionTurn {
-  turnNumber: number;
-  responses: DiscussionResponse[];
-  timestamp: number;
-}
-
-// Individual response in a turn
-export interface DiscussionResponse {
-  participantId: string;
-  displayName: string;
-  content: string;
-  isConclusion: boolean;
-  timestamp: number;
-  error?: string;
-}
-
-// Final conclusion from a participant
-export interface DiscussionConclusion {
-  participantId: string;
-  displayName: string;
-  content: string;
-}
-
-// Vote result
-export interface DiscussionVoteResult {
-  voterId: string;
-  voterDisplayName: string;
-  votedForId: string;
-  votedForDisplayName: string;
-  reason?: string;
-}
-
-// Complete discussion result
-export interface DiscussionResult {
-  theme: string;
-  turns: DiscussionTurn[];
-  conclusions: DiscussionConclusion[];
-  votes: DiscussionVoteResult[];
-  winnerId: string | null;
-  winnerIds: string[];
-  isDraw: boolean;
-  finalConclusion: string;
-  startTime: number;
-  endTime: number;
-  participants: DiscussionParticipant[];
-  voters: DiscussionVoter[];
-}
-
-// Discussion settings (stored in workspace state)
-export interface DiscussionSettings {
-  systemPrompt: string;
-  conclusionPrompt: string;
-  votePrompt: string;
-  outputFolder: string;
-  defaultTurns: number;
-  participants?: DiscussionParticipant[];
-  voters?: DiscussionVoter[];
-}
-
-export const DEFAULT_DISCUSSION_SETTINGS: DiscussionSettings = {
-  systemPrompt: "You are discussing a theme with other AI assistants. Share your thoughts concisely.",
-  conclusionPrompt: `Based on all the discussion so far, please provide your FINAL CONCLUSION on the theme.
-Be clear and decisive. Summarize your position in a well-structured manner.
-Start your response with "CONCLUSION:" followed by your final answer.`,
-  votePrompt: `You have seen the conclusions from all participants.
-Now you must vote for the BEST conclusion (you can also vote for your own if you believe it's the best).
-Consider clarity, logical reasoning, and completeness.`,
-  outputFolder: "discussions",
-  defaultTurns: 2,
-};
-
-// Discussion UI state
-export interface DiscussionState {
-  phase: DiscussionPhase;
-  currentTurn: number;
-  totalTurns: number;
-  theme: string;
-  turns: DiscussionTurn[];
-  conclusions: DiscussionConclusion[];
-  votes: DiscussionVoteResult[];
-  winnerId: string | null;
-  winnerIds: string[];
-  isDraw: boolean;
-  finalConclusion: string;
-  error?: string;
-  streamingResponses: Map<string, string>;
-  startTime?: number;
-  endTime?: number;
-  participants: DiscussionParticipant[];
-  voters: DiscussionVoter[];
-  // User interaction
-  pendingUserInput?: {
-    type: "debate" | "vote";
-    participantId: string;
-    role?: string;
-  };
-}
-
-// ==================== End Discussion types ====================
 
 // Supported local LLM frameworks
 export type LlmFramework = "ollama" | "lm-studio" | "anythingllm" | "vllm" | "opencode";

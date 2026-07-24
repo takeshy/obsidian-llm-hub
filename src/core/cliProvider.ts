@@ -839,10 +839,11 @@ export class AntigravityCliProvider extends BaseCliProvider {
       proc.stdout.setEncoding("utf8");
 
       for await (const chunk of proc.stdout) {
-        if (String(chunk).length > 0) {
+        const text = String(chunk);
+        if (text.length > 0) {
           sawStdout = true;
         }
-        yield { type: "text", content: chunk };
+        yield { type: "text", content: text };
       }
     }
 

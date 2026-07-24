@@ -52,12 +52,12 @@ function CryptMetadataEditor({ description, rows, onDescriptionChange, onRowsCha
   const update = (index: number, patch: Partial<MetadataRow>) =>
     onRowsChange(rows.map((row, i) => i === index ? { ...row, ...patch } : row));
   return <div className="llm-hub-crypt-metadata-editor">
-    <label><span>{t("dashboard.secretDescription")}</span><input value={description} onChange={(e) => onDescriptionChange(e.target.value)} /></label>
-    <div className="llm-hub-crypt-metadata-editor-heading"><span>{t("dashboard.secretMetadata")}</span><button type="button" onClick={() => onRowsChange([...rows, { key: "", value: "" }])}><Plus size={13} /> {t("dashboard.secretMetadataAdd")}</button></div>
+    <label><span>{t("crypt.description")}</span><input value={description} onChange={(e) => onDescriptionChange(e.target.value)} /></label>
+    <div className="llm-hub-crypt-metadata-editor-heading"><span>{t("crypt.metadata")}</span><button type="button" onClick={() => onRowsChange([...rows, { key: "", value: "" }])}><Plus size={13} /> {t("crypt.metadataAdd")}</button></div>
     <div className="llm-hub-crypt-metadata-editor-rows">{rows.map((row, index) => <div key={index}>
-      <input placeholder={t("dashboard.secretMetadataKey")} value={row.key} onChange={(e) => update(index, { key: e.target.value.replace(/[=\n]/g, "") })} />
-      <input placeholder={t("dashboard.secretMetadataValue")} value={row.value} onChange={(e) => update(index, { value: e.target.value.replace(/\n/g, "") })} />
-      <button type="button" aria-label={t("dashboard.remove")} onClick={() => onRowsChange(rows.length === 1 ? [{ key: "", value: "" }] : rows.filter((_, i) => i !== index))}><X size={14} /></button>
+      <input placeholder={t("crypt.metadataKey")} value={row.key} onChange={(e) => update(index, { key: e.target.value.replace(/[=\n]/g, "") })} />
+      <input placeholder={t("crypt.metadataValue")} value={row.value} onChange={(e) => update(index, { value: e.target.value.replace(/\n/g, "") })} />
+      <button type="button" aria-label={t("crypt.remove")} onClick={() => onRowsChange(rows.length === 1 ? [{ key: "", value: "" }] : rows.filter((_, i) => i !== index))}><X size={14} /></button>
     </div>)}</div>
   </div>;
 }
@@ -68,8 +68,8 @@ function CryptMetadata({ encryptedContent }: { encryptedContent: string }) {
   if (!metadata.description && entries.length === 0) return null;
   return (
     <div className="llm-hub-crypt-metadata">
-      {metadata.description && <div className="llm-hub-crypt-metadata-description"><span>{t("dashboard.secretDescription")}</span><p>{metadata.description}</p></div>}
-      {entries.length > 0 && <div className="llm-hub-crypt-metadata-fields"><span>{t("dashboard.secretMetadata")}</span><dl>
+      {metadata.description && <div className="llm-hub-crypt-metadata-description"><span>{t("crypt.description")}</span><p>{metadata.description}</p></div>}
+      {entries.length > 0 && <div className="llm-hub-crypt-metadata-fields"><span>{t("crypt.metadata")}</span><dl>
         {entries.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}
       </dl></div>}
     </div>

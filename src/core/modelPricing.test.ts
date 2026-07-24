@@ -37,3 +37,9 @@ describe("Claude Opus 5", () => {
     expect(calculateCost("claude-opus-5-20260724", 1_000_000, 1_000_000)).toBe(30);
   });
 });
+
+describe("OpenCode Go", () => {
+  it("does not inject a stale static model catalog", () => {
+    expect(getKnownModels("opencodego")).toEqual([]);
+  });
+});

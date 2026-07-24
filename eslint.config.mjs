@@ -1,5 +1,53 @@
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import tseslint from 'typescript-eslint';
+import { DEFAULT_BRANDS } from 'eslint-plugin-obsidianmd/dist/lib/rules/ui/brands.js';
+
+const BRANDS = [
+  ...DEFAULT_BRANDS,
+  'Dashboard Hub',
+  'LLM Hub',
+  'Discussion Hub',
+  'AI Discussion',
+  'Antigravity',
+  'Codex',
+  'Ollama',
+  'LM Studio',
+  'vLLM',
+  'AnythingLLM',
+  'OpenCode',
+  'OpenCode Go',
+  'OpenCode Zen',
+  'Grok',
+  'npx',
+  'Python',
+  'MP3',
+  'WAV',
+  'MP4',
+  'Top K',
+  'Timeline',
+  'Tasks',
+  'RAG',
+  'OKF',
+  'MCP',
+];
+
+const SENTENCE_CASE_IGNORES = [
+  '^\\(',
+  '^\\.\\.\\.',
+  '^#',
+  '^[Ee]\\.g\\.',
+  'https?://',
+  'https?\\(s\\)',
+  '_',
+  '\\^|[\\\\/]',
+  '\\b[a-z0-9-]+(?:\\.[a-z0-9-]+)+\\b',
+  '\\b(?:agy|claude|codex) command\\b',
+  '[\"\\\'][a-z][a-z0-9-]*[\"\\\']',
+  '^(?:[a-z0-9]+,\\s*)+[a-z0-9]+$',
+  '\\b(?:md|pdf|png|jpe?g|mp3|wav|mp4)(?:,\\s*(?:md|pdf|png|jpe?g|mp3|wav|mp4))+\\b',
+  '^(?:OR|AND)\\b',
+  '^(?:result|stale|day\\(s\\)|month\\(s\\)|year\\(s\\))$',
+];
 
 export default tseslint.config(
   {
@@ -20,12 +68,11 @@ export default tseslint.config(
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
       }],
-      // Disable overly strict unsafe rules (not required by ObsidianReviewBot)
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-argument': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
 
       // Obsidian plugin rules (from recommended config)
       'obsidianmd/commands/no-command-in-command-id': 'error',
@@ -52,8 +99,17 @@ export default tseslint.config(
       'obsidianmd/sample-names': 'error',
       'obsidianmd/validate-manifest': 'error',
       'obsidianmd/validate-license': 'error',
-      'obsidianmd/ui/sentence-case': 'off',
-      'obsidianmd/ui/sentence-case-locale-module': 'off',
+      'obsidianmd/ui/sentence-case': ['error', {
+        brands: BRANDS,
+        ignoreRegex: SENTENCE_CASE_IGNORES,
+        allowAutoFix: true,
+      }],
+      'obsidianmd/ui/sentence-case-locale-module': ['error', {
+        brands: BRANDS,
+        ignoreWords: ['RAG', 'OKF', 'OR', 'AND', 'VOTE', 'Base', 'View'],
+        ignoreRegex: SENTENCE_CASE_IGNORES,
+        allowAutoFix: true,
+      }],
 
       // Additional strict rules
       'no-case-declarations': 'error',

@@ -115,8 +115,7 @@ function buildContent(
           media_type: "application/pdf",
           data: att.data,
         },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
     }
   }
 
@@ -257,8 +256,7 @@ export async function* anthropicChatWithToolsStream(
                 roundTextLength += delta.text.length;
                 yield { type: "text", content: delta.text };
               } else if (delta.type === "thinking_delta") {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const thinkingText = (delta as any).thinking as string || "";
+                const thinkingText = delta.thinking || "";
                 thinkingContent += thinkingText;
                 yield { type: "thinking", content: thinkingText };
               } else if (delta.type === "input_json_delta") {

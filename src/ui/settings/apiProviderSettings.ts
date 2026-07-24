@@ -5,7 +5,7 @@ import { KNOWN_PROVIDER_DEFAULTS, normalizeDeprecatedGeminiModelName } from "src
 import { verifyApiProvider, verifyOpencodeGo } from "src/core/openaiProvider";
 import { verifyAnthropicProvider } from "src/core/anthropicProvider";
 import { verifyGeminiProvider } from "src/core/gemini";
-import { getKnownModels, OPENCODE_GO_FALLBACK_MODELS } from "src/core/modelPricing";
+import { getKnownModels } from "src/core/modelPricing";
 import type { SettingsContext } from "./settingsContext";
 
 export function displayApiProviderSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
@@ -158,7 +158,7 @@ class ApiProviderModal extends Modal {
         .setName(t("settings.apiProviderName"))
         .addText((text) =>
           text
-            .setPlaceholder("My Provider")
+            .setPlaceholder("My provider")
             .setValue(this.config.name)
             .onChange((value) => { this.config.name = value.trim(); })
         );
@@ -253,17 +253,9 @@ class ApiProviderModal extends Modal {
           btn.setDisabled(true);
           btn.setButtonText(t("settings.cliVerifying"));
           try {
-            // OpenCode Go has no `/v1/models`, so it uses a dedicated
-            // reachability probe on `/v1/chat/completions`. Any HTTP
-            // response (even 401/404) means the URL is live; DNS /
-            // connection errors fail verify so a typo'd baseUrl or missing
-            // API key surface here instead of at chat time. See issue #37.
             let result: { success: boolean; error?: string; models?: string[] };
             if (this.config.type === "opencodego") {
-              const probe = await verifyOpencodeGo(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
-              result = probe.success
-                ? { success: true, models: OPENCODE_GO_FALLBACK_MODELS }
-                : { success: false, error: probe.error };
+              result = await verifyOpencodeGo(this.config.baseUrl, this.config.apiKey, this.proxyUrl, this.proxyBypass);
             } else if (this.config.type === "gemini") {
               result = await verifyGeminiProvider(this.config.apiKey, this.proxyUrl, this.proxyBypass);
             } else if (this.config.type === "anthropic") {
@@ -274,6 +266,10 @@ class ApiProviderModal extends Modal {
             if (result.success) {
               this.config.verified = true;
               this.config.availableModels = result.models || [];
+              if (result.models) {
+                const availableModels = new Set(result.models);
+                this.config.enabledModels = this.config.enabledModels.filter(model => availableModels.has(model));
+              }
               new Notice(t("settings.apiProviderVerified", { count: String(this.config.availableModels.length) }));
               this.onOpen(); // Re-render with models
             } else {

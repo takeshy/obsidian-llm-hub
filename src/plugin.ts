@@ -698,8 +698,8 @@ export class LlmHubPlugin extends Plugin {
 
   }
 
-  async loadSettings() {
-    const loaded = await this.loadData() ?? {};
+  async loadSettings(): Promise<void> {
+    const loaded = (await this.loadData() ?? {}) as Partial<LlmHubSettings>;
 
     this.settings = {
       ...DEFAULT_SETTINGS,
@@ -713,7 +713,7 @@ export class LlmHubPlugin extends Plugin {
       // Deep copy arrays to avoid mutating DEFAULT_SETTINGS
       // Use loaded commands if present, otherwise use default commands
       slashCommands: loaded.slashCommands
-        ? (loaded.slashCommands as SlashCommand[]).map(cmd => {
+        ? loaded.slashCommands.map(cmd => {
             const searchSelection = getSlashCommandSearchSelection(cmd);
             const { searchSetting: _legacySearchSetting, ...rest } = cmd;
             return {
@@ -725,7 +725,7 @@ export class LlmHubPlugin extends Plugin {
         : [...DEFAULT_SETTINGS.slashCommands],
       // Deep copy API providers (ensure enabledModels exists)
       apiProviders: loaded.apiProviders
-        ? (loaded.apiProviders as Record<string, unknown>[]).map(p => ({
+        ? loaded.apiProviders.map(p => ({
             ...p,
             enabledModels: normalizeModelList(p.enabledModels),
             availableModels: normalizeModelList(p.availableModels),
@@ -733,9 +733,9 @@ export class LlmHubPlugin extends Plugin {
         : [],
       // Deep copy MCP servers (add default transport for backward compatibility)
       mcpServers: loaded.mcpServers
-        ? (loaded.mcpServers as Record<string, unknown>[]).map(s => ({
+        ? loaded.mcpServers.map(s => ({
             ...s,
-            transport: (s.transport as string) || "http",
+            transport: s.transport || "http",
           }))
         : [],
       // Deep copy workflow arrays

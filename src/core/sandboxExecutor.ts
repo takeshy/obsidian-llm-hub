@@ -98,27 +98,28 @@ export function executeSandboxedJS(
       }
     };
 
-    const handler = (event: MessageEvent) => {
+    const handler = (event: MessageEvent<unknown>) => {
       if (event.source !== iframe.contentWindow) return;
-      const data = event.data;
+      const data: unknown = event.data;
       if (!data || typeof data !== "object") return;
+      const message = data as Record<string, unknown>;
 
-      if (data.type === "ready" && !settled) {
+      if (message.type === "ready" && !settled) {
         iframe.contentWindow!.postMessage({ code, input }, "*");
         return;
       }
 
-      if (data.type === "result" && !settled) {
+      if (message.type === "result" && !settled) {
         settled = true;
         cleanup(timer);
-        resolve(typeof data.value === "string" ? data.value : String(data.value ?? ""));
+        resolve(typeof message.value === "string" ? message.value : "");
         return;
       }
 
-      if (data.type === "error" && !settled) {
+      if (message.type === "error" && !settled) {
         settled = true;
         cleanup(timer);
-        reject(new Error(data.message || "Script execution error"));
+        reject(new Error(typeof message.message === "string" ? message.message : "Script execution error"));
       }
     };
 

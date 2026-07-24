@@ -1443,7 +1443,7 @@ export class DiscordService {
     let scriptArgs: string[] = [];
     if (argsJson) {
       try {
-        const parsed = JSON.parse(argsJson);
+        const parsed = JSON.parse(argsJson) as unknown;
         if (Array.isArray(parsed)) {
           scriptArgs = parsed.map(String);
         }
@@ -1638,7 +1638,11 @@ export class DiscordService {
 
     // Handle rate limiting
     if (response.status === 429) {
-      const retryAfter = response.json?.retry_after as number | undefined;
+      const responseBody: unknown = response.json;
+      const retryAfter = responseBody && typeof responseBody === "object" && "retry_after" in responseBody
+        && typeof responseBody.retry_after === "number"
+        ? responseBody.retry_after
+        : undefined;
       const waitMs = retryAfter ? retryAfter * 1000 : 5000;
       console.warn(`LLM Hub: Discord rate limited, retrying in ${waitMs}ms`);
       await new Promise(resolve => setTimeout(resolve, waitMs));

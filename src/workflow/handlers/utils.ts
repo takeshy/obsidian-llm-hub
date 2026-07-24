@@ -64,6 +64,14 @@ export function jsonEscapeString(value: string): string {
   return JSON.stringify(value).slice(1, -1);
 }
 
+export function parseJsonRecord(value: string): Record<string, unknown> {
+  const parsed = JSON.parse(value) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Expected a JSON object");
+  }
+  return parsed as Record<string, unknown>;
+}
+
 // Normalize legacy __varName__ to _varName for backward compatibility
 function normalizeVarName(name: string): string {
   if (name.startsWith("__") && name.endsWith("__") && name.length > 4) {
@@ -124,7 +132,7 @@ export function replaceVariables(
 
     // Match {{varName}} or {{varName.path.to.value}} or {{varName.items[0].name}}
     // Also supports {{varName:json}} modifier for JSON-escaping the value
-    result = result.replace(/\{\{([\w.[\]]+)(:json)?\}\}/g, (match, fullPath, jsonModifier) => {
+    result = result.replace(/\{\{([\w.[\]]+)(:json)?\}\}/g, (match: string, fullPath: string, jsonModifier?: string) => {
     const shouldJsonEscape = jsonModifier === ":json";
     // Check if it's a simple variable or a path
     const dotIndex = fullPath.indexOf(".");
@@ -165,7 +173,7 @@ export function replaceVariables(
         if (codeBlockMatch) {
           jsonString = codeBlockMatch[1].trim();
         }
-        parsedValue = JSON.parse(jsonString);
+        parsedValue = JSON.parse(jsonString) as unknown;
       } catch {
         // Not valid JSON, try treating the whole path as a variable
         return match;
@@ -310,7 +318,7 @@ export function evaluateCondition(
     case "contains":
       // Check if left is a JSON array and right is in it
       try {
-        const leftParsed = JSON.parse(left);
+        const leftParsed = JSON.parse(left) as unknown;
         if (Array.isArray(leftParsed)) {
           return leftParsed.includes(right);
         }

@@ -1,4 +1,4 @@
-import { type App, TFile, loadPdfJs } from "obsidian";
+import { type App, TFile } from "obsidian";
 import { PDFDocument } from "pdf-lib";
 import {
   generateEmbeddings,
@@ -22,6 +22,7 @@ import {
   loadExternalRagVectors,
 } from "./localRagStorage";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type RagSetting } from "../types";
+import { extractPdfPageText, loadPdfDocument } from "./pdfJs";
 
 const MAX_CHANGED_FILES_PER_SYNC = 50;
 const SCAN_YIELD_INTERVAL = 25;
@@ -66,7 +67,10 @@ function mergeLoadedIndexes(items: { index: LocalRagIndex; vectors: Float32Array
       ...sameDimension[0].index,
       meta,
       dimension,
-      fileChecksums: Object.assign({}, ...sameDimension.map(({ index }) => index.fileChecksums)),
+      fileChecksums: sameDimension.reduce<Record<string, string>>(
+        (checksums, { index }) => ({ ...checksums, ...index.fileChecksums }),
+        {},
+      ),
     },
     vectors: mergedVectors,
   };
@@ -869,15 +873,10 @@ interface PdfExtractResult {
 /** Extract text from a PDF with page offset tracking for page label computation. */
 async function extractPdfTextWithOffsets(app: App, file: TFile): Promise<PdfExtractResult | null> {
   const buffer = await app.vault.readBinary(file);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfjsLib: any = await loadPdfJs();
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const pdf = await loadPdfDocument(buffer);
   const pageTexts: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const text = content.items.map((item: any) => item.str).join(" ");
+    const text = await extractPdfPageText(pdf, i);
     pageTexts.push(text.trim() ? text : "");
   }
   // Join non-empty page texts with "\n" and track the offset of each page

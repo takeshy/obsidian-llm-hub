@@ -56,7 +56,7 @@ export class LocalLlmModal extends Modal {
           .addOption("lm-studio", "LM Studio (OpenAI compatible)")
           .addOption("anythingllm", "AnythingLLM")
           .addOption("vllm", "vLLM")
-          .addOption("opencode", "OpenCode (Local)")
+          .addOption("opencode", "OpenCode (local)")
           .setValue(this.config.framework)
           .onChange((value) => {
             const fw = value as LlmFramework;

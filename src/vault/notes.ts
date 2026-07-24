@@ -561,7 +561,7 @@ export async function proposeEdit(
 const OPEN_FILE_AFTER_APPLY_KEY = "llm-hub-open-file-after-apply";
 
 export function getOpenFileAfterApplyPreference(app: App): boolean {
-  const stored = app.loadLocalStorage(OPEN_FILE_AFTER_APPLY_KEY);
+  const stored: unknown = app.loadLocalStorage(OPEN_FILE_AFTER_APPLY_KEY);
   return stored === false || stored === "false" ? false : true;
 }
 

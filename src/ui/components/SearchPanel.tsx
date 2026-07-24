@@ -22,7 +22,7 @@ import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
 import { extractPdfText } from "src/vault/search";
 import { extensionToMimeType } from "src/core/embeddingProvider";
-import { streamChatForModel } from "src/core/discussionEngine";
+import { streamChatForModel } from "src/core/modelStreaming";
 import { parseFilterTerms, matchesFilter, removeRedundantTerms } from "./searchUtils";
 import { t } from "src/i18n";
 
@@ -711,10 +711,11 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   };
 
   const openPluginSettings = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const setting = (plugin.app as any).setting;
-    setting?.open?.();
-    setting?.openTabById?.(plugin.manifest.id);
+    const app = plugin.app as typeof plugin.app & {
+      setting?: { open(): void; openTabById(id: string): void };
+    };
+    app.setting?.open();
+    app.setting?.openTabById(plugin.manifest.id);
   };
 
   if (ragSettingNames.length === 0) {

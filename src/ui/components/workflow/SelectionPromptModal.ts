@@ -58,8 +58,8 @@ export class SelectionPromptModal extends Modal {
     contentEl.addClass("workflow-selection-prompt-modal");
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     // Title
     contentEl.createEl("h2", { text: this.title || t("workflowModal.selectText") });

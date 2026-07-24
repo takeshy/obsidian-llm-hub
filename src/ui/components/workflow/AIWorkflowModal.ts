@@ -2707,7 +2707,7 @@ export function parseWorkflowResponseWithError(response: string): { result: AIWo
     }
 
     yaml = normalizeYamlText(yaml);
-    let parsed: {
+    type ParsedWorkflow = {
       name?: string;
       nodes?: Array<{
         id?: string;
@@ -2718,15 +2718,17 @@ export function parseWorkflowResponseWithError(response: string): { result: AIWo
         [key: string]: unknown;
       }>;
     };
+    let parsedValue: unknown;
     try {
-      parsed = parseYaml(yaml);
+      parsedValue = parseYaml(yaml) as unknown;
     } catch (yamlErr) {
       return { result: null, error: `YAML syntax error: ${formatError(yamlErr)}` };
     }
 
-    if (!parsed || typeof parsed !== "object") {
+    if (!parsedValue || typeof parsedValue !== "object") {
       return { result: null, error: "Parsed YAML is not an object." };
     }
+    const parsed = parsedValue as ParsedWorkflow;
     if (!Array.isArray(parsed.nodes)) {
       return { result: null, error: "Parsed YAML has no 'nodes' array at the top level." };
     }

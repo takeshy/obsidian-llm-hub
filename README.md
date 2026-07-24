@@ -564,7 +564,7 @@ Configure any OpenAI-compatible endpoint with custom base URL and models. OpenRo
 OpenCode offers two hosted gateways from the same account, both selectable from the provider dropdown:
 
 - **OpenCode Zen** (`https://opencode.ai/zen`) — pay-per-use, includes several free models (Big Pickle, MiniMax M2.5 Free, etc.) and a broad model catalog (Claude, GPT-5.x, and more). Exposes OpenAI-compatible `/v1/models` + `/v1/chat/completions`, so models are listed automatically.
-- **OpenCode Go** (`https://opencode.ai/zen/go`) — $5/first month, $10/month subscription with curated coding models (GLM, Kimi, DeepSeek, MiMo, MiniMax, Qwen). It exposes only `/v1/chat/completions`, so the plugin falls back to a documented model list during Verify.
+- **OpenCode Go** (`https://opencode.ai/zen/go`) — $5/first month, $10/month subscription with curated coding models (Grok, GLM, Kimi, DeepSeek, MiMo, MiniMax, Qwen, and more). The plugin fetches its live `/v1/models` catalog during Verify, so newly added and retired models are reflected automatically.
 
 ### Local LLM
 

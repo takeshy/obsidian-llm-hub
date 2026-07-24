@@ -61,8 +61,8 @@ export class DialogPromptModal extends Modal {
     contentEl.addClass("llm-hub-dialog-modal");
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     // Title
     contentEl.createEl("h2", { text: this.title });

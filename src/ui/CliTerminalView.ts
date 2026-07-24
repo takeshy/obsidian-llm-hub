@@ -20,7 +20,7 @@ export class CliTerminalView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "LLM Hub CLI Terminal";
+    return "LLM Hub CLI terminal";
   }
 
   getIcon(): IconName {

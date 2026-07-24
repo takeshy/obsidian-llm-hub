@@ -1,7 +1,7 @@
 import { Modal, App, Notice } from "obsidian";
 import { getLocalRagStore, type LocalRagSearchResult } from "src/core/localRagStore";
 import { extractPdfText } from "src/vault/search";
-import { streamChatForModel } from "src/core/discussionEngine";
+import { streamChatForModel } from "src/core/modelStreaming";
 import type { LlmHubSettings, ModelType, Message } from "src/types";
 import { t } from "src/i18n";
 

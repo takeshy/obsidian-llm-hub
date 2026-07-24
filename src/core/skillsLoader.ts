@@ -68,7 +68,7 @@ export function extractCapabilitiesBlock(
   const match = body.match(CAPABILITIES_FENCE_RE);
   if (!match) return null;
   try {
-    const parsed = parseYaml(match[1]);
+    const parsed: unknown = parseYaml(match[1]);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }

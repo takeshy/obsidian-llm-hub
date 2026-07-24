@@ -291,7 +291,7 @@ export async function handleFileSaveNode(
   // Parse FileExplorerData
   let fileData: FileExplorerData;
   try {
-    fileData = JSON.parse(sourceValue);
+    fileData = JSON.parse(sourceValue) as FileExplorerData;
     if (!fileData.data || !fileData.contentType) {
       throw new Error("Invalid FileExplorerData structure");
     }

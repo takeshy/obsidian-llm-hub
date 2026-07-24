@@ -8,6 +8,11 @@
 
 import { loadMermaid } from "obsidian";
 
+interface MermaidApi {
+  initialize(config: Record<string, unknown>): void;
+  render(id: string, chart: string): Promise<{ svg: string }>;
+}
+
 let queue: Promise<void> = Promise.resolve();
 
 export interface MermaidRenderOptions {
@@ -48,7 +53,7 @@ async function doRender(
 
   const id = `mermaid-${Date.now()}-${attempt}`;
   try {
-    const mermaid = await loadMermaid();
+    const mermaid = await loadMermaid() as MermaidApi;
     if (isCancelled()) return null;
 
     mermaid.initialize({

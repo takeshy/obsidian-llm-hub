@@ -29,9 +29,10 @@ export function computeLineDiff(oldText: string, newText: string): DiffLine[] {
   // Build LCS table
   const m = oldLines.length;
   const n = newLines.length;
-  const lcs: number[][] = Array(m + 1)
-    .fill(null)
-    .map(() => Array(n + 1).fill(0));
+  const lcs: number[][] = Array.from(
+    { length: m + 1 },
+    () => Array<number>(n + 1).fill(0),
+  );
 
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
@@ -133,8 +134,8 @@ export class EditConfirmationModal extends Modal {
     const { contentEl, modalEl, containerEl } = this;
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     // Add modal classes for styling
     modalEl.addClass("llm-hub-edit-confirm-modal");
@@ -543,8 +544,8 @@ export class DeleteConfirmationModal extends Modal {
     const { contentEl, modalEl, containerEl } = this;
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     // Add modal classes for styling
     modalEl.addClass("llm-hub-delete-confirm-modal");
@@ -831,8 +832,8 @@ export class BulkEditConfirmationModal extends Modal {
     const { contentEl, modalEl, containerEl } = this;
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     modalEl.addClass("llm-hub-bulk-confirm-modal");
     modalEl.addClass("llm-hub-resizable-modal");
@@ -1191,8 +1192,8 @@ export class BulkDeleteConfirmationModal extends Modal {
     const { contentEl, modalEl, containerEl } = this;
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     modalEl.addClass("llm-hub-bulk-confirm-modal");
     modalEl.addClass("llm-hub-bulk-delete-modal");
@@ -1526,8 +1527,8 @@ export class RenameConfirmationModal extends Modal {
     const { contentEl, modalEl, containerEl } = this;
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     modalEl.addClass("llm-hub-delete-confirm-modal");
 
@@ -1641,8 +1642,8 @@ export class BulkRenameConfirmationModal extends Modal {
     const { contentEl, modalEl, containerEl } = this;
 
     // Prevent closing on outside click
-    containerEl.setCssProps({ 'pointer-events': 'none' });
-    modalEl.setCssProps({ 'pointer-events': 'auto' });
+    containerEl.addClass("llm-hub-pass-through-modal-container");
+    modalEl.addClass("llm-hub-interactive-modal");
 
     modalEl.addClass("llm-hub-bulk-confirm-modal");
     modalEl.addClass("llm-hub-resizable-modal");

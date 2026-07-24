@@ -4,7 +4,7 @@
  */
 import { App } from "obsidian";
 import type { WorkflowNode, ExecutionContext } from "../types";
-import { replaceVariables } from "./utils";
+import { parseJsonRecord, replaceVariables } from "./utils";
 import { runScript } from "../../core/scriptRunner";
 
 const DEFAULT_TIMEOUT = 60_000;
@@ -25,7 +25,7 @@ export async function handleShellNode(
   if (argsTemplate) {
     const argsStr = replaceVariables(argsTemplate, context);
     try {
-      const parsed = JSON.parse(argsStr);
+      const parsed = JSON.parse(argsStr) as unknown;
       if (Array.isArray(parsed)) {
         args = parsed.map(String);
       }
@@ -50,9 +50,9 @@ export async function handleShellNode(
   if (envTemplate) {
     const envStr = replaceVariables(envTemplate, context);
     try {
-      const parsed = JSON.parse(envStr);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        for (const [k, v] of Object.entries(parsed)) {
+      const parsed = parseJsonRecord(envStr);
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
           envVars[k] = String(v);
         }
       }

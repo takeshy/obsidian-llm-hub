@@ -1,6 +1,6 @@
 import { Platform, TFile } from "obsidian";
 import type { LlmHubPlugin } from "src/plugin";
-import { streamChatForModel } from "src/core/discussionEngine";
+import { streamChatForModel } from "src/core/modelStreaming";
 import { GeminiClient } from "src/core/gemini";
 import { openaiChatWithToolsStream } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";

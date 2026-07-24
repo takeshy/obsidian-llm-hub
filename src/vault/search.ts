@@ -1,7 +1,8 @@
-import { TFolder, TFile, type App, loadPdfJs } from "obsidian";
+import { TFolder, TFile, type App } from "obsidian";
 import { formatError } from "src/utils/error";
 import { DEFAULT_SETTINGS } from "src/types";
 import { getSearchableVaultFiles, getVaultTextFiles } from "./fileTypes";
+import { extractPdfPageText, loadPdfDocument } from "../core/pdfJs";
 
 // In-memory cache for extracted PDF text, keyed by "path:startPage-endPage"
 const pdfTextCache = new Map<string, { mtime: number; size: number; text: string | null }>();
@@ -41,17 +42,13 @@ export async function extractPdfText(
       buffer = await app.vault.readBinary(file);
     }
 
-    const pdfjsLib = await loadPdfJs();
-    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const pdf = await loadPdfDocument(buffer);
 
     const from = startPage ?? 1;
     const to = endPage ?? pdf.numPages;
     const pages: string[] = [];
     for (let i = from; i <= Math.min(to, pdf.numPages); i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const text = content.items.map((item: any) => item.str).join(" ");
+      const text = await extractPdfPageText(pdf, i);
       if (text.trim()) pages.push(text);
     }
     const result = pages.length > 0 ? pages.join("\n") : null;

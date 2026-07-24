@@ -78,18 +78,18 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
             {t("chat.welcomeHint")}
           </p>
           {onAskLlmHubHelp && (
-            <div className="llm-hub-empty-dashboard">
-              <div className="llm-hub-empty-dashboard-heading">
+            <div className="llm-hub-empty-card">
+              <div className="llm-hub-empty-card-heading">
                 <BookOpen size={16} aria-hidden="true" />
                 <span>{t("chat.helpTitle")}</span>
               </div>
-              <p className="llm-hub-empty-dashboard-description">
+              <p className="llm-hub-empty-card-description">
                 {t("chat.helpDescription")}
               </p>
-              <div className="llm-hub-empty-dashboard-actions">
+              <div className="llm-hub-empty-card-actions">
                 <button
                   type="button"
-                  className="llm-hub-empty-dashboard-create"
+                  className="llm-hub-empty-card-action"
                   onClick={onAskLlmHubHelp}
                 >
                   <BookOpen size={14} aria-hidden="true" />
@@ -98,19 +98,19 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
               </div>
             </div>
           )}
-          <div className="llm-hub-empty-dashboard">
-            <div className="llm-hub-empty-dashboard-heading">
+          <div className="llm-hub-empty-card">
+            <div className="llm-hub-empty-card-heading">
               <LayoutDashboard size={16} aria-hidden="true" />
               <span>{t("chat.dashboardTitle")}</span>
             </div>
-            <p className="llm-hub-empty-dashboard-description">
+            <p className="llm-hub-empty-card-description">
               {t("chat.dashboardDescription")}
             </p>
-            <div className="llm-hub-empty-dashboard-actions">
+            <div className="llm-hub-empty-card-actions">
               {currentDashboard && onOpenDashboard && (
                 <button
                   type="button"
-                  className="llm-hub-empty-dashboard-link"
+                  className="llm-hub-empty-card-action"
                   title={currentDashboard.path}
                   onClick={onOpenDashboard}
                 >
@@ -121,7 +121,7 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
               {onCreateDashboard && (
                 <button
                   type="button"
-                  className="llm-hub-empty-dashboard-create"
+                  className="llm-hub-empty-card-action"
                   onClick={onCreateDashboard}
                 >
                   <Plus size={14} aria-hidden="true" />

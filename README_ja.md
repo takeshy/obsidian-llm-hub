@@ -568,7 +568,7 @@ AI Discussion は、別プラグインの [Discussion Hub](https://github.com/ta
 OpenCode は同じアカウントから 2 種類のゲートウェイを提供しており、どちらもプロバイダードロップダウンから選択できます。
 
 - **OpenCode Zen** (`https://opencode.ai/zen`) — 都度課金。Big Pickle、MiniMax M2.5 Free など複数の無料モデルを含み、Claude・GPT-5.x など幅広いモデルを提供。`/v1/models` と `/v1/chat/completions` の OpenAI 互換 API を公開しているため、Verify 時にモデルが自動で一覧取得されます。
-- **OpenCode Go** (`https://opencode.ai/zen/go`) — 初月 $5、以降 $10/月のサブスクリプション。コーディング系（GLM、Kimi、DeepSeek、MiMo、MiniMax、Qwen）を厳選。`/v1/chat/completions` のみ公開のため、Verify 時はプラグイン同梱のモデルリストにフォールバックします。
+- **OpenCode Go** (`https://opencode.ai/zen/go`) — 初月 $5、以降 $10/月のサブスクリプション。Grok、GLM、Kimi、DeepSeek、MiMo、MiniMax、Qwen などを厳選。Verify 時に最新の `/v1/models` を取得するため、モデルの追加・廃止が自動で反映されます。
 
 ### ローカル LLM
 

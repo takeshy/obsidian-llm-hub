@@ -146,7 +146,7 @@ export class McpHttpClient implements IMcpClient {
         return this.parseSSEResponse(response.text);
       } else {
         // Regular JSON response
-        const jsonResponse: JsonRpcResponse = response.json;
+        const jsonResponse = response.json as JsonRpcResponse;
 
         if (jsonResponse.error) {
           throw new Error(`MCP Error ${jsonResponse.error.code}: ${jsonResponse.error.message}`);
@@ -179,7 +179,7 @@ export class McpHttpClient implements IMcpClient {
       throw new Error("No data received in SSE response");
     }
 
-    const jsonResponse: JsonRpcResponse = JSON.parse(lastData);
+    const jsonResponse = JSON.parse(lastData) as JsonRpcResponse;
 
     if (jsonResponse.error) {
       throw new Error(`MCP Error ${jsonResponse.error.code}: ${jsonResponse.error.message}`);

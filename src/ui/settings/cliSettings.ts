@@ -69,13 +69,6 @@ export function displayCliSettings(containerEl: HTMLElement, ctx: SettingsContex
     onSettings: (cliType, customPath) => openCliPathModal(app, cliType, customPath, plugin, display),
   });
 
-  // CLI limitations notice
-  const noticeEl = containerEl.createDiv({ cls: "llm-hub-cli-notice llm-hub-cli-notice--spaced" });
-  const noteTitle = noticeEl.createEl("strong");
-  noteTitle.textContent = t("settings.cliLimitations");
-  const noteList = noticeEl.createEl("ul");
-  noteList.createEl("li").textContent = t("settings.cliLimitation1");
-  noteList.createEl("li").textContent = t("settings.cliLimitation3");
 }
 
 function createCliVerifyRow(

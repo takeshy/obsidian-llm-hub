@@ -1,7 +1,7 @@
 import { App, TFile, WorkspaceLeaf } from "obsidian";
 import type { LlmHubPlugin } from "../../plugin";
 import { WorkflowNode, ExecutionContext, PromptCallbacks } from "../types";
-import { replaceVariables } from "./utils";
+import { parseJsonRecord, replaceVariables } from "./utils";
 import { CLOUD_VAULT_SCOPE_DENIED_MSG, isFileAllowedForCloudVaultTools, isPathInAllowedVaultFolders } from "../../vault/cloudVaultScope";
 
 function hasWorkflowVaultScope(context: ExecutionContext): boolean {
@@ -46,7 +46,7 @@ export async function handleWorkflowNode(
   if (inputStr) {
     const replacedInput = replaceVariables(inputStr, context);
     try {
-      const inputMapping = JSON.parse(replacedInput);
+      const inputMapping = parseJsonRecord(replacedInput);
       if (typeof inputMapping === "object" && inputMapping !== null) {
         for (const [key, value] of Object.entries(inputMapping)) {
           if (typeof value === "string" || typeof value === "number") {
@@ -85,7 +85,7 @@ export async function handleWorkflowNode(
     // Parse output mapping (JSON object: {"parentVar": "subVar"} or comma-separated)
     const replacedOutput = replaceVariables(outputStr, context);
     try {
-      const outputMapping = JSON.parse(replacedOutput);
+      const outputMapping = parseJsonRecord(replacedOutput);
       if (typeof outputMapping === "object" && outputMapping !== null) {
         for (const [parentVar, subVar] of Object.entries(outputMapping)) {
           if (typeof subVar === "string") {
@@ -248,7 +248,7 @@ export function handleJsonNode(
 
   // Parse JSON and save as string (for consistent storage)
   try {
-    const parsed = JSON.parse(jsonString);
+    const parsed = JSON.parse(jsonString) as unknown;
     // Store as JSON string so it can be accessed with dot notation
     context.variables.set(saveTo, JSON.stringify(parsed));
   } catch (e) {
