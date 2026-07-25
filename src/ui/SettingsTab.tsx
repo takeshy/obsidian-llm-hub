@@ -29,6 +29,44 @@ export class SettingsTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /** Render settings on Obsidian versions before the declarative settings API. */
+  display(): void {
+    this.renderLegacySettings();
+  }
+
+  private renderLegacySettings(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    const ctx: SettingsContext = {
+      plugin: this.plugin,
+      display: () => this.renderLegacySettings(),
+      syncCancelRef: this.syncCancelRef,
+    };
+
+    displayCliSettings(containerEl, ctx);
+    displayLocalLlmSettings(containerEl, ctx);
+    displayApiProviderSettings(containerEl, ctx);
+    displayProxySettings(containerEl, ctx);
+    displayWorkspaceSettings(containerEl, ctx);
+    displayKnowledgeSettings(containerEl, ctx);
+    displayEditHistorySettings(containerEl, ctx);
+    displayEncryptionSettings(containerEl, ctx);
+    displayLangfuseSettings(containerEl, ctx);
+    displaySlashCommandSettings(containerEl, ctx);
+    displaySkillsSettings(containerEl, ctx);
+    displayExternalSkillSettings(containerEl, ctx);
+    displayRagSettings(containerEl, ctx);
+    displayMcpServersSettings(containerEl, ctx);
+    displayDiscordSettings(containerEl, ctx);
+
+    if (this.settingsListener) {
+      this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
+    }
+    this.settingsListener = () => this.renderLegacySettings();
+    this.plugin.settingsEmitter.on("settings-updated", this.settingsListener);
+  }
+
   getSettingDefinitions(): SettingDefinitionItem[] {
     const ctx: SettingsContext = {
       plugin: this.plugin,

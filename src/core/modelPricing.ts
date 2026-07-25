@@ -22,8 +22,9 @@ export const MODEL_PRICING: Record<string, TokenPricing> = {
   "gemini-3.5-flash-lite":               { input: 0.30  / 1e6, output:   2.50 / 1e6 },
   "gemini-3.1-pro-preview":              { input: 2.00  / 1e6, output:  12.00 / 1e6 },
   "gemini-3.1-pro-preview-customtools":  { input: 2.00  / 1e6, output:  12.00 / 1e6 },
-  "gemini-3-pro-image-preview":          { input: 2.00  / 1e6, output: 120.00 / 1e6 },
-  "gemini-3.1-flash-image-preview":      { input: 0.25  / 1e6, output:  60.00 / 1e6 },
+  "gemini-3-pro-image":                  { input: 2.00  / 1e6, output: 120.00 / 1e6 },
+  "gemini-3.1-flash-image":              { input: 0.50  / 1e6, output:  60.00 / 1e6 },
+  "gemini-3.1-flash-lite-image":         { input: 0.25  / 1e6, output:  30.00 / 1e6 },
 
   // OpenAI models (March 2026)
   // Source: https://openai.com/api/pricing/

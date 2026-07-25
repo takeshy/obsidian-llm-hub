@@ -651,9 +651,13 @@ export const CODEX_CLI_MODEL: ModelInfo = {
   isCliModel: true,
 };
 
-// Helper function to check if a model name is an image generation model (pattern-based)
+// Helper function to check if a model name is an image generation model (pattern-based).
+// API-provider model identifiers use `api:<provider-id>:<model-id>`, so only
+// inspect the final segment.
 export function isImageGenerationModel(modelName: string): boolean {
-  return /image-preview|dall-e/i.test(modelName);
+  const modelId = modelName.slice(modelName.lastIndexOf(":") + 1);
+  return /^gemini-.+-image(?:-preview)?(?:-\d{3})?$/i.test(modelId)
+    || /^dall-e(?:-\d+)?$/i.test(modelId);
 }
 
 // Chat message types

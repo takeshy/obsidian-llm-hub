@@ -572,11 +572,11 @@ Connect to locally running models via Ollama, LM Studio, vLLM, AnythingLLM, or t
 
 ## Installation
 
-### BRAT (Recommended)
-1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
-2. Open BRAT settings → "Add Beta plugin"
-3. Enter: `https://github.com/takeshy/obsidian-llm-hub`
-4. Enable the plugin in Community plugins settings
+### Community Plugins (Recommended)
+
+1. Open **Settings → Community plugins** in Obsidian
+2. Select **Browse** and search for **LLM Hub**
+3. Select **Install**, then **Enable**
 
 ### Manual
 1. Download `main.js`, `manifest.json`, `styles.css` from releases

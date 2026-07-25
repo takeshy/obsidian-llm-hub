@@ -5,6 +5,7 @@ import {
   deduplicateWebSearchSources,
   formatWebSearchCitations,
   getEffectiveSearchSelection,
+  getSearchSelectionForModel,
   getSlashCommandSearchSelection,
   modelSupportsWebSearch,
   normalizeSearchSelection,
@@ -31,6 +32,7 @@ function provider(overrides: Partial<ApiProviderConfig>): ApiProviderConfig {
 describe("web search capability", () => {
   it("allows Gemini and only official OpenAI/Anthropic/xAI endpoints", () => {
     expect(providerSupportsWebSearch(provider({ type: "gemini", baseUrl: "https://example.test" }), "gemini-3.5-flash")).toBe(true);
+    expect(providerSupportsWebSearch(provider({ type: "gemini", baseUrl: "https://example.test" }), "gemini-3.1-flash-lite-image")).toBe(false);
     expect(providerSupportsWebSearch(provider({}), "gpt-5.4")).toBe(true);
     expect(providerSupportsWebSearch(provider({ baseUrl: "https://api.openai.com/" }), "gpt-5.4")).toBe(true);
     expect(providerSupportsWebSearch(provider({ baseUrl: "https://openai.proxy.test" }), "gpt-5.4")).toBe(false);
@@ -103,6 +105,17 @@ describe("combined search selection", () => {
       webSearch: false, ragSetting: null,
     });
     expect(remembered).toEqual({ webSearch: true, ragSetting: "Research" });
+  });
+
+  it("clears RAG for image models while preserving the independent Web Search setting", () => {
+    expect(getSearchSelectionForModel(
+      { webSearch: true, ragSetting: "Research" },
+      "api:gemini:gemini-3.1-flash-image" as ModelType,
+    )).toEqual({ webSearch: true, ragSetting: null });
+    expect(getSearchSelectionForModel(
+      { webSearch: true, ragSetting: "Research" },
+      "api:gemini:gemini-3.5-flash" as ModelType,
+    )).toEqual({ webSearch: true, ragSetting: "Research" });
   });
 });
 

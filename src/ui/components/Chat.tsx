@@ -60,7 +60,7 @@ import { PersistentCliSession } from "src/core/cliProvider";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
-import { formatWebSearchCitations, providerSupportsWebSearch } from "src/core/webSearch";
+import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsWebSearch } from "src/core/webSearch";
 import { searchLocalRag, loadRagMediaAttachments } from "src/core/localRagStore";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import {
@@ -133,6 +133,7 @@ import {
 	parseMarkdownToMessages,
 	formatHistoryDate,
 } from "./chat/chatHistory";
+import { resolveEffectiveSkillPaths } from "./chat/contextSkills";
 
 export interface ChatRef {
 	getActiveChat: () => TFile | null;
@@ -496,6 +497,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [vaultFiles, setVaultFiles] = useState<string[]>([]);
 	const [currentDashboard, setCurrentDashboard] = useState<TFile | null>(null);
 	const [activeContextSkillPath, setActiveContextSkillPath] = useState<string | null>(null);
+	const [disabledContextSkillPaths, setDisabledContextSkillPaths] = useState<Set<string>>(
+		() => new Set(),
+	);
 	const [hasSelection, setHasSelection] = useState(false);
 	const [cliConfig, setCliConfig] = useState(plugin.settings.cliConfig || DEFAULT_CLI_CONFIG);
 	const [decryptingChatId, setDecryptingChatId] = useState<string | null>(null);
@@ -528,27 +532,19 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [activeSkillPaths, setActiveSkillPaths] = useState<string[]>(
 		() => DEFAULT_BUILTIN_SKILL_IDS.map(builtinFolderPath)
 	);
-	const effectiveActiveSkillPaths = useMemo(() => {
-		if (!activeContextSkillPath) {
-			return activeSkillPaths;
-		}
-		const withoutContextBuiltins = activeSkillPaths.filter(path => !CONTEXT_BUILTIN_SKILL_PATHS.has(path));
-		return [activeContextSkillPath, ...withoutContextBuiltins];
-	}, [activeSkillPaths, activeContextSkillPath]);
-	const getEffectiveSkillPathsForSend = useCallback((skillPath?: string) => {
-		let effectiveSkillPaths = activeSkillPaths;
-		if (skillPath && !effectiveSkillPaths.includes(skillPath)) {
-			effectiveSkillPaths = [...effectiveSkillPaths, skillPath];
-		}
-		if (skillPath && CONTEXT_BUILTIN_SKILL_PATHS.has(skillPath)) {
-			return effectiveSkillPaths.filter(path => !CONTEXT_BUILTIN_SKILL_PATHS.has(path) || path === skillPath);
-		}
-		if (!activeContextSkillPath) {
-			return effectiveSkillPaths;
-		}
-		const withoutContextBuiltins = effectiveSkillPaths.filter(path => !CONTEXT_BUILTIN_SKILL_PATHS.has(path));
-		return [activeContextSkillPath, ...withoutContextBuiltins];
-	}, [activeSkillPaths, activeContextSkillPath]);
+	const effectiveActiveSkillPaths = useMemo(() => resolveEffectiveSkillPaths(
+		activeSkillPaths,
+		activeContextSkillPath,
+		disabledContextSkillPaths,
+		CONTEXT_BUILTIN_SKILL_PATHS,
+	), [activeSkillPaths, activeContextSkillPath, disabledContextSkillPaths]);
+	const getEffectiveSkillPathsForSend = useCallback((skillPath?: string) => resolveEffectiveSkillPaths(
+		activeSkillPaths,
+		activeContextSkillPath,
+		disabledContextSkillPaths,
+		CONTEXT_BUILTIN_SKILL_PATHS,
+		skillPath,
+	), [activeSkillPaths, activeContextSkillPath, disabledContextSkillPaths]);
 	const [okfBundles, setOkfBundles] = useState<OkfBundle[]>([]);
 	const [activeOkfBundleIds, setActiveOkfBundleIds] = useState<string[]>([]);
 
@@ -1312,11 +1308,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		persist = true,
 		model = currentModel,
 	) => {
-		setSelectedRagSetting(selection.ragSetting);
-		setWebSearchEnabled(selection.webSearch);
-		if (persist) void plugin.selectSearchSelection(selection);
+		const effectiveSelection = getSearchSelectionForModel(selection, model);
+		setSelectedRagSetting(effectiveSelection.ragSetting);
+		setWebSearchEnabled(effectiveSelection.webSearch);
+		if (persist) void plugin.selectSearchSelection(effectiveSelection);
 		// Gemma 4: RAG or Web Search selected → disable function calling tools
-		if (isGemma4(model) && (selection.ragSetting || selection.webSearch)) {
+		if (isGemma4(model) && (effectiveSelection.ragSetting || effectiveSelection.webSearch)) {
 			setVaultToolMode("none");
 			setVaultToolNoneReason("manual");
 			setMcpServers(servers => servers.map(s => ({ ...s, enabled: false })));
@@ -1350,7 +1347,21 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	// Handle model change from UI
 	const handleModelChange = (model: ModelType) => {
 		setCurrentModel(model);
-		void plugin.selectModel(model);
+		const imageSearchSelection = isImageGenerationModel(model) && selectedRagSetting
+			? getSearchSelectionForModel(
+				{ ragSetting: selectedRagSetting, webSearch: webSearchEnabled },
+				model,
+			)
+			: null;
+		if (imageSearchSelection) {
+			handleSearchSelectionChange(imageSearchSelection, false, model);
+			// Serialize both workspace-state writes so an older model-only snapshot
+			// cannot restore the RAG selection after it has been cleared.
+			void plugin.selectModel(model)
+				.then(() => plugin.selectSearchSelection(imageSearchSelection));
+		} else {
+			void plugin.selectModel(model);
+		}
 
 		// Terminate persistent CLI session when switching away from CLI model
 		if (persistentCliRef.current) {
@@ -1372,7 +1383,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			setVaultToolNoneReason("cli");
 			setMcpServers(servers => servers.map(s => ({ ...s, enabled: false })));
 		} else if (isImageGenerationModel(model)) {
-			// Image models leave RAG remembered but inactive.
+			// RAG was cleared above; image models keep any independent Web Search selection.
 			setVaultToolMode("all");
 			setVaultToolNoneReason(null);
 		} else if (isGemma4(model)) {
@@ -1574,6 +1585,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		const nextModel = command.model ? command.model : currentModel;
 		if (nextModel !== currentModel) {
 			setCurrentModel(nextModel);
+			if (isImageGenerationModel(nextModel) && selectedRagSetting && command.searchSelection == null) {
+				handleSearchSelectionChange(
+					{ ragSetting: null, webSearch: webSearchEnabled },
+					false,
+					nextModel,
+				);
+			}
 			// Terminate persistent CLI session when model changes via slash command
 			if (persistentCliRef.current) {
 				persistentCliRef.current.terminate();
@@ -4051,7 +4069,26 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								availableSkills={availableSkills}
 								activeSkillPaths={effectiveActiveSkillPaths}
 								onToggleSkill={(folderPath) => {
-									if (activeContextSkillPath && CONTEXT_BUILTIN_SKILL_PATHS.has(folderPath)) {
+									if (folderPath === activeContextSkillPath && CONTEXT_BUILTIN_SKILL_PATHS.has(folderPath)) {
+										setDisabledContextSkillPaths(prev => {
+											const next = new Set(prev);
+											if (next.has(folderPath)) next.delete(folderPath);
+											else next.add(folderPath);
+											return next;
+										});
+										// The active context skill replaces the default Markdown skill in the UI.
+										// Remove all context defaults together so disabling Dashboard does not
+										// immediately reveal Markdown as an apparently new selection.
+										setActiveSkillPaths(prev =>
+											prev.filter(path => !CONTEXT_BUILTIN_SKILL_PATHS.has(path))
+										);
+										return;
+									}
+									if (
+										activeContextSkillPath
+										&& !disabledContextSkillPaths.has(activeContextSkillPath)
+										&& CONTEXT_BUILTIN_SKILL_PATHS.has(folderPath)
+									) {
 										return;
 									}
 									setActiveSkillPaths(prev =>

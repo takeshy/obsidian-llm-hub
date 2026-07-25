@@ -35,7 +35,7 @@ Chat can enable thinking based on message keywords such as "think", "analyze", o
 
 # Installation
 
-Recommended installation is through BRAT: install the BRAT plugin, choose "Add Beta plugin", and enter `https://github.com/takeshy/obsidian-llm-hub`, then enable the plugin in Community plugins settings.
+Install LLM Hub from Obsidian's Community Plugins browser: open **Settings → Community plugins**, select **Browse**, search for **LLM Hub**, then select **Install** and **Enable**.
 
 Manual installation copies `main.js`, `manifest.json`, and `styles.css` from releases into `.obsidian/plugins/llm-hub/`.
 

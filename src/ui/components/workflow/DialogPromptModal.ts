@@ -1,6 +1,6 @@
 import { App, Component, MarkdownRenderer, Modal, Setting } from "obsidian";
 import type { DialogResult } from "src/workflow/types";
-import { extractHtmlFromCodeBlock } from "../HTMLPreviewModal";
+import { extractHtmlFromCodeBlock, sanitizePreviewHtml } from "../HTMLPreviewModal";
 
 export class DialogPromptModal extends Modal {
   private title: string;
@@ -80,7 +80,7 @@ export class DialogPromptModal extends Modal {
         iframeContainer.createEl("iframe", {
           attr: {
             sandbox: "", // No scripts allowed for security
-            srcdoc: htmlContent,
+            srcdoc: sanitizePreviewHtml(htmlContent),
           },
           cls: "llm-hub-dialog-html-iframe"
         });

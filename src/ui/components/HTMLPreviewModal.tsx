@@ -21,6 +21,26 @@ function sanitizeFileName(name: string): string {
     .slice(0, 50) || "output";    // Limit length and provide fallback
 }
 
+export function sanitizePreviewHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("script").forEach((script) => script.remove());
+  doc.querySelectorAll("*").forEach((element) => {
+    for (const attribute of Array.from(element.attributes)) {
+      if (/^on/i.test(attribute.name)) {
+        element.removeAttribute(attribute.name);
+        continue;
+      }
+      if (
+        /^(?:href|src|xlink:href|formaction)$/i.test(attribute.name)
+        && /^\s*javascript:/i.test(attribute.value)
+      ) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  });
+  return `<!doctype html>\n${doc.documentElement.outerHTML}`;
+}
+
 export class HTMLPreviewModal extends Modal {
   private htmlContent: string;
   private baseName: string;
@@ -79,7 +99,7 @@ export class HTMLPreviewModal extends Modal {
     const iframe = iframeContainer.createEl("iframe", {
       attr: {
         sandbox: "", // No scripts allowed for security
-        srcdoc: this.htmlContent,
+        srcdoc: sanitizePreviewHtml(this.htmlContent),
       },
     });
     iframe.addClass("llm-hub-html-preview-iframe");

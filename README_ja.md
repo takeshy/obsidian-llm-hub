@@ -576,12 +576,11 @@ Ollama、LM Studio、vLLM、AnythingLLM、または OpenCode ローカルサー�
 
 ## インストール
 
-### BRAT（推奨）
+### コミュニティプラグイン（推奨）
 
-1. [BRAT](https://github.com/TfTHacker/obsidian42-brat) プラグインをインストール
-2. BRAT 設定 → 「Add Beta plugin」を開く
-3. `https://github.com/takeshy/obsidian-llm-hub` を入力
-4. コミュニティプラグイン設定でプラグインを有効化
+1. Obsidian の **設定 → コミュニティプラグイン** を開く
+2. **閲覧**を選び、**LLM Hub** を検索
+3. **インストール**し、続けて**有効化**
 
 ### 手動インストール
 

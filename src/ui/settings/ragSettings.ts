@@ -6,6 +6,7 @@ import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, getGeminiApiKey } 
 import type { RagSetting } from "src/types";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { formatError } from "src/utils/error";
+import { setDestructiveButton } from "src/ui/buttonCompat";
 import { RagSettingNameModal } from "./RagSettingNameModal";
 import type { SettingsContext } from "./settingsContext";
 
@@ -360,9 +361,7 @@ function displayLocalStoreSettings(
       .setName(t("settings.localClearIndex"))
       .setDesc(t("settings.localClearIndex.desc"))
       .addButton((btn) =>
-        btn
-          .setButtonText(t("settings.localClearIndex"))
-          .setDestructive()
+        setDestructiveButton(btn.setButtonText(t("settings.localClearIndex")))
           .onClick(() => {
             void (async () => {
               const confirmed = await new ConfirmModal(
@@ -716,9 +715,7 @@ function displaySyncControls(
   syncSetting
     .addButton((btn) => {
       cancelBtn = btn.buttonEl;
-      btn
-        .setButtonText(t("settings.cancelSync"))
-        .setDestructive()
+      setDestructiveButton(btn.setButtonText(t("settings.cancelSync")))
         .onClick(() => {
           syncCancelRef.value = true;
           new Notice(t("settings.cancellingSync"));

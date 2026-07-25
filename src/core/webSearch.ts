@@ -7,7 +7,12 @@ import type {
   WebSearchCitation,
   WebSearchSource,
 } from "../types";
-import { getApiProviderId, getApiProviderModelName, isApiProviderModel } from "../types";
+import {
+  getApiProviderId,
+  getApiProviderModelName,
+  isApiProviderModel,
+  isImageGenerationModel,
+} from "../types";
 
 export const WEB_SEARCH_COST_PER_REQUEST = 10 / 1000;
 export const XAI_WEB_SEARCH_COST_PER_REQUEST = 5 / 1000;
@@ -38,6 +43,17 @@ export function normalizeSearchSelection(value: SearchSelection): SearchSelectio
       ? value.ragSetting
       : null,
   };
+}
+
+/** Image generation requests cannot use a RAG index. */
+export function getSearchSelectionForModel(
+  selection: SearchSelection,
+  model: ModelType,
+): SearchSelection {
+  const normalized = normalizeSearchSelection(selection);
+  return isImageGenerationModel(model)
+    ? { ...normalized, ragSetting: null }
+    : normalized;
 }
 
 export function searchSelectionFromWorkspace(
@@ -91,7 +107,8 @@ export function getOfficialResponsesProvider(baseUrl: string): "openai" | "xai" 
 }
 
 export function providerSupportsWebSearch(provider: ApiProviderConfig, modelName: string): boolean {
-  if (provider.type === "gemini") return true;
+  // Flash Lite Image generates images but does not support Google Search grounding.
+  if (provider.type === "gemini") return !/^gemini-3\.1-flash-lite-image(?:-|$)/i.test(modelName);
   if (isOfficialOpenAiProvider(provider)) return !/^(?:dall-e|gpt-image)/i.test(modelName);
   if (isOfficialGrokProvider(provider)) return !/^grok-imagine-(?:image|video)/i.test(modelName);
   return isOfficialAnthropicProvider(provider);
