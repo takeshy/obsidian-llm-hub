@@ -1,5 +1,4 @@
-import { PluginSettingTab, App, type SettingDefinitionItem } from "obsidian";
-import { t } from "src/i18n";
+import { PluginSettingTab, App } from "obsidian";
 import type { LlmHubPlugin } from "src/plugin";
 import type { SettingsContext } from "src/ui/settings/settingsContext";
 
@@ -29,18 +28,14 @@ export class SettingsTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  /** Render settings on Obsidian versions before the declarative settings API. */
+  /** Render settings using the API available at the declared minimum version. */
   display(): void {
-    this.renderLegacySettings();
-  }
-
-  private renderLegacySettings(): void {
     const { containerEl } = this;
     containerEl.empty();
 
     const ctx: SettingsContext = {
       plugin: this.plugin,
-      display: () => this.renderLegacySettings(),
+      display: () => this.display(),
       syncCancelRef: this.syncCancelRef,
     };
 
@@ -63,57 +58,8 @@ export class SettingsTab extends PluginSettingTab {
     if (this.settingsListener) {
       this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
     }
-    this.settingsListener = () => this.renderLegacySettings();
+    this.settingsListener = () => this.display();
     this.plugin.settingsEmitter.on("settings-updated", this.settingsListener);
-  }
-
-  getSettingDefinitions(): SettingDefinitionItem[] {
-    const ctx: SettingsContext = {
-      plugin: this.plugin,
-      display: () => this.update(),
-      syncCancelRef: this.syncCancelRef,
-    };
-
-    // Refresh definitions when settings change elsewhere (for example when
-    // Chat automatically disables tools for a Local LLM model).
-    if (this.settingsListener) {
-      this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
-    }
-    this.settingsListener = () => this.update();
-    this.plugin.settingsEmitter.on("settings-updated", this.settingsListener);
-
-    const sections: Array<{
-      name: string;
-      render: (containerEl: HTMLElement, context: SettingsContext) => void;
-    }> = [
-      { name: t("settings.cliProviders"), render: displayCliSettings },
-      { name: t("settings.localLlm"), render: displayLocalLlmSettings },
-      { name: t("settings.apiProviders"), render: displayApiProviderSettings },
-      { name: t("settings.proxy"), render: displayProxySettings },
-      { name: t("settings.workspace"), render: displayWorkspaceSettings },
-      { name: t("settings.knowledge"), render: displayKnowledgeSettings },
-      { name: t("settings.encryption"), render: displayEncryptionSettings },
-      { name: t("settings.langfuse"), render: displayLangfuseSettings },
-      { name: t("settings.slashCommands"), render: displaySlashCommandSettings },
-      { name: t("settings.skills"), render: displaySkillsSettings },
-      { name: t("settings.externalSkills"), render: displayExternalSkillSettings },
-      { name: t("settings.rag"), render: displayRagSettings },
-      { name: t("settings.mcpServers"), render: displayMcpServersSettings },
-      { name: t("settings.discord"), render: displayDiscordSettings },
-    ];
-
-    // This section has no UI, but still normalizes legacy edit-history data.
-    displayEditHistorySettings(this.containerEl, ctx);
-
-    return sections.map((section) => ({
-      name: section.name,
-      render: (setting) => {
-        const containerEl = setting.settingEl;
-        containerEl.empty();
-        containerEl.removeClass("setting-item");
-        section.render(containerEl, ctx);
-      },
-    }));
   }
 
   hide(): void {
