@@ -16,6 +16,25 @@ import type {
 import { mapToolCallToAppResult, mapResourceReadResult } from "./mcpClientUtils";
 import { getChildProcess, type ChildProcessType } from "./cliProvider";
 
+const MODERN_PROTOCOL_VERSION = "2026-07-28";
+const LEGACY_PROTOCOL_VERSION = "2025-11-25";
+const SUPPORTED_LEGACY_PROTOCOL_VERSIONS = new Set([
+  LEGACY_PROTOCOL_VERSION,
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+]);
+
+type McpProtocolEra = "modern" | "legacy";
+
+interface McpDiscoverResult {
+  supportedVersions: string[];
+  capabilities?: McpInitializeResult["capabilities"];
+  _meta?: {
+    "io.modelcontextprotocol/serverInfo"?: McpInitializeResult["serverInfo"];
+  };
+}
+
 /**
  * MCP Client for communicating with local MCP servers via stdio transport.
  * Spawns a child process and uses stdin/stdout for JSON-RPC 2.0 communication.
@@ -32,6 +51,9 @@ export class McpStdioClient implements IMcpClient {
   private initialized = false;
   private stderrLog: string[] = [];
   private config: McpServerConfig;
+  private protocolEra: McpProtocolEra | null = null;
+  private cachedInitResult: McpInitializeResult | null = null;
+  private toolsCacheTtlMs: number | null = null;
   constructor(config: McpServerConfig) {
     if (Platform.isMobile) {
       throw new Error("Stdio MCP transport is not available on mobile");
@@ -45,32 +67,44 @@ export class McpStdioClient implements IMcpClient {
   private get framing(): "content-length" | "newline" {
     // Explicit setting takes priority
     if (this.config.framing) return this.config.framing;
-    // Auto-detect from command: Python tools use newline, Node/npx use content-length
-    const cmd = (this.config.command || "").split("/").pop()?.toLowerCase() || "";
-    if (cmd === "uv" || cmd === "uvx" || cmd === "python" || cmd === "python3" || cmd === "pip" || cmd === "pipx") {
-      return "newline";
-    }
-    return "content-length";
+    // Newline-delimited JSON is the standard MCP stdio framing.
+    return "newline";
   }
 
   /**
    * Initialize the MCP session - spawns the process and performs handshake
    */
   async initialize(): Promise<McpInitializeResult> {
-    if (this.initialized) {
-      return {
-        protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
-        serverInfo: { name: this.config.name, version: "unknown" },
-      };
+    if (this.initialized && this.cachedInitResult) {
+      return this.cachedInitResult;
     }
 
     // Spawn the process
     this.startProcess();
 
-    // MCP protocol handshake
+    this.protocolEra = "modern";
+    try {
+      const discover = await this.sendRequest("server/discover", {}, 5000) as McpDiscoverResult;
+      if (discover.supportedVersions?.includes(MODERN_PROTOCOL_VERSION)) {
+        const result: McpInitializeResult = {
+          protocolVersion: MODERN_PROTOCOL_VERSION,
+          capabilities: discover.capabilities || {},
+          serverInfo: discover._meta?.["io.modelcontextprotocol/serverInfo"] || {
+            name: this.config.name,
+            version: "unknown",
+          },
+        };
+        this.initialized = true;
+        this.cachedInitResult = result;
+        return result;
+      }
+    } catch {
+      // A 2025-era server reports MethodNotFound/UnsupportedProtocolVersion.
+    }
+
+    this.protocolEra = "legacy";
     const result = await this.sendRequest("initialize", {
-      protocolVersion: "2024-11-05",
+      protocolVersion: LEGACY_PROTOCOL_VERSION,
       capabilities: {},
       clientInfo: {
         name: "obsidian-llm-hub",
@@ -78,10 +112,15 @@ export class McpStdioClient implements IMcpClient {
       },
     }, 120000) as McpInitializeResult;
 
+    if (!SUPPORTED_LEGACY_PROTOCOL_VERSIONS.has(result.protocolVersion)) {
+      throw new Error(`MCP server negotiated unsupported protocol version: ${result.protocolVersion}`);
+    }
+
     // Send initialized notification
     this.sendNotification("notifications/initialized");
 
     this.initialized = true;
+    this.cachedInitResult = result;
     return result;
   }
 
@@ -94,7 +133,14 @@ export class McpStdioClient implements IMcpClient {
     }
 
     const result = await this.sendRequest("tools/list") as McpToolsListResult;
+    this.toolsCacheTtlMs = this.protocolEra === "modern"
+      ? Math.max(0, result.ttlMs ?? 0)
+      : null;
     return result.tools || [];
+  }
+
+  getToolsCacheTtlMs(): number | null {
+    return this.toolsCacheTtlMs;
   }
 
   /**
@@ -142,6 +188,9 @@ export class McpStdioClient implements IMcpClient {
    */
   async close(): Promise<void> {
     this.initialized = false;
+    this.cachedInitResult = null;
+    this.protocolEra = null;
+    this.toolsCacheTtlMs = null;
     const proc = this.process;
     this.process = null;
 
@@ -154,7 +203,7 @@ export class McpStdioClient implements IMcpClient {
     if (proc && !proc.killed) {
       await new Promise<void>((resolve) => {
         const timer = window.setTimeout(() => {
-          if (!proc.killed) {
+          if (proc.exitCode === null && proc.signalCode === null) {
             proc.kill("SIGKILL");
           }
         }, 3000);
@@ -248,11 +297,12 @@ export class McpStdioClient implements IMcpClient {
       }
 
       const id = this.nextId++;
+      const modern = this.protocolEra === "modern" || method === "server/discover";
       const request: JsonRpcRequest = {
         jsonrpc: "2.0",
         id,
         method,
-        params,
+        params: modern ? this.withModernMetadata(params || {}) : params,
       };
 
       const effectiveTimeout = timeoutMs ?? (method === "initialize" ? 120000 : 30000);
@@ -266,6 +316,16 @@ export class McpStdioClient implements IMcpClient {
       this.pending.set(id, {
         resolve: (value) => {
           window.clearTimeout(timeout);
+          if (modern) {
+            const resultType = value && typeof value === "object"
+              ? (value as Record<string, unknown>).resultType
+              : undefined;
+            if (resultType !== "complete") {
+              const label = typeof resultType === "string" ? resultType : resultType === undefined ? "missing" : "invalid";
+              reject(new Error(`Unsupported MCP result type: ${label}`));
+              return;
+            }
+          }
           resolve(value);
         },
         reject: (reason) => {
@@ -276,6 +336,21 @@ export class McpStdioClient implements IMcpClient {
 
       this.writeToStdin(this.serializeMessage(request));
     });
+  }
+
+  private withModernMetadata(params: Record<string, unknown>): Record<string, unknown> {
+    const existingMeta = params._meta && typeof params._meta === "object"
+      ? params._meta as Record<string, unknown>
+      : {};
+    return {
+      ...params,
+      _meta: {
+        ...existingMeta,
+        "io.modelcontextprotocol/protocolVersion": MODERN_PROTOCOL_VERSION,
+        "io.modelcontextprotocol/clientInfo": { name: "obsidian-llm-hub", version: "1.0.0" },
+        "io.modelcontextprotocol/clientCapabilities": {},
+      },
+    };
   }
 
   private sendNotification(method: string, params?: Record<string, unknown>): void {

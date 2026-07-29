@@ -177,7 +177,7 @@ export class McpServerModal extends Modal {
       .addDropdown((dropdown) => {
         dropdown.addOption("content-length", t("settings.mcpServerFraming.contentLength"));
         dropdown.addOption("newline", t("settings.mcpServerFraming.newline"));
-        dropdown.setValue(this.server.framing || "content-length");
+        dropdown.setValue(this.server.framing || "newline");
         dropdown.onChange((value) => {
           this.server.framing = value as McpFraming;
           this.invalidateConnectionTest();
@@ -346,7 +346,7 @@ export class McpServerModal extends Modal {
           command: this.server.command,
           args: this.argsText.trim() ? this.argsText.trim().split(/\s+/) : [],
           env,
-          framing: this.server.framing || "content-length",
+          framing: this.server.framing || "newline",
           enabled: true,
         };
       } else {

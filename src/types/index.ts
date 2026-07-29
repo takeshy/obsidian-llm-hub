@@ -15,7 +15,7 @@ export interface McpServerConfig {
   command?: string;        // Executable command (e.g., "npx", "uvx", "/path/to/server")
   args?: string[];         // Command arguments (e.g., ["-y", "@mcp/server"])
   env?: Record<string, string>;  // Environment variables for the child process
-  framing?: McpFraming;    // Framing protocol: "content-length" (default) or "newline"
+  framing?: McpFraming;    // Framing protocol: "newline" (standard/default) or legacy "content-length"
   // Common
   enabled: boolean;       // Whether this server is enabled for chat
   toolHints?: string[];   // Tool names from test connection (for display hints)

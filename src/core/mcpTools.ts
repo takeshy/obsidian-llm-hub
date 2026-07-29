@@ -16,7 +16,7 @@ export interface McpToolDefinition extends ToolDefinition {
 // Cache for MCP tools to avoid repeated fetches
 interface McpToolsCache {
   tools: McpToolDefinition[];
-  fetchedAt: number;
+  expiresAt: number;
 }
 
 const toolsCache = new Map<string, McpToolsCache>();
@@ -35,7 +35,7 @@ function sanitizeMcpName(name: string): string {
  */
 function getServerKey(server: McpServerConfig): string {
   if (server.transport === "stdio") {
-    return `stdio:${server.command}:${JSON.stringify(server.args || [])}:${server.framing || "content-length"}:${JSON.stringify(server.env || {})}`;
+    return `stdio:${server.command}:${JSON.stringify(server.args || [])}:${server.framing || "newline"}:${JSON.stringify(server.env || {})}`;
   }
   return `http:${server.url}:${JSON.stringify(server.headers || {})}`;
 }
@@ -143,20 +143,27 @@ function convertMcpToolToGemini(
 /**
  * Fetch tools from a single MCP server
  */
-async function fetchToolsFromServer(server: McpServerConfig): Promise<McpToolDefinition[]> {
+async function fetchToolsFromServer(server: McpServerConfig): Promise<{
+  tools: McpToolDefinition[];
+  ttlMs: number;
+}> {
   const client = createMcpClient(server);
 
   try {
     await client.initialize();
     const mcpTools = await client.listTools();
+    const ttlMs = client.getToolsCacheTtlMs() ?? CACHE_TTL_MS;
     await client.close();
 
-    return mcpTools.map((tool) => convertMcpToolToGemini(tool, server));
+    return {
+      tools: mcpTools.map((tool) => convertMcpToolToGemini(tool, server)),
+      ttlMs,
+    };
   } catch (error) {
     console.error(`Failed to fetch tools from MCP server ${server.name}:`, error);
     await client.close().catch((e: unknown) => console.warn("MCP client close error:", e));
     // Return empty array on failure - don't block chat functionality
-    return [];
+    return { tools: [], ttlMs: 0 };
   }
 }
 
@@ -184,7 +191,7 @@ export async function fetchMcpTools(
     const cached = toolsCache.get(cacheKey);
 
     // Use cache if available and not expired
-    if (!forceRefresh && cached && (now - cached.fetchedAt) < CACHE_TTL_MS) {
+    if (!forceRefresh && cached && now < cached.expiresAt) {
       cachedTools.push(...cached.tools);
     } else {
       serversToFetch.push(server);
@@ -194,11 +201,11 @@ export async function fetchMcpTools(
   // Fetch from servers in parallel
   const fetchResults = await Promise.all(
     serversToFetch.map(async (server) => {
-      const tools = await fetchToolsFromServer(server);
+      const { tools, ttlMs } = await fetchToolsFromServer(server);
       // Update cache
       toolsCache.set(getServerKey(server), {
         tools,
-        fetchedAt: now,
+        expiresAt: now + ttlMs,
       });
       return tools;
     })
