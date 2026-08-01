@@ -524,6 +524,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
   const [hasWorkflowBlock, setHasWorkflowBlock] = useState(false);
   const [multiBlockCount, setMultiBlockCount] = useState<number>(0);
   const [nodes, setNodes] = useState<SidebarNode[]>([]);
+  const [showProgress, setShowProgress] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -546,6 +547,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
       setHasWorkflowBlock(false);
       setMultiBlockCount(0);
       setNodes([]);
+      setShowProgress(true);
       setLoadError(null);
       return;
     }
@@ -562,6 +564,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
       // No workflow block at all
       setHasWorkflowBlock(false);
       setNodes([]);
+      setShowProgress(true);
       setLoadError(null);
       return;
     }
@@ -573,6 +576,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
     } else if (result.data) {
       setLoadError(null);
       setNodes(result.data.nodes);
+      setShowProgress(result.data.options?.showProgress !== false);
     }
   }, [plugin.app]);
 
@@ -607,16 +611,17 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
   }, [loadWorkflow, workflowFile]);
 
   // Save workflow
-  const saveWorkflow = useCallback(async (newNodes: SidebarNode[]) => {
+  const saveWorkflow = useCallback(async (newNodes: SidebarNode[], nextShowProgress = showProgress) => {
     if (!workflowFile) return;
 
     await saveToCodeBlock(plugin.app, workflowFile, {
       name: workflowName || "default",
+      options: { showProgress: nextShowProgress },
       nodes: newNodes,
     });
 
     await syncSkillInputVariables(plugin.app, workflowFile, newNodes, plugin.settings.skillsFolder);
-  }, [plugin.app, workflowFile, workflowName]);
+  }, [plugin.app, workflowFile, workflowName, showProgress]);
 
   // Split a multi-block workflow file into individual "1 file = 1 workflow"
   // files. The original file keeps the first block plus any surrounding prose;
@@ -760,7 +765,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
     let currentYaml: string;
     if (nodes.length === 0) {
       const content = await plugin.app.vault.read(workflowFile);
-      const match = content.match(/```(?:hub-workflow|workflow)\n([\s\S]*?)\n```/);
+      const match = content.match(/```[ \t]*(?:hub-workflow|workflow)\n([\s\S]*?)\n```/);
       if (!match) {
         new Notice(t("workflow.noWorkflowToModify"));
         return;
@@ -797,7 +802,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
           );
         } else {
           // Insert new history before the workflow code block
-          const workflowBlockMatch = content.match(/```(?:hub-workflow|workflow)/);
+          const workflowBlockMatch = content.match(/```[ \t]*(?:hub-workflow|workflow)/);
           if (workflowBlockMatch && workflowBlockMatch.index !== undefined) {
             const historyEntry = `> [!info] AI Workflow History\n${historyLine}\n\n`;
             newContent = content.slice(0, workflowBlockMatch.index) + historyEntry + content.slice(workflowBlockMatch.index);
@@ -1478,6 +1483,18 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
 
       {/* Content */}
       <div className="workflow-sidebar-content">
+        <label className="workflow-option">
+          <input
+            type="checkbox"
+            checked={showProgress}
+            onChange={(event) => {
+              const nextShowProgress = event.currentTarget.checked;
+              setShowProgress(nextShowProgress);
+              void saveWorkflow(nodes, nextShowProgress);
+            }}
+          />
+          <span>{t("workflow.showProgress")}</span>
+        </label>
         <div className="workflow-node-list">
           {nodes.length === 0 && !loadError ? (
             <div className="workflow-empty-state">

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeYamlText, parseWorkflowFromMarkdown } from "./parser";
+import { findWorkflowBlocks, normalizeYamlText, parseWorkflowFromMarkdown } from "./parser";
 
 describe("normalizeYamlText", () => {
   describe("list marker conversion", () => {
@@ -377,5 +377,16 @@ nodes:
 
   it("throws when the file contains no workflow block", () => {
     expect(() => parseWorkflowFromMarkdown("just prose, no code block")).toThrow(/No workflow code block|no workflow/);
+  });
+});
+
+describe("findWorkflowBlocks", () => {
+  it("accepts whitespace between the opening fence and language", () => {
+    const content = `\`\`\` hub-workflow
+name: register_rag
+nodes: []
+\`\`\``;
+
+    expect(findWorkflowBlocks(content)).toHaveLength(1);
   });
 });

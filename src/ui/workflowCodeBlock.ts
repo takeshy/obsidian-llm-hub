@@ -1,4 +1,4 @@
-// Render ```workflow code blocks as Mermaid diagrams.
+// Render workflow code blocks as Mermaid diagrams.
 // Uses the mermaid npm package directly for reliable rendering.
 // In Live Preview, Obsidian natively toggles between rendered output (cursor outside)
 // and raw YAML source (cursor inside).
@@ -25,7 +25,7 @@ function isDarkMode(): boolean {
 }
 
 export function registerWorkflowCodeBlockProcessor(plugin: Plugin): void {
-  plugin.registerMarkdownCodeBlockProcessor("hub-workflow", (source, el) => {
+  const processor = (source: string, el: HTMLElement) => {
     try {
       const chart = parseAndConvert(source);
       if (!chart) {
@@ -78,5 +78,12 @@ export function registerWorkflowCodeBlockProcessor(plugin: Plugin): void {
       console.error("LLM Hub: Failed to render workflow code block:", e);
       el.textContent = "Failed to render workflow diagram";
     }
-  });
+  };
+
+  // `workflow` is the original/sidebar-compatible fence name, while
+  // `hub-workflow` is used by newer generated files. Keep both aliases wired
+  // to the exact same renderer so changing the fence does not change which
+  // plugin features are available.
+  plugin.registerMarkdownCodeBlockProcessor("workflow", processor);
+  plugin.registerMarkdownCodeBlockProcessor("hub-workflow", processor);
 }
