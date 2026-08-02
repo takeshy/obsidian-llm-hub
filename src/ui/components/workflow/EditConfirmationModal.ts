@@ -1,6 +1,7 @@
 import { Modal, App, MarkdownRenderer, Component, setIcon } from "obsidian";
 import { t } from "src/i18n";
 import { renderDiffView, formatLineComments, createDiffViewToggle, type DiffRendererState } from "./DiffRenderer";
+import { getDiffViewModePreference, setDiffViewModePreference } from "./diffViewPreference";
 import { getOpenFileAfterApplyPreference, setOpenFileAfterApplyPreference } from "src/vault/notes";
 
 /**
@@ -105,7 +106,6 @@ export class EditConfirmationModal extends Modal {
   private resolvePromise: ((value: EditConfirmationResult) => void) | null = null;
   private component: Component;
   private additionalRequestEl: HTMLTextAreaElement | null = null;
-  private requestChangesBtn: HTMLButtonElement | null = null;
   private diffState: DiffRendererState | null = null;
   private isFullscreen = false;
 
@@ -194,9 +194,11 @@ export class EditConfirmationModal extends Modal {
     if (this.originalContent || this.mode === "create") {
       this.diffState = renderDiffView(previewContent, this.originalContent, this.content, {
         enableComments: true,
-        viewMode: "unified",
+        viewMode: getDiffViewModePreference(this.app),
       });
-      createDiffViewToggle(previewLabel, this.diffState);
+      createDiffViewToggle(previewLabel, this.diffState, (viewMode) => {
+        setDiffViewModePreference(this.app, viewMode);
+      });
     } else {
       // Fallback to markdown preview if no original content
       void MarkdownRenderer.render(
@@ -249,33 +251,24 @@ export class EditConfirmationModal extends Modal {
       this.close();
     });
 
-    this.requestChangesBtn = actions.createEl("button", {
+    const requestChangesBtn = actions.createEl("button", {
       text: t("message.requestChanges"),
       cls: "mod-warning",
     });
-    this.requestChangesBtn.disabled = true;
 
-    // Helper to enable/disable Request Changes based on comments + textarea
-    const updateRequestChangesState = () => {
-      if (!this.requestChangesBtn) return;
-      const hasComments = this.diffState ? this.diffState.lineComments.size > 0 : false;
-      const hasText = (this.additionalRequestEl?.value || "").trim().length > 0;
-      this.requestChangesBtn.disabled = !hasComments && !hasText;
-    };
-
-    // Listen for comment changes from the diff renderer
-    if (this.diffState) {
-      this.diffState.onCommentsChange = () => updateRequestChangesState();
-    }
-
-    // Monitor textarea input
-    this.additionalRequestEl.addEventListener("input", () => updateRequestChangesState());
-
-    this.requestChangesBtn.addEventListener("click", () => {
+    requestChangesBtn.addEventListener("click", () => {
       const generalFeedback = this.additionalRequestEl?.value || "";
       const lineCommentsFeedback = this.diffState
         ? formatLineComments(this.filePath, this.diffState.lineComments)
         : "";
+
+      // If no feedback exists yet, reveal the collapsed field instead of leaving
+      // Request Changes disabled with no obvious next action.
+      if (!lineCommentsFeedback && !generalFeedback.trim()) {
+        additionalRequestContainer.open = true;
+        this.additionalRequestEl?.focus();
+        return;
+      }
 
       const parts: string[] = [];
       if (lineCommentsFeedback) parts.push(lineCommentsFeedback);

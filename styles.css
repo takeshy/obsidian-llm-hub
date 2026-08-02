@@ -2935,13 +2935,10 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
    =============================================== */
 
 .llm-hub-edit-confirm-modal {
-  width: min(92vw, 1400px);
-  height: min(88vh, 900px);
+  width: min(1100px, calc(100vw - 32px));
+  height: min(700px, calc(100vh - 32px));
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
-  min-width: min(720px, calc(100vw - 32px));
-  min-height: min(560px, calc(100vh - 32px));
-  overflow: hidden;
 }
 
 .llm-hub-edit-confirm-modal .modal-content {
