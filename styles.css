@@ -2935,20 +2935,26 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
    =============================================== */
 
 .llm-hub-edit-confirm-modal {
-  width: 800px;
-  height: 500px;
-  max-width: 90vw;
-  max-height: 80vh;
+  width: min(92vw, 1400px);
+  height: min(88vh, 900px);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  min-width: min(720px, calc(100vw - 32px));
+  min-height: min(560px, calc(100vh - 32px));
+  overflow: hidden;
 }
 
 .llm-hub-edit-confirm-modal .modal-content {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   padding: 0;
 }
 
 .llm-hub-edit-confirm-header {
+  flex-shrink: 0;
   padding: 16px;
   border-bottom: 1px solid var(--background-modifier-border);
   cursor: move;
@@ -2958,6 +2964,7 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 8px;
 }
 
@@ -2975,6 +2982,55 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   color: var(--text-on-accent);
 }
 
+.llm-hub-edit-confirm-title-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.llm-hub-edit-confirm-fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.llm-hub-edit-confirm-fullscreen-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-edit-confirm-fullscreen-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.llm-hub-edit-confirm-modal.is-fullscreen {
+  position: fixed !important;
+  top: 8px !important;
+  left: 8px !important;
+  width: calc(100vw - 16px) !important;
+  height: calc(100vh - 16px) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
+.llm-hub-edit-confirm-modal.is-fullscreen .llm-hub-resize-handle {
+  display: none;
+}
+
 .llm-hub-edit-confirm-path {
   font-size: 13px;
   color: var(--text-muted);
@@ -2987,6 +3043,7 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 .llm-hub-edit-confirm-preview {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3004,6 +3061,7 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 .llm-hub-edit-confirm-preview-content {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 12px;
   background: var(--background-secondary);
@@ -3014,6 +3072,8 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 .llm-hub-edit-confirm-actions {
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
@@ -3052,14 +3112,18 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 /* Edit Confirmation Additional Request */
 .llm-hub-edit-additional-container {
-  padding: 0 16px 16px;
+  flex-shrink: 0;
+  padding: 0 16px 12px;
 }
 
 .llm-hub-edit-additional-label {
-  display: block;
-  margin-bottom: 8px;
+  cursor: pointer;
   font-size: 14px;
   color: var(--text-muted);
+}
+
+.llm-hub-edit-additional-container[open] .llm-hub-edit-additional-label {
+  margin-bottom: 8px;
 }
 
 .llm-hub-edit-confirm-modal .llm-hub-edit-additional-input {
@@ -3073,7 +3137,8 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   font-size: 13px;
   color: var(--text-normal);
   box-sizing: border-box;
-  min-height: 80px;
+  min-height: 64px;
+  max-height: 18vh;
 }
 
 .llm-hub-edit-confirm-modal .llm-hub-edit-additional-input:focus {
@@ -3083,6 +3148,30 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 .llm-hub-edit-confirm-modal .llm-hub-edit-additional-input::placeholder {
   color: var(--text-muted);
+}
+
+@media (max-width: 720px), (max-height: 620px) {
+  .llm-hub-edit-confirm-modal {
+    width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .llm-hub-edit-confirm-header,
+  .llm-hub-edit-confirm-actions {
+    padding: 12px;
+  }
+
+  .llm-hub-edit-confirm-preview {
+    padding: 12px;
+  }
+
+  .llm-hub-edit-additional-container {
+    padding: 0 12px 10px;
+  }
 }
 
 /* ===============================================

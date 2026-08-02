@@ -407,6 +407,8 @@ export const ko: Record<string, string> = {
   // Diff viewer
   "diff.unifiedView": "통합",
   "diff.splitView": "분할",
+  "diff.fullscreen": "전체 화면",
+  "diff.restoreSize": "크기 복원",
   "diff.commentPlaceholder": "이 줄에 대한 코멘트를 추가하세요...",
   "diff.saveComment": "저장",
   "diff.cancelComment": "취소",

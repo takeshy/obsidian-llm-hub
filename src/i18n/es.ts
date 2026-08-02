@@ -407,6 +407,8 @@ export const es: Record<string, string> = {
   // Diff viewer
   "diff.unifiedView": "Unificado",
   "diff.splitView": "Dividido",
+  "diff.fullscreen": "Pantalla completa",
+  "diff.restoreSize": "Restaurar tamaño",
   "diff.commentPlaceholder": "Agrega tu comentario sobre esta línea...",
   "diff.saveComment": "Guardar",
   "diff.cancelComment": "Cancelar",
