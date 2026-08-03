@@ -407,6 +407,8 @@ export const zh: Record<string, string> = {
   // Diff viewer
   "diff.unifiedView": "统一",
   "diff.splitView": "分栏",
+  "diff.fullscreen": "全屏",
+  "diff.restoreSize": "恢复大小",
   "diff.commentPlaceholder": "添加关于此行的评论...",
   "diff.saveComment": "保存",
   "diff.cancelComment": "取消",

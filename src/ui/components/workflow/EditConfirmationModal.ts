@@ -1,6 +1,7 @@
-import { Modal, App, MarkdownRenderer, Component } from "obsidian";
+import { Modal, App, MarkdownRenderer, Component, setIcon } from "obsidian";
 import { t } from "src/i18n";
 import { renderDiffView, formatLineComments, createDiffViewToggle, type DiffRendererState } from "./DiffRenderer";
+import { getDiffViewModePreference, setDiffViewModePreference } from "./diffViewPreference";
 import { getOpenFileAfterApplyPreference, setOpenFileAfterApplyPreference } from "src/vault/notes";
 
 /**
@@ -105,8 +106,8 @@ export class EditConfirmationModal extends Modal {
   private resolvePromise: ((value: EditConfirmationResult) => void) | null = null;
   private component: Component;
   private additionalRequestEl: HTMLTextAreaElement | null = null;
-  private requestChangesBtn: HTMLButtonElement | null = null;
   private diffState: DiffRendererState | null = null;
+  private isFullscreen = false;
 
   // Drag state
   private isDragging = false;
@@ -149,10 +150,24 @@ export class EditConfirmationModal extends Modal {
     const titleRow = header.createDiv({ cls: "llm-hub-edit-confirm-title-row" });
     titleRow.createEl("h3", { text: t("workflowModal.confirmFileWrite") });
 
+    const titleActions = titleRow.createDiv({ cls: "llm-hub-edit-confirm-title-actions" });
     const modeLabel = this.getModeLabel();
-    titleRow.createSpan({
+    titleActions.createSpan({
       text: modeLabel,
       cls: "llm-hub-edit-confirm-mode",
+    });
+
+    const fullscreenBtn = titleActions.createEl("button", {
+      cls: "llm-hub-edit-confirm-fullscreen-btn",
+      attr: {
+        type: "button",
+        "aria-label": t("diff.fullscreen"),
+        title: t("diff.fullscreen"),
+      },
+    });
+    setIcon(fullscreenBtn, "maximize-2");
+    fullscreenBtn.addEventListener("click", () => {
+      this.toggleFullscreen(modalEl, fullscreenBtn);
     });
 
     // File path display
@@ -179,8 +194,11 @@ export class EditConfirmationModal extends Modal {
     if (this.originalContent || this.mode === "create") {
       this.diffState = renderDiffView(previewContent, this.originalContent, this.content, {
         enableComments: true,
+        viewMode: getDiffViewModePreference(this.app),
       });
-      createDiffViewToggle(previewLabel, this.diffState);
+      createDiffViewToggle(previewLabel, this.diffState, (viewMode) => {
+        setDiffViewModePreference(this.app, viewMode);
+      });
     } else {
       // Fallback to markdown preview if no original content
       void MarkdownRenderer.render(
@@ -192,12 +210,13 @@ export class EditConfirmationModal extends Modal {
       );
     }
 
-    // Feedback textarea (always visible)
-    const additionalRequestContainer = contentEl.createDiv({
+    // Keep optional general feedback collapsed so the diff remains the primary content.
+    // Line comments and Request Changes continue to work without opening this section.
+    const additionalRequestContainer = contentEl.createEl("details", {
       cls: "llm-hub-edit-additional-container",
     });
 
-    additionalRequestContainer.createEl("label", {
+    additionalRequestContainer.createEl("summary", {
       text: t("message.additionalPlaceholder"),
       cls: "llm-hub-edit-additional-label",
     });
@@ -206,7 +225,7 @@ export class EditConfirmationModal extends Modal {
       cls: "llm-hub-edit-additional-input",
       placeholder: t("message.additionalPlaceholder"),
     });
-    this.additionalRequestEl.rows = 3;
+    this.additionalRequestEl.rows = 2;
 
     // Action buttons
     const actions = contentEl.createDiv({
@@ -232,33 +251,24 @@ export class EditConfirmationModal extends Modal {
       this.close();
     });
 
-    this.requestChangesBtn = actions.createEl("button", {
+    const requestChangesBtn = actions.createEl("button", {
       text: t("message.requestChanges"),
       cls: "mod-warning",
     });
-    this.requestChangesBtn.disabled = true;
 
-    // Helper to enable/disable Request Changes based on comments + textarea
-    const updateRequestChangesState = () => {
-      if (!this.requestChangesBtn) return;
-      const hasComments = this.diffState ? this.diffState.lineComments.size > 0 : false;
-      const hasText = (this.additionalRequestEl?.value || "").trim().length > 0;
-      this.requestChangesBtn.disabled = !hasComments && !hasText;
-    };
-
-    // Listen for comment changes from the diff renderer
-    if (this.diffState) {
-      this.diffState.onCommentsChange = () => updateRequestChangesState();
-    }
-
-    // Monitor textarea input
-    this.additionalRequestEl.addEventListener("input", () => updateRequestChangesState());
-
-    this.requestChangesBtn.addEventListener("click", () => {
+    requestChangesBtn.addEventListener("click", () => {
       const generalFeedback = this.additionalRequestEl?.value || "";
       const lineCommentsFeedback = this.diffState
         ? formatLineComments(this.filePath, this.diffState.lineComments)
         : "";
+
+      // If no feedback exists yet, reveal the collapsed field instead of leaving
+      // Request Changes disabled with no obvious next action.
+      if (!lineCommentsFeedback && !generalFeedback.trim()) {
+        additionalRequestContainer.open = true;
+        this.additionalRequestEl?.focus();
+        return;
+      }
 
       const parts: string[] = [];
       if (lineCommentsFeedback) parts.push(lineCommentsFeedback);
@@ -338,6 +348,16 @@ export class EditConfirmationModal extends Modal {
     }
   }
 
+  private toggleFullscreen(modalEl: HTMLElement, button: HTMLButtonElement): void {
+    this.isFullscreen = !this.isFullscreen;
+    modalEl.toggleClass("is-fullscreen", this.isFullscreen);
+
+    const label = t(this.isFullscreen ? "diff.restoreSize" : "diff.fullscreen");
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
+    setIcon(button, this.isFullscreen ? "minimize-2" : "maximize-2");
+  }
+
   private addResizeHandles(modalEl: HTMLElement) {
     const directions = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
     for (const dir of directions) {
@@ -351,7 +371,7 @@ export class EditConfirmationModal extends Modal {
 
   private setupDrag(header: HTMLElement, modalEl: HTMLElement) {
     const onMouseDown = (e: MouseEvent) => {
-      if ((e.target as HTMLElement).tagName === "BUTTON") return;
+      if (this.isFullscreen || (e.target as HTMLElement).closest("button")) return;
 
       this.isDragging = true;
       this.dragStartX = e.clientX;
@@ -397,6 +417,8 @@ export class EditConfirmationModal extends Modal {
 
   private setupResize(handle: HTMLElement, modalEl: HTMLElement, direction: string) {
     const onMouseDown = (e: MouseEvent) => {
+      if (this.isFullscreen) return;
+
       this.isResizing = true;
       this.resizeDirection = direction;
       this.dragStartX = e.clientX;

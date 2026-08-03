@@ -448,6 +448,8 @@ export const en = {
   // Diff viewer
   "diff.unifiedView": "Unified",
   "diff.splitView": "Split",
+  "diff.fullscreen": "Full screen",
+  "diff.restoreSize": "Restore size",
   "diff.commentPlaceholder": "Add your comment about this line...",
   "diff.saveComment": "Save",
   "diff.cancelComment": "Cancel",

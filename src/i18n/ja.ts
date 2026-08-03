@@ -442,6 +442,8 @@ export const ja: Record<string, string> = {
   // Diff viewer
   "diff.unifiedView": "統合",
   "diff.splitView": "分割",
+  "diff.fullscreen": "全画面表示",
+  "diff.restoreSize": "サイズを元に戻す",
   "diff.commentPlaceholder": "この行についてのコメントを追加...",
   "diff.saveComment": "保存",
   "diff.cancelComment": "キャンセル",
