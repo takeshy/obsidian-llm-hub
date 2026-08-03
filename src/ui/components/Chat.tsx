@@ -223,10 +223,15 @@ function createConfirmingToolExecutor(
 	processedEdits: PendingEditInfo[];
 	processedDeletes: PendingDeleteInfo[];
 	processedRenames: PendingRenameInfo[];
+	pendingAdditionalRequest: { current: { filePath: string; request: string } | null };
 } {
 	const processedEdits: PendingEditInfo[] = [];
 	const processedDeletes: PendingDeleteInfo[] = [];
 	const processedRenames: PendingRenameInfo[] = [];
+	// Feedback from "Request changes" in the edit confirmation modal. The caller
+	// hands it to setPendingEditFeedback once the stream is done, which sends it
+	// back to the model as a follow-up message.
+	const pendingAdditionalRequest: { current: { filePath: string; request: string } | null } = { current: null };
 
 	const executeToolCall = async (name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> => {
 		const prevPendingEdit = getPendingEdit();
@@ -272,6 +277,10 @@ function createConfirmingToolExecutor(
 				if (confirmResult.additionalRequest !== undefined) {
 					discardEdit(app);
 					processedEdits.push({ originalPath: pending.originalPath, status: "discarded" });
+					pendingAdditionalRequest.current = {
+						filePath: pending.originalPath,
+						request: confirmResult.additionalRequest,
+					};
 					return { ...result, applied: false, message: "User requested changes" };
 				}
 				discardEdit(app);
@@ -384,7 +393,7 @@ function createConfirmingToolExecutor(
 		return result;
 	};
 
-	return { executeToolCall, processedEdits, processedDeletes, processedRenames };
+	return { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest };
 }
 
 function getLatestPendingInfo<T>(items: T[]): T | undefined {
@@ -2251,7 +2260,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					return await obsidianToolExecutor(name, args);
 				};
 
-				const { executeToolCall, processedEdits, processedDeletes, processedRenames } =
+				const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
 					createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef);
 
 				const toolsUsed: string[] = [];
@@ -2383,6 +2392,15 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					};
 					const newMessages = [...messages, userMessage, assistantMessage];
 					await saveResult(newMessages, null);
+
+					// "Request changes" in the edit confirmation modal: send the
+					// feedback back to the model now that this turn is finished.
+					if (isActive() && pendingAdditionalRequest.current) {
+						const requestInfo = pendingAdditionalRequest.current;
+						pendingAdditionalRequest.current = null;
+						setPendingEditFeedback(requestInfo);
+					}
+
 					tracing.traceEnd(llmTraceId, { output: toolsFullContent });
 					tracing.score(llmTraceId, {
 						name: "status",
@@ -2661,7 +2679,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				return await obsidianToolExecutor(name, args);
 			};
 
-			const { executeToolCall, processedEdits, processedDeletes, processedRenames } =
+			const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
 				createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef);
 
 			let fullContent = "";
@@ -2814,6 +2832,14 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			};
 			const newMessages = [...messages, userMessage, assistantMessage];
 			await saveResult(newMessages);
+
+			// "Request changes" in the edit confirmation modal: send the feedback
+			// back to the model now that this turn is finished.
+			if (isActive() && pendingAdditionalRequest.current) {
+				const requestInfo = pendingAdditionalRequest.current;
+				pendingAdditionalRequest.current = null;
+				setPendingEditFeedback(requestInfo);
+			}
 
 			tracing.traceEnd(apiTraceId, { output: fullContent });
 			tracing.score(apiTraceId, {
