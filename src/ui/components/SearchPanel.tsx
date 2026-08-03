@@ -21,6 +21,7 @@ import { getGeminiApiKey, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, C
 import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
 import { extractPdfText } from "src/vault/search";
+import { getPdfResultModePreference, setPdfResultModePreference, type PdfResultMode } from "./pdfResultModePreference";
 import { extensionToMimeType } from "src/core/embeddingProvider";
 import { streamChatForModel } from "src/core/modelStreaming";
 import { parseFilterTerms, matchesFilter, removeRedundantTerms } from "./searchUtils";
@@ -108,7 +109,12 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   const [mediaPreviews, setMediaPreviews] = useState<Map<number, string>>(new Map());
   const mediaPreviewsRef = useRef(mediaPreviews);
   mediaPreviewsRef.current = mediaPreviews;
-  const [pdfModes, setPdfModes] = useState<Map<number, "text" | "pdf">>(new Map());
+  const [pdfModes, setPdfModes] = useState<Map<number, PdfResultMode>>(new Map());
+  // Remembered per vault: scanned/broken-OCR PDFs are unreadable as text, so users
+  // who rely on page-level matching keep their choice across searches.
+  const [defaultPdfMode, setDefaultPdfMode] = useState<PdfResultMode>(
+    () => getPdfResultModePreference(plugin.app)
+  );
   const filterIdCounter = useRef(1);
   const [keywordFilters, setKeywordFilters] = useState<{ id: number; value: string }[]>(
     () => [{ id: 0, value: "" }]
@@ -574,8 +580,8 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
       if (!result) continue;
 
       // Non-text content → attach as media file
-      // For PDFs, respect per-result pdfModes choice (default: "text" to try extraction)
-      const pdfMode = result.contentType === "pdf" ? (pdfModes.get(idx) ?? "text") : undefined;
+      // For PDFs, respect per-result pdfModes choice (falls back to the remembered default)
+      const pdfMode = result.contentType === "pdf" ? (pdfModes.get(idx) ?? defaultPdfMode) : undefined;
       if (result.contentType && result.contentType !== "text" && pdfMode !== "text") {
         mediaReferences.push({
           filePath: result.filePath,
@@ -1132,12 +1138,15 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                   {result.contentType === "pdf" && (
                     <select
                       className="llm-hub-search-pdf-mode"
-                      value={pdfModes.get(index) ?? "text"}
+                      value={pdfModes.get(index) ?? defaultPdfMode}
                       onClick={e => e.stopPropagation()}
                       onChange={e => {
                         e.stopPropagation();
-                        const mode = e.target.value as "text" | "pdf";
+                        const mode = e.target.value as PdfResultMode;
                         setPdfModes(prev => new Map(prev).set(index, mode));
+                        // Remember the latest choice as the default for future searches
+                        setDefaultPdfMode(mode);
+                        setPdfResultModePreference(plugin.app, mode);
                         if (mode === "pdf" && expandedIndices.has(index)) {
                           loadMediaPreview(index, result);
                         }
@@ -1151,7 +1160,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                 {(() => {
                   const ct = result.contentType;
                   const showMediaPreview = ct === "image" || ct === "audio" || ct === "video"
-                    || (ct === "pdf" && (pdfModes.get(index) ?? "text") === "pdf");
+                    || (ct === "pdf" && (pdfModes.get(index) ?? defaultPdfMode) === "pdf");
                   return showMediaPreview;
                 })() ? (
                   <>
