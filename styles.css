@@ -3988,6 +3988,14 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   overflow-y: auto;
 }
 
+.llm-hub-bulk-preview .llm-hub-edit-confirm-preview-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 8px;
+  background: var(--background-primary);
+}
+
 .llm-hub-bulk-preview .llm-hub-edit-confirm-preview-content {
   padding: 0;
   border: none;

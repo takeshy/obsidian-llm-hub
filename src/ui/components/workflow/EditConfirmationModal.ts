@@ -1,7 +1,12 @@
 import { Modal, App, MarkdownRenderer, Component, setIcon } from "obsidian";
 import { t } from "src/i18n";
 import { renderDiffView, formatLineComments, createDiffViewToggle, type DiffRendererState } from "./DiffRenderer";
-import { getDiffViewModePreference, setDiffViewModePreference } from "./diffViewPreference";
+import {
+  getDiffFullscreenPreference,
+  getDiffViewModePreference,
+  setDiffFullscreenPreference,
+  setDiffViewModePreference,
+} from "./diffViewPreference";
 import { getOpenFileAfterApplyPreference, setOpenFileAfterApplyPreference } from "src/vault/notes";
 
 /**
@@ -169,6 +174,7 @@ export class EditConfirmationModal extends Modal {
     fullscreenBtn.addEventListener("click", () => {
       this.toggleFullscreen(modalEl, fullscreenBtn);
     });
+    this.setFullscreen(modalEl, fullscreenBtn, getDiffFullscreenPreference(this.app), false);
 
     // File path display
     const pathRow = header.createDiv({ cls: "llm-hub-edit-confirm-path" });
@@ -349,13 +355,26 @@ export class EditConfirmationModal extends Modal {
   }
 
   private toggleFullscreen(modalEl: HTMLElement, button: HTMLButtonElement): void {
-    this.isFullscreen = !this.isFullscreen;
-    modalEl.toggleClass("is-fullscreen", this.isFullscreen);
+    this.setFullscreen(modalEl, button, !this.isFullscreen, true);
+  }
 
-    const label = t(this.isFullscreen ? "diff.restoreSize" : "diff.fullscreen");
+  private setFullscreen(
+    modalEl: HTMLElement,
+    button: HTMLButtonElement,
+    fullscreen: boolean,
+    persist: boolean,
+  ): void {
+    this.isFullscreen = fullscreen;
+    modalEl.toggleClass("is-fullscreen", fullscreen);
+
+    const label = t(fullscreen ? "diff.restoreSize" : "diff.fullscreen");
     button.setAttribute("aria-label", label);
     button.setAttribute("title", label);
-    setIcon(button, this.isFullscreen ? "minimize-2" : "maximize-2");
+    setIcon(button, fullscreen ? "minimize-2" : "maximize-2");
+
+    if (persist) {
+      setDiffFullscreenPreference(this.app, fullscreen);
+    }
   }
 
   private addResizeHandles(modalEl: HTMLElement) {
@@ -979,7 +998,14 @@ export class BulkEditConfirmationModal extends Modal {
 
   private renderPreview(container: HTMLElement, item: BulkEditConfirmItem) {
     const preview = container.createDiv({ cls: "llm-hub-bulk-preview" });
-    renderDiffView(preview, item.originalContent, item.newContent);
+    const previewLabel = preview.createDiv({ cls: "llm-hub-edit-confirm-preview-label" });
+    previewLabel.createSpan({ text: t("workflowModal.changes") });
+    const diffState = renderDiffView(preview, item.originalContent, item.newContent, {
+      viewMode: getDiffViewModePreference(this.app),
+    });
+    createDiffViewToggle(previewLabel, diffState, (viewMode) => {
+      setDiffViewModePreference(this.app, viewMode);
+    });
   }
 
   private getModeLabel(mode: string): string {

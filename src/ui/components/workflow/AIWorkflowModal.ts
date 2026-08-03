@@ -11,6 +11,7 @@ import type { SidebarNode, WorkflowNodeType, ExecutionStep } from "src/workflow/
 import { findWorkflowBlocks, normalizeYamlText } from "src/workflow/parser";
 import { ExecutionHistoryManager } from "src/workflow/history";
 import { renderDiffView, createDiffViewToggle, formatLineComments, type DiffRendererState } from "./DiffRenderer";
+import { getDiffViewModePreference, setDiffViewModePreference } from "./diffViewPreference";
 import { WorkflowGenerationModal } from "./WorkflowGenerationModal";
 import { showWorkflowPreview } from "./WorkflowPreviewModal";
 import { showExecutionHistorySelect } from "./ExecutionHistorySelectModal";
@@ -175,9 +176,14 @@ class WorkflowConfirmModal extends Modal {
           instrWrapper,
           this.oldInstructions ?? "",
           this.newInstructions,
-          { enableComments: false },
+          {
+            enableComments: false,
+            viewMode: getDiffViewModePreference(this.app),
+          },
         );
-        createDiffViewToggle(instrLabel, this.instructionsDiffState);
+        createDiffViewToggle(instrLabel, this.instructionsDiffState, (viewMode) => {
+          setDiffViewModePreference(this.app, viewMode);
+        });
       }
     }
 
@@ -198,8 +204,11 @@ class WorkflowConfirmModal extends Modal {
       const diffWrapper = scrollable.createDiv({ cls: "ai-workflow-confirm-diff-wrapper ai-workflow-confirm-diff" });
       this.diffState = renderDiffView(diffWrapper, this.oldYaml, this.newYaml, {
         enableComments: true,
+        viewMode: getDiffViewModePreference(this.app),
       });
-      createDiffViewToggle(diffLabel, this.diffState);
+      createDiffViewToggle(diffLabel, this.diffState, (viewMode) => {
+        setDiffViewModePreference(this.app, viewMode);
+      });
     }
 
     // Generation context (plan/thinking/review)
@@ -237,22 +246,17 @@ class WorkflowConfirmModal extends Modal {
       text: t("message.requestChanges"),
       cls: "mod-warning",
     });
-    const updateRequestChangesState = () => {
-      const hasComments = this.diffState ? this.diffState.lineComments.size > 0 : false;
-      const hasText = !!(this.additionalRequestEl?.value?.trim());
-      requestChangesBtn.disabled = !hasComments && !hasText;
-    };
-    // Start disabled — enabled once the user types a refinement or adds a line comment.
-    requestChangesBtn.disabled = true;
-    if (this.diffState) {
-      this.diffState.onCommentsChange = () => updateRequestChangesState();
-    }
-    this.additionalRequestEl.addEventListener("input", () => updateRequestChangesState());
     requestChangesBtn.addEventListener("click", () => {
       const generalFeedback = this.additionalRequestEl?.value?.trim() || "";
       const lineCommentsFeedback = this.diffState
         ? formatLineComments("workflow", this.diffState.lineComments)
         : "";
+
+      if (!lineCommentsFeedback && !generalFeedback) {
+        this.additionalRequestEl?.focus();
+        return;
+      }
+
       const parts: string[] = [];
       if (lineCommentsFeedback) parts.push(lineCommentsFeedback);
       if (generalFeedback) parts.push(generalFeedback);
