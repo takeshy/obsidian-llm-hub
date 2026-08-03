@@ -246,7 +246,7 @@ export const ja: Record<string, string> = {
   "settings.localPdfChunkPages": "PDF分割ページ数",
   "settings.localPdfChunkPages.desc": "PDFを何ページ単位で分割するか (1-6)",
   "settings.indexMultimodal": "メディアファイルをインデックス",
-  "settings.indexMultimodal.desc": "画像（PNG、JPEG）、PDF、音声（MP3、WAV）、動画（MP4）を意味検索の対象にします。Geminiのembeddingモデルが必要です。",
+  "settings.indexMultimodal.desc": "画像（PNG、JPEG）、音声（MP3、WAV）、動画（MP4）を意味検索の対象にします。Geminiのembeddingモデルが必要です。PDFはどのプロバイダでも対象になります。Geminiはページ自体を埋め込み、それ以外は抽出したテキストレイヤーを埋め込むため、テキストを持たないスキャンPDFはインデックスできません。",
   "settings.localSyncStatus": "ローカルインデックス: {{files}}ファイルから{{chunks}}チャンク",
   "settings.localSyncBtn": "ローカルインデックスを同期",
   "settings.localSyncing": "同期中...",

@@ -213,7 +213,7 @@ export const de: Record<string, string> = {
   "settings.localPdfChunkPages": "PDF-Seitenanzahl pro Chunk",
   "settings.localPdfChunkPages.desc": "Anzahl der PDF-Seiten pro Chunk (1-6)",
   "settings.indexMultimodal": "Index media files",
-  "settings.indexMultimodal.desc": "Index images (PNG, JPEG), PDFs, audio (MP3, WAV), and video (MP4) for semantic search. Requires Gemini embedding model.",
+  "settings.indexMultimodal.desc": "Index images (PNG, JPEG), audio (MP3, WAV), and video (MP4) for semantic search. Requires Gemini embedding model. PDFs work with any provider. Gemini embeds the pages themselves, other providers embed the extracted text layer, so scanned PDFs without usable text cannot be indexed.",
   "settings.localSyncStatus": "Local index: {{chunks}} chunks from {{files}} files",
   "settings.localSyncBtn": "Sync local index",
   "settings.localSyncing": "Syncing...",
