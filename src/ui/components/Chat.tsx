@@ -2255,6 +2255,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef);
 
 				const toolsUsed: string[] = [];
+				const toolCalls: Message["toolCalls"] = [];
+				const toolResults: Message["toolResults"] = [];
 				let toolsFlowError: string | null = null;
 				let toolsFlowAborted = false;
 				let toolsFullContent = "";
@@ -2281,7 +2283,15 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 								if (isActive()) setStreamingThinking(toolsThinking);
 								break;
 							case "tool_call":
-								if (chunk.toolCall) toolsUsed.push(chunk.toolCall.name);
+								if (chunk.toolCall) {
+									toolCalls.push(chunk.toolCall);
+									if (!toolsUsed.includes(chunk.toolCall.name)) {
+										toolsUsed.push(chunk.toolCall.name);
+									}
+								}
+								break;
+							case "tool_result":
+								if (chunk.toolResult) toolResults.push(chunk.toolResult);
 								break;
 							case "error":
 								toolsFlowError = chunk.error || "Unknown error";
@@ -2359,6 +2369,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 						timestamp: Date.now(),
 						model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
 						toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
+						toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+						toolResults: toolResults.length > 0 ? toolResults : undefined,
 						thinking: toolsThinking || undefined,
 						pendingEdit: processedEdits[processedEdits.length - 1],
 						pendingEdits: processedEdits.length > 0 ? processedEdits : undefined,
@@ -2655,6 +2667,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			let fullContent = "";
 			let thinkingContent = "";
 			const toolsUsed: string[] = [];
+			// toolCalls/toolResults drive the tool badges in MessageBubble; toolsUsed
+			// alone only reaches the saved Markdown history.
+			const toolCalls: Message["toolCalls"] = [];
+			const toolResults: Message["toolResults"] = [];
 			const generatedImages: GeneratedImage[] = [];
 			let stopped = false;
 			let streamUsage: Message["usage"] = undefined;
@@ -2713,7 +2729,16 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 					case "tool_call":
 						if (chunk.toolCall) {
-							toolsUsed.push(chunk.toolCall.name);
+							toolCalls.push(chunk.toolCall);
+							if (!toolsUsed.includes(chunk.toolCall.name)) {
+								toolsUsed.push(chunk.toolCall.name);
+							}
+						}
+						break;
+
+					case "tool_result":
+						if (chunk.toolResult) {
+							toolResults.push(chunk.toolResult);
 						}
 						break;
 
@@ -2768,6 +2793,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				timestamp: Date.now(),
 				model: currentModel,
 				toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
+				toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+				toolResults: toolResults.length > 0 ? toolResults : undefined,
 				thinking: thinkingContent || undefined,
 				pendingEdit: pendingEditInfo,
 				pendingEdits,

@@ -247,6 +247,37 @@ function buildMessages(
 }
 
 /**
+ * Parse a tool call's raw `arguments` string into an object.
+ *
+ * Models that call a tool with no arguments emit an empty string (or omit the
+ * field entirely), and some emit `null` or a non-object literal.
+ */
+function parseToolArguments(raw: string): Record<string, unknown> | null {
+  if (!raw.trim()) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalize the `arguments` string echoed back in the assistant tool-call turn.
+ *
+ * Gateways that translate OpenAI tool calls into another provider's format map
+ * this string onto a field that must be an object — Anthropic rejects anything
+ * else with `tool_use.input: Input should be an object`. An empty string is
+ * what a no-argument call produces, so it has to become `{}` before the history
+ * is replayed on the next round.
+ */
+function normalizeToolArguments(raw: string): string {
+  return parseToolArguments(raw) === null ? "{}" : raw;
+}
+
+/**
  * Convert plugin ToolDefinition to OpenAI SDK tool format
  */
 function toOpenAiTools(tools: ToolDefinition[]): OpenAI.ChatCompletionTool[] {
@@ -585,12 +616,10 @@ async function* openaiResponsesStream(
 
     // Emit tool calls
     for (const tc of toolCalls) {
-      try {
-        const args = JSON.parse(tc.arguments) as Record<string, unknown>;
-        yield { type: "tool_call", toolCall: { id: tc.call_id, name: tc.name, args } };
-      } catch {
-        yield { type: "tool_call", toolCall: { id: tc.call_id, name: tc.name, args: {} } };
-      }
+      yield {
+        type: "tool_call",
+        toolCall: { id: tc.call_id, name: tc.name, args: parseToolArguments(tc.arguments) ?? {} },
+      };
     }
 
     if (toolCalls.length === 0) {
@@ -625,8 +654,8 @@ async function* openaiResponsesStream(
 
     // Execute tool calls and add results to input
     for (const tc of toolCalls) {
+      const args = parseToolArguments(tc.arguments) ?? {};
       try {
-        const args = JSON.parse(tc.arguments) as Record<string, unknown>;
         const result = await executeToolCall(tc.name, args);
         const resultStr = typeof result === "string" ? result : JSON.stringify(result);
         yield { type: "tool_result", toolResult: { toolCallId: tc.call_id, result } };
@@ -809,12 +838,10 @@ export async function* openaiChatWithToolsStream(
 
     // Emit tool calls
     for (const [, tc] of toolCallAccum) {
-      try {
-        const args = JSON.parse(tc.arguments) as Record<string, unknown>;
-        yield { type: "tool_call", toolCall: { id: tc.id, name: tc.name, args } };
-      } catch {
-        yield { type: "tool_call", toolCall: { id: tc.id, name: tc.name, args: {} } };
-      }
+      yield {
+        type: "tool_call",
+        toolCall: { id: tc.id, name: tc.name, args: parseToolArguments(tc.arguments) ?? {} },
+      };
     }
 
     if (!hasToolCalls) {
@@ -844,7 +871,7 @@ export async function* openaiChatWithToolsStream(
       tool_calls: toolCallEntries.map(tc => ({
         id: tc.id,
         type: "function" as const,
-        function: { name: tc.name, arguments: tc.arguments },
+        function: { name: tc.name, arguments: normalizeToolArguments(tc.arguments) },
       })),
     };
     if (reasoningContent) {
@@ -853,8 +880,10 @@ export async function* openaiChatWithToolsStream(
     conversationMessages.push(assistantMsg as unknown as OpenAI.ChatCompletionMessageParam);
 
     for (const tc of toolCallEntries) {
+      // A no-argument call arrives as an empty string; parsing it must not be
+      // mistaken for a tool failure when every parameter is optional.
+      const args = parseToolArguments(tc.arguments) ?? {};
       try {
-        const args = JSON.parse(tc.arguments) as Record<string, unknown>;
         const result = await executeToolCall(tc.name, args);
         const resultStr = typeof result === "string" ? result : JSON.stringify(result);
         yield { type: "tool_result", toolResult: { toolCallId: tc.id, result } };
