@@ -439,6 +439,7 @@ export const en = {
   "message.discard": "Discard",
   "message.discardChanges": "Discard changes",
   "message.requestChanges": "Request changes",
+  "message.requestChangesNeedsFeedback": "Enter what you would like changed, then request changes again.",
   "message.regenerate": "Regenerate",
   "message.additionalPlaceholder": "Describe what changes you want...",
   "message.openFileAfterApply": "Open file after applying",

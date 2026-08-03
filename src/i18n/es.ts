@@ -399,6 +399,7 @@ export const es: Record<string, string> = {
   "message.discard": "Descartar",
   "message.discardChanges": "Descartar cambios",
   "message.requestChanges": "Solicitar cambios",
+  "message.requestChangesNeedsFeedback": "Escribe que quieres cambiar y vuelve a solicitar los cambios.",
   "message.regenerate": "Regenerar",
   "message.additionalPlaceholder": "Describe los cambios que deseas...",
   "message.editFeedbackHeader": "La edición propuesta a \"{{filePath}}\" fue rechazada.",

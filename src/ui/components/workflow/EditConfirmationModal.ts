@@ -227,11 +227,22 @@ export class EditConfirmationModal extends Modal {
       cls: "llm-hub-edit-additional-label",
     });
 
+    // Shown when Request Changes is pressed with nothing to send, so the reason
+    // for the reopened field is visible rather than implied by the focus jump.
+    const additionalRequestHint = additionalRequestContainer.createEl("p", {
+      text: t("message.requestChangesNeedsFeedback"),
+      cls: "llm-hub-edit-additional-hint",
+    });
+    additionalRequestHint.hide();
+
     this.additionalRequestEl = additionalRequestContainer.createEl("textarea", {
       cls: "llm-hub-edit-additional-input",
       placeholder: t("message.additionalPlaceholder"),
     });
     this.additionalRequestEl.rows = 2;
+    this.additionalRequestEl.addEventListener("input", () => {
+      if (this.additionalRequestEl?.value.trim()) additionalRequestHint.hide();
+    });
 
     // Action buttons
     const actions = contentEl.createDiv({
@@ -272,6 +283,7 @@ export class EditConfirmationModal extends Modal {
       // Request Changes disabled with no obvious next action.
       if (!lineCommentsFeedback && !generalFeedback.trim()) {
         additionalRequestContainer.open = true;
+        additionalRequestHint.show();
         this.additionalRequestEl?.focus();
         return;
       }

@@ -399,6 +399,7 @@ export const it: Record<string, string> = {
   "message.discard": "Annulla",
   "message.discardChanges": "Annulla modifiche",
   "message.requestChanges": "Richiedi modifiche",
+  "message.requestChangesNeedsFeedback": "Indica cosa vuoi modificare, poi richiedi di nuovo le modifiche.",
   "message.regenerate": "Rigenera",
   "message.additionalPlaceholder": "Descrivi le modifiche desiderate...",
   "message.editFeedbackHeader": "La modifica proposta per \"{{filePath}}\" è stata rifiutata.",

@@ -399,6 +399,7 @@ export const zh: Record<string, string> = {
   "message.discard": "放弃",
   "message.discardChanges": "放弃更改",
   "message.requestChanges": "请求修改",
+  "message.requestChangesNeedsFeedback": "请输入希望修改的内容，然后再次请求修改。",
   "message.regenerate": "重新生成",
   "message.additionalPlaceholder": "描述您想要的更改...",
   "message.editFeedbackHeader": "对 \"{{filePath}}\" 的编辑建议已被拒绝。",

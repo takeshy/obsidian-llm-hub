@@ -433,6 +433,7 @@ export const ja: Record<string, string> = {
   "message.discard": "破棄",
   "message.discardChanges": "変更を破棄",
   "message.requestChanges": "変更をリクエスト",
+  "message.requestChangesNeedsFeedback": "変更してほしい内容を入力してから、もう一度「変更をリクエスト」を選択してください。",
   "message.regenerate": "再生成",
   "message.additionalPlaceholder": "変更内容を説明してください...",
   "message.openFileAfterApply": "適用後にファイルを開く",

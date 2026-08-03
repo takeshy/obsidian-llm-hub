@@ -399,6 +399,7 @@ export const pt: Record<string, string> = {
   "message.discard": "Descartar",
   "message.discardChanges": "Descartar alteracoes",
   "message.requestChanges": "Solicitar alteracoes",
+  "message.requestChangesNeedsFeedback": "Escreva o que deseja alterar e solicite as alteracoes novamente.",
   "message.regenerate": "Regenerar",
   "message.additionalPlaceholder": "Descreva as alteracoes desejadas...",
   "message.editFeedbackHeader": "A edicao proposta para \"{{filePath}}\" foi rejeitada.",

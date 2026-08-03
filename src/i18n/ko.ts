@@ -399,6 +399,7 @@ export const ko: Record<string, string> = {
   "message.discard": "취소",
   "message.discardChanges": "변경 사항 취소",
   "message.requestChanges": "변경 요청",
+  "message.requestChangesNeedsFeedback": "변경할 내용을 입력한 후 변경을 다시 요청하세요.",
   "message.regenerate": "재생성",
   "message.additionalPlaceholder": "원하는 변경 사항을 설명하세요...",
   "message.editFeedbackHeader": "\"{{filePath}}\"에 대한 편집 제안이 거부되었습니다.",

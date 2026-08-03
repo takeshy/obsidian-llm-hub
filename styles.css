@@ -3123,6 +3123,12 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   margin-bottom: 8px;
 }
 
+.llm-hub-edit-additional-hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-warning, var(--text-accent));
+}
+
 .llm-hub-edit-confirm-modal .llm-hub-edit-additional-input {
   width: 100%;
   padding: 8px;

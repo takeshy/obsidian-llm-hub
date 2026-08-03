@@ -399,6 +399,7 @@ export const de: Record<string, string> = {
   "message.discard": "Verwerfen",
   "message.discardChanges": "Änderungen verwerfen",
   "message.requestChanges": "Änderungen anfordern",
+  "message.requestChangesNeedsFeedback": "Geben Sie an, was geändert werden soll, und fordern Sie die Änderungen erneut an.",
   "message.regenerate": "Neu generieren",
   "message.additionalPlaceholder": "Beschreiben Sie die gewünschten Änderungen...",
   "message.editFeedbackHeader": "Die vorgeschlagene Bearbeitung für \"{{filePath}}\" wurde abgelehnt.",
