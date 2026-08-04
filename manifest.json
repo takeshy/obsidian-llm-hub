@@ -1,7 +1,7 @@
 {
 	"id": "llm-hub",
 	"name": "LLM Hub",
-	"minAppVersion": "1.10.0",
+	"minAppVersion": "1.11.4",
 	"description": "AI assistant with chat, workflow automation, and semantic search (RAG). Supports Gemini, OpenAI, Anthropic, OpenRouter, Grok, local LLMs, and CLI backends.",
 	"author": "takeshy",
 	"authorUrl": "https://github.com/takeshy",

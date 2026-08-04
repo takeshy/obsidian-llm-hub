@@ -3,6 +3,8 @@ import { t } from "src/i18n";
 import { DEFAULT_LANGFUSE_SETTINGS } from "src/types";
 import { sendTestTrace, isLangfuseAvailable } from "src/tracing/langfuse";
 import { formatError } from "src/utils/error";
+import { credentialSlot } from "src/core/credentialBundle";
+import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
 import type { SettingsContext } from "./settingsContext";
 
 export function displayLangfuseSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
@@ -42,6 +44,8 @@ export function displayLangfuseSettings(containerEl: HTMLElement, ctx: SettingsC
   const secretKeySetting = new Setting(detailContainer)
     .setName(t("settings.langfuseSecretKey"))
     .setDesc(t("settings.langfuseSecretKey.desc"));
+
+  markCredentialConfiguredElsewhere(secretKeySetting, plugin, credentialSlot.langfuse, langfuse.secretKey);
 
   let secretKeyInput: HTMLInputElement;
   secretKeySetting.addText((text) => {

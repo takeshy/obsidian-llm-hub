@@ -1,4 +1,4 @@
-import { Setting, Notice, Modal, App, Platform } from "obsidian";
+import { Setting, Notice, Modal, Platform } from "obsidian";
 import { t } from "src/i18n";
 import type { ApiProviderConfig, ApiProviderType } from "src/types";
 import { KNOWN_PROVIDER_DEFAULTS, normalizeDeprecatedGeminiModelName } from "src/types";
@@ -6,13 +6,15 @@ import { verifyApiProvider, verifyOpencodeGo } from "src/core/openaiProvider";
 import { verifyAnthropicProvider } from "src/core/anthropicProvider";
 import { verifyGeminiProvider } from "src/core/gemini";
 import { getKnownModels } from "src/core/modelPricing";
+import { credentialSlot } from "src/core/credentialBundle";
+import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
+import type { LlmHubPlugin } from "src/plugin";
 import type { SettingsContext } from "./settingsContext";
 
 export function displayApiProviderSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
   if (Platform.isMobile) return;
 
   const { plugin, display } = ctx;
-  const app = plugin.app;
 
   new Setting(containerEl).setName(t("settings.apiProviders")).setHeading();
 
@@ -52,7 +54,7 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
         .setIcon("settings")
         .setTooltip(t("settings.apiProviderEdit"))
         .onClick(() => {
-          new ApiProviderModal(app, provider, async (updated) => {
+          new ApiProviderModal(plugin, provider, async (updated) => {
             const idx = plugin.settings.apiProviders.findIndex(p => p.id === provider.id);
             if (idx >= 0) {
               plugin.settings.apiProviders[idx] = updated;
@@ -94,7 +96,7 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
             verified: false,
             enabled: true,
           };
-          new ApiProviderModal(app, newProvider, async (created) => {
+          new ApiProviderModal(plugin, newProvider, async (created) => {
             plugin.settings.apiProviders.push(created);
             await plugin.saveSettings();
             display();
@@ -106,11 +108,13 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
 class ApiProviderModal extends Modal {
   private config: ApiProviderConfig;
   private onSave: (config: ApiProviderConfig) => Promise<void>;
+  private plugin: LlmHubPlugin;
   private proxyUrl?: string;
   private proxyBypass?: string;
 
-  constructor(app: App, config: ApiProviderConfig, onSave: (config: ApiProviderConfig) => Promise<void>, proxyUrl?: string, proxyBypass?: string) {
-    super(app);
+  constructor(plugin: LlmHubPlugin, config: ApiProviderConfig, onSave: (config: ApiProviderConfig) => Promise<void>, proxyUrl?: string, proxyBypass?: string) {
+    super(plugin.app);
+    this.plugin = plugin;
     this.config = { ...config };
     this.onSave = onSave;
     this.proxyUrl = proxyUrl;
@@ -175,7 +179,7 @@ class ApiProviderModal extends Modal {
     }
 
     // API Key
-    new Setting(contentEl)
+    const apiKeySetting = new Setting(contentEl)
       .setName(t("settings.apiProviderApiKey"))
       .addText((text) => {
         text
@@ -184,6 +188,12 @@ class ApiProviderModal extends Modal {
           .onChange((value) => { this.config.apiKey = value.trim(); });
         text.inputEl.type = "password";
       });
+    markCredentialConfiguredElsewhere(
+      apiKeySetting,
+      this.plugin,
+      credentialSlot.apiProvider(this.config.id),
+      this.config.apiKey,
+    );
 
     // Model selection — checkboxes for enabling/disabling models
     const knownModels = getKnownModels(this.config.type);

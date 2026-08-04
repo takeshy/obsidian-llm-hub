@@ -8,6 +8,7 @@ import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { formatError } from "src/utils/error";
 import { setDestructiveButton } from "src/ui/buttonCompat";
 import { RagSettingNameModal } from "./RagSettingNameModal";
+import { markRagKeyConfiguredElsewhere } from "./credentialStorageSettings";
 import type { SettingsContext } from "./settingsContext";
 
 type RagSettingMode = "internal" | "combined" | "external";
@@ -276,7 +277,7 @@ function displayLocalStoreSettings(
       );
 
     // Embedding API Key (optional)
-    new Setting(containerEl)
+    const embeddingKeySetting = new Setting(containerEl)
       .setName(t("settings.localEmbeddingApiKey"))
       .setDesc(t("settings.localEmbeddingApiKey.desc"))
       .addText((text) => {
@@ -290,6 +291,7 @@ function displayLocalStoreSettings(
           });
         text.inputEl.type = "password";
       });
+    markRagKeyConfiguredElsewhere(embeddingKeySetting, plugin, ragSetting);
 
     // Top K (per-setting)
     displayTopKSetting(containerEl, plugin, name, ragSetting, display);
@@ -408,7 +410,7 @@ function displayEmbeddingSettings(
     );
 
   // Custom Embedding API Key
-  new Setting(containerEl)
+  const customEmbeddingKeySetting = new Setting(containerEl)
     .setName(t("settings.localEmbeddingApiKey"))
     .setDesc(t("settings.localEmbeddingApiKey.desc"))
     .addText((text) => {
@@ -422,6 +424,7 @@ function displayEmbeddingSettings(
         });
       text.inputEl.type = "password";
     });
+  markRagKeyConfiguredElsewhere(customEmbeddingKeySetting, plugin, ragSetting);
 
   // Embedding model (dropdown + fetch button, fallback to text input)
   const embeddingModelSetting = new Setting(containerEl)

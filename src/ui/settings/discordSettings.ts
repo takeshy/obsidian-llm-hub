@@ -3,6 +3,8 @@ import { t } from "src/i18n";
 import { DEFAULT_DISCORD_SETTINGS } from "src/types";
 import { getDiscordService, initDiscordService, resetDiscordService } from "src/core/discordService";
 import { formatError } from "src/utils/error";
+import { credentialSlot } from "src/core/credentialBundle";
+import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
 import type { SettingsContext } from "./settingsContext";
 
 export function displayDiscordSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
@@ -40,6 +42,8 @@ export function displayDiscordSettings(containerEl: HTMLElement, ctx: SettingsCo
   const tokenSetting = new Setting(containerEl)
     .setName(t("settings.discordBotToken"))
     .setDesc(t("settings.discordBotToken.desc"));
+
+  markCredentialConfiguredElsewhere(tokenSetting, plugin, credentialSlot.discord, discord.botToken);
 
   let tokenInput: HTMLInputElement;
   tokenSetting.addText((text) => {

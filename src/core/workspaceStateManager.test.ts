@@ -18,7 +18,6 @@ function createManager(initialContent: string) {
   const manager = new WorkspaceStateManager(
     { vault: { adapter } } as unknown as App,
     () => ({ workspaceFolder: "LLMHub", apiProviders: [], cliConfig: {} } as unknown as LlmHubSettings),
-    async () => undefined,
     emitter,
     async () => ({}),
   );

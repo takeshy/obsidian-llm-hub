@@ -1,5 +1,19 @@
 // Japanese translations
 export const ja: Record<string, string> = {
+  // Settings - Credential storage
+  "settings.credentialStorage": "認証情報の保存先",
+  "settings.credentialStorage.mode": "APIキーの保存先",
+  "settings.credentialStorage.plaintext": "プラグイン設定（平文）",
+  "settings.credentialStorage.secretStorage": "Obsidianのシークレット領域",
+  "settings.credentialStorage.plaintext.desc": "APIキー・トークン・パスワードをプラグイン設定ファイルとワークスペース状態ファイルに平文で保存します。vaultの同期対象に含まれるため、これらのファイルをGitへコミットしたり共有したりしないでください。",
+  "settings.credentialStorage.secretStorage.desc": "APIキー・トークン・パスワードをObsidianのシークレット領域に保存し、vaultには書き込みません。シークレット領域は端末ごとに独立しているため、他の端末では各認証情報を入力し直す必要があります。",
+  "settings.credentialStorage.unavailable": "シークレット領域の利用にはObsidian 1.11.4以降が必要です。",
+  "settings.credentialStorage.configuredElsewhere": "別の端末で設定済みです。この端末で使うには入力し直してください。",
+  "settings.credentialStorage.movedToSecretStorage": "認証情報をObsidianのシークレット領域へ移動しました。",
+  "settings.credentialStorage.movedToPlaintext": "認証情報をプラグイン設定へ戻しました。",
+  "settings.credentialStorage.switchFailed": "認証情報の保存先を切り替えられませんでした: {error}",
+  "settings.credentialStorage.writeFailed": "Obsidianのシークレット領域へ書き込めませんでした。認証情報はプラグイン設定に平文のまま保持しています。",
+  "settings.credentialStorage.workspaceMigrationFailed": "Obsidianのシークレット領域にあるワークスペースの認証情報を移行できませんでした。",
   // Settings - Headings
   "settings.api": "API",
   "settings.cliProviders": "CLIプロバイダー",

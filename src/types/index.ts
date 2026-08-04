@@ -1,5 +1,12 @@
 import type { Content } from "@google/genai";
 
+/**
+ * Where credentials are stored.
+ * - `plaintext`: in the plugin's own files, so they follow whatever syncs the vault.
+ * - `secretStorage`: in Obsidian's device-local SecretStorage, kept out of the vault.
+ */
+export type CredentialStorageMode = "plaintext" | "secretStorage";
+
 // MCP transport types
 export type McpTransport = "http" | "stdio";
 export type McpFraming = "content-length" | "newline";
@@ -172,6 +179,12 @@ export interface LlmHubSettings {
   // Encryption settings
   encryption: EncryptionSettings;
 
+  // Where API keys, tokens, and passwords are stored
+  credentialStorage: CredentialStorageMode;
+
+  // Credential slots configured on any device (only tracked in secretStorage mode)
+  configuredCredentials?: string[];
+
   // Langfuse observability
   langfuse: LangfuseSettings;
 
@@ -276,6 +289,7 @@ export const DEFAULT_ENCRYPTION_SETTINGS: EncryptionSettings = {
 export interface RagSetting {
   embeddingBaseUrl: string;      // Embedding API URL (空 = Gemini default)
   embeddingApiKey: string;       // APIキー (空 = Gemini API key fallback)
+  embeddingApiKeyConfigured?: boolean; // 別端末で設定済み (secretStorage利用時のみ)
   embeddingModel: string;        // モデル名 (空 = Gemini default)
   chunkSize: number;             // default: 500
   chunkOverlap: number;          // default: 100
@@ -893,6 +907,8 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   editHistory: DEFAULT_EDIT_HISTORY_SETTINGS,
   // Encryption
   encryption: DEFAULT_ENCRYPTION_SETTINGS,
+  // Credential storage (plaintext keeps the pre-1.11 behaviour)
+  credentialStorage: "plaintext",
   // Langfuse
   langfuse: DEFAULT_LANGFUSE_SETTINGS,
   // One-time migration notices

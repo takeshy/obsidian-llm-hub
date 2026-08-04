@@ -19,6 +19,15 @@ import {
 } from "../types";
 import { formatError } from "../utils/error";
 import { searchSelectionFromWorkspace } from "./webSearch";
+import {
+  applyRagCredentials,
+  clearRagCredentialMarkers,
+  collectRagCredentials,
+  ragCredentialSecretId,
+  stripWorkspaceCredentials,
+  type RagCredentialBundle,
+} from "./credentialBundle";
+import { isSecretStorageAvailable, readSecretJson, writeSecretJson } from "./secretStorage";
 
 const WORKSPACE_STATE_FILENAME = "gemini-workspace.json";
 const OLD_WORKSPACE_STATE_FILENAME = ".gemini-workspace.json";
@@ -29,7 +38,6 @@ export class WorkspaceStateManager {
   constructor(
     private app: App,
     private getSettings: () => LlmHubSettings,
-    private saveSettingsCallback: () => Promise<void>,
     private settingsEmitter: EventEmitter,
     private loadDataCallback: () => Promise<unknown>
   ) {}
@@ -105,8 +113,13 @@ export class WorkspaceStateManager {
       };
     }
 
+    // Restore embedding keys that were moved into SecretStorage. Runs in both
+    // storage modes so a device holding the secrets can still recover them.
+    const stored = readSecretJson<RagCredentialBundle>(this.app, ragCredentialSecretId(this.workspaceFolder));
+    if (stored) applyRagCredentials(this.workspaceState, stored);
+
     if (legacyWebSearch) {
-      await this.app.vault.adapter.write(filePath, JSON.stringify(this.workspaceState, null, 2));
+      await this.app.vault.adapter.write(filePath, JSON.stringify(this.persistableWorkspaceState(), null, 2));
     }
   }
 
@@ -121,10 +134,27 @@ export class WorkspaceStateManager {
     }
   }
 
+  /**
+   * The state as it should be written to the vault. In secretStorage mode the
+   * embedding API keys are moved into a per-workspace secret first; if that
+   * write fails the keys stay in the file rather than being lost.
+   */
+  private persistableWorkspaceState(): WorkspaceState {
+    if (this.settings.credentialStorage !== "secretStorage" || !isSecretStorageAvailable(this.app)) {
+      return clearRagCredentialMarkers(this.workspaceState);
+    }
+    const stored = writeSecretJson(
+      this.app,
+      ragCredentialSecretId(this.workspaceFolder),
+      collectRagCredentials(this.workspaceState),
+    );
+    return stored ? stripWorkspaceCredentials(this.workspaceState) : this.workspaceState;
+  }
+
   // Save workspace state to file
   async saveWorkspaceState(): Promise<void> {
     const filePath = this.getWorkspaceStateFilePath();
-    const content = JSON.stringify(this.workspaceState, null, 2);
+    const content = JSON.stringify(this.persistableWorkspaceState(), null, 2);
 
     // Ensure folder exists
     const wsFolder = this.workspaceFolder;

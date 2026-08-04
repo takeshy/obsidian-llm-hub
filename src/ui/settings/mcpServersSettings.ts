@@ -35,7 +35,6 @@ function isSameServer(a: McpServerConfig, b: McpServerConfig): boolean {
 
 export function displayMcpServersSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
   const { plugin, display } = ctx;
-  const app = plugin.app;
 
   new Setting(containerEl).setName(t("settings.mcpServers")).setHeading();
 
@@ -52,7 +51,7 @@ export function displayMcpServersSettings(containerEl: HTMLElement, ctx: Setting
         .setCta()
         .onClick(() => {
           new McpServerModal(
-            app,
+            plugin,
             null,
             async (server) => {
               plugin.settings.mcpServers.push(server);
@@ -85,7 +84,7 @@ export function displayMcpServersSettings(containerEl: HTMLElement, ctx: Setting
           .setTooltip(t("common.edit"))
           .onClick(() => {
             new McpServerModal(
-              app,
+              plugin,
               server,
               async (updated) => {
                 const index = plugin.settings.mcpServers.findIndex(

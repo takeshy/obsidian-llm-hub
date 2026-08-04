@@ -1,8 +1,11 @@
-import { Modal, App, Setting, Notice, Platform } from "obsidian";
+import { Modal, Setting, Notice, Platform } from "obsidian";
 import type { McpServerConfig, McpTransport, McpFraming } from "src/types";
 import { createMcpClient } from "src/core/mcpClient";
+import { credentialSlot } from "src/core/credentialBundle";
+import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
 import { formatError } from "src/utils/error";
 import { t } from "src/i18n";
+import type { LlmHubPlugin } from "src/plugin";
 
 function parseStringRecord(json: string): Record<string, string> {
   const parsed = JSON.parse(json) as unknown;
@@ -38,11 +41,11 @@ export class McpServerModal extends Modal {
   }
 
   constructor(
-    app: App,
+    private plugin: LlmHubPlugin,
     server: McpServerConfig | null,
     onSubmit: (server: McpServerConfig) => void | Promise<void>
   ) {
-    super(app);
+    super(plugin.app);
     this.isNew = server === null;
     // For existing servers with toolHints, consider connection already tested
     this.connectionTested = server !== null && Array.isArray(server.toolHints) && server.toolHints.length > 0;
@@ -142,6 +145,13 @@ export class McpServerModal extends Modal {
       text.inputEl.addClass("llm-hub-settings-textarea");
     });
 
+    markCredentialConfiguredElsewhere(
+      headersSetting,
+      this.plugin,
+      credentialSlot.mcpHeaders(this.server),
+      this.headersText,
+    );
+
     // --- Stdio fields ---
     this.stdioFieldsEl = contentEl.createDiv();
 
@@ -202,6 +212,13 @@ export class McpServerModal extends Modal {
       text.inputEl.rows = 3;
       text.inputEl.addClass("llm-hub-settings-textarea");
     });
+
+    markCredentialConfiguredElsewhere(
+      envSetting,
+      this.plugin,
+      credentialSlot.mcpEnv(this.server),
+      this.envText,
+    );
 
     // Set initial field visibility
     this.updateFieldVisibility();

@@ -3,6 +3,8 @@ import { t } from "src/i18n";
 import { DEFAULT_SETTINGS, DEFAULT_WORKSPACE_FOLDER } from "src/types";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { getLocalRagStore } from "src/core/localRagStore";
+import { ragCredentialSecretId } from "src/core/credentialBundle";
+import { clearSecret, copySecret, readSecretJson } from "src/core/secretStorage";
 import type { SettingsContext } from "./settingsContext";
 
 export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
@@ -37,6 +39,7 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
           }
 
           // Check if old folder exists and ask to move
+          let migratedOldSecretId: string | null = null;
           const oldExists = await app.vault.adapter.exists(oldFolder);
           if (oldExists) {
             const confirmed = await new ConfirmModal(
@@ -47,13 +50,29 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
             ).openAndWait();
 
             if (confirmed) {
+              const oldSecretId = ragCredentialSecretId(oldFolder);
+              const newSecretId = ragCredentialSecretId(newFolder);
+              const migrateSecret = plugin.isSecretCredentialStorage();
+              // Only the copy we make ourselves may be rolled back — a secret
+              // that was already there belongs to whatever used that name.
+              const secretWasCopied = migrateSecret && !readSecretJson(plugin.app, newSecretId);
+              if (migrateSecret && !copySecret(plugin.app, oldSecretId, newSecretId)) {
+                new Notice(t("settings.moveWorkspaceFolder.error", {
+                  error: t("settings.credentialStorage.workspaceMigrationFailed"),
+                }));
+                text.setValue(oldFolder);
+                return;
+              }
+
               try {
                 await app.vault.adapter.rename(oldFolder, newFolder);
               } catch (e) {
+                if (secretWasCopied) clearSecret(plugin.app, newSecretId);
                 new Notice(t("settings.moveWorkspaceFolder.error", { error: String(e) }));
                 text.setValue(oldFolder);
                 return;
               }
+              if (migrateSecret) migratedOldSecretId = oldSecretId;
             }
           }
 
@@ -63,6 +82,7 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
 
           // Reload workspace state from new folder
           await plugin.loadWorkspaceState();
+          if (migratedOldSecretId) clearSecret(plugin.app, migratedOldSecretId);
 
           // Update LocalRagStore workspace folder and invalidate cache
           const localRag = getLocalRagStore();

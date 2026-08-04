@@ -1,6 +1,9 @@
-import { Modal, App, Setting, Notice } from "obsidian";
+import { Modal, Setting, Notice } from "obsidian";
 import { fetchLocalLlmModels } from "src/core/localLlmProvider";
 import { t } from "src/i18n";
+import { credentialSlot } from "src/core/credentialBundle";
+import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
+import type { LlmHubPlugin } from "src/plugin";
 import type { LocalLlmConfig, LlmFramework } from "src/types";
 
 export class LocalLlmModal extends Modal {
@@ -11,12 +14,12 @@ export class LocalLlmModal extends Modal {
   private saveButton: HTMLButtonElement | null = null;
 
   constructor(
-    app: App,
+    private plugin: LlmHubPlugin,
     currentConfig: LocalLlmConfig,
     existingModels: string[],
     onSave: (config: LocalLlmConfig, models: string[]) => void | Promise<void>,
   ) {
-    super(app);
+    super(plugin.app);
     this.config = { ...currentConfig };
     this.onSave = onSave;
     if (existingModels.length > 0) {
@@ -86,7 +89,7 @@ export class LocalLlmModal extends Modal {
       });
 
     // API Key (optional)
-    new Setting(contentEl)
+    const apiKeySetting = new Setting(contentEl)
       .setName(t("settings.localLlmModal.apiKey"))
       .setDesc(this.config.framework === "anythingllm"
         ? t("settings.localLlmModal.apiKeyDescAnythingllm")
@@ -100,6 +103,12 @@ export class LocalLlmModal extends Modal {
           });
         text.inputEl.type = "password";
       });
+    markCredentialConfiguredElsewhere(
+      apiKeySetting,
+      this.plugin,
+      credentialSlot.localLlmApiKey(this.config.id),
+      this.config.apiKey,
+    );
 
     // Basic Auth (OpenCode local server may set OPENCODE_SERVER_USERNAME / PASSWORD)
     if (this.config.framework === "opencode") {
@@ -115,7 +124,7 @@ export class LocalLlmModal extends Modal {
             });
         });
 
-      new Setting(contentEl)
+      const passwordSetting = new Setting(contentEl)
         .setName(t("settings.localLlmModal.password"))
         .setDesc(t("settings.localLlmModal.passwordDesc"))
         .addText((text) => {
@@ -127,6 +136,12 @@ export class LocalLlmModal extends Modal {
             });
           text.inputEl.type = "password";
         });
+      markCredentialConfiguredElsewhere(
+        passwordSetting,
+        this.plugin,
+        credentialSlot.localLlmPassword(this.config.id),
+        this.config.password,
+      );
     }
 
     // Fetch models + multi-select checklist (mirrors API Provider settings)

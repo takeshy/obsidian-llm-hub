@@ -59,6 +59,15 @@ import {
   unregisterRuntimeSkill,
 } from "src/core/runtimeSkills";
 import { registerDiscussionHubIntegration } from "src/integrations/discussionHubCapabilities";
+import {
+  applySettingsCredentials,
+  collectSettingsCredentials,
+  mergeConfiguredCredentials,
+  stripSettingsCredentials,
+  SETTINGS_CREDENTIAL_SECRET_ID,
+  type SettingsCredentialBundle,
+} from "src/core/credentialBundle";
+import { isSecretStorageAvailable, readSecretJson, writeSecretJson } from "src/core/secretStorage";
 
 interface DashboardHubIntegration {
   protocolVersion: 1;
@@ -290,7 +299,6 @@ export class LlmHubPlugin extends Plugin {
     this.wsManager = new WorkspaceStateManager(
       this.app,
       () => this.settings,
-      () => this.saveSettings(),
       this.settingsEmitter,
       () => this.loadData()
     );
@@ -779,13 +787,56 @@ export class LlmHubPlugin extends Plugin {
     };
     this.settings.lastAIWorkflowModel = normalizeModelSetting(this.settings.lastAIWorkflowModel);
     this.settings.lastTimelineAiModel = normalizeModelSetting(this.settings.lastTimelineAiModel);
+
+    // Overlay credentials held in SecretStorage. This runs in both storage modes
+    // so that a device still holding the secrets can recover values that another
+    // device stripped from data.json.
+    const stored = readSecretJson<SettingsCredentialBundle>(this.app, SETTINGS_CREDENTIAL_SECRET_ID);
+    if (stored) applySettingsCredentials(this.settings, stored);
+  }
+
+  /** True when new credential writes should go to Obsidian's SecretStorage. */
+  isSecretCredentialStorage(): boolean {
+    return this.settings.credentialStorage === "secretStorage" && isSecretStorageAvailable(this.app);
+  }
+
+  /**
+   * Hint shown next to an empty credential field when that slot is known to be
+   * configured on another device.
+   */
+  credentialConfiguredElsewhere(slot: string, currentValue: string | undefined): boolean {
+    if (!this.isSecretCredentialStorage()) return false;
+    if (currentValue) return false;
+    return this.settings.configuredCredentials?.includes(slot) ?? false;
   }
 
   async saveSettings() {
+    // Credentials go to SecretStorage first: if that write fails we keep the
+    // plaintext copy rather than stripping away the only copy we have.
+    let settingsForPersistence = this.settings;
+    if (this.isSecretCredentialStorage()) {
+      const stored = writeSecretJson(
+        this.app,
+        SETTINGS_CREDENTIAL_SECRET_ID,
+        collectSettingsCredentials(this.settings),
+      );
+      if (stored) {
+        this.settings.configuredCredentials = mergeConfiguredCredentials(
+          this.settings,
+          this.settings.configuredCredentials,
+        );
+        settingsForPersistence = stripSettingsCredentials(this.settings);
+      } else {
+        new Notice(t("settings.credentialStorage.writeFailed"), 10000);
+      }
+    } else if (this.settings.configuredCredentials) {
+      this.settings.configuredCredentials = undefined;
+    }
+
     // Only save values that differ from defaults
     const dataToSave: Partial<LlmHubSettings> = {};
-    for (const key of Object.keys(this.settings) as (keyof LlmHubSettings)[]) {
-      const currentValue = this.settings[key];
+    for (const key of Object.keys(settingsForPersistence) as (keyof LlmHubSettings)[]) {
+      const currentValue = settingsForPersistence[key];
       const defaultValue = DEFAULT_SETTINGS[key];
       // Use JSON.stringify for arrays/objects comparison
       const isDifferent = Array.isArray(currentValue) || (typeof currentValue === 'object' && currentValue !== null)

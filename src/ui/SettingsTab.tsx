@@ -2,6 +2,7 @@ import { PluginSettingTab, App } from "obsidian";
 import type { LlmHubPlugin } from "src/plugin";
 import type { SettingsContext } from "src/ui/settings/settingsContext";
 
+import { displayCredentialStorageSettings } from "src/ui/settings/credentialStorageSettings";
 import { displayCliSettings } from "src/ui/settings/cliSettings";
 import { displayLocalLlmSettings } from "src/ui/settings/localLlmSettings";
 import { displayWorkspaceSettings } from "src/ui/settings/workspaceSettings";
@@ -39,6 +40,7 @@ export class SettingsTab extends PluginSettingTab {
       syncCancelRef: this.syncCancelRef,
     };
 
+    displayCredentialStorageSettings(containerEl, ctx);
     displayCliSettings(containerEl, ctx);
     displayLocalLlmSettings(containerEl, ctx);
     displayApiProviderSettings(containerEl, ctx);

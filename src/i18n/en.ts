@@ -1,5 +1,19 @@
 // English translations (base language)
 export const en = {
+  // Settings - Credential storage
+  "settings.credentialStorage": "Credential storage",
+  "settings.credentialStorage.mode": "Store API keys in",
+  "settings.credentialStorage.plaintext": "Plugin settings (plaintext)",
+  "settings.credentialStorage.secretStorage": "Obsidian secret storage",
+  "settings.credentialStorage.plaintext.desc": "API keys, tokens, and passwords are stored as plaintext in the plugin settings and workspace state files. They follow whatever syncs your vault, so do not commit or share those files.",
+  "settings.credentialStorage.secretStorage.desc": "API keys, tokens, and passwords are kept in Obsidian's secret storage and never written into the vault. Secret storage is per device, so you have to enter each credential again on every other device.",
+  "settings.credentialStorage.unavailable": "Secret storage requires Obsidian 1.11.4 or later.",
+  "settings.credentialStorage.configuredElsewhere": "Configured on another device. Enter it again to use it here.",
+  "settings.credentialStorage.movedToSecretStorage": "Credentials moved to Obsidian secret storage.",
+  "settings.credentialStorage.movedToPlaintext": "Credentials moved back into the plugin settings.",
+  "settings.credentialStorage.switchFailed": "Failed to switch credential storage: {error}",
+  "settings.credentialStorage.writeFailed": "Failed to write to Obsidian secret storage. Credentials were kept in the plugin settings as plaintext.",
+  "settings.credentialStorage.workspaceMigrationFailed": "Failed to migrate the workspace credential in Obsidian secret storage.",
   // Settings - Headings
   "settings.api": "API",
   "settings.cliProviders": "CLI providers",

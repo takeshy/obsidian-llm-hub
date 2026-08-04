@@ -9,7 +9,6 @@ export function displayLocalLlmSettings(containerEl: HTMLElement, ctx: SettingsC
   if (Platform.isMobile) return;
 
   const { plugin, display } = ctx;
-  const app = plugin.app;
   const configs = plugin.settings.localLlmConfigs ?? [];
 
   new Setting(containerEl).setName(t("settings.localLlm")).setHeading();
@@ -51,7 +50,7 @@ export function displayLocalLlmSettings(containerEl: HTMLElement, ctx: SettingsC
         .setTooltip(t("settings.localLlmConfigure"))
         .onClick(() => {
           new LocalLlmModal(
-            app,
+            plugin,
             config,
             config.availableModels ?? [],
             async (updated, models) => {
@@ -125,7 +124,7 @@ export function displayLocalLlmSettings(containerEl: HTMLElement, ctx: SettingsC
             enabled: true,
           };
           new LocalLlmModal(
-            app,
+            plugin,
             draft,
             [],
             async (created, models) => {
