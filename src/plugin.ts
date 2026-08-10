@@ -746,6 +746,7 @@ export class LlmHubPlugin extends Plugin {
             transport: s.transport || "http",
           }))
         : [],
+      agentPlugins: Array.isArray(loaded.agentPlugins) ? loaded.agentPlugins : [],
       // Deep copy workflow arrays
       enabledWorkflowHotkeys: loaded.enabledWorkflowHotkeys
         ? [...loaded.enabledWorkflowHotkeys]

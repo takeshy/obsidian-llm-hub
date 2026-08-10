@@ -3,6 +3,7 @@ import type { McpAppResult, McpAppUiResource, McpServerConfig } from "src/types"
 import type { IMcpClient } from "src/core/mcpClient";
 import { createClientFromAppInfo } from "src/core/mcpClientUtils";
 import { t } from "src/i18n";
+import { prepareMcpAppHtml } from "src/core/mcpAppCsp";
 
 // JSON-RPC message types for postMessage communication
 interface JsonRpcRequest {
@@ -68,6 +69,7 @@ export function McpAppRenderer({
   const [loading, setLoading] = useState(!initialUiResource);
   const [error, setError] = useState<string | null>(null);
   const [uiResource, setUiResource] = useState<McpAppUiResource | null>(initialUiResource || null);
+  const [iframeHtml, setIframeHtml] = useState<string | null>(null);
   const clientRef = useRef<IMcpClient | null>(null);
 
   // Get the UI resource URI from the tool result
@@ -120,10 +122,7 @@ export function McpAppRenderer({
 
     const message = event.data as JsonRpcRequest;
 
-    // Validate JSON-RPC format
-    if (message.jsonrpc !== "2.0" || typeof message.id === "undefined") {
-      return;
-    }
+    if (message.jsonrpc !== "2.0") return;
 
     const sendResponse = (response: JsonRpcResponse) => {
       // Using "*" origin is required for srcdoc iframes as they have null origin
@@ -132,7 +131,22 @@ export function McpAppRenderer({
 
     try {
       switch (message.method) {
+        case "ui/initialize": {
+          if (typeof message.id === "undefined") return;
+          sendResponse({ jsonrpc: "2.0", id: message.id, result: {
+            protocolVersion: "2026-01-26",
+            hostInfo: { name: "obsidian-llm-hub", version: "0.31.8" },
+            hostCapabilities: { serverTools: {} },
+            hostContext: { theme: document.body.classList.contains("theme-dark") ? "dark" : "light", platform: "desktop", displayMode: "inline" },
+          } });
+          return;
+        }
+        case "ui/notifications/initialized": {
+          iframeRef.current?.contentWindow?.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: toolResult }, "*");
+          return;
+        }
         case "tools/call": {
+          if (typeof message.id === "undefined") return;
           // UI is requesting to call a tool
           const params = message.params as { name: string; arguments?: Record<string, unknown> } | undefined;
           if (!params?.name) {
@@ -209,20 +223,7 @@ export function McpAppRenderer({
   // Send initial tool result to iframe once loaded
   const handleIframeLoad = useCallback(() => {
     setLoading(false);
-
-    // Send the tool result to the iframe
-    // Using "*" origin is required for srcdoc iframes as they have null origin
-    if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage({
-        jsonrpc: "2.0",
-        method: "toolResult",
-        params: {
-          content: toolResult.content,
-          isError: toolResult.isError,
-        },
-      }, "*");
-    }
-  }, [toolResult]);
+  }, []);
 
   // Generate iframe content (server-provided HTML should already contain SDK per MCP Apps spec)
   const getIframeContent = (): string => {
@@ -243,6 +244,16 @@ export function McpAppRenderer({
 
     return html;
   };
+
+  useEffect(() => {
+    if (!uiResource) { setIframeHtml(null); return; }
+    let cancelled = false;
+    void prepareMcpAppHtml(getIframeContent(), uiResource).then(html => {
+      if (cancelled) return;
+      setIframeHtml(html);
+    }).catch(error => setError(error instanceof Error ? error.message : String(error)));
+    return () => { cancelled = true; };
+  }, [uiResource]);
 
   // Render loading state
   if (loading) {
@@ -268,7 +279,9 @@ export function McpAppRenderer({
     return null;
   }
 
-  const iframeContent = getIframeContent();
+  if (!iframeHtml) {
+    return <div className="llm-hub-mcp-app-loading"><span className="llm-hub-mcp-app-spinner" /><span>{t("mcpApp.loading")}</span></div>;
+  }
 
   return (
     <div className={`llm-hub-mcp-app ${expanded ? "llm-hub-mcp-app-expanded" : ""}`}>
@@ -287,8 +300,9 @@ export function McpAppRenderer({
         )}
       </div>
       <iframe
+        key={uiResource.uri}
         ref={iframeRef}
-        srcDoc={iframeContent}
+        srcDoc={iframeHtml}
         sandbox="allow-scripts allow-forms"
         onLoad={handleIframeLoad}
         className={`llm-hub-mcp-app-iframe ${expanded ? "llm-hub-mcp-app-iframe-expanded" : ""}`}

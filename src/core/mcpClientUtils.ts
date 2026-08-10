@@ -16,6 +16,7 @@ export function mapToolCallToAppResult(result: McpToolCallResult): McpAppResult 
       resource: c.resource,
     })) || [],
     isError: result.isError,
+    structuredContent: result.structuredContent,
     _meta: result._meta,
   };
 }
@@ -31,6 +32,7 @@ export function mapResourceReadResult(result: McpResourceReadResult): McpAppUiRe
       mimeType: content.mimeType || "text/html",
       text: content.text,
       blob: content.blob,
+      _meta: content._meta,
     };
   }
   return null;

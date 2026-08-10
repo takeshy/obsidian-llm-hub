@@ -18,6 +18,7 @@ import { displayMcpServersSettings } from "src/ui/settings/mcpServersSettings";
 import { displayApiProviderSettings } from "src/ui/settings/apiProviderSettings";
 import { displayProxySettings } from "src/ui/settings/proxySettings";
 import { displayDiscordSettings } from "src/ui/settings/discordSettings";
+import { displayAgentPluginSettings } from "src/ui/settings/agentPluginSettings";
 
 export class SettingsTab extends PluginSettingTab {
   plugin: LlmHubPlugin;
@@ -53,6 +54,7 @@ export class SettingsTab extends PluginSettingTab {
     displaySlashCommandSettings(containerEl, ctx);
     displaySkillsSettings(containerEl, ctx);
     displayExternalSkillSettings(containerEl, ctx);
+    displayAgentPluginSettings(containerEl, ctx);
     displayRagSettings(containerEl, ctx);
     displayMcpServersSettings(containerEl, ctx);
     displayDiscordSettings(containerEl, ctx);

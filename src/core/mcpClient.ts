@@ -7,6 +7,13 @@ import { mapToolCallToAppResult, mapResourceReadResult } from "./mcpClientUtils"
 
 const MODERN_PROTOCOL_VERSION = "2026-07-28";
 const LEGACY_PROTOCOL_VERSION = "2025-11-25";
+export const MCP_APPS_CLIENT_CAPABILITIES = {
+  extensions: {
+    "io.modelcontextprotocol/ui": {
+      mimeTypes: ["text/html;profile=mcp-app"],
+    },
+  },
+};
 const SUPPORTED_LEGACY_PROTOCOL_VERSIONS = new Set([
   LEGACY_PROTOCOL_VERSION,
   "2025-06-18",
@@ -46,6 +53,7 @@ export interface McpInitializeResult {
   protocolVersion: string;
   capabilities: {
     tools?: Record<string, unknown>;
+    extensions?: Record<string, unknown>;
   };
   serverInfo: {
     name: string;
@@ -80,10 +88,12 @@ export interface McpToolCallResult {
     };
   }>;
   isError?: boolean;
+  structuredContent?: Record<string, unknown>;
   _meta?: {
     ui?: {
       resourceUri: string;
     };
+    "ui/resourceUri"?: string;
   };
 }
 
@@ -94,6 +104,7 @@ export interface McpResourceReadResult {
     mimeType?: string;
     text?: string;
     blob?: string;  // Base64 encoded binary
+    _meta?: McpAppUiResource["_meta"];
   }>;
 }
 
@@ -315,7 +326,7 @@ export class McpHttpClient implements IMcpClient {
     this.negotiatedProtocolVersion = LEGACY_PROTOCOL_VERSION;
     const result = await this.sendRequest("initialize", {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
-      capabilities: {},
+      capabilities: MCP_APPS_CLIENT_CAPABILITIES,
       clientInfo: {
         name: "obsidian-llm-hub",
         version: "1.0.0",

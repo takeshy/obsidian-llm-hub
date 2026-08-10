@@ -13,8 +13,10 @@ import type {
   JsonRpcResponse,
   JsonRpcNotification,
 } from "./mcpClient";
+import { MCP_APPS_CLIENT_CAPABILITIES } from "./mcpClient";
 import { mapToolCallToAppResult, mapResourceReadResult } from "./mcpClientUtils";
 import { getChildProcess, type ChildProcessType } from "./cliProvider";
+import * as path from "path";
 
 const MODERN_PROTOCOL_VERSION = "2026-07-28";
 const LEGACY_PROTOCOL_VERSION = "2025-11-25";
@@ -105,7 +107,7 @@ export class McpStdioClient implements IMcpClient {
     this.protocolEra = "legacy";
     const result = await this.sendRequest("initialize", {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
-      capabilities: {},
+      capabilities: MCP_APPS_CLIENT_CAPABILITIES,
       clientInfo: {
         name: "obsidian-llm-hub",
         version: "1.0.0",
@@ -223,14 +225,25 @@ export class McpStdioClient implements IMcpClient {
 
     const command = this.config.command!;
     const args = this.config.args || [];
+    const cwd = this.config.cwd;
+    if (this.config.pluginRoot) {
+      if (!this.config.pluginData || !cwd) throw new Error("Agent Plugin paths are incomplete");
+      const root = path.resolve(this.config.pluginRoot), data = path.resolve(this.config.pluginData), resolvedCwd = path.resolve(cwd);
+      const inside = (parent: string, child: string) => child === parent || child.startsWith(parent + path.sep);
+      if (!inside(root, resolvedCwd) && !inside(data, resolvedCwd)) throw new Error("Agent Plugin cwd is outside PLUGIN_ROOT and PLUGIN_DATA");
+      if (path.isAbsolute(command) && !inside(root, path.resolve(command))) throw new Error("Agent Plugin executable is outside PLUGIN_ROOT");
+      for (const key of Object.keys(this.config.env ?? {})) if (key.toUpperCase() === "PLUGIN_ROOT" || key.toUpperCase() === "PLUGIN_DATA") throw new Error(`Reserved Agent Plugin environment variable: ${key}`);
+    }
     const childEnv = typeof process !== "undefined"
       ? { ...process.env, ...this.config.env }
       : { ...this.config.env };
+    if (this.config.pluginRoot && this.config.pluginData) Object.assign(childEnv, { PLUGIN_ROOT: this.config.pluginRoot, PLUGIN_DATA: this.config.pluginData });
 
     this.process = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell: false,
       env: childEnv,
+      cwd,
     });
 
     this.process.stdout!.on("data", (data: Buffer) => {

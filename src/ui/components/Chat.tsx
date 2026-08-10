@@ -134,6 +134,7 @@ import {
 	formatHistoryDate,
 } from "./chat/chatHistory";
 import { resolveEffectiveSkillPaths } from "./chat/contextSkills";
+import { resolveAgentPluginMcpServers } from "src/core/agentPlugins";
 
 export interface ChatRef {
 	getActiveChat: () => TFile | null;
@@ -2175,6 +2176,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			let fullContent = "";
 			let fullThinking = "";
 			let stopped = false;
+			const llmMcpApps: McpAppInfo[] = [];
 
 			// === Tools-enabled flow (OpenAI-compat function calling) ===
 			// Modern Local LLMs (LM Studio / vLLM / AnythingLLM with recent
@@ -2203,7 +2205,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				// Fetch MCP tools if any servers are enabled
 				let toolsBundle = [...vaultTools];
 				let mcpToolExecutor: McpToolExecutor | null = null;
-				const enabledMcpServers = settings.mcpServers.filter(s => s.enabled);
+				const enabledMcpServers = resolveAgentPluginMcpServers(settings.mcpServers, effectiveSkillPaths, settings.agentPlugins).filter(s => s.enabled);
 				if (enabledMcpServers.length > 0) {
 					try {
 						const mcpTools = await fetchMcpTools(enabledMcpServers);
@@ -2235,6 +2237,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
 					if (name.startsWith("mcp_") && mcpToolExecutor) {
 						const mcpResult = await mcpToolExecutor.execute(name, args);
+						if (mcpResult.mcpApp) llmMcpApps.push(mcpResult.mcpApp);
 						if (mcpResult.error) return { error: mcpResult.error };
 						return { result: mcpResult.result };
 					}
@@ -2490,6 +2493,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
 				...(fullThinking ? { thinking: fullThinking } : {}),
 				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
+				...(llmMcpApps.length > 0 ? { mcpApps: llmMcpApps } : {}),
 			};
 
 			const newMessages = [...messages, userMessage, assistantMessage];
@@ -2611,7 +2615,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 			// Fetch MCP tools
 			let mcpToolExecutor: McpToolExecutor | null = null;
-			const enabledMcpServers = settings.mcpServers.filter(s => s.enabled);
+			const enabledMcpServers = resolveAgentPluginMcpServers(settings.mcpServers, getEffectiveSkillPathsForSend(skillPath), settings.agentPlugins).filter(s => s.enabled);
 			if (enabledMcpServers.length > 0) {
 				try {
 					const mcpTools = await fetchMcpTools(enabledMcpServers);
@@ -2650,10 +2654,12 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 			const apiSkillWorkflowMap = collectSkillWorkflows(apiLoadedSkills);
 			const apiSkillScriptMap = collectSkillScripts(apiLoadedSkills);
+			const apiMcpApps: McpAppInfo[] = [];
 
 			const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
 				if (name.startsWith("mcp_") && mcpToolExecutor) {
 					const mcpResult = await mcpToolExecutor.execute(name, args);
+					if (mcpResult.mcpApp) apiMcpApps.push(mcpResult.mcpApp);
 					if (mcpResult.error) return { error: mcpResult.error };
 					return { result: mcpResult.result };
 				}
@@ -2829,6 +2835,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				providerContinuation,
 				usage: streamUsage,
 				elapsedMs,
+				mcpApps: apiMcpApps.length > 0 ? apiMcpApps : undefined,
 			};
 			const newMessages = [...messages, userMessage, assistantMessage];
 			await saveResult(newMessages);
@@ -3008,7 +3015,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				}
 
 				// Fetch MCP tools from enabled servers only
-				const enabledMcpServers = mcpServers.filter(s => s.enabled);
+				const enabledMcpServers = resolveAgentPluginMcpServers(mcpServers, effectiveSkillPaths, settings.agentPlugins).filter(s => s.enabled);
 				const mcpTools: McpToolDefinition[] = toolsEnabled && enabledMcpServers.length > 0
 					? await fetchMcpTools(enabledMcpServers)
 					: [];

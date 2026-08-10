@@ -4,6 +4,7 @@ import type { IMcpClient } from "src/core/mcpClient";
 import { createClientFromAppInfo } from "src/core/mcpClientUtils";
 import { t } from "src/i18n";
 import { formatError } from "src/utils/error";
+import { prepareMcpAppHtml } from "src/core/mcpAppCsp";
 
 // JSON-RPC message types for postMessage communication
 interface JsonRpcRequest {
@@ -56,7 +57,7 @@ export class McpAppModal extends Modal {
 
     // Check if we have UI resource
     if (this.mcpApp.uiResource) {
-      this.renderIframe(container, this.mcpApp.uiResource);
+      void this.renderIframe(container, this.mcpApp.uiResource);
     } else if (this.mcpApp.toolResult._meta?.ui?.resourceUri) {
       // Need to fetch the UI resource
       void this.fetchAndRenderResource(container, this.mcpApp.toolResult._meta.ui.resourceUri);
@@ -136,7 +137,7 @@ export class McpAppModal extends Modal {
       loadingDiv.remove();
 
       if (resource) {
-        this.renderIframe(container, resource);
+        await this.renderIframe(container, resource);
       } else {
         container.createEl("p", { text: t("mcpApp.resourceNotFound") });
       }
@@ -149,7 +150,7 @@ export class McpAppModal extends Modal {
     }
   }
 
-  private renderIframe(container: HTMLElement, uiResource: McpAppUiResource) {
+  private async renderIframe(container: HTMLElement, uiResource: McpAppUiResource) {
     // Get the HTML content (server-provided HTML should already contain SDK per MCP Apps spec)
     let html = uiResource.text || "";
 
@@ -162,12 +163,12 @@ export class McpAppModal extends Modal {
         return;
       }
     }
+    html = await prepareMcpAppHtml(html, uiResource);
 
     // Create iframe
     this.iframe = container.createEl("iframe", {
       attr: {
         sandbox: "allow-scripts allow-forms",
-        srcdoc: html,
       },
       cls: "llm-hub-mcp-app-iframe"
     });
@@ -177,21 +178,8 @@ export class McpAppModal extends Modal {
       void this.handleMessage(event);
     };
     window.addEventListener("message", this.messageHandler);
+    this.iframe.srcdoc = html;
 
-    // Send initial tool result when iframe loads
-    this.iframe.addEventListener("load", () => {
-      if (this.iframe?.contentWindow) {
-        // Using "*" origin is required for srcdoc iframes as they have null origin
-        this.iframe.contentWindow.postMessage({
-          jsonrpc: "2.0",
-          method: "toolResult",
-          params: {
-            content: this.mcpApp.toolResult.content,
-            isError: this.mcpApp.toolResult.isError,
-          },
-        }, "*");
-      }
-    });
   }
 
   private async handleMessage(event: MessageEvent) {
@@ -202,10 +190,7 @@ export class McpAppModal extends Modal {
 
     const message = event.data as JsonRpcRequest;
 
-    // Validate JSON-RPC format
-    if (message.jsonrpc !== "2.0" || typeof message.id === "undefined") {
-      return;
-    }
+    if (message.jsonrpc !== "2.0") return;
 
     const sendResponse = (response: JsonRpcResponse) => {
       // Using "*" origin is required for srcdoc iframes as they have null origin
@@ -214,7 +199,22 @@ export class McpAppModal extends Modal {
 
     try {
       switch (message.method) {
+        case "ui/initialize": {
+          if (typeof message.id === "undefined") return;
+          sendResponse({ jsonrpc: "2.0", id: message.id, result: {
+            protocolVersion: "2026-01-26",
+            hostInfo: { name: "obsidian-llm-hub", version: "0.31.8" },
+            hostCapabilities: { serverTools: {} },
+            hostContext: { theme: document.body.classList.contains("theme-dark") ? "dark" : "light", platform: "desktop", displayMode: "inline" },
+          } });
+          return;
+        }
+        case "ui/notifications/initialized": {
+          this.iframe?.contentWindow?.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: this.mcpApp.toolResult }, "*");
+          return;
+        }
         case "tools/call": {
+          if (typeof message.id === "undefined") return;
           // UI is requesting to call a tool
           const params = message.params as { name: string; arguments?: Record<string, unknown> } | undefined;
           if (!params?.name) {
