@@ -1,5 +1,5 @@
 import { Modal, App, Setting, Notice } from "obsidian";
-import { isWindows, validateCliPath } from "src/core/cliProvider";
+import { isWindows, listCodexModels, validateCliPath } from "src/core/cliProvider";
 import { t } from "src/i18n";
 
 export type CliType = "gemini" | "claude" | "codex";
@@ -7,17 +7,20 @@ export type CliType = "gemini" | "claude" | "codex";
 export class CliPathModal extends Modal {
   private cliType: CliType;
   private currentPath: string;
-  private onSave: (path: string | undefined) => void | Promise<void>;
+  private currentModel: string;
+  private onSave: (path: string | undefined, model?: string) => void | Promise<void>;
 
   constructor(
     app: App,
     cliType: CliType,
     currentPath: string | undefined,
-    onSave: (path: string | undefined) => void | Promise<void>
+    currentModel: string | undefined,
+    onSave: (path: string | undefined, model?: string) => void | Promise<void>
   ) {
     super(app);
     this.cliType = cliType;
     this.currentPath = currentPath || "";
+    this.currentModel = currentModel || "";
     this.onSave = onSave;
   }
 
@@ -49,6 +52,40 @@ export class CliPathModal extends Modal {
           }
         });
       });
+
+    if (this.cliType === "codex") {
+      const modelSetting = new Setting(contentEl)
+        .setName(t("settings.codexCliModel"))
+        .setDesc(t("settings.codexCliModel.desc"));
+      modelSetting.addDropdown((dropdown) => {
+        dropdown.addOption("", t("settings.codexCliModel.default"));
+        if (this.currentModel) dropdown.addOption(this.currentModel, this.currentModel);
+        dropdown.setValue(this.currentModel);
+        dropdown.selectEl.disabled = true;
+        dropdown.onChange((model) => {
+          this.currentModel = model;
+        });
+
+        void listCodexModels(this.currentPath || undefined)
+          .then((models) => {
+            dropdown.selectEl.empty();
+            dropdown.addOption("", t("settings.codexCliModel.default"));
+            for (const model of models) {
+              dropdown.addOption(model.slug, `${model.displayName} (${model.slug})`);
+            }
+            if (this.currentModel && !models.some((model) => model.slug === this.currentModel)) {
+              dropdown.addOption(this.currentModel, this.currentModel);
+            }
+            dropdown.setValue(this.currentModel);
+          })
+          .catch(() => {
+            modelSetting.setDesc(t("settings.codexCliModel.loadFailed"));
+          })
+          .finally(() => {
+            dropdown.selectEl.disabled = false;
+          });
+      });
+    }
 
     // Show OS-specific help note
     const noteEl = contentEl.createDiv({ cls: "llm-hub-cli-path-note" });
@@ -96,12 +133,12 @@ export class CliPathModal extends Modal {
         return;
       }
     }
-    void this.onSave(path || undefined);
+    void this.onSave(path || undefined, this.currentModel || undefined);
     this.close();
   }
 
   private async clear() {
-    await this.onSave(undefined);
+    await this.onSave(undefined, this.currentModel || undefined);
     this.close();
   }
 

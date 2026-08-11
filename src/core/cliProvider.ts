@@ -455,8 +455,7 @@ export function resolveCodexCommand(args: string[], customPath?: string): Resolv
     if (isWindows()) {
       return resolveWindowsCustomPath(customPath, args);
     }
-    const node = findNodeBinary();
-    return { command: node, args: [customPath, ...args], shell: false };
+    return resolveNonWindowsCustomPath(customPath, args);
   }
 
   if (isWindows()) {
@@ -497,6 +496,62 @@ function formatWindowsCodexCliError(message: string | undefined): string | undef
     return installHint;
   }
   return message;
+}
+
+export interface CodexModelOption {
+  slug: string;
+  displayName: string;
+}
+
+export function parseCodexModelsCatalog(output: string): CodexModelOption[] {
+  const parsed = JSON.parse(output) as { models?: unknown };
+  if (!Array.isArray(parsed.models)) return [];
+
+  return parsed.models.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const model = entry as Record<string, unknown>;
+    if (typeof model.slug !== "string" || !model.slug.trim()) return [];
+    if (model.visibility !== undefined && model.visibility !== "list") return [];
+    return [{
+      slug: model.slug,
+      displayName: typeof model.display_name === "string" && model.display_name.trim()
+        ? model.display_name
+        : model.slug,
+    }];
+  });
+}
+
+/** Read the model catalog exposed by the installed Codex CLI. */
+export async function listCodexModels(customPath?: string): Promise<CodexModelOption[]> {
+  if (Platform.isMobile) return [];
+  const { spawn } = getChildProcess();
+  const { command, args, shell } = resolveCodexCommand(["debug", "models"], customPath);
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      shell,
+      env: buildCliEnvironment(),
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout?.setEncoding("utf8");
+    proc.stderr?.setEncoding("utf8");
+    proc.stdout?.on("data", (chunk: string) => { stdout += chunk; });
+    proc.stderr?.on("data", (chunk: string) => { stderr += chunk; });
+    proc.on("error", reject);
+    proc.on("close", (code: number | null) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `Codex CLI exited with code ${code}`));
+        return;
+      }
+      try {
+        resolve(parseCodexModelsCatalog(stdout));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
 }
 
 export interface CliProviderInterface {
@@ -542,18 +597,20 @@ function formatHistoryAsPrompt(messages: Message[], systemPrompt: string): strin
 export function buildCodexExecInvocation(
   messages: Message[],
   systemPrompt: string,
-  sessionId?: string
+  sessionId?: string,
+  model?: string
 ): { args: string[]; stdin: string } {
+  const modelArgs = model?.trim() ? ["--model", model.trim()] : [];
   if (sessionId) {
     const lastMessage = messages[messages.length - 1];
     return {
-      args: ["exec", "--json", "--skip-git-repo-check", "resume", sessionId, "-"],
+      args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, "resume", sessionId, "-"],
       stdin: lastMessage?.role === "user" ? lastMessage.content : "",
     };
   }
 
   return {
-    args: ["exec", "--json", "--skip-git-repo-check", "-"],
+    args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, "-"],
     stdin: formatHistoryAsPrompt(messages, systemPrompt),
   };
 }
@@ -1036,8 +1093,12 @@ export class CodexCliProvider extends BaseCliProvider {
   displayName = "Codex CLI";
   supportsSessionResumption = true;
 
+  constructor(private model?: string, private customPath?: string) {
+    super();
+  }
+
   protected resolveVersionCommand(): ResolvedCommand {
-    return resolveCodexCommand(["--version"]);
+    return resolveCodexCommand(["--version"], this.customPath);
   }
 
   async *chatStream(
@@ -1053,9 +1114,9 @@ export class CodexCliProvider extends BaseCliProvider {
     // Build CLI arguments based on whether we have a session ID.
     // Prompt content is sent through stdin so large skill/OKF/RAG contexts do not hit argv limits.
     // Note: --json and --skip-git-repo-check are options for 'exec', must come before subcommands.
-    const { args: cliArgs, stdin: prompt } = buildCodexExecInvocation(messages, systemPrompt, sessionId);
+    const { args: cliArgs, stdin: prompt } = buildCodexExecInvocation(messages, systemPrompt, sessionId, this.model);
 
-    const { command, args, shell } = resolveCodexCommand(cliArgs);
+    const { command, args, shell } = resolveCodexCommand(cliArgs, this.customPath);
     const proc = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell,
@@ -1169,7 +1230,8 @@ export class PersistentCliSession {
     providerType: ChatProvider,
     workingDirectory: string,
     customPath?: string,
-    existingSessionId?: string
+    existingSessionId?: string,
+    private codexModel?: string
   ) {
     this._providerType = providerType;
     this.workingDirectory = workingDirectory;
@@ -1433,7 +1495,7 @@ export class PersistentCliSession {
   ): AsyncGenerator<StreamChunk> {
     let provider: CliProviderInterface;
     if (this._providerType === "codex-cli") {
-      provider = new CodexCliProvider();
+      provider = new CodexCliProvider(this.codexModel, this.customPath);
     } else {
       provider = new AntigravityCliProvider(this.customPath);
     }

@@ -501,6 +501,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const initialLastActiveChatIdRef = useRef<string | null>(plugin.lastActiveChatId);
 	const hasCompletedInitialRestoreRef = useRef(false);
 	const persistentCliRef = useRef<PersistentCliSession | null>(null);
+	const codexRuntimeConfigRef = useRef({
+		model: plugin.settings.cliConfig?.codexCliModel,
+		path: plugin.settings.cliConfig?.codexCliPath,
+	});
 	const previousNonTerminalModelRef = useRef<ModelType | null>(
 		isTerminalProvider(initialModel) ? null : initialModel
 	);
@@ -1272,8 +1276,21 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 	useEffect(() => {
 		const handleSettingsUpdated = () => {
+			const nextCliConfig = plugin.settings.cliConfig || DEFAULT_CLI_CONFIG;
+			const codexConfigChanged =
+				codexRuntimeConfigRef.current.model !== nextCliConfig.codexCliModel ||
+				codexRuntimeConfigRef.current.path !== nextCliConfig.codexCliPath;
+			codexRuntimeConfigRef.current = {
+				model: nextCliConfig.codexCliModel,
+				path: nextCliConfig.codexCliPath,
+			};
 			setCurrentModel(plugin.getSelectedModel());
-			setCliConfig(plugin.settings.cliConfig || DEFAULT_CLI_CONFIG);
+			setCliConfig(nextCliConfig);
+			// A Codex thread keeps the model it was created with. Do not resume an
+			// existing thread after changing the configured model or executable.
+			if (codexConfigChanged) {
+				setCliSession((session) => session?.provider === "codex-cli" ? null : session);
+			}
 			// Terminate persistent CLI session when settings change (model may have changed)
 			if (persistentCliRef.current) {
 				persistentCliRef.current.terminate();
@@ -1916,7 +1933,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 						: cliConfig.codexCliPath;
 				session = new PersistentCliSession(
 					currentProvider, vaultBasePath,
-					customCliPath, storedSessionId
+					customCliPath, storedSessionId,
+					cliConfig.codexCliModel
 				);
 				session.start();
 				persistentCliRef.current = session;

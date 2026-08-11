@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCodexExecInvocation } from "./cliProvider";
+import { buildCodexExecInvocation, parseCodexModelsCatalog } from "./cliProvider";
 import type { Message } from "../types";
 
 describe("buildCodexExecInvocation", () => {
@@ -35,4 +35,27 @@ describe("buildCodexExecInvocation", () => {
     expect(invocation.args.join(" ")).not.toContain(longPrompt);
     expect(invocation.stdin).toBe(longPrompt);
   });
+
+  it("adds a configured model to initial and resumed invocations", () => {
+    const messages = [{ role: "user", content: "hello" } as Message];
+
+    expect(buildCodexExecInvocation(messages, "system", undefined, " gpt-5.3-codex ").args)
+      .toEqual(["exec", "--json", "--skip-git-repo-check", "--model", "gpt-5.3-codex", "-"]);
+    expect(buildCodexExecInvocation(messages, "system", "session-123", "gpt-5.3-codex").args)
+      .toEqual(["exec", "--json", "--skip-git-repo-check", "--model", "gpt-5.3-codex", "resume", "session-123", "-"]);
+  });
+
+  it("parses visible models from the Codex model catalog", () => {
+    const catalog = JSON.stringify({ models: [
+      { slug: "gpt-visible", display_name: "GPT Visible", visibility: "list" },
+      { slug: "gpt-hidden", display_name: "GPT Hidden", visibility: "hide" },
+      { slug: "gpt-fallback", visibility: "list" },
+    ] });
+
+    expect(parseCodexModelsCatalog(catalog)).toEqual([
+      { slug: "gpt-visible", displayName: "GPT Visible" },
+      { slug: "gpt-fallback", displayName: "gpt-fallback" },
+    ]);
+  });
+
 });

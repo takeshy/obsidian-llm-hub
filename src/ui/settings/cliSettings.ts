@@ -128,17 +128,23 @@ function openCliPathModal(
     app,
     cliType,
     currentPath,
-    async (path: string | undefined) => {
+    cliType === "codex" ? plugin.settings.cliConfig.codexCliModel : undefined,
+    async (path: string | undefined, model?: string) => {
       const cliConfig = plugin.settings.cliConfig;
       const pathKey = cliType === "gemini" ? "geminiCliPath" :
                       cliType === "claude" ? "claudeCliPath" : "codexCliPath";
       if (path) {
-        plugin.settings.cliConfig = { ...cliConfig, [pathKey]: path };
+        plugin.settings.cliConfig = {
+          ...cliConfig,
+          [pathKey]: path,
+          ...(cliType === "codex" ? { codexCliModel: model || undefined } : {}),
+        };
         await plugin.saveSettings();
         new Notice(t("settings.cliPathSaved"));
       } else {
         const newConfig = { ...cliConfig };
         delete newConfig[pathKey];
+        if (cliType === "codex") newConfig.codexCliModel = model || undefined;
         plugin.settings.cliConfig = newConfig;
         await plugin.saveSettings();
         new Notice(t("settings.cliPathCleared"));

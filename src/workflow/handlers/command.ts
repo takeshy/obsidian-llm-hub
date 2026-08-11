@@ -226,7 +226,13 @@ Please revise the output based on the user's feedback above.`;
       const customCliPath = providerName === "antigravity-cli"
         ? cliConfig?.geminiCliPath
         : cliConfig?.codexCliPath;
-      session = new PersistentCliSession(providerName, vaultPath, customCliPath);
+      session = new PersistentCliSession(
+        providerName,
+        vaultPath,
+        customCliPath,
+        undefined,
+        cliConfig?.codexCliModel
+      );
       session.start();
       context.persistentCliSessions.set(providerName, session);
     }

@@ -492,6 +492,7 @@ export interface CliProviderConfig {
   geminiCliPath?: string;       // Custom path for Antigravity CLI
   claudeCliPath?: string;       // Custom path for Claude CLI
   codexCliPath?: string;        // Custom path for Codex CLI
+  codexCliModel?: string;       // Optional model override for Codex CLI
 }
 
 export const DEFAULT_CLI_CONFIG: CliProviderConfig = {
