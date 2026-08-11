@@ -45,6 +45,20 @@ describe("buildCodexExecInvocation", () => {
       .toEqual(["exec", "--json", "--skip-git-repo-check", "--model", "gpt-5.3-codex", "resume", "session-123", "-"]);
   });
 
+  it("adds the confirmation bridge and read-only sandbox when configured", () => {
+    const messages = [{ role: "user", content: "edit Note.md" } as Message];
+    const url = "http://127.0.0.1:4321/mcp?token=secret";
+    const invocation = buildCodexExecInvocation(messages, "system", undefined, undefined, url);
+
+    expect(invocation.args).toEqual([
+      "exec", "--json", "--skip-git-repo-check",
+      "--sandbox", "read-only",
+      "--config", 'approval_policy="never"',
+      "--config", `mcp_servers.llm_hub_vault.url=${JSON.stringify(url)}`,
+      "-",
+    ]);
+  });
+
   it("parses visible models from the Codex model catalog", () => {
     const catalog = JSON.stringify({ models: [
       { slug: "gpt-visible", display_name: "GPT Visible", visibility: "list" },

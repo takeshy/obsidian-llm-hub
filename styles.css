@@ -1237,6 +1237,16 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   min-width: 300px;
 }
 
+/* Declarative settings render host: the complete legacy settings layout is
+   rendered inside one custom Setting row, so that host row must not use the
+   default horizontal setting-item layout. */
+.setting-item.llm-hub-settings-render-root {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border-top: 0;
+}
+
 /* Hotkey enabled indicator */
 .llm-hub-hotkey-enabled {
   color: var(--interactive-accent);

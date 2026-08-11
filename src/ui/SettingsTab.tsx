@@ -1,4 +1,4 @@
-import { PluginSettingTab, App } from "obsidian";
+import { PluginSettingTab, App, type SettingDefinitionItem } from "obsidian";
 import type { LlmHubPlugin } from "src/plugin";
 import type { SettingsContext } from "src/ui/settings/settingsContext";
 
@@ -30,40 +30,56 @@ export class SettingsTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  /** Render settings using the API available at the declared minimum version. */
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [{
+      name: "LLM Hub settings",
+      aliases: [
+        "credentials", "CLI", "local LLM", "API provider", "proxy", "workspace",
+        "knowledge", "edit history", "encryption", "Langfuse", "slash commands",
+        "skills", "agent plugins", "RAG", "MCP servers", "Discord",
+      ],
+      render: (setting) => {
+        const containerEl = setting.settingEl;
+        containerEl.addClass("llm-hub-settings-render-root");
+        containerEl.empty();
 
-    const ctx: SettingsContext = {
-      plugin: this.plugin,
-      display: () => this.display(),
-      syncCancelRef: this.syncCancelRef,
-    };
+        const ctx: SettingsContext = {
+          plugin: this.plugin,
+          display: () => this.update(),
+          syncCancelRef: this.syncCancelRef,
+        };
 
-    displayCredentialStorageSettings(containerEl, ctx);
-    displayCliSettings(containerEl, ctx);
-    displayLocalLlmSettings(containerEl, ctx);
-    displayApiProviderSettings(containerEl, ctx);
-    displayProxySettings(containerEl, ctx);
-    displayWorkspaceSettings(containerEl, ctx);
-    displayKnowledgeSettings(containerEl, ctx);
-    displayEditHistorySettings(containerEl, ctx);
-    displayEncryptionSettings(containerEl, ctx);
-    displayLangfuseSettings(containerEl, ctx);
-    displaySlashCommandSettings(containerEl, ctx);
-    displaySkillsSettings(containerEl, ctx);
-    displayExternalSkillSettings(containerEl, ctx);
-    displayAgentPluginSettings(containerEl, ctx);
-    displayRagSettings(containerEl, ctx);
-    displayMcpServersSettings(containerEl, ctx);
-    displayDiscordSettings(containerEl, ctx);
+        displayCredentialStorageSettings(containerEl, ctx);
+        displayCliSettings(containerEl, ctx);
+        displayLocalLlmSettings(containerEl, ctx);
+        displayApiProviderSettings(containerEl, ctx);
+        displayProxySettings(containerEl, ctx);
+        displayWorkspaceSettings(containerEl, ctx);
+        displayKnowledgeSettings(containerEl, ctx);
+        displayEditHistorySettings(containerEl, ctx);
+        displayEncryptionSettings(containerEl, ctx);
+        displayLangfuseSettings(containerEl, ctx);
+        displaySlashCommandSettings(containerEl, ctx);
+        displaySkillsSettings(containerEl, ctx);
+        displayExternalSkillSettings(containerEl, ctx);
+        displayAgentPluginSettings(containerEl, ctx);
+        displayRagSettings(containerEl, ctx);
+        displayMcpServersSettings(containerEl, ctx);
+        displayDiscordSettings(containerEl, ctx);
 
-    if (this.settingsListener) {
-      this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
-    }
-    this.settingsListener = () => this.display();
-    this.plugin.settingsEmitter.on("settings-updated", this.settingsListener);
+        if (this.settingsListener) {
+          this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
+        }
+        const listener = () => this.update();
+        this.settingsListener = listener;
+        this.plugin.settingsEmitter.on("settings-updated", listener);
+
+        return () => {
+          this.plugin.settingsEmitter.off("settings-updated", listener);
+          if (this.settingsListener === listener) this.settingsListener = null;
+        };
+      },
+    }];
   }
 
   hide(): void {

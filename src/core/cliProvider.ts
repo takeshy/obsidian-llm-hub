@@ -38,7 +38,7 @@ export function getChildProcess(): typeof import("child_process") {
   return getNodeModule<typeof import("child_process")>("child_process");
 }
 
-function getNodeModule<T>(id: string): T {
+export function getNodeModule<T>(id: string): T {
   const loader =
     (window as unknown as { require?: (id: string) => unknown }).require ||
     (window as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
@@ -598,19 +598,27 @@ export function buildCodexExecInvocation(
   messages: Message[],
   systemPrompt: string,
   sessionId?: string,
-  model?: string
+  model?: string,
+  vaultMcpUrl?: string
 ): { args: string[]; stdin: string } {
   const modelArgs = model?.trim() ? ["--model", model.trim()] : [];
+  const vaultMcpArgs = vaultMcpUrl
+    ? [
+      "--sandbox", "read-only",
+      "--config", 'approval_policy="never"',
+      "--config", `mcp_servers.llm_hub_vault.url=${JSON.stringify(vaultMcpUrl)}`,
+    ]
+    : [];
   if (sessionId) {
     const lastMessage = messages[messages.length - 1];
     return {
-      args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, "resume", sessionId, "-"],
+      args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, ...vaultMcpArgs, "resume", sessionId, "-"],
       stdin: lastMessage?.role === "user" ? lastMessage.content : "",
     };
   }
 
   return {
-    args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, "-"],
+    args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, ...vaultMcpArgs, "-"],
     stdin: formatHistoryAsPrompt(messages, systemPrompt),
   };
 }
@@ -1093,7 +1101,7 @@ export class CodexCliProvider extends BaseCliProvider {
   displayName = "Codex CLI";
   supportsSessionResumption = true;
 
-  constructor(private model?: string, private customPath?: string) {
+  constructor(private model?: string, private customPath?: string, private vaultMcpUrl?: string) {
     super();
   }
 
@@ -1114,7 +1122,7 @@ export class CodexCliProvider extends BaseCliProvider {
     // Build CLI arguments based on whether we have a session ID.
     // Prompt content is sent through stdin so large skill/OKF/RAG contexts do not hit argv limits.
     // Note: --json and --skip-git-repo-check are options for 'exec', must come before subcommands.
-    const { args: cliArgs, stdin: prompt } = buildCodexExecInvocation(messages, systemPrompt, sessionId, this.model);
+    const { args: cliArgs, stdin: prompt } = buildCodexExecInvocation(messages, systemPrompt, sessionId, this.model, this.vaultMcpUrl);
 
     const { command, args, shell } = resolveCodexCommand(cliArgs, this.customPath);
     const proc = spawn(command, args, {
@@ -1231,7 +1239,8 @@ export class PersistentCliSession {
     workingDirectory: string,
     customPath?: string,
     existingSessionId?: string,
-    private codexModel?: string
+    private codexModel?: string,
+    private codexVaultMcpUrl?: string
   ) {
     this._providerType = providerType;
     this.workingDirectory = workingDirectory;
@@ -1495,7 +1504,7 @@ export class PersistentCliSession {
   ): AsyncGenerator<StreamChunk> {
     let provider: CliProviderInterface;
     if (this._providerType === "codex-cli") {
-      provider = new CodexCliProvider(this.codexModel, this.customPath);
+      provider = new CodexCliProvider(this.codexModel, this.customPath, this.codexVaultMcpUrl);
     } else {
       provider = new AntigravityCliProvider(this.customPath);
     }

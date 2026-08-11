@@ -57,6 +57,7 @@ import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "src/core/s
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "src/workflow/workflowSpec";
 import { fetchMcpTools, createMcpToolExecutor, isMcpTool, type McpToolDefinition, type McpToolExecutor } from "src/core/mcpTools";
 import { PersistentCliSession } from "src/core/cliProvider";
+import { CodexVaultMcpBridge } from "src/core/codexVaultMcpBridge";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
@@ -406,6 +407,20 @@ function getPendingInfos<T>(items: T[]): T[] | undefined {
 }
 
 const MAX_BACKGROUND_STREAMS = 3;
+const CODEX_VAULT_TOOLS = new Set([
+	"read_timeline",
+	"read_note",
+	"search_notes",
+	"list_notes",
+	"list_folders",
+	"get_active_note_info",
+	"propose_edit",
+	"propose_delete",
+	"rename_note",
+	"bulk_propose_edit",
+	"bulk_propose_delete",
+	"bulk_propose_rename",
+]);
 
 function shouldLimitLlmVaultTools(model: ModelType): boolean {
 	return model !== "antigravity-cli"
@@ -455,22 +470,21 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		: null;
 	const initialLocalLlmToolsCapable = !!(initialLocalLlmConfig
 		&& isLocalLlmToolsEnabled(initialLocalLlmConfig, initialLocalLlmConfig.model));
-	const isInitialCli = initialModel === "antigravity-cli"
+	const isInitialVaultRestrictedCli = initialModel === "antigravity-cli"
 		|| initialModel === "claude-cli"
-		|| initialModel === "codex-cli"
 		|| (isLocalLlmModel(initialModel) && !initialLocalLlmToolsCapable);
 	const initialGemma4Rag = initialModel.toLowerCase().includes("gemma-4")
 		&& (plugin.workspaceState.selectedRagSetting != null || plugin.workspaceState.webSearchEnabled === true);
 	const [vaultToolMode, setVaultToolMode] = useState<"all" | "noSearch" | "none">(
-		(isInitialCli || initialGemma4Rag) ? "none" : "all"
+		(isInitialVaultRestrictedCli || initialGemma4Rag) ? "none" : "all"
 	);
 	// Reason why vault tools are "none" - determines whether MCP should also be disabled
 	const [vaultToolNoneReason, setVaultToolNoneReason] = useState<VaultToolNoneReason | null>(
-		isInitialCli ? "cli" : initialGemma4Rag ? "manual" : null
+		isInitialVaultRestrictedCli ? "cli" : initialGemma4Rag ? "manual" : null
 	);
 	// MCP servers state: local copy with per-server enabled state (for chat session)
 	const [mcpServers, setMcpServers] = useState(() =>
-		(isInitialCli || initialGemma4Rag)
+		(isInitialVaultRestrictedCli || initialGemma4Rag)
 			? plugin.settings.mcpServers.map(s => ({ ...s, enabled: false }))
 			: [...plugin.settings.mcpServers]
 	);
@@ -501,6 +515,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const initialLastActiveChatIdRef = useRef<string | null>(plugin.lastActiveChatId);
 	const hasCompletedInitialRestoreRef = useRef(false);
 	const persistentCliRef = useRef<PersistentCliSession | null>(null);
+	const codexVaultMcpBridgeRef = useRef<CodexVaultMcpBridge | null>(null);
 	const codexRuntimeConfigRef = useRef({
 		model: plugin.settings.cliConfig?.codexCliModel,
 		path: plugin.settings.cliConfig?.codexCliPath,
@@ -586,6 +601,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const isLocalLlmToolsCapable = !!(currentLocalLlmConfig
 		&& isLocalLlmToolsEnabled(currentLocalLlmConfig, currentLocalLlmConfig.model));
 	const isCliMode = isAntigravityCliMode || isClaudeCliMode || isCodexCliMode
+		|| (isLocalLlmMode && !isLocalLlmToolsCapable);
+	const isVaultToolRestrictedCliMode = isAntigravityCliMode || isClaudeCliMode
 		|| (isLocalLlmMode && !isLocalLlmToolsCapable);
 
 	// Resolve API provider config from current model name ("api:{providerId}")
@@ -1132,6 +1149,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				persistentCliRef.current.terminate();
 				persistentCliRef.current = null;
 			}
+			if (codexVaultMcpBridgeRef.current) {
+				void codexVaultMcpBridgeRef.current.stop();
+				codexVaultMcpBridgeRef.current = null;
+			}
 		};
 	}, []);
 
@@ -1401,13 +1422,18 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		const newLocalLlmConfig = isLocalLlmModel(model) ? getLocalLlmConfig(model, plugin.settings) : null;
 		const isNewLocalLlmToolsCapable = !!(newLocalLlmConfig
 			&& isLocalLlmToolsEnabled(newLocalLlmConfig, newLocalLlmConfig.model));
-		const isNewModelCli = model === "antigravity-cli" || model === "claude-cli" || model === "codex-cli"
+		const isNewModelVaultRestrictedCli = model === "antigravity-cli" || model === "claude-cli"
 			|| (isLocalLlmModel(model) && !isNewLocalLlmToolsCapable);
 		// Auto-adjust search setting and vault tool mode for CLI mode and special models
-		if (isNewModelCli) {
+		if (isNewModelVaultRestrictedCli) {
 			// CLI mode: disable vault tools and MCP
 			setVaultToolMode("none");
 			setVaultToolNoneReason("cli");
+			setMcpServers(servers => servers.map(s => ({ ...s, enabled: false })));
+		} else if (model === "codex-cli") {
+			// Codex receives the plugin's confirmation-gated Vault tools over MCP.
+			setVaultToolMode("all");
+			setVaultToolNoneReason(null);
 			setMcpServers(servers => servers.map(s => ({ ...s, enabled: false })));
 		} else if (isImageGenerationModel(model)) {
 			// RAG was cleared above; image models keep any independent Web Search selection.
@@ -1847,12 +1873,26 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 		try {
 			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+			let codexMcpUrl: string | undefined;
+			let codexMutationTracking: ReturnType<typeof createConfirmingToolExecutor> | null = null;
 
-			// Build system prompt for CLI (read-only mode)
+			// Build system prompt for CLI. Codex stays read-only and proposes
+			// mutations through the confirmation-gated MCP bridge.
 			const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Antigravity CLI";
 			let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
-			systemPrompt += `\n\nNote: You are running in ${cliName} mode with limited capabilities. You can read and search vault files, but cannot modify them.`;
-			systemPrompt += `\n\nIMPORTANT: File writing operations may fail in this environment. Always output results directly to standard output instead of attempting to write to files.`;
+			if (isCodexCli) {
+				systemPrompt += "\n\nYou can read Vault files directly, but the filesystem is read-only. Never attempt to modify, delete, rename, or create Vault files directly.";
+				if (vaultToolMode !== "none") {
+					systemPrompt += " The llm_hub_vault MCP also provides Obsidian-aware read tools. When the user refers to the open, active, or current file without naming it, call read_note with activeNote=true (or get_active_note_info when only its metadata is needed).";
+					if (vaultToolMode === "noSearch") {
+						systemPrompt += " Vault search and note-listing tools are disabled for this chat.";
+					}
+					systemPrompt += "\n\nFor any requested Vault mutation, use the llm_hub_vault MCP propose_edit, bulk_propose_edit, propose_delete, bulk_propose_delete, rename_note, or bulk_propose_rename tool. These tools show a diff or confirmation to the user and apply changes only after approval. Do not claim a change was applied unless the tool result says it was applied.";
+				}
+			} else {
+				systemPrompt += `\n\nNote: You are running in ${cliName} mode with limited capabilities. You can read and search vault files, but cannot modify them.`;
+				systemPrompt += "\n\nIMPORTANT: File writing operations may fail in this environment. Always output results directly to standard output instead of attempting to write to files.";
+			}
 			systemPrompt += `\n\nVault location: ${(plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || "."}`;
 
 			if (plugin.settings.systemPrompt) {
@@ -1865,11 +1905,58 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
 				if (activeMetadata.length > 0) {
 					cliLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
-					const skillPrompt = buildSkillSystemPrompt(cliLoadedSkills, { cliMode: true });
+					const skillPrompt = buildSkillSystemPrompt(cliLoadedSkills, { cliMode: !isCodexCli });
 					if (skillPrompt) {
 						systemPrompt += skillPrompt;
 					}
 				}
+			}
+
+			if (isCodexCli) {
+				const codexTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false })
+					.filter((tool) => CODEX_VAULT_TOOLS.has(tool.name))
+					.filter((tool) => vaultToolMode === "all"
+						|| (vaultToolMode === "noSearch" && !["search_notes", "list_notes"].includes(tool.name)));
+				const skillWorkflowMap = collectSkillWorkflows(cliLoadedSkills);
+				const skillScriptMap = collectSkillScripts(cliLoadedSkills);
+				if (skillWorkflowMap.size > 0) codexTools.push(skillWorkflowTool);
+				if (skillScriptMap.size > 0) codexTools.push(skillScriptTool);
+
+				const vaultExecutor = createToolExecutor(plugin.app);
+				const codexToolExecutor = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+					if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
+						return executeSkillWorkflow(
+							plugin,
+							args.workflowId as string,
+							args.variables as string | undefined,
+							skillWorkflowMap,
+						);
+					}
+					if (name === "run_skill_script" && skillScriptMap.size > 0) {
+						return executeSkillScript(
+							plugin,
+							args.scriptId as string,
+							args.args as string | undefined,
+							skillScriptMap,
+						);
+					}
+					return vaultExecutor(name, args);
+				};
+				codexMutationTracking = createConfirmingToolExecutor(
+					codexToolExecutor,
+					plugin.app,
+					currentSlashCommandRef,
+				);
+				if (!codexVaultMcpBridgeRef.current) {
+					codexVaultMcpBridgeRef.current = new CodexVaultMcpBridge(
+						codexTools,
+						codexMutationTracking.executeToolCall,
+					);
+				} else {
+					codexVaultMcpBridgeRef.current.setTools(codexTools);
+					codexVaultMcpBridgeRef.current.setExecutor(codexMutationTracking.executeToolCall);
+				}
+				codexMcpUrl = await codexVaultMcpBridgeRef.current.start();
 			}
 
 			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
@@ -1934,7 +2021,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				session = new PersistentCliSession(
 					currentProvider, vaultBasePath,
 					customCliPath, storedSessionId,
-					cliConfig.codexCliModel
+					cliConfig.codexCliModel,
+					codexMcpUrl
 				);
 				session.start();
 				persistentCliRef.current = session;
@@ -1989,7 +2077,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				if (stopped) break;
 
 				// Execute any skill markers in this iteration's output
-				const markerResult = cliLoadedSkills.length > 0
+				const markerResult = !isCodexCli && cliLoadedSkills.length > 0
 					? await processSkillMarkers(plugin, iterationContent, cliLoadedSkills, abortController.signal)
 					: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
 
@@ -2034,6 +2122,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				content: processedContent,
 				timestamp: Date.now(),
 				model: currentProvider,
+				pendingEdit: codexMutationTracking?.processedEdits.at(-1),
+				pendingEdits: getPendingInfos(codexMutationTracking?.processedEdits || []),
+				pendingDelete: codexMutationTracking?.processedDeletes.at(-1),
+				pendingDeletes: getPendingInfos(codexMutationTracking?.processedDeletes || []),
+				pendingRename: codexMutationTracking?.processedRenames.at(-1),
+				pendingRenames: getPendingInfos(codexMutationTracking?.processedRenames || []),
 				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
 			};
 
@@ -4114,7 +4208,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								onSearchSelectionChange={handleSearchSelectionChange}
 								vaultToolMode={vaultToolMode}
 								onVaultToolModeChange={handleVaultToolModeChange}
-								vaultToolModeOnlyNone={isCliMode}
+								vaultToolModeOnlyNone={isVaultToolRestrictedCliMode}
 								maxPreviousMessages={maxPreviousMessages}
 								onMaxPreviousMessagesChange={(count) => {
 									setMaxPreviousMessages(count);
