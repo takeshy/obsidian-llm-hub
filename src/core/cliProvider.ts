@@ -548,7 +548,7 @@ export async function listCodexModels(customPath?: string): Promise<CodexModelOp
       try {
         resolve(parseCodexModelsCatalog(stdout));
       } catch (error) {
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
   });
