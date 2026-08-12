@@ -4,6 +4,7 @@ import { DEFAULT_DISCORD_SETTINGS } from "src/types";
 import { getDiscordService, initDiscordService, resetDiscordService } from "src/core/discordService";
 import { formatError } from "src/utils/error";
 import { credentialSlot } from "src/core/credentialBundle";
+import { getAvailableModels } from "src/core/availableModels";
 import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
 import type { SettingsContext } from "./settingsContext";
 
@@ -184,20 +185,29 @@ export function displayDiscordSettings(containerEl: HTMLElement, ctx: SettingsCo
     );
 
   // Model override
+  const availableModels = getAvailableModels(plugin.settings);
   new Setting(detailContainer)
     .setName(t("settings.discordModel"))
     .setDesc(t("settings.discordModel.desc"))
-    .addText((text) =>
-      text
-        .setPlaceholder(t("settings.discordModel.placeholder"))
+    .addDropdown((dropdown) => {
+      dropdown.addOption("", t("settings.discordModel.placeholder"));
+      for (const model of availableModels) {
+        dropdown.addOption(model.name, model.displayName);
+      }
+      // Keep a previously configured model visible even if its provider is
+      // currently disabled or no longer verified.
+      if (discord.model && !availableModels.some((model) => model.name === discord.model)) {
+        dropdown.addOption(discord.model, discord.model);
+      }
+      dropdown
         .setValue(discord.model)
         .onChange((value) => {
           void (async () => {
             plugin.settings.discord = { ...plugin.settings.discord, model: value };
             await plugin.saveSettings();
           })();
-        })
-    );
+        });
+    });
 
   // System prompt override
   new Setting(detailContainer)
