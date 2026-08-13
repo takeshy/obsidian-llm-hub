@@ -23,7 +23,7 @@
  */
 
 import { Platform } from "obsidian";
-import type { Message, StreamChunk, ChatProvider } from "../types";
+import type { Message, StreamChunk, ChatProvider, CodexReasoningEffort } from "../types";
 
 // Type for ChildProcess (avoid static import)
 export type ChildProcessType = import("child_process").ChildProcess;
@@ -599,9 +599,11 @@ export function buildCodexExecInvocation(
   systemPrompt: string,
   sessionId?: string,
   model?: string,
-  vaultMcpUrl?: string
+  vaultMcpUrl?: string,
+  reasoningEffort: CodexReasoningEffort = "low"
 ): { args: string[]; stdin: string } {
   const modelArgs = model?.trim() ? ["--model", model.trim()] : [];
+  const reasoningArgs = ["--config", `model_reasoning_effort=${JSON.stringify(reasoningEffort)}`];
   const vaultMcpArgs = vaultMcpUrl
     ? [
       "--sandbox", "read-only",
@@ -612,13 +614,13 @@ export function buildCodexExecInvocation(
   if (sessionId) {
     const lastMessage = messages[messages.length - 1];
     return {
-      args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, ...vaultMcpArgs, "resume", sessionId, "-"],
+      args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, ...reasoningArgs, ...vaultMcpArgs, "resume", sessionId, "-"],
       stdin: lastMessage?.role === "user" ? lastMessage.content : "",
     };
   }
 
   return {
-    args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, ...vaultMcpArgs, "-"],
+    args: ["exec", "--json", "--skip-git-repo-check", ...modelArgs, ...reasoningArgs, ...vaultMcpArgs, "-"],
     stdin: formatHistoryAsPrompt(messages, systemPrompt),
   };
 }
@@ -1101,7 +1103,12 @@ export class CodexCliProvider extends BaseCliProvider {
   displayName = "Codex CLI";
   supportsSessionResumption = true;
 
-  constructor(private model?: string, private customPath?: string, private vaultMcpUrl?: string) {
+  constructor(
+    private model?: string,
+    private customPath?: string,
+    private vaultMcpUrl?: string,
+    private reasoningEffort: CodexReasoningEffort = "low"
+  ) {
     super();
   }
 
@@ -1122,7 +1129,7 @@ export class CodexCliProvider extends BaseCliProvider {
     // Build CLI arguments based on whether we have a session ID.
     // Prompt content is sent through stdin so large skill/OKF/RAG contexts do not hit argv limits.
     // Note: --json and --skip-git-repo-check are options for 'exec', must come before subcommands.
-    const { args: cliArgs, stdin: prompt } = buildCodexExecInvocation(messages, systemPrompt, sessionId, this.model, this.vaultMcpUrl);
+    const { args: cliArgs, stdin: prompt } = buildCodexExecInvocation(messages, systemPrompt, sessionId, this.model, this.vaultMcpUrl, this.reasoningEffort);
 
     const { command, args, shell } = resolveCodexCommand(cliArgs, this.customPath);
     const proc = spawn(command, args, {
@@ -1240,7 +1247,8 @@ export class PersistentCliSession {
     customPath?: string,
     existingSessionId?: string,
     private codexModel?: string,
-    private codexVaultMcpUrl?: string
+    private codexVaultMcpUrl?: string,
+    private codexReasoningEffort: CodexReasoningEffort = "low"
   ) {
     this._providerType = providerType;
     this.workingDirectory = workingDirectory;
@@ -1504,7 +1512,7 @@ export class PersistentCliSession {
   ): AsyncGenerator<StreamChunk> {
     let provider: CliProviderInterface;
     if (this._providerType === "codex-cli") {
-      provider = new CodexCliProvider(this.codexModel, this.customPath, this.codexVaultMcpUrl);
+      provider = new CodexCliProvider(this.codexModel, this.customPath, this.codexVaultMcpUrl, this.codexReasoningEffort);
     } else {
       provider = new AntigravityCliProvider(this.customPath);
     }

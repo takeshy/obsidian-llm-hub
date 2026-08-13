@@ -10,7 +10,7 @@ describe("buildCodexExecInvocation", () => {
       "system prompt",
     );
 
-    expect(invocation.args).toEqual(["exec", "--json", "--skip-git-repo-check", "-"]);
+    expect(invocation.args).toEqual(["exec", "--json", "--skip-git-repo-check", "--config", 'model_reasoning_effort="low"', "-"]);
     expect(invocation.args.join(" ")).not.toContain(longPrompt);
     expect(invocation.stdin).toContain(longPrompt);
     expect(invocation.stdin).toContain("system prompt");
@@ -28,6 +28,8 @@ describe("buildCodexExecInvocation", () => {
       "exec",
       "--json",
       "--skip-git-repo-check",
+      "--config",
+      'model_reasoning_effort="low"',
       "resume",
       "session-123",
       "-",
@@ -40,9 +42,9 @@ describe("buildCodexExecInvocation", () => {
     const messages = [{ role: "user", content: "hello" } as Message];
 
     expect(buildCodexExecInvocation(messages, "system", undefined, " gpt-5.3-codex ").args)
-      .toEqual(["exec", "--json", "--skip-git-repo-check", "--model", "gpt-5.3-codex", "-"]);
+      .toEqual(["exec", "--json", "--skip-git-repo-check", "--model", "gpt-5.3-codex", "--config", 'model_reasoning_effort="low"', "-"]);
     expect(buildCodexExecInvocation(messages, "system", "session-123", "gpt-5.3-codex").args)
-      .toEqual(["exec", "--json", "--skip-git-repo-check", "--model", "gpt-5.3-codex", "resume", "session-123", "-"]);
+      .toEqual(["exec", "--json", "--skip-git-repo-check", "--model", "gpt-5.3-codex", "--config", 'model_reasoning_effort="low"', "resume", "session-123", "-"]);
   });
 
   it("adds the confirmation bridge and read-only sandbox when configured", () => {
@@ -52,11 +54,21 @@ describe("buildCodexExecInvocation", () => {
 
     expect(invocation.args).toEqual([
       "exec", "--json", "--skip-git-repo-check",
+      "--config", 'model_reasoning_effort="low"',
       "--sandbox", "read-only",
       "--config", 'approval_policy="never"',
       "--config", `mcp_servers.llm_hub_vault.url=${JSON.stringify(url)}`,
       "-",
     ]);
+  });
+
+  it("overrides the Codex reasoning effort for initial and resumed invocations", () => {
+    const messages = [{ role: "user", content: "hello" } as Message];
+
+    expect(buildCodexExecInvocation(messages, "system", undefined, undefined, undefined, "high").args)
+      .toContain('model_reasoning_effort="high"');
+    expect(buildCodexExecInvocation(messages, "system", "session-123", undefined, undefined, "xhigh").args)
+      .toContain('model_reasoning_effort="xhigh"');
   });
 
   it("parses visible models from the Codex model catalog", () => {

@@ -84,7 +84,7 @@ export async function* streamChatForModel(
     const provider = model === "claude-cli"
       ? new ClaudeCliProvider()
       : model === "codex-cli"
-        ? new CodexCliProvider(settings.cliConfig.codexCliModel, settings.cliConfig.codexCliPath)
+        ? new CodexCliProvider(settings.cliConfig.codexCliModel, settings.cliConfig.codexCliPath, undefined, settings.cliConfig.codexCliReasoningEffort)
         : new AntigravityCliProvider(customPath);
     yield* provider.chatStream(messages, systemPrompt, "", signal);
   } else {

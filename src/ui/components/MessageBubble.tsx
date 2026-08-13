@@ -120,6 +120,7 @@ export default function MessageBubble({
   // Get model display name
   const getModelDisplayName = () => {
     if (isUser) return t("message.you");
+    if (message.modelDisplayName) return message.modelDisplayName;
     if (!message.model) return t("message.assistant");
     // Strip "api:" prefix for display
     if (isApiProviderModel(message.model)) {

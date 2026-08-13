@@ -50,6 +50,8 @@ export const ja: Record<string, string> = {
   "settings.codexCliModel.desc": "インストール済みのCodex CLIが提供するモデル一覧から選択します。",
   "settings.codexCliModel.default": "Codex CLIのデフォルト",
   "settings.codexCliModel.loadFailed": "Codex CLIからモデル一覧を取得できませんでした。CLIのパスとバージョンを確認してください。",
+  "settings.codexCliReasoningEffort": "Codexの推論レベル",
+  "settings.codexCliReasoningEffort.desc": "Codexが使用する推論量を選択します。テキスト対話を高速化するため、デフォルトはlowです。",
   "settings.cliPathSettings": "CLIパスを設定",
   "settings.cliPathModal.title": "CLIパス設定",
   "settings.cliPathModal.desc": "CLIが自動検出されない場合、ここにフルパスを指定してください。プラグインはバージョンマネージャー（nodenv、nvm、volta、fnm、asdf、mise）を含む一般的なインストールパスを自動検索します。",

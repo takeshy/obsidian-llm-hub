@@ -129,7 +129,8 @@ function openCliPathModal(
     cliType,
     currentPath,
     cliType === "codex" ? plugin.settings.cliConfig.codexCliModel : undefined,
-    async (path: string | undefined, model?: string) => {
+    cliType === "codex" ? plugin.settings.cliConfig.codexCliReasoningEffort : undefined,
+    async (path: string | undefined, model?: string, reasoningEffort?) => {
       const cliConfig = plugin.settings.cliConfig;
       const pathKey = cliType === "gemini" ? "geminiCliPath" :
                       cliType === "claude" ? "claudeCliPath" : "codexCliPath";
@@ -137,14 +138,17 @@ function openCliPathModal(
         plugin.settings.cliConfig = {
           ...cliConfig,
           [pathKey]: path,
-          ...(cliType === "codex" ? { codexCliModel: model || undefined } : {}),
+          ...(cliType === "codex" ? { codexCliModel: model || undefined, codexCliReasoningEffort: reasoningEffort || "low" } : {}),
         };
         await plugin.saveSettings();
         new Notice(t("settings.cliPathSaved"));
       } else {
         const newConfig = { ...cliConfig };
         delete newConfig[pathKey];
-        if (cliType === "codex") newConfig.codexCliModel = model || undefined;
+        if (cliType === "codex") {
+          newConfig.codexCliModel = model || undefined;
+          newConfig.codexCliReasoningEffort = reasoningEffort || "low";
+        }
         plugin.settings.cliConfig = newConfig;
         await plugin.saveSettings();
         new Notice(t("settings.cliPathCleared"));

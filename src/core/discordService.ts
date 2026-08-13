@@ -26,7 +26,7 @@ import { openaiChatWithToolsStream } from "./openaiProvider";
 import { anthropicChatWithToolsStream } from "./anthropicProvider";
 import { GeminiClient, getGeminiClient, shouldEnableThinkingByKeyword } from "./gemini";
 import { localLlmChatStream } from "./localLlmProvider";
-import { CliProviderManager } from "./cliProvider";
+import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "./cliProvider";
 import { searchLocalRag } from "./localRagStore";
 import { formatError } from "../utils/error";
 import { formatWebSearchCitations, modelSupportsWebSearch } from "./webSearch";
@@ -1203,10 +1203,12 @@ export class DiscordService {
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
     vaultBasePath: string,
   ): Promise<string> {
-    const cliManager = new CliProviderManager();
-    const providerName = model === "claude-cli" ? "claude-cli" : model === "codex-cli" ? "codex-cli" : "antigravity-cli";
-    const provider = cliManager.getProvider(providerName);
-    if (!provider) throw new Error(`CLI provider ${providerName} not available`);
+    const cliConfig = this.plugin.settings.cliConfig;
+    const provider = model === "claude-cli"
+      ? new ClaudeCliProvider()
+      : model === "codex-cli"
+        ? new CodexCliProvider(cliConfig.codexCliModel, cliConfig.codexCliPath, undefined, cliConfig.codexCliReasoningEffort)
+        : new AntigravityCliProvider(cliConfig.geminiCliPath);
 
     let fullResponse = "";
     const stream = provider.chatStream(messages, systemPrompt, vaultBasePath);

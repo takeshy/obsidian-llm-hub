@@ -26,3 +26,20 @@ describe("chat web-search metadata", () => {
     expect(parsed?.messages[0].providerContinuation).toEqual(messages[0].providerContinuation);
   });
 });
+
+describe("chat model display metadata", () => {
+  it("preserves the exact Codex model and reasoning effort", async () => {
+    const messages: Message[] = [{
+      role: "assistant",
+      content: "Answer",
+      timestamp: 1234,
+      model: "codex-cli",
+      modelDisplayName: "Codex CLI · gpt-5.6-luna · xhigh",
+    }];
+
+    const markdown = await messagesToMarkdown(messages, "Codex", 1234, undefined);
+    const parsed = parseMarkdownToMessages(markdown);
+
+    expect(parsed?.messages[0].modelDisplayName).toBe("Codex CLI · gpt-5.6-luna · xhigh");
+  });
+});

@@ -231,7 +231,9 @@ Please revise the output based on the user's feedback above.`;
         vaultPath,
         customCliPath,
         undefined,
-        cliConfig?.codexCliModel
+        cliConfig?.codexCliModel,
+        undefined,
+        cliConfig?.codexCliReasoningEffort
       );
       session.start();
       context.persistentCliSessions.set(providerName, session);

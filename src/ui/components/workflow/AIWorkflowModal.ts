@@ -1534,7 +1534,7 @@ Fix the problem and output ONLY the complete, valid YAML workflow starting with 
         if (!cliConfig.codexCliVerified) {
           throw new Error("Codex CLI is not available. Please verify it in settings.");
         }
-        provider = new CodexCliProvider(cliConfig.codexCliModel, cliConfig.codexCliPath);
+        provider = new CodexCliProvider(cliConfig.codexCliModel, cliConfig.codexCliPath, undefined, cliConfig.codexCliReasoningEffort);
       } else {
         if (!cliConfig.cliVerified) {
           throw new Error("Antigravity CLI is not available. Please verify it in settings.");

@@ -96,7 +96,7 @@ function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[],
     return localLlmChatStream(config, messages, systemPrompt, signal);
   }
   const basePath = (plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || ".";
-  if (model === "codex-cli") return new CodexCliProvider(plugin.settings.cliConfig.codexCliModel, plugin.settings.cliConfig.codexCliPath).chatStream(messages, systemPrompt, basePath, signal);
+  if (model === "codex-cli") return new CodexCliProvider(plugin.settings.cliConfig.codexCliModel, plugin.settings.cliConfig.codexCliPath, undefined, plugin.settings.cliConfig.codexCliReasoningEffort).chatStream(messages, systemPrompt, basePath, signal);
   if (model === "claude-cli") return new ClaudeCliProvider().chatStream(messages, systemPrompt, basePath, signal);
   return new AntigravityCliProvider(plugin.settings.cliConfig.geminiCliPath).chatStream(messages, systemPrompt, basePath, signal);
 }

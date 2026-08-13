@@ -56,7 +56,7 @@ import { getEnabledTools, skillWorkflowTool, skillScriptTool } from "src/core/to
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "src/core/sandboxExecutor";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "src/workflow/workflowSpec";
 import { fetchMcpTools, createMcpToolExecutor, isMcpTool, type McpToolDefinition, type McpToolExecutor } from "src/core/mcpTools";
-import { PersistentCliSession } from "src/core/cliProvider";
+import { listCodexModels, PersistentCliSession, type CodexModelOption } from "src/core/cliProvider";
 import { CodexVaultMcpBridge } from "src/core/codexVaultMcpBridge";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
@@ -453,6 +453,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [streamingContent, setStreamingContent] = useState("");
 	const [streamingThinking, setStreamingThinking] = useState("");
 	const [currentModel, setCurrentModel] = useState<ModelType>(plugin.getSelectedModel());
+	const [codexModels, setCodexModels] = useState<CodexModelOption[]>([]);
 	const ragEnabledState = true;  // RAG is always available; individual stores managed in settings
 	const [ragSettingNames, setRagSettingNames] = useState<string[]>(plugin.getRagSettingNames());
 	const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(
@@ -519,6 +520,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const codexRuntimeConfigRef = useRef({
 		model: plugin.settings.cliConfig?.codexCliModel,
 		path: plugin.settings.cliConfig?.codexCliPath,
+		reasoningEffort: plugin.settings.cliConfig?.codexCliReasoningEffort,
 	});
 	const previousNonTerminalModelRef = useRef<ModelType | null>(
 		isTerminalProvider(initialModel) ? null : initialModel
@@ -581,6 +583,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const antigravityCliVerified = !Platform.isMobile && cliConfig.cliVerified === true;
 	const claudeCliVerified = !Platform.isMobile && cliConfig.claudeCliVerified === true;
 	const codexCliVerified = !Platform.isMobile && cliConfig.codexCliVerified === true;
+	useEffect(() => {
+		if (!codexCliVerified) {
+			setCodexModels([]);
+			return;
+		}
+		let cancelled = false;
+		void listCodexModels(cliConfig.codexCliPath)
+			.then((models) => { if (!cancelled) setCodexModels(models); })
+			.catch(() => { if (!cancelled) setCodexModels([]); });
+		return () => { cancelled = true; };
+	}, [codexCliVerified, cliConfig.codexCliPath]);
 	const activeLocalLlmConfigs = !Platform.isMobile
 		? (plugin.settings.localLlmConfigs ?? []).filter(c => c.verified && c.enabled !== false)
 		: [];
@@ -1300,10 +1313,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			const nextCliConfig = plugin.settings.cliConfig || DEFAULT_CLI_CONFIG;
 			const codexConfigChanged =
 				codexRuntimeConfigRef.current.model !== nextCliConfig.codexCliModel ||
-				codexRuntimeConfigRef.current.path !== nextCliConfig.codexCliPath;
+				codexRuntimeConfigRef.current.path !== nextCliConfig.codexCliPath ||
+				codexRuntimeConfigRef.current.reasoningEffort !== nextCliConfig.codexCliReasoningEffort;
 			codexRuntimeConfigRef.current = {
 				model: nextCliConfig.codexCliModel,
 				path: nextCliConfig.codexCliPath,
+				reasoningEffort: nextCliConfig.codexCliReasoningEffort,
 			};
 			setCurrentModel(plugin.getSelectedModel());
 			setCliConfig(nextCliConfig);
@@ -1452,6 +1467,25 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			setVaultToolMode("all");
 			setVaultToolNoneReason(null);
 		}
+	};
+
+	const handleCodexConfigChange = (model: string | undefined, reasoningEffort: import("src/types").CodexReasoningEffort) => {
+		const nextCliConfig = {
+			...plugin.settings.cliConfig,
+			codexCliModel: model,
+			codexCliReasoningEffort: reasoningEffort,
+		};
+		plugin.settings.cliConfig = nextCliConfig;
+		setCliConfig(nextCliConfig);
+		codexRuntimeConfigRef.current = {
+			model,
+			path: nextCliConfig.codexCliPath,
+			reasoningEffort,
+		};
+		persistentCliRef.current?.terminate();
+		persistentCliRef.current = null;
+		setCliSession((session) => session?.provider === "codex-cli" ? null : session);
+		void plugin.saveSettings();
 	};
 
 	// Resolve slash command variables
@@ -2022,7 +2056,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					currentProvider, vaultBasePath,
 					customCliPath, storedSessionId,
 					cliConfig.codexCliModel,
-					codexMcpUrl
+					codexMcpUrl,
+					cliConfig.codexCliReasoningEffort
 				);
 				session.start();
 				persistentCliRef.current = session;
@@ -2122,6 +2157,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				content: processedContent,
 				timestamp: Date.now(),
 				model: currentProvider,
+				modelDisplayName: isCodexCli
+					? ["Codex CLI", cliConfig.codexCliModel, cliConfig.codexCliReasoningEffort || "low"].filter(Boolean).join(" · ")
+					: undefined,
 				pendingEdit: codexMutationTracking?.processedEdits.at(-1),
 				pendingEdits: getPendingInfos(codexMutationTracking?.processedEdits || []),
 				pendingDelete: codexMutationTracking?.processedDeletes.at(-1),
@@ -4200,6 +4238,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								model={currentModel}
 								onModelChange={handleModelChange}
 								availableModels={availableModels}
+								codexModels={codexModels}
+								codexModel={cliConfig.codexCliModel}
+								codexReasoningEffort={cliConfig.codexCliReasoningEffort || "low"}
+								onCodexConfigChange={handleCodexConfigChange}
 								allowWebSearch={allowWebSearch}
 								webSearchEnabled={webSearchEnabled}
 								ragEnabled={allowRag}

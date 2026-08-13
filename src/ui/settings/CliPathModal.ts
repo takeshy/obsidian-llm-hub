@@ -1,6 +1,7 @@
 import { Modal, App, Setting, Notice } from "obsidian";
 import { isWindows, listCodexModels, validateCliPath } from "src/core/cliProvider";
 import { t } from "src/i18n";
+import type { CodexReasoningEffort } from "src/types";
 
 export type CliType = "gemini" | "claude" | "codex";
 
@@ -8,19 +9,22 @@ export class CliPathModal extends Modal {
   private cliType: CliType;
   private currentPath: string;
   private currentModel: string;
-  private onSave: (path: string | undefined, model?: string) => void | Promise<void>;
+  private currentReasoningEffort: CodexReasoningEffort;
+  private onSave: (path: string | undefined, model?: string, reasoningEffort?: CodexReasoningEffort) => void | Promise<void>;
 
   constructor(
     app: App,
     cliType: CliType,
     currentPath: string | undefined,
     currentModel: string | undefined,
-    onSave: (path: string | undefined, model?: string) => void | Promise<void>
+    currentReasoningEffort: CodexReasoningEffort | undefined,
+    onSave: (path: string | undefined, model?: string, reasoningEffort?: CodexReasoningEffort) => void | Promise<void>
   ) {
     super(app);
     this.cliType = cliType;
     this.currentPath = currentPath || "";
     this.currentModel = currentModel || "";
+    this.currentReasoningEffort = currentReasoningEffort || "low";
     this.onSave = onSave;
   }
 
@@ -85,6 +89,18 @@ export class CliPathModal extends Modal {
             dropdown.selectEl.disabled = false;
           });
       });
+
+      new Setting(contentEl)
+        .setName(t("settings.codexCliReasoningEffort"))
+        .setDesc(t("settings.codexCliReasoningEffort.desc"))
+        .addDropdown((dropdown) => {
+          const efforts: CodexReasoningEffort[] = ["minimal", "low", "medium", "high", "xhigh"];
+          for (const effort of efforts) dropdown.addOption(effort, effort);
+          dropdown.setValue(this.currentReasoningEffort);
+          dropdown.onChange((effort) => {
+            this.currentReasoningEffort = effort as CodexReasoningEffort;
+          });
+        });
     }
 
     // Show OS-specific help note
@@ -133,12 +149,12 @@ export class CliPathModal extends Modal {
         return;
       }
     }
-    void this.onSave(path || undefined, this.currentModel || undefined);
+    void this.onSave(path || undefined, this.currentModel || undefined, this.currentReasoningEffort);
     this.close();
   }
 
   private async clear() {
-    await this.onSave(undefined, this.currentModel || undefined);
+    await this.onSave(undefined, this.currentModel || undefined, this.currentReasoningEffort);
     this.close();
   }
 

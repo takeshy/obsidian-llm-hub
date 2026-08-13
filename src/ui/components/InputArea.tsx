@@ -8,7 +8,8 @@ import Database from "lucide-react/dist/esm/icons/database";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { Notice, Platform, type App } from "obsidian";
-import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode } from "src/types";
+import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode, type CodexReasoningEffort } from "src/types";
+import type { CodexModelOption } from "src/core/cliProvider";
 import { RagSourceModal } from "./RagSourceModal";
 import type { SkillMetadata } from "src/core/skillsLoader";
 import type { OkfBundle } from "src/core/okfLoader";
@@ -33,6 +34,10 @@ interface InputAreaProps {
   model: ModelType;
   onModelChange: (model: ModelType) => void;
   availableModels: ModelInfo[];
+  codexModels: CodexModelOption[];
+  codexModel?: string;
+  codexReasoningEffort: CodexReasoningEffort;
+  onCodexConfigChange: (model: string | undefined, reasoningEffort: CodexReasoningEffort) => void;
   allowWebSearch: boolean;
   webSearchEnabled: boolean;
   ragEnabled: boolean;
@@ -99,6 +104,10 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   model,
   onModelChange,
   availableModels,
+  codexModels,
+  codexModel,
+  codexReasoningEffort,
+  onCodexConfigChange,
   allowWebSearch,
   webSearchEnabled,
   ragEnabled,
@@ -943,6 +952,38 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
               </option>
             ))}
           </select>
+          {model === "codex-cli" && (
+            <>
+              <select
+                className="llm-hub-model-select"
+                value={codexModel || ""}
+                onChange={(e) => onCodexConfigChange(e.target.value || undefined, codexReasoningEffort)}
+                disabled={isLoading}
+                title={t("settings.codexCliModel")}
+              >
+                <option value="">{t("settings.codexCliModel.default")}</option>
+                {codexModels.map((option) => (
+                  <option key={option.slug} value={option.slug}>
+                    {option.displayName} ({option.slug})
+                  </option>
+                ))}
+                {codexModel && !codexModels.some((option) => option.slug === codexModel) && (
+                  <option value={codexModel}>{codexModel}</option>
+                )}
+              </select>
+              <select
+                className="llm-hub-model-select"
+                value={codexReasoningEffort}
+                onChange={(e) => onCodexConfigChange(codexModel, e.target.value as CodexReasoningEffort)}
+                disabled={isLoading}
+                title={t("settings.codexCliReasoningEffort")}
+              >
+                {(["minimal", "low", "medium", "high", "xhigh"] as CodexReasoningEffort[]).map((effort) => (
+                  <option key={effort} value={effort}>{effort}</option>
+                ))}
+              </select>
+            </>
+          )}
           <div className="llm-hub-search-selector" ref={searchMenuRef}>
             <button
               ref={searchButtonRef}

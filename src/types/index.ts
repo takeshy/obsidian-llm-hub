@@ -493,12 +493,16 @@ export interface CliProviderConfig {
   claudeCliPath?: string;       // Custom path for Claude CLI
   codexCliPath?: string;        // Custom path for Codex CLI
   codexCliModel?: string;       // Optional model override for Codex CLI
+  codexCliReasoningEffort?: CodexReasoningEffort; // Reasoning effort override for Codex CLI
 }
+
+export type CodexReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export const DEFAULT_CLI_CONFIG: CliProviderConfig = {
   cliVerified: false,
   claudeCliVerified: false,
   codexCliVerified: false,
+  codexCliReasoningEffort: "low",
   antigravityCliMigrated: true,
 };
 
@@ -731,6 +735,7 @@ export interface Message {
   llmContent?: string;          // full content sent to the LLM (hidden from UI)
   timestamp: number;
   model?: ModelType;  // モデル名（assistantの場合のみ）
+  modelDisplayName?: string; // Exact runtime model configuration shown in chat/history
   toolsUsed?: string[];  // 使用したツール名の配列
   attachments?: Attachment[];  // 添付ファイル
   pendingEdit?: PendingEditInfo;  // 保留中の編集情報

@@ -50,6 +50,8 @@ export const en = {
   "settings.codexCliModel.desc": "Select a model from the catalog reported by the installed Codex CLI.",
   "settings.codexCliModel.default": "Codex CLI default",
   "settings.codexCliModel.loadFailed": "Could not load the model catalog from Codex CLI. Check the CLI path and version.",
+  "settings.codexCliReasoningEffort": "Codex reasoning effort",
+  "settings.codexCliReasoningEffort.desc": "Choose how much reasoning Codex uses. Low is the default for faster text interactions.",
   "settings.cliPathSettings": "Configure CLI path",
   "settings.cliPathModal.title": "CLI path settings",
   "settings.cliPathModal.desc": "If the CLI is not detected automatically, specify the full path here. The plugin automatically searches common installation paths including version managers (nodenv, nvm, volta, fnm, asdf, mise).",
