@@ -367,7 +367,7 @@ Please revise the output based on the user's feedback above.`;
     const providerModelName = getApiProviderModelName(model) || providerConfig.enabledModels[0] || "";
     if (providerConfig.type === "gemini") {
       geminiProviderConfig = providerConfig;
-      model = (providerModelName || "gemini-3.6-flash") as import("../../types").ModelType;
+      model = (providerModelName || "gemini-3.7-flash") as import("../../types").ModelType;
     } else {
       // Build system prompt with local RAG context if available
       let apiSystemPrompt = "";

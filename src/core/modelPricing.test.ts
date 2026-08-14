@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { calculateCost, getKnownModels } from "./modelPricing";
 
-describe("Gemini 3.6 Flash", () => {
+describe("Gemini 3.7 Flash", () => {
   it("is offered as a known Gemini model", () => {
-    expect(getKnownModels("gemini")).toContain("gemini-3.6-flash");
+    const models = getKnownModels("gemini");
+    expect(models).toContain("gemini-3.7-flash");
+    expect(models).not.toContain("gemini-3.5-flash");
+    expect(models).not.toContain("gemini-3.6-flash");
   });
 
   it("uses the published token pricing", () => {
-    expect(calculateCost("gemini-3.6-flash", 1_000_000, 1_000_000)).toBe(9);
+    expect(calculateCost("gemini-3.7-flash", 1_000_000, 1_000_000)).toBe(4.5);
   });
 });
 

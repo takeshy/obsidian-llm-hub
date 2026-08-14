@@ -1,6 +1,6 @@
 {
   "name": "obsidian-llm-hub",
-  "version": "0.32.2",
+  "version": "0.32.3",
   "description": "AI-powered assistant using Google Gemini with File Search RAG capabilities",
   "main": "main.js",
   "scripts": {

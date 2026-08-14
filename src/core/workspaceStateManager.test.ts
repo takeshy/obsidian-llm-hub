@@ -26,6 +26,33 @@ function createManager(initialContent: string) {
 
 describe("WorkspaceStateManager combined search persistence", () => {
   it.each([
+    "gemini-3-flash-preview",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-2.5-flash",
+  ])("migrates superseded Gemini Flash model %s", async (legacyModel) => {
+    const harness = createManager(JSON.stringify({
+      selectedModel: `api:gemini:${legacyModel}`,
+      ragSettings: {},
+    }));
+
+    await harness.manager.loadWorkspaceState();
+
+    expect(harness.manager.workspaceState.selectedModel).toBe("api:gemini:gemini-3.7-flash");
+  });
+
+  it("migrates retired Gemini 2.5 Pro", async () => {
+    const harness = createManager(JSON.stringify({
+      selectedModel: "api:gemini:gemini-2.5-pro",
+      ragSettings: {},
+    }));
+
+    await harness.manager.loadWorkspaceState();
+
+    expect(harness.manager.workspaceState.selectedModel).toBe("api:gemini:gemini-3.1-pro-preview");
+  });
+
+  it.each([
     "gemini-3.1-flash-lite-preview",
     "gemini-3.1-flash-lite",
     "gemini-2.5-flash-lite",

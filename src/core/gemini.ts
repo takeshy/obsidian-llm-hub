@@ -226,10 +226,8 @@ function collectWebSources(value: unknown, sources: WebSearchSource[]): void {
 // Model pricing per token (USD)
 // Source: https://ai.google.dev/pricing
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "gemini-2.5-flash":       { input: 0.30 / 1e6, output: 2.50 / 1e6 },
-  "gemini-2.5-pro":         { input: 1.25 / 1e6, output: 10.00 / 1e6 },
-  "gemini-3.6-flash": { input: 1.50 / 1e6, output: 7.50 / 1e6 },
-  "gemini-3.5-flash": { input: 1.50 / 1e6, output: 9.00 / 1e6 },
+  // Introductory pricing through December 31, 2026.
+  "gemini-3.7-flash": { input: 0.75 / 1e6, output: 3.75 / 1e6 },
   "gemini-3.5-flash-lite": { input: 0.30 / 1e6, output: 2.50 / 1e6 },
   "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
@@ -242,15 +240,12 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 // Gemini 3 models: $14/1K queries, Gemini 2.x: $35/1K prompts
 // Approximated as per-prompt since exact query count is not exposed by the API
 const SEARCH_GROUNDING_COST: Record<string, number> = {
-  "gemini-3.6-flash": 14 / 1000,
-  "gemini-3.5-flash": 14 / 1000,
+  "gemini-3.7-flash": 14 / 1000,
   "gemini-3.1-pro-preview": 14 / 1000,
   "gemini-3.1-pro-preview-customtools": 14 / 1000,
   "gemini-3-pro-image": 14 / 1000,
   "gemini-3.1-flash-image": 14 / 1000,
   "gemini-3.5-flash-lite": 14 / 1000,
-  "gemini-2.5-flash":       35 / 1000,
-  "gemini-2.5-pro":         35 / 1000,
 };
 
 // Extract usage metadata from Gemini API response and calculate cost
@@ -440,7 +435,7 @@ export class GeminiClient {
   private ai: GoogleGenAI;
   private model: ModelType;
 
-  constructor(apiKey: string, model: ModelType = "gemini-3.6-flash" as ModelType, proxyUrl?: string, proxyBypass?: string) {
+  constructor(apiKey: string, model: ModelType = "gemini-3.7-flash" as ModelType, proxyUrl?: string, proxyBypass?: string) {
     this.ai = new GoogleGenAI({ apiKey });
     this.model = model;
 
@@ -491,8 +486,8 @@ export class GeminiClient {
     if (modelLower.includes("gemma-4")) return undefined;
 
     // New Gemini models use thinkingLevel instead of thinkingBudget.
-    // Gemini 3.6 Flash accepts LOW/HIGH (the API currently rejects MEDIUM).
-    if (modelLower.includes("gemini-3.6-flash")) {
+    // Gemini 3.7 Flash accepts LOW/HIGH (the API currently rejects MEDIUM).
+    if (modelLower.includes("gemini-3.7-flash")) {
       return enableThinking
         ? { includeThoughts: true, thinkingLevel: "HIGH" }
         : { thinkingLevel: "LOW" };
@@ -864,7 +859,7 @@ export class GeminiClient {
     // Gemini 3.6 currently requires GenerateContent's
     // includeServerSideToolInvocations opt-in when combining Google Search
     // with client-side function calling.
-    if (modelLower.includes("gemini-3.6-flash") && webSearchEnabled && tools.length > 0) {
+    if (modelLower.includes("gemini-3.7-flash") && webSearchEnabled && tools.length > 0) {
       return true;
     }
     if (!(modelLower.includes("gemini-3.1-pro") || modelLower.includes("gemini-3-pro"))) {
@@ -1277,8 +1272,8 @@ export class GeminiClient {
       const modelLower = this.model.toLowerCase();
       // Gemma 4: thinking config not supported via Interactions API
       if (modelLower.includes("gemma-4")) return undefined;
-      // Gemini 3.6 Flash currently accepts low/high (not medium).
-      if (modelLower.includes("gemini-3.6-flash")) {
+      // Gemini 3.7 Flash currently accepts low/high (not medium).
+      if (modelLower.includes("gemini-3.7-flash")) {
         return enableThinking ? "high" : "low";
       }
       // Pro models require thinking — always return high

@@ -3077,7 +3077,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 		// Initialize a GeminiClient with this provider's API key
 		const { GeminiClient } = await import("src/core/gemini");
-		const modelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "gemini-3.6-flash";
+		const modelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "gemini-3.7-flash";
 		const client = new GeminiClient(apiKey, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
 
 		let allowedModel = modelName as ModelType;

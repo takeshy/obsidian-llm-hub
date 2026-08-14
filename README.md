@@ -508,11 +508,8 @@ See the [Discussion Hub documentation](https://github.com/takeshy/obsidian-discu
 |-------|-------------|
 | Gemini 3.1 Pro Preview | Latest flagship model, 1M context (recommended) |
 | Gemini 3.1 Pro Preview (Custom Tools) | Optimized for agentic workflows with custom tools and bash |
-| Gemini 3.6 Flash | Latest GA Flash model, 1M context, optimized for agentic and multimodal tasks |
-| Gemini 3.5 Flash | Fast model, 1M context, best cost-performance |
+| Gemini 3.7 Flash | Latest fast model, 1M context (recommended) |
 | Gemini 3.5 Flash Lite | Latest fast, low-cost model with 1M context |
-| Gemini 2.5 Flash | Fast model, 1M context |
-| Gemini 2.5 Pro | Pro model, 1M context |
 | Gemini 3 Pro (Image) | Pro image generation, 4K |
 | Gemini 3.1 Flash (Image) | Fast, low-cost image generation |
 | Gemma 4 | Free, function calling and RAG/Web Search are mutually exclusive |
