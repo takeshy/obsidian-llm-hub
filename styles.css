@@ -4208,12 +4208,20 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 .llm-hub-diff-split-cell {
   width: 50%;
+  min-width: 0;
   display: flex;
   white-space: pre;
+  overflow-x: auto;
+  overflow-y: hidden;
   min-height: 1.5em;
   font-family: var(--font-monospace);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.llm-hub-diff-split-cell .llm-hub-diff-content {
+  flex: 0 0 auto;
+  min-width: calc(100% - 72px);
 }
 
 .llm-hub-diff-split-left {

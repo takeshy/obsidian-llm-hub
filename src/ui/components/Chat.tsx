@@ -220,6 +220,7 @@ function createConfirmingToolExecutor(
 	baseExecuteToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>,
 	app: import("obsidian").App,
 	currentSlashCommandRef: { current: SlashCommand | null },
+	cancelGeneration: () => void,
 ): {
 	executeToolCall: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
 	processedEdits: PendingEditInfo[];
@@ -234,8 +235,10 @@ function createConfirmingToolExecutor(
 	// hands it to setPendingEditFeedback once the stream is done, which sends it
 	// back to the model as a follow-up message.
 	const pendingAdditionalRequest: { current: { filePath: string; request: string } | null } = { current: null };
+	let cancelled = false;
 
 	const executeToolCall = async (name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+		if (cancelled) return { cancelled: true, message: "User cancelled the edit" };
 		const prevPendingEdit = getPendingEdit();
 		const prevPendingDelete = getPendingDelete();
 		const prevPendingRename = getPendingRename();
@@ -287,6 +290,8 @@ function createConfirmingToolExecutor(
 				}
 				discardEdit(app);
 				processedEdits.push({ originalPath: pending.originalPath, status: "discarded" });
+				cancelled = true;
+				cancelGeneration();
 				return { ...result, applied: false, message: "User cancelled the edit" };
 			}
 		}
@@ -1904,11 +1909,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				pluginVersion: plugin.manifest.version,
 			},
 		});
+		let codexMutationTracking: ReturnType<typeof createConfirmingToolExecutor> | null = null;
+		let fullContent = "";
+		let localRagSources: string[] = [];
 
 		try {
 			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 			let codexMcpUrl: string | undefined;
-			let codexMutationTracking: ReturnType<typeof createConfirmingToolExecutor> | null = null;
 
 			// Build system prompt for CLI. Codex stays read-only and proposes
 			// mutations through the confirmation-gated MCP bridge.
@@ -1980,6 +1987,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					codexToolExecutor,
 					plugin.app,
 					currentSlashCommandRef,
+					() => abortController.abort(),
 				);
 				if (!codexVaultMcpBridgeRef.current) {
 					codexVaultMcpBridgeRef.current = new CodexVaultMcpBridge(
@@ -1996,7 +2004,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
 
 			// Local RAG: search and inject context into system prompt
-			let localRagSources: string[] = [];
 			if (selectedRagSetting) {
 				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 				if (ragSettingObj) {
@@ -2024,7 +2031,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				}
 			}
 
-			let fullContent = "";
 			let stopped = false;
 			let receivedSessionId: string | null = null;
 
@@ -2179,6 +2185,28 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				comment: stopped ? "stopped by user" : "completed",
 			});
 		} catch (error) {
+			if (abortController.signal.aborted) {
+				const stoppedContent = fullContent
+					? `${fullContent}\n\n${t("chat.generationStopped")}`
+					: "";
+				const assistantMessage: Message = {
+					role: "assistant",
+					content: stoppedContent,
+					timestamp: Date.now(),
+					model: isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "antigravity-cli",
+					pendingEdit: codexMutationTracking?.processedEdits.at(-1),
+					pendingEdits: getPendingInfos(codexMutationTracking?.processedEdits || []),
+					pendingDelete: codexMutationTracking?.processedDeletes.at(-1),
+					pendingDeletes: getPendingInfos(codexMutationTracking?.processedDeletes || []),
+					pendingRename: codexMutationTracking?.processedRenames.at(-1),
+					pendingRenames: getPendingInfos(codexMutationTracking?.processedRenames || []),
+					...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
+				};
+				await saveResult([...messages, userMessage, assistantMessage]);
+				tracing.traceEnd(cliTraceId, { output: stoppedContent, metadata: { status: "aborted" } });
+				tracing.score(cliTraceId, { name: "status", value: 0.5, comment: "stopped by user" });
+				return;
+			}
 			const errorMessageText = error instanceof Error ? error.message : t("chat.unknownError");
 			const errorMessage: Message = {
 				role: "assistant",
@@ -2414,7 +2442,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				};
 
 				const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
-					createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef);
+					createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef, () => abortController.abort());
 
 				const toolsUsed: string[] = [];
 				const toolCalls: Message["toolCalls"] = [];
@@ -2836,7 +2864,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			};
 
 			const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
-				createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef);
+				createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, currentSlashCommandRef, () => abortController.abort());
 
 			let fullContent = "";
 			let thinkingContent = "";
@@ -3317,6 +3345,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				// Wrap tool executor to handle propose_edit/propose_delete with immediate confirmation
 				const toolExecutor = baseToolExecutor
 					? async (name: string, args: Record<string, unknown>) => {
+						if (abortController.signal.aborted) {
+							return { cancelled: true, message: "User cancelled the edit" };
+						}
 						const prevPendingEdit = getPendingEdit();
 						const prevPendingDelete = getPendingDelete();
 						const prevPendingRename = getPendingRename();
@@ -3376,6 +3407,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 									} else {
 										discardEdit(plugin.app);
 										processedEdits.push({ originalPath: pending.originalPath, status: "discarded" });
+										abortController.abort();
 										return { ...result, applied: false, message: "User cancelled the edit" };
 									}
 								}
