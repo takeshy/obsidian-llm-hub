@@ -54,6 +54,20 @@ function toolCallChunk(args: string | undefined) {
   };
 }
 
+function namedToolCallChunk(index: number, name: string) {
+  return {
+    choices: [{
+      delta: {
+        tool_calls: [{
+          index,
+          id: `call_${index}`,
+          function: { name, arguments: "{}" },
+        }],
+      },
+    }],
+  };
+}
+
 async function collect(stream: AsyncGenerator<import("../types").StreamChunk>) {
   const chunks = [];
   for await (const chunk of stream) chunks.push(chunk);
@@ -129,5 +143,70 @@ describe("tool calls with no arguments", () => {
       name: "list_folders",
       arguments: "{\"parentFolder\":\"ai_access\"}",
     });
+  });
+
+  it("retries an empty response after a read tool result", async () => {
+    mocks.openAiChatCreate
+      .mockResolvedValueOnce(asyncEvents([toolCallChunk("")]))
+      .mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: {}, finish_reason: "stop" }] }]))
+      .mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: { content: "done" }, finish_reason: "stop" }] }]));
+
+    const execute = vi.fn().mockResolvedValue("ai_access");
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://opencode.ai/zen", "key", "claude-sonnet-4-6", messages, [tool], "system", execute,
+    ));
+
+    expect(mocks.openAiChatCreate).toHaveBeenCalledTimes(3);
+    expect(chunks).toContainEqual({ type: "text", content: "done" });
+    expect(chunks.at(-1)?.type).toBe("done");
+  });
+
+  it("retries a tool-call finish with no tool-call deltas", async () => {
+    mocks.openAiChatCreate
+      .mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: {}, finish_reason: "tool_calls" }] }]))
+      .mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: { content: "recovered" }, finish_reason: "stop" }] }]));
+
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://opencode.ai/zen", "key", "claude-sonnet-4-6", messages, [tool], "system", vi.fn(),
+    ));
+
+    expect(mocks.openAiChatCreate).toHaveBeenCalledTimes(2);
+    expect(chunks).toContainEqual({ type: "text", content: "recovered" });
+  });
+
+  it("retries an empty response when a read tool is mixed with another tool", async () => {
+    mocks.openAiChatCreate
+      .mockResolvedValueOnce(asyncEvents([
+        namedToolCallChunk(0, "list_folders"),
+        namedToolCallChunk(1, "create_note"),
+      ]))
+      .mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: {}, finish_reason: "stop" }] }]))
+      .mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: { content: "done" }, finish_reason: "stop" }] }]));
+
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://opencode.ai/zen", "key", "claude-sonnet-4-6", messages, [tool], "system",
+      vi.fn().mockResolvedValue("ok"),
+    ));
+
+    expect(mocks.openAiChatCreate).toHaveBeenCalledTimes(3);
+    expect(chunks).toContainEqual({ type: "text", content: "done" });
+  });
+
+  it("does not consume the tool-round limit when retrying an incomplete response", async () => {
+    for (let i = 0; i < 19; i++) {
+      mocks.openAiChatCreate.mockResolvedValueOnce(asyncEvents([toolCallChunk("")]));
+    }
+    mocks.openAiChatCreate
+      .mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: {}, finish_reason: "tool_calls" }] }]))
+      .mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: { content: "recovered" }, finish_reason: "stop" }] }]));
+
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://opencode.ai/zen", "key", "claude-sonnet-4-6", messages, [tool], "system",
+      vi.fn().mockResolvedValue("ok"),
+    ));
+
+    expect(mocks.openAiChatCreate).toHaveBeenCalledTimes(21);
+    expect(chunks).toContainEqual({ type: "text", content: "recovered" });
+    expect(chunks.at(-1)?.type).toBe("done");
   });
 });

@@ -742,12 +742,24 @@ export async function* openaiChatWithToolsStream(
   let inThinkTag = false;
   let tagBuffer = "";
   let hasNativeReasoning = false;
+  let retryEmptyAfterRead = false;
+  let incompleteRetryCount = 0;
 
   const MAX_TOOL_ROUNDS = 20;
+  const MAX_INCOMPLETE_RETRIES = 3;
+  const readToolNames = new Set([
+    "read_timeline",
+    "read_note",
+    "search_notes",
+    "list_notes",
+    "list_folders",
+    "get_active_note_info",
+  ]);
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     let textContent = "";
     let reasoningContent = "";
     let hasToolCalls = false;
+    let finishedWithToolCalls = false;
     const toolCallAccum = new Map<number, { id: string; name: string; arguments: string }>();
 
     try {
@@ -763,6 +775,9 @@ export async function* openaiChatWithToolsStream(
       for await (const chunk of stream) {
         const choice = chunk.choices?.[0];
         const delta = choice?.delta;
+        if (choice?.finish_reason === "tool_calls" || choice?.finish_reason === "function_call") {
+          finishedWithToolCalls = true;
+        }
 
         // Native reasoning fields (reasoning_content for DeepSeek/Moonshot/Kimi,
         // reasoning for OpenRouter). Accumulate locally so we can echo it back
@@ -845,6 +860,22 @@ export async function* openaiChatWithToolsStream(
     }
 
     if (!hasToolCalls) {
+      const incompleteToolCall = finishedWithToolCalls && toolCallAccum.size === 0;
+      const emptyReadContinuation = retryEmptyAfterRead && textContent.trim().length === 0;
+      if (incompleteToolCall || emptyReadContinuation) {
+        incompleteRetryCount++;
+        if (incompleteRetryCount <= MAX_INCOMPLETE_RETRIES) {
+          console.warn(
+            `[llm-hub] Server returned an incomplete tool continuation; retrying round (${incompleteRetryCount}/${MAX_INCOMPLETE_RETRIES})`,
+          );
+          // An incomplete server response is not a tool round. Preserve the
+          // current round so retries remain available near the tool-round cap.
+          round--;
+          continue;
+        }
+        yield { type: "error", error: "The server repeatedly returned an incomplete response after a read tool result." };
+        return;
+      }
       const cost = calculateCost(model, totalInputTokens, totalOutputTokens);
       yield {
         type: "done",
@@ -860,6 +891,8 @@ export async function* openaiChatWithToolsStream(
 
     // Execute tool calls
     const toolCallEntries = [...toolCallAccum.values()];
+    incompleteRetryCount = 0;
+    retryEmptyAfterRead = toolCallEntries.some(tc => readToolNames.has(tc.name));
 
     // Echo reasoning_content back when the model emitted any. Required by
     // Moonshot/Kimi K2.x via OpenCode Zen Go (which validates that thinking
