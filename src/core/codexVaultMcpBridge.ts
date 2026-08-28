@@ -25,8 +25,9 @@ const DESTRUCTIVE_TOOLS = new Set(["propose_delete", "bulk_propose_delete"]);
 
 /**
  * Loopback-only MCP bridge used by Codex CLI for Obsidian-aware Vault reads and
- * confirmation-gated mutations. The bridge never exposes direct write/apply
- * tools; mutations must run through the plugin's propose_* confirmation flow.
+ * Vault mutations. New files may be created directly with create_note, while
+ * changes to existing files use the plugin's confirmation-gated propose tools.
+ * The bridge never exposes direct update/apply tools.
  */
 export class CodexVaultMcpBridge {
   private server: Server | null = null;

@@ -202,6 +202,7 @@ export class LocalLlmModal extends Modal {
     // Multi-select checklist (only shown after fetch)
     if (this.modelsFetched && this.fetchedModels.length > 0) {
       const modelSetting = new Setting(contentEl).setDesc(t("settings.localLlmModal.modelMultiDesc"));
+      modelSetting.settingEl.addClass("llm-hub-model-setting");
 
       const items: HTMLElement[] = [];
       if (this.fetchedModels.length > 20) {

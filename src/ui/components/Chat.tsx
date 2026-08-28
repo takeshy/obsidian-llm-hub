@@ -419,6 +419,7 @@ const CODEX_VAULT_TOOLS = new Set([
 	"list_notes",
 	"list_folders",
 	"get_active_note_info",
+	"create_note",
 	"propose_edit",
 	"propose_delete",
 	"rename_note",
@@ -1917,8 +1918,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 			let codexMcpUrl: string | undefined;
 
-			// Build system prompt for CLI. Codex stays read-only and proposes
-			// mutations through the confirmation-gated MCP bridge.
+			// Build system prompt for CLI. Codex's direct filesystem access stays
+			// read-only; Vault writes go through the plugin MCP bridge.
 			const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Antigravity CLI";
 			let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
 			if (isCodexCli) {
@@ -1928,7 +1929,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					if (vaultToolMode === "noSearch") {
 						systemPrompt += " Vault search and note-listing tools are disabled for this chat.";
 					}
-					systemPrompt += "\n\nFor any requested Vault mutation, use the llm_hub_vault MCP propose_edit, bulk_propose_edit, propose_delete, bulk_propose_delete, rename_note, or bulk_propose_rename tool. These tools show a diff or confirmation to the user and apply changes only after approval. Do not claim a change was applied unless the tool result says it was applied.";
+					systemPrompt += "\n\nFor a new Vault file, use the llm_hub_vault MCP create_note tool; it creates the file immediately, including text-based formats such as .canvas and .base. For changes to existing files, use propose_edit, bulk_propose_edit, propose_delete, bulk_propose_delete, rename_note, or bulk_propose_rename. Existing-file mutations show a diff or confirmation and apply only after approval. Do not claim a change was applied unless the tool result says it was applied.";
 				}
 			} else {
 				systemPrompt += `\n\nNote: You are running in ${cliName} mode with limited capabilities. You can read and search vault files, but cannot modify them.`;

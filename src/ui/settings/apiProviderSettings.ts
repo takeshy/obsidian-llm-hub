@@ -211,6 +211,7 @@ class ApiProviderModal extends Modal {
       const modelSetting = new Setting(contentEl)
         .setName(t("settings.apiProviderModel"))
         .setDesc(t("settings.apiProviderModel.desc"));
+      modelSetting.settingEl.addClass("llm-hub-model-setting");
 
       // Search filter (show when many models)
       const items: HTMLElement[] = [];

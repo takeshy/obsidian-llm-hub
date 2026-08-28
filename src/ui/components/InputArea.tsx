@@ -7,6 +7,8 @@ import Eye from "lucide-react/dist/esm/icons/eye";
 import Database from "lucide-react/dist/esm/icons/database";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import Wrench from "lucide-react/dist/esm/icons/wrench";
+import X from "lucide-react/dist/esm/icons/x";
 import { Notice, Platform, type App } from "obsidian";
 import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode, type CodexReasoningEffort } from "src/types";
 import type { CodexModelOption } from "src/core/cliProvider";
@@ -18,6 +20,7 @@ import OkfSelector from "./OkfSelector";
 import { isThinkingRequired } from "src/core/gemini";
 import { t } from "src/i18n";
 import { isCaretOnFirstLine, isCaretOnLastLine } from "./chat/chatUtils";
+import ModelSelector from "./ModelSelector";
 
 // Built-in command definition (not user-configurable)
 interface BuiltInCommand {
@@ -596,6 +599,32 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
 
   return (
     <div className={`llm-hub-input-container ${isCollapsed ? "collapsed" : ""}`}>
+      {/* MCP servers enabled for this chat */}
+      {!isCollapsed && mcpServers.some((server) => server.enabled) && (
+        <div className="llm-hub-enabled-mcp-servers">
+          {mcpServers.filter((server) => server.enabled).map((server) => (
+            <span
+              key={server.name}
+              className="llm-hub-enabled-mcp-server"
+              title={t("input.mcpServerEnabled", { name: server.name })}
+            >
+              <Wrench size={12} aria-hidden="true" />
+              <span className="llm-hub-enabled-mcp-server-name">{server.name}</span>
+              <button
+                type="button"
+                className="llm-hub-enabled-mcp-server-remove"
+                onClick={() => onMcpServerToggle(server.name, false)}
+                disabled={isLoading || vaultToolModeOnlyNone}
+                title={t("input.mcpServerDisable", { name: server.name })}
+                aria-label={t("input.mcpServerDisable", { name: server.name })}
+              >
+                <X size={10} aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Pending attachments display */}
       {!isCollapsed && pendingAttachments.length > 0 && (
         <div className="llm-hub-pending-attachments">
@@ -940,18 +969,12 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
 
       {!isCollapsed && (
         <div className="llm-hub-model-selector">
-          <select
-            className="llm-hub-model-select"
+          <ModelSelector
+            models={availableModels}
             value={model}
-            onChange={(e) => onModelChange(e.target.value as ModelType)}
+            onChange={onModelChange}
             disabled={isLoading}
-          >
-            {availableModels.map((m) => (
-              <option key={m.name} value={m.name}>
-                {m.displayName}
-              </option>
-            ))}
-          </select>
+          />
           {model === "codex-cli" && (
             <>
               <select

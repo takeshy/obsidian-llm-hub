@@ -17,6 +17,7 @@ import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { t } from "src/i18n";
 import { formatError } from "src/utils/error";
 import { isSafeWebUrl } from "src/core/webSearch";
+import { chatLinkFileRef } from "./chat/localFileLink";
 
 interface MessageBubbleProps {
   message: Message;
@@ -27,6 +28,19 @@ interface MessageBubbleProps {
   app: App;
   localLlmConfigs?: LocalLlmConfig[];
   skillsFolder?: string;
+}
+
+function openLocalFile(path: string): void {
+  const electron = (window as {
+    require?: (id: string) => { shell?: { openPath: (filePath: string) => Promise<string> } };
+  }).require?.("electron");
+  if (!electron?.shell) {
+    new Notice(`Cannot open local file: ${path}`);
+    return;
+  }
+  void electron.shell.openPath(path).then((error) => {
+    if (error) new Notice(`Failed to open local file: ${error}`);
+  });
 }
 
 export default function MessageBubble({
@@ -86,6 +100,28 @@ export default function MessageBubble({
       // Add click handlers for internal links
       const container = contentRef.current;
       if (!container) return;
+
+      const vaultBasePath = (app.vault.adapter as unknown as { basePath?: string }).basePath ?? "";
+
+      // Convert local links under the Vault root into genuine Obsidian internal
+      // links. Only files outside the Vault continue through the OS shell.
+      container.querySelectorAll("a[href]").forEach((link) => {
+        const href = link.getAttribute("href");
+        const target = href ? chatLinkFileRef(href, vaultBasePath) : null;
+        if (target?.scope === "vault") {
+          link.setAttribute("href", target.path);
+          link.setAttribute("data-href", target.path);
+          link.classList.remove("external-link");
+          link.classList.add("internal-link");
+          return;
+        }
+        if (!target) return;
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          openLocalFile(target.path);
+        });
+      });
 
       container.querySelectorAll("a.internal-link").forEach((link) => {
         link.addEventListener("click", (e) => {
