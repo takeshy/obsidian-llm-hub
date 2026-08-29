@@ -126,6 +126,36 @@ describe("OpenAI native web search", () => {
     expect(mocks.openAiChatCreate).not.toHaveBeenCalled();
   });
 
+  it("does not fall back to Chat Completions for OpenAI reasoning with function tools", async () => {
+    mocks.openAiResponsesStream.mockImplementation(() => {
+      throw new Error("temporary Responses failure");
+    });
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://api.openai.com", "key", "gpt-5.6-luna",
+      [{ role: "user", content: "Edit my note", timestamp: 1 }],
+      [tool], "system", vi.fn(), undefined, true,
+    ));
+
+    expect(chunks.at(-1)).toEqual({ type: "error", error: "temporary Responses failure" });
+    expect(mocks.openAiChatCreate).not.toHaveBeenCalled();
+  });
+
+  it("always uses Responses for GPT-5.6 function tools even when thinking is off", async () => {
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{
+      type: "response.completed",
+      response: { id: "resp_luna", output: [], usage: { input_tokens: 1, output_tokens: 1 } },
+    }]));
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://api.openai.com", "key", "gpt-5.6-luna",
+      [{ role: "user", content: "Read my note", timestamp: 1 }],
+      [tool], "system", vi.fn(), undefined, false,
+    ));
+
+    expect(chunks.at(-1)?.type).toBe("done");
+    expect(mocks.openAiResponsesStream).toHaveBeenCalledOnce();
+    expect(mocks.openAiChatCreate).not.toHaveBeenCalled();
+  });
+
   it("replays matching native continuation items after their triggering user", async () => {
     const priorItem = { id: "prior", type: "message", role: "assistant", status: "completed", content: [] };
     mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{

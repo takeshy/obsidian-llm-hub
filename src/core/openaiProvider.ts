@@ -703,8 +703,9 @@ async function* openaiResponsesStream(
 
 /**
  * Stream chat completion with function calling support via OpenAI SDK.
- * When enableThinking is true, tries Responses API first (for gpt-5+ reasoning),
- * then falls back to Chat Completions API with reasoning_effort.
+ * When enableThinking is true, uses Responses API first for official OpenAI.
+ * A tool-enabled reasoning request must not fall back to Chat Completions:
+ * current GPT-5.6 models reject that combination on /v1/chat/completions.
  */
 export async function* openaiChatWithToolsStream(
   baseUrl: string,
@@ -726,11 +727,15 @@ export async function* openaiChatWithToolsStream(
   // Native search uses Responses on the official OpenAI and xAI endpoints.
   // Other compatible gateways continue to use Chat Completions.
   const responsesProvider = getOfficialResponsesProvider(baseUrl);
+  const requiresResponsesForTools = responsesProvider === "openai"
+    && /^gpt-5\.6(?:-|$)/i.test(model)
+    && tools.length > 0;
 
   // Preserve existing non-search behavior: only OpenAI reasoning requests use
   // Responses automatically, while search forces Responses for OpenAI or xAI.
   const shouldUseResponses = (useReasoning && responsesProvider === "openai")
-    || (webSearchEnabled === true && responsesProvider !== null);
+    || (webSearchEnabled === true && responsesProvider !== null)
+    || requiresResponsesForTools;
   if (shouldUseResponses && responsesProvider) {
     let responsesWorked = false;
     let initialResponsesError: StreamChunk | undefined;
@@ -748,11 +753,12 @@ export async function* openaiChatWithToolsStream(
       yield chunk;
     }
     if (responsesWorked) return;
-    if (webSearchEnabled) {
+    if (webSearchEnabled || requiresResponsesForTools
+      || (useReasoning && responsesProvider === "openai" && tools.length > 0)) {
       yield initialResponsesError ?? { type: "error", error: "Native web search request failed" };
       return;
     }
-    // Fall through to Chat Completions API with reasoning_effort
+    // Tool-free reasoning requests may still use the legacy fallback.
   }
 
   const openaiTools = tools.length > 0 ? toOpenAiTools(tools) : undefined;
