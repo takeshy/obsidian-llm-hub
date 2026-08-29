@@ -729,7 +729,6 @@ function displaySyncControls(
       btn
         .setButtonText(t("settings.localSyncBtn"))
         .setCta()
-        .setDisabled(!ragSetting.embeddingApiKey && !getGeminiApiKey(plugin.settings))
         .onClick(() => {
           void (async () => {
             syncCancelRef.value = false;

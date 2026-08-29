@@ -36,7 +36,8 @@ function localTarget(href: string): string | null {
 
 /** Obsidian renders bare hosts (`www.example.com/page`) as links too; those are not Vault notes. */
 function looksLikeBareHost(target: string): boolean {
-  return target.split("/")[0].includes(".") && !VAULT_FILE_EXT.test(target);
+  const firstSegment = target.split("/")[0];
+  return firstSegment.includes(".") && !VAULT_FILE_EXT.test(firstSegment);
 }
 
 /** Windows drive paths and UNC shares are case-insensitive; posix roots are not. */

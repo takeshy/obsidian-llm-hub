@@ -68,6 +68,8 @@ describe("chatLinkFileRef", () => {
   it("ignores bare hosts that obsidian renders as links", () => {
     expect(chatLinkFileRef("www.example.com/page", "C:\\Vault")).toBeNull();
     expect(chatLinkFileRef("example.com", "C:\\Vault")).toBeNull();
+    expect(chatLinkFileRef("www.example.com/readme.md", "C:\\Vault")).toBeNull();
+    expect(chatLinkFileRef("example.com/image.png", "C:\\Vault")).toBeNull();
   });
 
   it("ignores anchor-only and mailto links", () => {

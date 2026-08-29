@@ -967,7 +967,7 @@ export async function searchLocalRagResults(
 ): Promise<LocalRagSearchResult[]> {
   const store = getLocalRagStore();
   const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
-  if (!store || !apiKey) return [];
+  if (!store || (!apiKey && !ragSetting.embeddingBaseUrl)) return [];
   return store.search(
     settingName, query, apiKey,
     ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),

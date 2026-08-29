@@ -64,6 +64,7 @@ import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsWebSearch } from "src/core/webSearch";
 import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments } from "src/core/localRagStore";
 import { createRagSearchRunner, RAG_SEARCH_SYSTEM_PROMPT, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
+import { buildNoDiscoverySystemPrompt } from "./chat/noDiscoveryPrompt";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import {
 	getPendingEdit,
@@ -1927,9 +1928,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				systemPrompt += "\n\nYou can read Vault files directly, but the filesystem is read-only. Never attempt to modify, delete, rename, or create Vault files directly.";
 				if (vaultToolMode !== "none") {
 					systemPrompt += " The llm_hub_vault MCP also provides Obsidian-aware read tools. When the user refers to the open, active, or current file without naming it, call read_note with activeNote=true (or get_active_note_info when only its metadata is needed).";
-					if (vaultToolMode === "noSearch") {
-						systemPrompt += " Vault search and note-listing tools are disabled for this chat.";
-					}
 					systemPrompt += "\n\nFor a new Vault file, use the llm_hub_vault MCP create_note tool; it creates the file immediately, including text-based formats such as .canvas and .base. For changes to existing files, use propose_edit, bulk_propose_edit, propose_delete, bulk_propose_delete, rename_note, or bulk_propose_rename. Existing-file mutations show a diff or confirmation and apply only after approval. Do not claim a change was applied unless the tool result says it was applied.";
 				}
 			} else {
@@ -2055,6 +2053,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 						console.error("Local RAG search failed:", formatError(e));
 					}
 				}
+			}
+
+			if (vaultToolMode === "noSearch") {
+				systemPrompt += buildNoDiscoverySystemPrompt({
+					ragRequested: Boolean(ragSearchRunner),
+					hasRagContext: localRagSources.length > 0,
+				});
 			}
 
 			if (ragSearchToolOffered) {
@@ -2388,6 +2393,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				} catch (e) {
 					console.error("Local RAG search failed:", formatError(e));
 				}
+			}
+			if (vaultToolMode === "noSearch") {
+				systemPrompt += buildNoDiscoverySystemPrompt({
+					ragRequested: Boolean(ragSearchRunner),
+					hasRagContext: localRagSources.length > 0,
+				});
 			}
 
 			let fullContent = "";
@@ -2834,6 +2845,12 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				} catch (e) {
 					console.error("Local RAG search failed:", formatError(e));
 				}
+			}
+			if (vaultToolMode === "noSearch") {
+				systemPrompt += buildNoDiscoverySystemPrompt({
+					ragRequested: Boolean(ragSearchRunner),
+					hasRagContext: localRagSources.length > 0,
+				});
 			}
 
 			// Build vault tools (same as Gemini path)
@@ -3729,6 +3746,12 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					} catch (e) {
 						console.error("Local RAG search failed:", formatError(e));
 					}
+				}
+				if (vaultToolMode === "noSearch") {
+					systemPrompt += buildNoDiscoverySystemPrompt({
+						ragRequested: Boolean(ragSearchRunner),
+						hasRagContext: localRagSources.length > 0,
+					});
 				}
 
 				// The automatic retrieval already ran; let the model refine the query.

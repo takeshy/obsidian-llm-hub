@@ -203,12 +203,14 @@ export default function MessageBubble({
     }
 
     const toolDisplayMap: Record<string, { icon: string; label: string }> = {
+      read_timeline: { icon: "📅", label: t("tool.readTimeline") },
       read_note: { icon: "📖", label: t("tool.read") },
       create_note: { icon: "📝", label: t("tool.created") },
       update_note: { icon: "✏️", label: t("tool.updated") },
       delete_note: { icon: "🗑️", label: t("tool.deleted") },
       rename_note: { icon: "📋", label: t("tool.renamed") },
       search_notes: { icon: "🔍", label: t("tool.searched") },
+      rag_search: { icon: "📚", label: t("tool.ragSearched") },
       list_notes: { icon: "📂", label: t("tool.listed") },
       list_folders: { icon: "📁", label: t("tool.listedFolders") },
       create_folder: { icon: "📁", label: t("tool.createdFolder") },

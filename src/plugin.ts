@@ -1317,7 +1317,7 @@ export class LlmHubPlugin extends Plugin {
     }
 
     const embeddingApiKey = ragSetting.embeddingApiKey || getGeminiApiKey(this.settings);
-    if (!embeddingApiKey) {
+    if (!ragSetting.embeddingBaseUrl && !embeddingApiKey) {
       new Notice("API key is required for embedding (set Google API key or custom embedding API key)");
       return null;
     }

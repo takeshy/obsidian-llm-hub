@@ -752,7 +752,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           {/* Vault tool mode button */}
           <div className="llm-hub-vault-tool-container" ref={vaultToolMenuRef}>
             <button
-              className={`llm-hub-vault-tool-btn ${vaultToolMode !== "all" || mcpServers.some(s => !s.enabled) ? "active" : ""}`}
+              className={`llm-hub-vault-tool-btn ${vaultToolMode !== "all" ? "active" : ""}`}
               onClick={() => setShowVaultToolMenu(!showVaultToolMenu)}
               disabled={isLoading || isImageGenerationModel(model)}
               title={t("input.vaultToolTitle")}
@@ -765,19 +765,22 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                   className={`llm-hub-vault-tool-item ${vaultToolMode === "all" ? "selected" : ""} ${vaultToolModeOnlyNone ? "disabled" : ""}`}
                   onClick={() => { if (!vaultToolModeOnlyNone) { onVaultToolModeChange("all"); setShowVaultToolMenu(false); } }}
                 >
-                  {t("input.vaultToolAll")}
+                  <div>{t("input.vaultToolAll")}</div>
+                  <div className="llm-hub-vault-tool-item-desc">{t("input.vaultToolAllDesc")}</div>
                 </div>
                 <div
                   className={`llm-hub-vault-tool-item ${vaultToolMode === "noSearch" ? "selected" : ""} ${vaultToolModeOnlyNone ? "disabled" : ""}`}
                   onClick={() => { if (!vaultToolModeOnlyNone) { onVaultToolModeChange("noSearch"); setShowVaultToolMenu(false); } }}
                 >
-                  {t("input.vaultToolNoSearch")}
+                  <div>{t("input.vaultToolNoSearch")}</div>
+                  <div className="llm-hub-vault-tool-item-desc">{t("input.vaultToolNoSearchDesc")}</div>
                 </div>
                 <div
                   className={`llm-hub-vault-tool-item ${vaultToolMode === "none" ? "selected" : ""}`}
                   onClick={() => { onVaultToolModeChange("none"); setShowVaultToolMenu(false); }}
                 >
-                  {t("input.vaultToolNone")}
+                  <div>{t("input.vaultToolNone")}</div>
+                  <div className="llm-hub-vault-tool-item-desc">{t("input.vaultToolNoneDesc")}</div>
                 </div>
                 <div className="llm-hub-vault-tool-separator" />
                 <label className="llm-hub-vault-tool-checkbox">
