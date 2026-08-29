@@ -18,6 +18,7 @@ import { t } from "src/i18n";
 import { formatError } from "src/utils/error";
 import { isSafeWebUrl } from "src/core/webSearch";
 import { chatLinkFileRef } from "./chat/localFileLink";
+import { ConfirmModal } from "./ConfirmModal";
 
 interface MessageBubbleProps {
   message: Message;
@@ -35,12 +36,22 @@ function openLocalFile(path: string): void {
     require?: (id: string) => { shell?: { openPath: (filePath: string) => Promise<string> } };
   }).require?.("electron");
   if (!electron?.shell) {
-    new Notice(`Cannot open local file: ${path}`);
+    new Notice(t("message.openLocalFileUnavailable", { path }));
     return;
   }
   void electron.shell.openPath(path).then((error) => {
-    if (error) new Notice(`Failed to open local file: ${error}`);
+    if (error) new Notice(t("message.openLocalFileFailed", { error }));
   });
+}
+
+/** Files outside the Vault are launched by the OS, so let the user see the path first. */
+async function confirmAndOpenLocalFile(app: App, path: string): Promise<void> {
+  const confirmed = await new ConfirmModal(
+    app,
+    t("message.openLocalFileConfirm", { path }),
+    t("message.openLocalFileOpen"),
+  ).openAndWait();
+  if (confirmed) openLocalFile(path);
 }
 
 export default function MessageBubble({
@@ -119,7 +130,7 @@ export default function MessageBubble({
         link.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopImmediatePropagation();
-          openLocalFile(target.path);
+          void confirmAndOpenLocalFile(app, target.path);
         });
       });
 
