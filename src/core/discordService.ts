@@ -105,6 +105,10 @@ interface ChannelConversation {
   webSearch: boolean;            // Per-channel native web search toggle
   activeSkillPaths: string[];    // Active folder skill paths
   lastInteractionId?: string;    // Interactions API chaining (Gemini only)
+  cliSession?: {
+    provider: "antigravity-cli" | "claude-cli" | "codex-cli";
+    sessionId: string;
+  };
 }
 
 interface GeneratedResponse {
@@ -621,6 +625,10 @@ export class DiscordService {
       return `Model \`${arg}\` not found. Use \`!model\` to see available models.`;
     }
 
+    if (conversation.model !== match.name) {
+      conversation.cliSession = undefined;
+      conversation.lastInteractionId = undefined;
+    }
     conversation.model = match.name;
 
     return `Model switched to **${match.displayName}** (\`${match.name}\`)`;
@@ -1151,8 +1159,20 @@ export class DiscordService {
 
     if (isCliModel) {
       conversation.lastInteractionId = undefined;
-      return { content: await this.generateViaCli(model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath) };
+      const cliProvider = model;
+      const existingSessionId = conversation.cliSession?.provider === cliProvider
+        ? conversation.cliSession.sessionId
+        : undefined;
+      const generated = await this.generateViaCli(
+        model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath, existingSessionId,
+      );
+      conversation.cliSession = generated.sessionId
+        ? { provider: cliProvider, sessionId: generated.sessionId }
+        : undefined;
+      return { content: generated.content };
     }
+
+    conversation.cliSession = undefined;
 
     if (isLocalLlmModel(model)) {
       conversation.lastInteractionId = undefined;
@@ -1202,7 +1222,8 @@ export class DiscordService {
     scriptMap: Map<string, { skill: LoadedSkill; scriptRef: SkillScriptRef; vaultPath: string }>,
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
     vaultBasePath: string,
-  ): Promise<string> {
+    sessionId?: string,
+  ): Promise<{ content: string; sessionId?: string }> {
     const cliConfig = this.plugin.settings.cliConfig;
     const provider = model === "claude-cli"
       ? new ClaudeCliProvider()
@@ -1211,16 +1232,22 @@ export class DiscordService {
         : new AntigravityCliProvider(cliConfig.geminiCliPath);
 
     let fullResponse = "";
-    const stream = provider.chatStream(messages, systemPrompt, vaultBasePath);
+    let receivedSessionId: string | undefined;
+    const stream = provider.chatStream(messages, systemPrompt, vaultBasePath, undefined, sessionId);
     for await (const chunk of stream) {
       if (chunk.type === "text") fullResponse += chunk.content;
+      else if (chunk.type === "session_id" && chunk.sessionId) receivedSessionId = chunk.sessionId;
       else if (chunk.type === "error") throw new Error(chunk.error);
     }
 
     // Process text markers from CLI response
     fullResponse = await this.processTextMarkers(fullResponse, scriptMap, workflowMap, vaultBasePath);
 
-    return fullResponse;
+    return {
+      content: fullResponse,
+      // Antigravity does not emit an ID; any truthy sentinel enables --continue.
+      sessionId: receivedSessionId || sessionId || (model === "antigravity-cli" ? "__continue__" : undefined),
+    };
   }
 
   private async generateViaApiProvider(

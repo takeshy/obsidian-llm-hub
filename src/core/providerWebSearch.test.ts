@@ -58,6 +58,7 @@ describe("OpenAI native web search", () => {
 
   it("forces Responses, combines tools, preserves attachments, citations, and continuation", async () => {
     const response = {
+      id: "resp_search_1",
       output: [
         { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "news" } },
         { id: "ws_2", type: "web_search_call", status: "completed", action: { type: "open_page", url: "https://example.com" } },
@@ -110,6 +111,7 @@ describe("OpenAI native web search", () => {
     }]);
     expect(done?.usage?.webSearchRequests).toBe(1);
     expect(done?.providerContinuation?.items).toEqual(response.output);
+    expect(done?.providerContinuation?.responseId).toBe("resp_search_1");
   });
 
   it("surfaces a Responses error instead of falling back when search is selected", async () => {
@@ -149,6 +151,62 @@ describe("OpenAI native web search", () => {
       priorItem,
       { role: "user", content: "follow up" },
     ]);
+  });
+
+  it("continues an OpenAI Responses conversation by response ID", async () => {
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{
+      type: "response.completed",
+      response: { id: "resp_next", output: [], usage: { input_tokens: 1, output_tokens: 1 } },
+    }]));
+    const messages: Message[] = [
+      { role: "user", content: "first", timestamp: 1 },
+      {
+        role: "assistant", content: "answer", timestamp: 2,
+        providerContinuation: {
+          provider: "openai", baseUrl: "https://api.openai.com", model: "gpt-5.4",
+          items: [{ type: "reasoning", encrypted_content: "opaque" }], responseId: "resp_prior",
+        },
+      },
+      { role: "user", content: "follow up", timestamp: 3 },
+    ];
+
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://api.openai.com", "key", "gpt-5.4", messages, [], "system", vi.fn(),
+      undefined, true, undefined, undefined, false,
+    ));
+
+    const request = mocks.openAiResponsesStream.mock.calls[0][0];
+    expect(request.previous_response_id).toBe("resp_prior");
+    expect(request.input).toEqual([{ role: "user", content: "follow up" }]);
+    expect(chunks.find(chunk => chunk.type === "done")?.providerContinuation?.responseId)
+      .toBe("resp_next");
+  });
+
+  it("does not resume an older OpenAI response across a different model reply", async () => {
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{
+      type: "response.completed",
+      response: { id: "resp_new", output: [], usage: { input_tokens: 1, output_tokens: 1 } },
+    }]));
+    const messages: Message[] = [
+      { role: "user", content: "first", timestamp: 1 },
+      {
+        role: "assistant", content: "OpenAI answer", timestamp: 2,
+        providerContinuation: {
+          provider: "openai", baseUrl: "https://api.openai.com", model: "gpt-5.4",
+          items: [], responseId: "resp_stale",
+        },
+      },
+      { role: "user", content: "other model question", timestamp: 3 },
+      { role: "assistant", content: "Other model answer", timestamp: 4 },
+      { role: "user", content: "back to OpenAI", timestamp: 5 },
+    ];
+
+    await collect(openaiChatWithToolsStream(
+      "https://api.openai.com", "key", "gpt-5.4", messages, [], "system", vi.fn(),
+      undefined, true, undefined, undefined, false,
+    ));
+
+    expect(mocks.openAiResponsesStream.mock.calls[0][0].previous_response_id).toBeUndefined();
   });
 });
 

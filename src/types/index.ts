@@ -867,6 +867,8 @@ export interface ProviderContinuation {
   baseUrl: string;
   model: string;
   items: unknown[];
+  /** Responses API response ID used for provider-native multi-turn chaining. */
+  responseId?: string;
 }
 
 // Streaming chunk types

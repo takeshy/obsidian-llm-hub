@@ -469,8 +469,19 @@ async function* openaiResponsesStream(
     ...toResponsesTools(tools),
     ...(webSearchEnabled ? [{ type: "web_search" as const }] : []),
   ];
-  // Build input: previous messages as conversation history
-  const input = buildResponsesInput(messages, baseUrl, model, continuationProvider);
+  const priorAssistant = [...messages].reverse().find(message => message.role === "assistant");
+  const priorContinuation = continuationProvider === "openai"
+    && continuationMatches(priorAssistant?.providerContinuation, continuationProvider, baseUrl, model)
+    && priorAssistant.providerContinuation.responseId
+    ? priorAssistant.providerContinuation
+    : undefined;
+  let previousResponseId = priorContinuation?.responseId;
+  // A native response chain already contains earlier turns. Without one, use
+  // the existing stateless replay path (also used by xAI and old histories).
+  let input = buildResponsesInput(
+    previousResponseId ? messages.slice(-1) : messages,
+    baseUrl, model, continuationProvider,
+  );
   const continuationItems: OpenAI.Responses.ResponseInputItem[] = [];
 
   let totalInputTokens = 0;
@@ -494,6 +505,7 @@ async function* openaiResponsesStream(
       const stream = client.responses.stream({
         model,
         input,
+        ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
         instructions: systemPrompt || undefined,
         tools: responsesTools.length > 0 ? responsesTools : undefined,
         tool_choice: webSearchEnabled ? "auto" : undefined,
@@ -642,17 +654,21 @@ async function* openaiResponsesStream(
         },
         webSearchCitations: citations.length > 0 ? citations : undefined,
         webSearchSources: sources.length > 0 ? deduplicateWebSearchSources(sources) : undefined,
-        providerContinuation: webSearchEmitted ? {
+        providerContinuation: {
           provider: continuationProvider,
           baseUrl: baseUrl.replace(/\/+$/, ""),
           model,
           items: continuationItems,
-        } : undefined,
+          ...(continuationProvider === "openai" && completedResponse.id
+            ? { responseId: completedResponse.id }
+            : {}),
+        },
       };
       return;
     }
 
-    // Execute tool calls and add results to input
+    // Execute tool calls and add results to the next Responses round.
+    const functionOutputs: OpenAI.Responses.ResponseInputItem.FunctionCallOutput[] = [];
     for (const tc of toolCalls) {
       const args = parseToolArguments(tc.arguments) ?? {};
       try {
@@ -662,16 +678,23 @@ async function* openaiResponsesStream(
         const output: OpenAI.Responses.ResponseInputItem.FunctionCallOutput = {
           type: "function_call_output", call_id: tc.call_id, output: resultStr,
         };
-        input.push(output);
+        functionOutputs.push(output);
         continuationItems.push(output);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         const output: OpenAI.Responses.ResponseInputItem.FunctionCallOutput = {
           type: "function_call_output", call_id: tc.call_id, output: JSON.stringify({ error: errMsg }),
         };
-        input.push(output);
+        functionOutputs.push(output);
         continuationItems.push(output);
       }
+    }
+
+    if (continuationProvider === "openai" && completedResponse.id) {
+      previousResponseId = completedResponse.id;
+      input = functionOutputs;
+    } else {
+      input.push(...functionOutputs);
     }
   }
 
