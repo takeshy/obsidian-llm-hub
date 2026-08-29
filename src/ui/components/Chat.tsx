@@ -1955,6 +1955,21 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				}
 			}
 
+			// The bridge is wired before the automatic RAG search runs, so the runner
+			// has to exist by now; its budget is charged when that search completes.
+			let ragSearchRunner: RagSearchRunner | null = null;
+			let ragSearchToolOffered = false;
+			const cliRagSetting = selectedRagSetting ? plugin.getRagSearchSetting(selectedRagSetting) : null;
+			if (selectedRagSetting && cliRagSetting) {
+				ragSearchRunner = createRagSearchRunner(
+					(query, topK) => searchLocalRagResults(
+						selectedRagSetting, query, cliRagSetting, getGeminiApiKey(plugin.settings),
+						plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+					),
+					(filePaths) => { for (const path of filePaths) if (!localRagSources.includes(path)) localRagSources.push(path); },
+				);
+			}
+
 			if (isCodexCli) {
 				const codexTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false })
 					.filter((tool) => CODEX_VAULT_TOOLS.has(tool.name))
@@ -1964,9 +1979,15 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				const skillScriptMap = collectSkillScripts(cliLoadedSkills);
 				if (skillWorkflowMap.size > 0) codexTools.push(skillWorkflowTool);
 				if (skillScriptMap.size > 0) codexTools.push(skillScriptTool);
+				// RAG has its own toggle, so it is offered regardless of vaultToolMode.
+				if (ragSearchRunner) {
+					codexTools.push(RAG_SEARCH_TOOL);
+					ragSearchToolOffered = true;
+				}
 
 				const vaultExecutor = createToolExecutor(plugin.app);
 				const codexToolExecutor = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+					if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return ragSearchRunner.run(args);
 					if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
 						return executeSkillWorkflow(
 							plugin,
@@ -2015,6 +2036,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 							ragSettingObj, getGeminiApiKey(plugin.settings),
 							plugin.settings.proxyUrl, plugin.settings.proxyBypass
 						);
+						// A search that threw never reached the index, so it must not consume
+						// the turn budget the model is told it has.
+						ragSearchRunner?.countAutomaticSearch();
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
 							localRagSources = localRag.sources;
@@ -2031,6 +2055,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 						console.error("Local RAG search failed:", formatError(e));
 					}
 				}
+			}
+
+			if (ragSearchToolOffered) {
+				systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
 			}
 
 			let stopped = false;

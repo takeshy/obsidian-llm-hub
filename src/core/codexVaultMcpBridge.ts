@@ -1,6 +1,7 @@
 import type { IncomingMessage, Server, ServerResponse } from "http";
 import type { ToolDefinition } from "src/types";
 import { getNodeModule } from "./cliProvider";
+import { RAG_SEARCH_TOOL_NAME } from "./ragSearchTool";
 
 type ToolExecutor = (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
@@ -13,6 +14,7 @@ interface JsonRpcRequest {
 
 const PROTOCOL_VERSION = "2025-11-25";
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
+
 const READ_ONLY_TOOLS = new Set([
   "read_timeline",
   "read_note",
@@ -20,6 +22,7 @@ const READ_ONLY_TOOLS = new Set([
   "list_notes",
   "list_folders",
   "get_active_note_info",
+  RAG_SEARCH_TOOL_NAME,
 ]);
 const DESTRUCTIVE_TOOLS = new Set(["propose_delete", "bulk_propose_delete"]);
 
