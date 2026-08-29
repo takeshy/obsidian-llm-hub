@@ -62,7 +62,8 @@ import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsWebSearch } from "src/core/webSearch";
-import { searchLocalRag, loadRagMediaAttachments } from "src/core/localRagStore";
+import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments } from "src/core/localRagStore";
+import { createRagSearchRunner, RAG_SEARCH_SYSTEM_PROMPT, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import {
 	getPendingEdit,
@@ -2325,30 +2326,39 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
-			if (selectedRagSetting) {
-				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
-				if (ragSettingObj) {
-					try {
-						const localRag = await searchLocalRag(
-							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass
-						);
-						if (localRag.sources.length > 0) {
-							systemPrompt += localRag.context;
-							localRagSources = localRag.sources;
-							// Attach multimodal RAG files so the LLM can see actual content
-							if (localRag.mediaReferences.length > 0) {
-								const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
-								if (ragAttachments.length > 0) {
-									const existing = userMessage.attachments || [];
-									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-								}
+			let ragSearchRunner: RagSearchRunner | null = null;
+			const ragSettingObj = selectedRagSetting ? plugin.getRagSearchSetting(selectedRagSetting) : null;
+			if (selectedRagSetting && ragSettingObj) {
+				ragSearchRunner = createRagSearchRunner(
+					(query, topK) => searchLocalRagResults(
+						selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
+						plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+					),
+					(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+				);
+				try {
+					const localRag = await searchLocalRag(
+						selectedRagSetting, resolvedContent,
+						ragSettingObj, getGeminiApiKey(plugin.settings),
+						plugin.settings.proxyUrl, plugin.settings.proxyBypass
+					);
+					// A search that threw never reached the index, so it must not consume
+					// the turn budget the model is told it has.
+					ragSearchRunner.countAutomaticSearch();
+					if (localRag.sources.length > 0) {
+						systemPrompt += localRag.context;
+						localRagSources = localRag.sources;
+						// Attach multimodal RAG files so the LLM can see actual content
+						if (localRag.mediaReferences.length > 0) {
+							const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
+							if (ragAttachments.length > 0) {
+								const existing = userMessage.attachments || [];
+								(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
 							}
 						}
-					} catch (e) {
-						console.error("Local RAG search failed:", formatError(e));
 					}
+				} catch (e) {
+					console.error("Local RAG search failed:", formatError(e));
 				}
 			}
 
@@ -2413,7 +2423,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					toolsBundle = toolsBundle.filter(t => !SEARCH_NAMES.has(t.name));
 				}
 
+				// The automatic retrieval already ran; let the model refine the query.
+				// Kept out of `systemPrompt` itself: a tools rejection falls through to
+				// the marker flow below, which has no tool to offer.
+				if (ragSearchRunner) toolsBundle.push(RAG_SEARCH_TOOL);
+				const toolsSystemPrompt = ragSearchRunner ? systemPrompt + RAG_SEARCH_SYSTEM_PROMPT : systemPrompt;
+
 				const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
+					if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
 					if (name.startsWith("mcp_") && mcpToolExecutor) {
 						const mcpResult = await mcpToolExecutor.execute(name, args);
 						if (mcpResult.mcpApp) llmMcpApps.push(mcpResult.mcpApp);
@@ -2459,7 +2476,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 						llmConfig.apiKey || "no-key",
 						llmConfig.model,
 						allMessages, toolsBundle,
-						systemPrompt, executeToolCall, abortController.signal,
+						toolsSystemPrompt, executeToolCall, abortController.signal,
 						false, // local LLMs: don't request reasoning_effort
 						undefined, undefined, // proxy already handled by createNodeFetch
 					)) {
@@ -2755,30 +2772,39 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 			// Local RAG: search and inject context into system prompt
 			let localRagSources: string[] = [];
-			if (selectedRagSetting && !isImageGenerationModel(currentModel)) {
-				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
-				if (ragSettingObj) {
-					try {
-						const localRag = await searchLocalRag(
-							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass
-						);
-						if (localRag.sources.length > 0) {
-							systemPrompt += localRag.context;
-							localRagSources = localRag.sources;
-							// Attach multimodal RAG files so the LLM can see actual content
-							if (localRag.mediaReferences.length > 0) {
-								const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
-								if (ragAttachments.length > 0) {
-									const existing = userMessage.attachments || [];
-									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-								}
+			let ragSearchRunner: RagSearchRunner | null = null;
+			const ragSettingObj = selectedRagSetting && !isImageGenerationModel(currentModel) ? plugin.getRagSearchSetting(selectedRagSetting) : null;
+			if (selectedRagSetting && ragSettingObj) {
+				ragSearchRunner = createRagSearchRunner(
+					(query, topK) => searchLocalRagResults(
+						selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
+						plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+					),
+					(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+				);
+				try {
+					const localRag = await searchLocalRag(
+						selectedRagSetting, resolvedContent,
+						ragSettingObj, getGeminiApiKey(plugin.settings),
+						plugin.settings.proxyUrl, plugin.settings.proxyBypass
+					);
+					// A search that threw never reached the index, so it must not consume
+					// the turn budget the model is told it has.
+					ragSearchRunner.countAutomaticSearch();
+					if (localRag.sources.length > 0) {
+						systemPrompt += localRag.context;
+						localRagSources = localRag.sources;
+						// Attach multimodal RAG files so the LLM can see actual content
+						if (localRag.mediaReferences.length > 0) {
+							const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
+							if (ragAttachments.length > 0) {
+								const existing = userMessage.attachments || [];
+								(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
 							}
 						}
-					} catch (e) {
-						console.error("Local RAG search failed:", formatError(e));
 					}
+				} catch (e) {
+					console.error("Local RAG search failed:", formatError(e));
 				}
 			}
 
@@ -2831,11 +2857,18 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				tools.push(skillScriptTool);
 			}
 
+			// The automatic retrieval already ran; let the model refine the query.
+			if (ragSearchRunner) {
+				tools.push(RAG_SEARCH_TOOL);
+				systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
+			}
+
 			const apiSkillWorkflowMap = collectSkillWorkflows(apiLoadedSkills);
 			const apiSkillScriptMap = collectSkillScripts(apiLoadedSkills);
 			const apiMcpApps: McpAppInfo[] = [];
 
 			const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
+				if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
 				if (name.startsWith("mcp_") && mcpToolExecutor) {
 					const mcpResult = await mcpToolExecutor.execute(name, args);
 					if (mcpResult.mcpApp) apiMcpApps.push(mcpResult.mcpApp);
@@ -3289,6 +3322,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				// Combined tool executor that routes to Obsidian, MCP, or Skill Workflow/Script based on tool name
 				const baseToolExecutor = (obsidianToolExecutor || mcpToolExecutor || skillWorkflowMap.size > 0 || skillScriptMap.size > 0)
 					? async (name: string, args: Record<string, unknown>) => {
+						if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
 						// MCP tools start with "mcp_"
 						if (name.startsWith("mcp_") && mcpToolExecutor) {
 							const mcpResult = await mcpToolExecutor.execute(name, args);
@@ -3633,32 +3667,44 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 				// Local RAG: search and inject context into system prompt
 				let localRagSources: string[] = [];
-				if (selectedRagSetting && !isImageGenerationModel(allowedModel)) {
-					const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
-					if (ragSettingObj) {
-						try {
-							const localRag = await searchLocalRag(
-								selectedRagSetting, resolvedContent,
-								ragSettingObj, getGeminiApiKey(plugin.settings),
-								plugin.settings.proxyUrl, plugin.settings.proxyBypass
-							);
-							if (localRag.sources.length > 0) {
-								systemPrompt += localRag.context;
-								localRagSources = localRag.sources;
-								// Attach multimodal RAG files so the LLM can see actual content
-								if (localRag.mediaReferences.length > 0) {
-									const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
-									if (ragAttachments.length > 0) {
-										const existing = userMessage.attachments || [];
-										(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-									}
+				let ragSearchRunner: RagSearchRunner | null = null;
+				const ragSettingObj = selectedRagSetting && !isImageGenerationModel(allowedModel) ? plugin.getRagSearchSetting(selectedRagSetting) : null;
+				if (selectedRagSetting && ragSettingObj) {
+					ragSearchRunner = createRagSearchRunner(
+						(query, topK) => searchLocalRagResults(
+							selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+						),
+						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+					);
+					try {
+						const localRag = await searchLocalRag(
+							selectedRagSetting, resolvedContent,
+							ragSettingObj, getGeminiApiKey(plugin.settings),
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass
+						);
+						// A search that threw never reached the index, so it must not consume
+						// the turn budget the model is told it has.
+						ragSearchRunner.countAutomaticSearch();
+						if (localRag.sources.length > 0) {
+							systemPrompt += localRag.context;
+							localRagSources = localRag.sources;
+							// Attach multimodal RAG files so the LLM can see actual content
+							if (localRag.mediaReferences.length > 0) {
+								const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
+								if (ragAttachments.length > 0) {
+									const existing = userMessage.attachments || [];
+									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
 								}
 							}
-						} catch (e) {
-							console.error("Local RAG search failed:", formatError(e));
 						}
+					} catch (e) {
+						console.error("Local RAG search failed:", formatError(e));
 					}
 				}
+
+				// The automatic retrieval already ran; let the model refine the query.
+				if (toolsEnabled && ragSearchRunner) tools.push(RAG_SEARCH_TOOL);
 
 				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 
@@ -3669,7 +3715,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				const toolResults: Message["toolResults"] = [];
 				const toolsUsed: string[] = [];
 				let ragUsed = localRagSources.length > 0;
-				const ragSources: string[] = [...localRagSources];
+				// Aliased, not copied: rag_search runs mid-stream and appends to it.
+				const ragSources: string[] = localRagSources;
 				let webSearchUsed = false;
 				let webSearchSources: Message["webSearchSources"];
 				let imageGenerationUsed = false;
@@ -3697,6 +3744,11 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 				// Gemma 4: RAG/Web Search and function calling are mutually exclusive
 				const effectiveTools = isGemma4(allowedModel) && (isWebSearch || localRagSources.length > 0) ? [] : tools;
+				// Gemma 4 drops every tool when RAG or web search is on, so only describe
+				// rag_search when it actually survives into the request.
+				if (effectiveTools.some(tool => tool.name === RAG_SEARCH_TOOL_NAME)) {
+					systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
+				}
 
 				// Use image generation stream or regular chat stream
 				const chunkStream = isImageGeneration

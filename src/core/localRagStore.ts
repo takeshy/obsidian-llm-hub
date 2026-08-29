@@ -952,6 +952,33 @@ export interface LocalRagResult {
   mediaReferences: RagMediaReference[];
 }
 
+/**
+ * Raw chunk search against a local RAG index. `searchLocalRag` formats these
+ * into a system-prompt block; the rag_search tool needs the chunks themselves.
+ */
+export async function searchLocalRagResults(
+  settingName: string,
+  query: string,
+  ragSetting: import("src/types").RagSetting,
+  fallbackApiKey: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
+  topK?: number,
+): Promise<LocalRagSearchResult[]> {
+  const store = getLocalRagStore();
+  const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
+  if (!store || !apiKey) return [];
+  return store.search(
+    settingName, query, apiKey,
+    ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),
+    topK ?? ragSetting.topK,
+    ragSetting.embeddingBaseUrl || undefined,
+    ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
+    ragSetting.searchFileExtensions,
+    proxyUrl, proxyBypass,
+  );
+}
+
 export async function searchLocalRag(
   settingName: string,
   query: string,
@@ -960,18 +987,8 @@ export async function searchLocalRag(
   proxyUrl?: string,
   proxyBypass?: string,
 ): Promise<LocalRagResult> {
-  const store = getLocalRagStore();
-  const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
-  if (!store || !apiKey) {
-    return { context: "", sources: [], mediaReferences: [] };
-  }
-  const results = await store.search(
-    settingName, query, apiKey,
-    ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL), ragSetting.topK,
-    ragSetting.embeddingBaseUrl || undefined,
-    ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
-    ragSetting.searchFileExtensions,
-    proxyUrl, proxyBypass,
+  const results = await searchLocalRagResults(
+    settingName, query, ragSetting, fallbackApiKey, proxyUrl, proxyBypass,
   );
   if (results.length === 0) {
     return { context: "", sources: [], mediaReferences: [] };
