@@ -502,7 +502,7 @@ export const en = {
   "message.thinkingTokens": "Thinking",
 
   // Tool display labels
-  "tool.readTimeline": "Read timeline",
+  "tool.readTimeline": "Read Timeline",
   "tool.read": "Read",
   "tool.created": "Created",
   "tool.updated": "Updated",

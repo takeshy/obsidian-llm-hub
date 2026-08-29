@@ -356,7 +356,7 @@ function displayLocalStoreSettings(
     displayIndexStatus(containerEl, app, name, ragSetting);
 
     // Sync
-    displaySyncControls(containerEl, ctx, name, ragSetting);
+    displaySyncControls(containerEl, ctx, name);
 
     // Clear index
     new Setting(containerEl)
@@ -696,8 +696,7 @@ function displayIndexStatus(
 function displaySyncControls(
   containerEl: HTMLElement,
   ctx: SettingsContext,
-  name: string,
-  ragSetting: RagSetting
+  name: string
 ): void {
   const { plugin, display, syncCancelRef } = ctx;
 
