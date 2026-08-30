@@ -20,9 +20,9 @@ Workflows use node types for variables, control flow, LLM calls, HTTP, JSON, Jav
 - `workflow` calls another workflow.
 - `mcp` calls a tool on an MCP server given by URL.
 - `shell` runs a local system command.
-- `rag-sync` is a deprecated compatibility node that only logs a warning; use local RAG instead.
+- `rag-sync` runs a full incremental sync of a local RAG setting.
 
-Hotkeys can run workflows directly. Event triggers can run workflows on file create, modify, delete, rename, or open events, optionally filtered by glob patterns.
+Hotkeys can run workflows directly. Event triggers can run workflows on startup or file create, modify, delete, rename, or open events, optionally filtered by glob patterns for file events.
 
 Workflow history records runs and can be exported or referenced when asking AI to modify a workflow. Skill workflows run through chat with the same interactive modals and return all variables except `__`-prefixed internal ones to the chat model.
 

@@ -122,28 +122,38 @@ export async function handleWorkflowNode(
   }
 }
 
-// Handle rag-sync node - previously synced notes to server RAG store (now removed)
-// Server RAG has been removed. This node is now a no-op that logs a warning.
-// eslint-disable-next-line @typescript-eslint/require-await -- Preserve the async handler contract for legacy rag-sync workflow nodes.
+// Handle rag-sync node - run a full incremental sync of the local RAG index.
 export async function handleRagSyncNode(
   node: WorkflowNode,
   context: ExecutionContext,
   _app: App,
-  _plugin: LlmHubPlugin
+  plugin: LlmHubPlugin
 ): Promise<void> {
   const saveTo = node.properties["saveTo"];
   const pathRaw = node.properties["path"] || "";
-  const path = pathRaw ? replaceVariables(pathRaw, context) : null;
+  const requestedPath = pathRaw ? replaceVariables(pathRaw, context) : undefined;
+  const ragSettingRaw = node.properties["ragSetting"] || "";
+  const ragSetting = (ragSettingRaw ? replaceVariables(ragSettingRaw, context) : "")
+    || plugin.workspaceState.selectedRagSetting;
 
-  console.warn("rag-sync node is deprecated: Server RAG (Google File Search) has been removed. Use local RAG instead.");
+  if (!ragSetting) {
+    throw new Error("No local RAG setting selected. Set ragSetting or select a semantic search setting first.");
+  }
 
-  // Set result if saveTo is specified
+  // Local RAG currently exposes full incremental sync only. Preserve legacy
+  // path input in the result, but use the setting's folder/exclusion filters.
+  const result = await plugin.syncVaultForLocalRAG(ragSetting);
+  if (!result) {
+    throw new Error(`Local RAG sync could not start for setting "${ragSetting}".`);
+  }
+
   if (saveTo) {
     context.variables.set(saveTo, JSON.stringify({
-      path,
-      error: "Server RAG sync is no longer supported. Use local RAG instead.",
+      ...result,
+      ragSetting,
+      requestedPath,
       syncedAt: Date.now(),
-      mode: "unsupported",
+      mode: "full-incremental",
     }));
   }
 }

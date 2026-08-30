@@ -97,8 +97,8 @@ code: |
 System variables are prefixed with \`_\` and automatically set by the runtime depending on trigger mode.
 
 ### Event Trigger Variables
-Set when workflow is triggered by a file event (create, modify, delete, rename, file-open):
-- \`_eventType\` - Event type: "create", "modify", "delete", "rename", "file-open"
+Set when workflow is triggered by an event. Startup only sets \`_eventType\`; file variables are available for file events:
+- \`_eventType\` - Event type: "startup", "create", "modify", "delete", "rename", "file-open"
 - \`_eventFilePath\` - Path of the affected file (e.g., "folder/note.md")
 - \`_eventFile\` - JSON object: \`{"path": "...", "basename": "...", "name": "...", "extension": "..."}\`
 - \`_eventFileContent\` - Full file content (available for create, modify, file-open events)
@@ -424,24 +424,18 @@ Execute sub-workflow.
 - **prefix** (optional): Prefix for all imported variables
 
 #### rag-sync
-Sync note to RAG store.
-- **path** (optional): Note path to sync (required unless delete-only)
-- **ragSetting** (required): RAG setting name
-- **oldPath** (optional): Old path to delete (for rename/delete operations)
+Run a full incremental sync of a local RAG setting. The setting's target folders,
+exclude patterns, embedding model, and multimodal behavior are applied.
+- **ragSetting** (optional): Local RAG setting name (defaults to the selected setting)
+- **path** (deprecated): Accepted for compatibility but does not limit the sync to one file
 - **saveTo** (optional): Variable for result
 
 **Example**:
 \`\`\`yaml
-- id: update-note
-  type: note
-  path: "{{notePath}}"
-  content: "{{newContent}}"
-  mode: overwrite
-  confirm: "false"
 - id: sync-to-rag
   type: rag-sync
-  path: "{{notePath}}"
   ragSetting: "my-rag-store"
+  saveTo: syncResult
 \`\`\`
 
 #### obsidian-command

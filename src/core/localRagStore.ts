@@ -86,6 +86,12 @@ export interface FilterConfig {
   excludePatterns: string[];
 }
 
+/** Gemini native embedding models that accept multimodal inputs. */
+export function isGeminiMultimodalEmbeddingModel(model: string): boolean {
+  const modelId = model.split("/").pop() ?? model;
+  return /^gemini-embedding-/i.test(modelId);
+}
+
 function shouldIncludeFile(filePath: string, config: FilterConfig): boolean {
   // Check include folders (if empty, include all)
   if (config.includeFolders.length > 0) {

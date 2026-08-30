@@ -5,6 +5,7 @@ import {
   _cosineSimilarity as cosineSimilarity,
   _simpleChecksum as simpleChecksum,
   _shouldIncludeFile as shouldIncludeFile,
+  isGeminiMultimodalEmbeddingModel,
 } from "./localRagStore";
 import type { FilterConfig, LocalRagSearchResult } from "./localRagStore";
 import {
@@ -46,6 +47,19 @@ vi.mock("obsidian", async () => {
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 const MODEL = "gemini-embedding-2-preview";
 const hasApiKey = GEMINI_API_KEY.length > 0;
+
+describe("isGeminiMultimodalEmbeddingModel", () => {
+  it("recognizes Gemini Embedding 2 GA and preview model IDs", () => {
+    expect(isGeminiMultimodalEmbeddingModel("gemini-embedding-2")).toBe(true);
+    expect(isGeminiMultimodalEmbeddingModel("gemini-embedding-2-preview")).toBe(true);
+    expect(isGeminiMultimodalEmbeddingModel("models/gemini-embedding-2")).toBe(true);
+  });
+
+  it("does not classify local or text-only embedding model IDs as Gemini multimodal", () => {
+    expect(isGeminiMultimodalEmbeddingModel("nomic-embed-text")).toBe(false);
+    expect(isGeminiMultimodalEmbeddingModel("text-embedding-004")).toBe(false);
+  });
+});
 
 // ── shouldIncludeFile ──────────────────────────────────────────────
 

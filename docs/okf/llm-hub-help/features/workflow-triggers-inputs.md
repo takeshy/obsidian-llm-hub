@@ -33,6 +33,7 @@ Every run also sets `_date`, `_time`, `_datetime`, and `_workflowName`. Setting 
 
 Event triggers can run workflows on:
 
+- `startup` - workspace ready after startup.
 - `create` - file created.
 - `modify` - file modified, debounced.
 - `delete` - file deleted.
@@ -43,9 +44,8 @@ Triggers can include a glob file pattern such as `**/*.md`, `journal/*.md`, `*.m
 
 # Event Variables
 
-Event-triggered workflows receive:
+Event-triggered workflows receive `_eventType`. File-triggered workflows also receive:
 
-- `_eventType` - event type.
 - `_eventFilePath` - path of the affected file.
 - `_eventFile` - JSON with path, basename, name, and extension.
 - `_eventFileContent` - file content for create, modify, and file-open events.

@@ -449,6 +449,7 @@ Workflows can be automatically triggered by Obsidian events:
 
 | Event | Description |
 |-------|-------------|
+| Startup | Triggered once when the Obsidian workspace is ready |
 | File Created | Triggered when a new file is created |
 | File Modified | Triggered when a file is saved (debounced 5s) |
 | File Deleted | Triggered when a file is deleted |
@@ -472,13 +473,15 @@ Workflows can be automatically triggered by Obsidian events:
 
 | Variable | Description |
 |----------|-------------|
-| `_eventType` | Event type: `create`, `modify`, `delete`, `rename`, `file-open` |
+| `_eventType` | Event type: `startup`, `create`, `modify`, `delete`, `rename`, `file-open` |
 | `_eventFilePath` | Path of the affected file |
 | `_eventFile` | JSON with file info (path, basename, name, extension) |
 | `_eventFileContent` | File content (for create/modify/file-open events) |
 | `_eventOldPath` | Previous path (for rename events only) |
 
 > **Note:** `prompt-file` and `prompt-selection` nodes automatically use the event file when triggered by events. `prompt-selection` uses the entire file content as the selection.
+
+Startup triggers have no event file, and their optional file pattern is ignored.
 
 ---
 

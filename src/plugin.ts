@@ -30,6 +30,7 @@ import {
   initLocalRagStore,
   resetLocalRagStore,
   getLocalRagStore,
+  isGeminiMultimodalEmbeddingModel,
 } from "src/core/localRagStore";
 import { initCliProviderManager } from "src/core/cliProvider";
 import {
@@ -354,6 +355,9 @@ export class LlmHubPlugin extends Plugin {
       } catch (e) {
         console.error("LLM Hub: Failed to register workflow event listeners:", formatError(e));
       }
+      this.app.workspace.onLayoutReady(() => {
+        void this.workflowMgr.triggerStartupWorkflows();
+      });
       // Emit event to refresh UI after workspace state is loaded
       this.settingsEmitter.emit("workspace-state-loaded", this.workspaceState);
       // Notify UI components that settings are ready (fixes race condition where
@@ -1328,7 +1332,7 @@ export class LlmHubPlugin extends Plugin {
       // - Gemini native embedding models: full multimodal (PDF binary, images, audio, video)
       // - Non-Gemini (custom base URL): PDF only via text extraction
       const indexMultimodal = !ragSetting.embeddingBaseUrl
-        ? /gemini-embedding-/i.test(effectiveModel)
+        ? isGeminiMultimodalEmbeddingModel(effectiveModel)
         : true;
       const failedFiles = new Set<string>();
       let result = await localRag.sync(
