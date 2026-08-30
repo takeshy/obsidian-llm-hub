@@ -483,6 +483,20 @@ Workflows can be automatically triggered by Obsidian events:
 
 Startup triggers have no event file, and their optional file pattern is ignored.
 
+### Example: Sync Local RAG on Startup
+
+Use a `rag-sync` node with a Startup event trigger to refresh a Local RAG index automatically whenever the Obsidian workspace becomes ready. The node performs a full incremental sync using the target folders, exclusion patterns, and embedding configuration from the selected RAG setting.
+
+1. Create a workflow containing a `rag-sync` node and select the RAG setting to sync.
+2. Open the event trigger settings from the zap icon (⚡), enable **Startup**, and save.
+3. Restart or reload Obsidian. Open the workflow history to confirm the sync result, including embedded, skipped, removed, and failed files.
+
+![Local RAG sync workflow](docs/images/rag_workflow.png)
+
+![Startup event trigger for Local RAG sync](docs/images/rag_event.png)
+
+![Local RAG sync execution result](docs/images/rag_workflow_execution_log.png)
+
 ---
 
 # Dashboard Hub Integration
