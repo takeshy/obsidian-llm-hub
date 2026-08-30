@@ -943,6 +943,8 @@ export interface RagMediaReference {
   filePath: string;
   contentType: RagContentType;
   pageLabel?: string;  // e.g. "pages 1-6 of 24" for PDF page extraction
+  /** True when the indexed chunk is only a Gemini-native PDF label, not extracted text. */
+  needsTextFallback?: boolean;
 }
 
 export interface LocalRagResult {
@@ -997,7 +999,12 @@ export async function searchLocalRag(
   // Collect non-text file references for multimodal attachment
   const mediaReferences: RagMediaReference[] = results
     .filter(r => r.contentType && r.contentType !== "text")
-    .map(r => ({ filePath: r.filePath, contentType: r.contentType!, pageLabel: r.pageLabel }));
+    .map(r => ({
+      filePath: r.filePath,
+      contentType: r.contentType!,
+      pageLabel: r.pageLabel,
+      needsTextFallback: r.contentType === "pdf" && /^\[Pdf:/i.test(r.text.trim()),
+    }));
 
   return {
     context: buildLocalRagContext(results),
@@ -1103,6 +1110,75 @@ export async function loadRagMediaAttachments(
   }
 
   return attachments;
+}
+
+/**
+ * Text fallback for RAG PDF hits on providers that cannot take a PDF attachment.
+ * An index built with Gemini-native multimodal embeddings stores only a label
+ * ("[Pdf: report.pdf (pages 1-6 of 24)]") as the chunk text, so dropping the
+ * attachment without this would leave the model a filename and no content.
+ */
+export async function buildRagPdfTextContext(
+  app: App,
+  mediaReferences: RagMediaReference[],
+  maxCharsPerFile = 20000,
+): Promise<string> {
+  const pdfReferences = mediaReferences.filter(
+    ref => ref.contentType === "pdf" && ref.needsTextFallback === true,
+  );
+  if (pdfReferences.length === 0) return "";
+
+  const { extractPdfText } = await import("../vault/search");
+  let context = "";
+
+  type PageRange = { startPage?: number; endPage?: number };
+  const byFile = new Map<string, PageRange[]>();
+  for (const ref of pdfReferences) {
+    const range = ref.pageLabel ? parsePageLabel(ref.pageLabel) : null;
+    const ranges = byFile.get(ref.filePath) ?? [];
+    ranges.push(range ?? {});
+    byFile.set(ref.filePath, ranges);
+  }
+
+  for (const [filePath, rawRanges] of byFile) {
+    // A whole-document reference subsumes every ranged reference. Otherwise
+    // merge overlapping/adjacent page ranges to avoid injecting pages twice.
+    const ranges: PageRange[] = rawRanges.some(range => range.startPage == null || range.endPage == null)
+      ? [{}]
+      : rawRanges
+        .map(range => ({ startPage: range.startPage!, endPage: range.endPage! }))
+        .sort((a, b) => a.startPage - b.startPage)
+        .reduce<Array<{ startPage: number; endPage: number }>>((merged, range) => {
+          const previous = merged[merged.length - 1];
+          if (previous && range.startPage <= previous.endPage + 1) {
+            previous.endPage = Math.max(previous.endPage, range.endPage);
+          } else {
+            merged.push({ ...range });
+          }
+          return merged;
+        }, []);
+
+    let remaining = maxCharsPerFile;
+    for (const range of ranges) {
+      if (remaining <= 0) break;
+      try {
+        const text = await extractPdfText(app, filePath, range.startPage, range.endPage);
+        if (!text?.trim()) continue;
+        const truncated = text.length > remaining;
+        const body = truncated ? text.slice(0, remaining) + "\n... [PDF text truncated]" : text;
+        const label = range.startPage != null && range.endPage != null
+          ? ` (pages ${range.startPage}-${range.endPage})`
+          : "";
+        context += `\n[Source: ${filePath}]${label}\n${body}\n`;
+        remaining -= Math.min(text.length, remaining);
+      } catch (e) {
+        console.error(`Failed to extract RAG PDF text for ${filePath}:`, e);
+      }
+    }
+  }
+
+  if (!context) return "";
+  return `\n\n--- Extracted PDF text from vault (semantic search) ---\n${context}\n--- End of PDF text ---\n`;
 }
 
 /**

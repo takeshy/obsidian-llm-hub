@@ -1,7 +1,7 @@
 import { TFolder, TFile, type App } from "obsidian";
 import { formatError } from "src/utils/error";
 import { DEFAULT_SETTINGS } from "src/types";
-import { getSearchableVaultFiles, getVaultTextFiles } from "./fileTypes";
+import { getSearchableVaultFiles } from "./fileTypes";
 import { extractPdfPageText, loadPdfDocument } from "../core/pdfJs";
 
 // In-memory cache for extracted PDF text, keyed by "path:startPage-endPage"
@@ -169,7 +169,9 @@ export function listNotes(
   limit = DEFAULT_SETTINGS.listNotesLimit,
   fileFilter?: (file: TFile) => boolean,
 ): { results: SearchResult[]; totalCount: number; hasMore: boolean } {
-  let files = fileFilter ? getVaultTextFiles(app).filter(fileFilter) : getVaultTextFiles(app);
+  // PDFs are searchable (searchByName/searchByContent), so hiding them here
+  // would leave the model finding files it can never list.
+  let files = fileFilter ? getSearchableVaultFiles(app).filter(fileFilter) : getSearchableVaultFiles(app);
 
   if (folder) {
     const normalizedFolder = folder.toLowerCase().replace(/\/$/, "");

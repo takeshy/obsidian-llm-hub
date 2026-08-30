@@ -195,6 +195,16 @@ class ApiProviderModal extends Modal {
       this.config.apiKey,
     );
 
+    new Setting(contentEl)
+      .setName(t("settings.pdfInputMode"))
+      .setDesc(t("settings.pdfInputMode.desc"))
+      .addDropdown((dropdown) => dropdown
+        .addOption("auto", t("settings.pdfInputMode.auto"))
+        .addOption("native", t("settings.pdfInputMode.native"))
+        .addOption("extract-text", t("settings.pdfInputMode.extractText"))
+        .setValue(this.config.pdfInputMode ?? "auto")
+        .onChange((value) => { this.config.pdfInputMode = value as import("src/types").PdfInputMode; }));
+
     // Model selection — checkboxes for enabling/disabling models
     const knownModels = getKnownModels(this.config.type);
     const fetchedModels = this.config.availableModels;

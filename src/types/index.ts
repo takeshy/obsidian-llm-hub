@@ -415,6 +415,8 @@ export interface LocalLlmConfig {
    * list from settings. Empty / unset means tools are attempted by default.
    */
   toolsUnsupportedModels?: string[];
+  /** Local/OpenAI-compatible servers default to text extraction in auto mode. */
+  pdfInputMode?: PdfInputMode;
 }
 
 /**
@@ -431,7 +433,9 @@ export function isToolsCompatibleFramework(framework: LlmFramework): boolean {
 
 /** True if the user's vault tools should be attempted for this config + model. */
 export function isLocalLlmToolsEnabled(config: LocalLlmConfig, modelName: string): boolean {
-  if (!isToolsCompatibleFramework(config.framework)) return false;
+  // OpenCode receives tools through its dynamically registered MCP server,
+  // not through the OpenAI-compatible function-calling endpoint.
+  if (config.framework !== "opencode" && !isToolsCompatibleFramework(config.framework)) return false;
   return !(config.toolsUnsupportedModels?.includes(modelName));
 }
 
@@ -461,6 +465,7 @@ export type ChatProvider = "api" | "antigravity-cli" | "claude-cli" | "codex-cli
 
 // API provider types for multi-provider support
 export type ApiProviderType = "gemini" | "openai" | "anthropic" | "openrouter" | "grok" | "opencodego" | "opencodezen" | "custom";
+export type PdfInputMode = "auto" | "native" | "extract-text";
 
 export interface ApiProviderConfig {
   id: string;
@@ -472,6 +477,8 @@ export interface ApiProviderConfig {
   availableModels: string[];
   verified: boolean;
   enabled: boolean;
+  /** How PDF files returned by vault tools are supplied to this provider. */
+  pdfInputMode?: PdfInputMode;
 }
 
 export const KNOWN_PROVIDER_DEFAULTS: Record<string, { baseUrl: string; displayName: string }> = {

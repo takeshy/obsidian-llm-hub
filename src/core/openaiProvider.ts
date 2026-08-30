@@ -15,6 +15,7 @@ import type { Message, StreamChunk, ToolDefinition, GeneratedImage, WebSearchCit
 import { calculateCost } from "./modelPricing";
 import { parseThinkTags } from "./thinkTagParser";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
+import { dedupeAttachments, getToolResultAttachments, withoutToolResultAttachments } from "./toolResultAttachments";
 import {
   continuationMatches,
   deduplicateWebSearchSources,
@@ -669,17 +670,23 @@ async function* openaiResponsesStream(
 
     // Execute tool calls and add results to the next Responses round.
     const functionOutputs: OpenAI.Responses.ResponseInputItem.FunctionCallOutput[] = [];
+    const roundAttachments: import("../types").Attachment[] = [];
     for (const tc of toolCalls) {
       const args = parseToolArguments(tc.arguments) ?? {};
       try {
         const result = await executeToolCall(tc.name, args);
-        const resultStr = typeof result === "string" ? result : JSON.stringify(result);
-        yield { type: "tool_result", toolResult: { toolCallId: tc.call_id, result } };
+        const cleanResult = withoutToolResultAttachments(result);
+        const resultStr = typeof cleanResult === "string" ? cleanResult : JSON.stringify(cleanResult);
+        yield { type: "tool_result", toolResult: { toolCallId: tc.call_id, result: cleanResult } };
         const output: OpenAI.Responses.ResponseInputItem.FunctionCallOutput = {
           type: "function_call_output", call_id: tc.call_id, output: resultStr,
         };
         functionOutputs.push(output);
         continuationItems.push(output);
+        // Deliberately kept out of continuationItems: those are persisted with
+        // the message and replayed, which would store the base64 in the chat
+        // file and re-upload it on every later turn.
+        roundAttachments.push(...getToolResultAttachments(result));
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         const output: OpenAI.Responses.ResponseInputItem.FunctionCallOutput = {
@@ -690,11 +697,22 @@ async function* openaiResponsesStream(
       }
     }
 
+    const toolAttachmentItems: OpenAI.Responses.ResponseInputItem[] = dedupeAttachments(roundAttachments)
+      .map(attachment => ({
+        type: "message",
+        role: "user",
+        content: [{
+          type: "input_file",
+          filename: attachment.name,
+          file_data: `data:${attachment.mimeType};base64,${attachment.data}`,
+        }],
+      }) as unknown as OpenAI.Responses.ResponseInputItem);
+
     if (continuationProvider === "openai" && completedResponse.id) {
       previousResponseId = completedResponse.id;
-      input = functionOutputs;
+      input = [...functionOutputs, ...toolAttachmentItems];
     } else {
-      input.push(...functionOutputs);
+      input.push(...functionOutputs, ...toolAttachmentItems);
     }
   }
 
@@ -941,19 +959,35 @@ export async function* openaiChatWithToolsStream(
     }
     conversationMessages.push(assistantMsg as unknown as OpenAI.ChatCompletionMessageParam);
 
+    const toolRoundAttachments: import("src/types").Attachment[] = [];
     for (const tc of toolCallEntries) {
       // A no-argument call arrives as an empty string; parsing it must not be
       // mistaken for a tool failure when every parameter is optional.
       const args = parseToolArguments(tc.arguments) ?? {};
       try {
         const result = await executeToolCall(tc.name, args);
-        const resultStr = typeof result === "string" ? result : JSON.stringify(result);
-        yield { type: "tool_result", toolResult: { toolCallId: tc.id, result } };
+        const cleanResult = withoutToolResultAttachments(result);
+        const resultStr = typeof cleanResult === "string" ? cleanResult : JSON.stringify(cleanResult);
+        yield { type: "tool_result", toolResult: { toolCallId: tc.id, result: cleanResult } };
         conversationMessages.push({ role: "tool", content: resultStr, tool_call_id: tc.id });
+        toolRoundAttachments.push(...getToolResultAttachments(result));
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         conversationMessages.push({ role: "tool", content: JSON.stringify({ error: errMsg }), tool_call_id: tc.id });
       }
+    }
+    const roundFiles = dedupeAttachments(toolRoundAttachments);
+    if (roundFiles.length > 0) {
+      conversationMessages.push({
+        role: "user",
+        content: roundFiles.map(attachment => ({
+          type: "file" as const,
+          file: {
+            filename: attachment.name,
+            file_data: `data:${attachment.mimeType};base64,${attachment.data}`,
+          },
+        })),
+      } as unknown as OpenAI.ChatCompletionMessageParam);
     }
   }
 

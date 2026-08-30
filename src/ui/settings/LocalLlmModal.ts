@@ -110,6 +110,17 @@ export class LocalLlmModal extends Modal {
       this.config.apiKey,
     );
 
+    new Setting(contentEl)
+      .setName(t("settings.pdfInputMode"))
+      .setDesc(t("settings.pdfInputMode.localDesc"))
+      // Local servers resolve "auto" to text extraction, so offering it as a
+      // third option would just duplicate "extract-text".
+      .addDropdown((dropdown) => dropdown
+        .addOption("extract-text", t("settings.pdfInputMode.extractText"))
+        .addOption("native", t("settings.pdfInputMode.native"))
+        .setValue(this.config.pdfInputMode === "native" ? "native" : "extract-text")
+        .onChange((value) => { this.config.pdfInputMode = value as import("src/types").PdfInputMode; }));
+
     // Basic Auth (OpenCode local server may set OPENCODE_SERVER_USERNAME / PASSWORD)
     if (this.config.framework === "opencode") {
       new Setting(contentEl)

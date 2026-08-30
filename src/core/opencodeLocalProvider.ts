@@ -298,6 +298,7 @@ export async function* opencodeLocalChatStream(
   systemPrompt: string,
   signal?: AbortSignal,
   _attachments?: Attachment[],
+  vaultMcpUrl?: string,
 ): AsyncGenerator<StreamChunk> {
   void _attachments; // attachments not yet forwarded; see issue #37 for follow-ups
 
@@ -317,6 +318,32 @@ export async function* opencodeLocalChatStream(
   const modelID = config.model.slice(slash + 1);
 
   if (signal?.aborted) return;
+
+  // OpenCode has its own session API rather than OpenAI-compatible function
+  // calling. Register the plugin's loopback MCP bridge so OpenCode can expose
+  // the Obsidian Vault tools to the selected model for this session.
+  if (vaultMcpUrl) {
+    try {
+      const res = await requestUrl({
+        url: `${base}/mcp`,
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: "obsidian-llm-hub-vault",
+          config: { type: "remote", url: vaultMcpUrl, enabled: true },
+        }),
+        throw: false,
+      });
+      if (res.status < 200 || res.status >= 300) {
+        const detail = (res.text || "").slice(0, 200);
+        yield { type: "error", error: `Failed to register Vault MCP with OpenCode: HTTP ${res.status}${detail ? ` ${detail}` : ""}` };
+        return;
+      }
+    } catch (err) {
+      yield { type: "error", error: `Failed to register Vault MCP with OpenCode: ${err instanceof Error ? err.message : String(err)}` };
+      return;
+    }
+  }
 
   // 1) Create session
   let sessionId: string;

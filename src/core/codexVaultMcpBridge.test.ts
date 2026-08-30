@@ -60,6 +60,26 @@ describe("CodexVaultMcpBridge", () => {
     expect(result).not.toHaveProperty("isError");
   });
 
+  it("reports MCP tool calls to the chat observer", async () => {
+    const execute = vi.fn().mockResolvedValue({ success: true, content: "PDF text" });
+    const observe = vi.fn();
+    const bridge = new CodexVaultMcpBridge([{ ...tool, name: "read_note" }], execute);
+    bridge.setToolCallObserver(observe);
+
+    await bridge.handleRequest({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: { name: "read_note", arguments: { fileName: "docs/manual.pdf" } },
+    });
+
+    expect(observe).toHaveBeenCalledWith(
+      "read_note",
+      { fileName: "docs/manual.pdf" },
+      { success: true, content: "PDF text" },
+    );
+  });
+
   it("rejects tools that were not explicitly exposed", async () => {
     const execute = vi.fn();
     const bridge = new CodexVaultMcpBridge([tool], execute);

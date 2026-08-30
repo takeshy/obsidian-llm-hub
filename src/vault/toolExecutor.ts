@@ -15,7 +15,7 @@ import {
   proposeBulkEdit,
   proposeBulkDelete,
   proposeBulkRename,
-  findFileByName,
+  resolveNoteFile,
 } from "./notes";
 import {
   searchByName,
@@ -41,6 +41,7 @@ export interface ToolExecutionContext {
   maxNoteChars?: number;
   limitVaultToolScope?: boolean;
   cloudVaultToolAllowedFolders?: string[];
+  pdfInputMode?: import("src/types").PdfInputMode;
 }
 
 function hasCloudVaultToolScope(context: ToolExecutionContext | undefined): boolean {
@@ -55,9 +56,9 @@ function cloudVaultToolFileFilter(context: ToolExecutionContext | undefined): ((
 function resolveToolFile(app: App, fileName: string | undefined, activeNote: boolean | undefined): TFile | null {
   if (activeNote) return app.workspace.getActiveFile();
   if (!fileName) return null;
-  const direct = app.vault.getAbstractFileByPath(fileName);
-  if (direct instanceof TFile) return direct;
-  return findFileByName(app, fileName);
+  // Must match readNote/notes.ts exactly: a target this fails to resolve is not
+  // scope-checked, so a looser lookup downstream would slip past the guard.
+  return resolveNoteFile(app, fileName);
 }
 
 function denyIfCloudVaultToolPathOutsideScope(path: string, context: ToolExecutionContext | undefined): ToolResult | null {
@@ -147,7 +148,8 @@ async function executeToolCallInternal(
         app,
         fileName,
         args.activeNote as boolean | undefined,
-        context?.maxNoteChars ?? DEFAULT_SETTINGS.maxNoteChars
+        context?.maxNoteChars ?? DEFAULT_SETTINGS.maxNoteChars,
+        context?.pdfInputMode ?? "extract-text",
       );
     }
 

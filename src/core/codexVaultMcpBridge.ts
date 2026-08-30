@@ -4,6 +4,11 @@ import { getNodeModule } from "./cliProvider";
 import { RAG_SEARCH_TOOL_NAME } from "./ragSearchTool";
 
 type ToolExecutor = (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+type ToolCallObserver = (
+  name: string,
+  args: Record<string, unknown>,
+  result: Record<string, unknown>,
+) => void;
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -36,6 +41,7 @@ export class CodexVaultMcpBridge {
   private server: Server | null = null;
   private token = "";
   private url: string | null = null;
+  private observeToolCall?: ToolCallObserver;
 
   constructor(
     private tools: ToolDefinition[],
@@ -48,6 +54,10 @@ export class CodexVaultMcpBridge {
 
   setTools(tools: ToolDefinition[]): void {
     this.tools = tools;
+  }
+
+  setToolCallObserver(observer?: ToolCallObserver): void {
+    this.observeToolCall = observer;
   }
 
   async start(): Promise<string> {
@@ -124,6 +134,7 @@ export class CodexVaultMcpBridge {
       }
       try {
         const result = await this.executeTool(name, args);
+        this.observeToolCall?.(name, args, result);
         const isError = result.success === false || typeof result.error === "string";
         console.warn("[LLM Hub Codex MCP] tool result", { name, isError });
         return {
@@ -133,6 +144,7 @@ export class CodexVaultMcpBridge {
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        this.observeToolCall?.(name, args, { success: false, error: message });
         console.error("[LLM Hub Codex MCP] tool failed", { name, message });
         return { content: [{ type: "text", text: message }], isError: true };
       }

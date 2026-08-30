@@ -62,10 +62,12 @@ import { localLlmChatStream } from "src/core/localLlmProvider";
 import { openaiChatWithToolsStream, openaiGenerateImageStream, isOpenAiImageModel } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsWebSearch } from "src/core/webSearch";
-import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments } from "src/core/localRagStore";
+import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments, buildRagPdfTextContext } from "src/core/localRagStore";
+import { resolveApiProviderPdfInputMode, resolveLocalLlmPdfInputMode } from "src/core/pdfInputMode";
 import { createRagSearchRunner, RAG_SEARCH_SYSTEM_PROMPT, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
 import { buildNoDiscoverySystemPrompt } from "./chat/noDiscoveryPrompt";
 import { createToolExecutor } from "src/vault/toolExecutor";
+import { extractPdfText } from "src/vault/search";
 import {
 	getPendingEdit,
 	applyEdit,
@@ -413,6 +415,10 @@ function getPendingInfos<T>(items: T[]): T[] | undefined {
 	return items.length > 0 ? items : undefined;
 }
 
+// File mentions stay as bare vault paths whenever the model has Vault tools
+// (see resolveMessageVariables), so it has to fetch their contents itself.
+const FILE_MENTION_TOOL_PROMPT = "\n\nA bare vault-relative path in the user's message (for example `folder/note.md` or `folder/document.pdf`) is a file the user referenced by mention, not a literal string. Its content is not inlined into the message. Call read_note with that exact path before answering anything that depends on it.";
+
 const MAX_BACKGROUND_STREAMS = 3;
 const CODEX_VAULT_TOOLS = new Set([
 	"read_timeline",
@@ -525,6 +531,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const hasCompletedInitialRestoreRef = useRef(false);
 	const persistentCliRef = useRef<PersistentCliSession | null>(null);
 	const codexVaultMcpBridgeRef = useRef<CodexVaultMcpBridge | null>(null);
+	const openCodeVaultMcpBridgeRef = useRef<CodexVaultMcpBridge | null>(null);
 	const codexRuntimeConfigRef = useRef({
 		model: plugin.settings.cliConfig?.codexCliModel,
 		path: plugin.settings.cliConfig?.codexCliPath,
@@ -1174,13 +1181,19 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				void codexVaultMcpBridgeRef.current.stop();
 				codexVaultMcpBridgeRef.current = null;
 			}
+			if (openCodeVaultMcpBridgeRef.current) {
+				void openCodeVaultMcpBridgeRef.current.stop();
+				openCodeVaultMcpBridgeRef.current = null;
+			}
 		};
 	}, []);
 
 	// Load vault files for @ mention suggestions
 	useEffect(() => {
 		const updateVaultFiles = () => {
-			const files = plugin.app.vault.getMarkdownFiles().map(f => f.path);
+			const files = plugin.app.vault.getFiles()
+				.filter(file => file.extension === "md" || file.extension === "pdf")
+				.map(file => file.path);
 			setVaultFiles(files.sort());
 		};
 		updateVaultFiles();
@@ -1584,16 +1597,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		return result;
 	};
 
-	// Resolve message variables (for regular messages).
-	// Bare file paths that match a vault markdown file get their contents
-	// inlined. The scan iterates the vault list longest-path-first so files
-	// with spaces/unicode/regex-special chars resolve correctly and longer
-	// paths take priority over shorter suffixes. Paths must be surrounded by
-	// whitespace so we don't accidentally replace text inside words.
+	// Resolve message variables (for regular messages). File mentions normally
+	// remain as complete vault-relative paths so a tool-capable model can call
+	// read_note (and choose PDF pages when appropriate). Only modes without
+	// Vault tool access inline Markdown/PDF text as a compatibility fallback.
 	const resolveMessageVariables = async (content: string): Promise<string> => {
 		let result = await resolveCommandVariables(content);
+		const shouldInlineFileMentions = vaultToolMode === "none" || isVaultToolRestrictedCliMode;
+		if (!shouldInlineFileMentions) return result;
 
-		const files = plugin.app.vault.getMarkdownFiles();
+		const files = plugin.app.vault.getFiles()
+			.filter(file => file.extension === "md" || file.extension === "pdf");
 		const fileByPath = new Map<string, TFile>(files.map(f => [f.path, f]));
 		const occurrences = findFileMentionOccurrences(
 			result,
@@ -1614,7 +1628,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			const file = fileByPath.get(path);
 			if (!file) continue;
 			try {
-				const fileContent = await plugin.app.vault.read(file);
+				const extracted = file.extension === "pdf"
+					? await extractPdfText(plugin.app, file.path)
+					: await plugin.app.vault.read(file);
+				if (extracted === null) continue;
+				const maxChars = plugin.settings.maxNoteChars;
+				const fileContent = maxChars > 0 && extracted.length > maxChars
+					? `${extracted.slice(0, maxChars)}\n\n[Content truncated at ${maxChars} characters]`
+					: extracted;
 				const replacement = `\n\n--- Content of "${path}" ---\n${fileContent}\n--- End of "${path}" ---\n\n`;
 				for (const h of hits) {
 					splices.push({ start: h.start, end: h.end, replacement });
@@ -1934,6 +1955,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				systemPrompt += `\n\nNote: You are running in ${cliName} mode with limited capabilities. You can read and search vault files, but cannot modify them.`;
 				systemPrompt += "\n\nIMPORTANT: File writing operations may fail in this environment. Always output results directly to standard output instead of attempting to write to files.";
 			}
+			if (vaultToolMode !== "none" && !isVaultToolRestrictedCliMode) {
+				systemPrompt += FILE_MENTION_TOOL_PROMPT;
+			}
 			systemPrompt += `\n\nVault location: ${(plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || "."}`;
 
 			if (plugin.settings.systemPrompt) {
@@ -2042,7 +2066,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 							localRagSources = localRag.sources;
 							// Attach multimodal RAG files so the LLM can see actual content
 							if (localRag.mediaReferences.length > 0) {
-								const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
+								const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
+									.filter(attachment => attachment.type !== "pdf");
+								// A dropped PDF leaves only its label in the indexed chunk text,
+								// so its pages go into the prompt as extracted text instead.
+								systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
 								if (ragAttachments.length > 0) {
 									const existing = userMessage.attachments || [];
 									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
@@ -2313,6 +2341,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				pluginVersion: plugin.manifest.version,
 			},
 		});
+		let openCodeMcpToolExecutor: McpToolExecutor | null = null;
 
 		// Decide whether to try OpenAI-style function calling for this model.
 		// Default ON for OpenAI-compatible frameworks; auto-disabled if the
@@ -2331,6 +2360,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
 			if (wantsTools) {
 				systemPrompt += `\n\nYou have access to function-calling tools for reading, searching, and editing the user's vault. Prefer calling a tool over describing what you would do.`;
+				systemPrompt += FILE_MENTION_TOOL_PROMPT;
 			} else {
 				systemPrompt += `\n\nNote: You are running in Local LLM mode with limited capabilities. You do not have direct vault tool access in this mode.`;
 				systemPrompt += `\n\nUse only information already present in the conversation, text attachments inlined into the prompt, and any local RAG context that may be added below.`;
@@ -2383,7 +2413,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 						localRagSources = localRag.sources;
 						// Attach multimodal RAG files so the LLM can see actual content
 						if (localRag.mediaReferences.length > 0) {
-							const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
+							const pdfMode = resolveLocalLlmPdfInputMode(llmConfig);
+							const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
+								.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
+							// A dropped PDF leaves only its label in the indexed chunk text,
+							// so its pages go into the prompt as extracted text instead.
+							if (pdfMode !== "native") {
+								systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
+							}
 							if (ragAttachments.length > 0) {
 								const existing = userMessage.attachments || [];
 								(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
@@ -2405,13 +2442,122 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			let fullThinking = "";
 			let stopped = false;
 			const llmMcpApps: McpAppInfo[] = [];
+			let openCodeMcpUrl: string | undefined;
+			let openCodeMutationTracking: ReturnType<typeof createConfirmingToolExecutor> | null = null;
+			const openCodeToolsUsed: string[] = [];
+			const openCodeToolCalls: NonNullable<Message["toolCalls"]> = [];
+			const openCodeToolResults: NonNullable<Message["toolResults"]> = [];
+			let openCodeToolCallSequence = 0;
+
+			// OpenCode uses its own session API, but can consume the same tool
+			// bundle as the other agent paths through a dynamically registered MCP
+			// server hosted by the plugin.
+			if (wantsTools && llmConfig.framework === "opencode") {
+				let openCodeTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false });
+				if (vaultToolMode === "noSearch") {
+					const searchNames = new Set(["search_notes", "list_notes"]);
+					openCodeTools = openCodeTools.filter(tool => !searchNames.has(tool.name));
+				}
+				if (ragSearchRunner) openCodeTools.push(RAG_SEARCH_TOOL);
+				openCodeTools.push(EXECUTE_JAVASCRIPT_TOOL, GET_WORKFLOW_SPEC_TOOL);
+				if (activeOkfBundleIds.length > 0) openCodeTools.push(READ_OKF_DOCUMENT_TOOL);
+
+				const openCodeSkillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
+				const openCodeSkillScriptMap = collectSkillScripts(llmLoadedSkills);
+				if (openCodeSkillWorkflowMap.size > 0) openCodeTools.push(skillWorkflowTool);
+				if (openCodeSkillScriptMap.size > 0) openCodeTools.push(skillScriptTool);
+
+				const enabledMcpServers = resolveAgentPluginMcpServers(
+					plugin.settings.mcpServers,
+					effectiveSkillPaths,
+					plugin.settings.agentPlugins,
+				).filter(server => server.enabled);
+				if (enabledMcpServers.length > 0) {
+					try {
+						const mcpTools = await fetchMcpTools(enabledMcpServers);
+						openCodeTools.push(...mcpTools);
+						openCodeMcpToolExecutor = createMcpToolExecutor(mcpTools, llmTraceId);
+					} catch (error) {
+						console.error("Failed to fetch MCP tools for OpenCode:", error);
+					}
+				}
+
+				const vaultExecutor = createToolExecutor(plugin.app, {
+					listNotesLimit: plugin.settings.listNotesLimit,
+					maxNoteChars: plugin.settings.maxNoteChars,
+					limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
+					cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+					pdfInputMode: resolveLocalLlmPdfInputMode(llmConfig),
+				});
+				const executeOpenCodeTool = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+					if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return ragSearchRunner.run(args);
+					if (name.startsWith("mcp_") && openCodeMcpToolExecutor) {
+						const mcpResult = await openCodeMcpToolExecutor.execute(name, args);
+						if (mcpResult.mcpApp) llmMcpApps.push(mcpResult.mcpApp);
+						if (mcpResult.error) return { error: mcpResult.error };
+						return { result: mcpResult.result };
+					}
+					if (name === "run_skill_workflow" && openCodeSkillWorkflowMap.size > 0) {
+						return executeSkillWorkflow(
+							plugin,
+							args.workflowId as string,
+							args.variables as string | undefined,
+							openCodeSkillWorkflowMap,
+							{ cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders },
+						);
+					}
+					if (name === "run_skill_script" && openCodeSkillScriptMap.size > 0) {
+						return executeSkillScript(
+							plugin,
+							args.scriptId as string,
+							args.args as string | undefined,
+							openCodeSkillScriptMap,
+						);
+					}
+					if (name === "execute_javascript") return handleExecuteJavascriptTool(args);
+					if (name === GET_WORKFLOW_SPEC_TOOL_NAME) return handleGetWorkflowSpec(args, plugin);
+					if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
+						return executeReadOkfDocumentTool(
+							plugin.app,
+							getOkfRoot(),
+							activeOkfBundleIds,
+							typeof args.bundleId === "string" ? args.bundleId : "",
+							typeof args.path === "string" ? args.path : "",
+						);
+					}
+					return vaultExecutor(name, args);
+				};
+				openCodeMutationTracking = createConfirmingToolExecutor(
+					executeOpenCodeTool,
+					plugin.app,
+					currentSlashCommandRef,
+					() => abortController.abort(),
+				);
+				if (!openCodeVaultMcpBridgeRef.current) {
+					openCodeVaultMcpBridgeRef.current = new CodexVaultMcpBridge(
+						openCodeTools,
+						openCodeMutationTracking.executeToolCall,
+					);
+				} else {
+					openCodeVaultMcpBridgeRef.current.setTools(openCodeTools);
+					openCodeVaultMcpBridgeRef.current.setExecutor(openCodeMutationTracking.executeToolCall);
+				}
+				openCodeVaultMcpBridgeRef.current.setToolCallObserver((name, args, result) => {
+					const id = `opencode-mcp-${Date.now()}-${openCodeToolCallSequence++}`;
+					openCodeToolCalls.push({ id, name, args });
+					openCodeToolResults.push({ toolCallId: id, result });
+					if (!openCodeToolsUsed.includes(name)) openCodeToolsUsed.push(name);
+				});
+				openCodeMcpUrl = await openCodeVaultMcpBridgeRef.current.start();
+				systemPrompt += `\n\nThe Obsidian Vault tools are available through the obsidian-llm-hub-vault MCP server. Use them when the request requires vault access.`;
+			}
 
 			// === Tools-enabled flow (OpenAI-compat function calling) ===
 			// Modern Local LLMs (LM Studio / vLLM / AnythingLLM with recent
 			// models) speak the OpenAI tools API. Try that first; on a
 			// tools-related rejection mark the model unsupported, persist,
 			// and fall through to the marker-based flow below for this turn.
-			if (wantsTools) {
+			if (wantsTools && llmConfig.framework !== "opencode") {
 				const settings = plugin.settings;
 
 				// Build vault tools (same shape as API provider path: always
@@ -2428,6 +2574,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					maxNoteChars: settings.maxNoteChars,
 					limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
 					cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+					pdfInputMode: resolveLocalLlmPdfInputMode(llmConfig),
 				});
 
 				// Fetch MCP tools if any servers are enabled
@@ -2668,6 +2815,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					systemPrompt,
 					abortController.signal,
 					imageAttachments.length > 0 ? imageAttachments : undefined,
+					openCodeMcpUrl,
 				)) {
 					if (abortController.signal.aborted) {
 						stopped = true;
@@ -2729,6 +2877,21 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 				...(fullThinking ? { thinking: fullThinking } : {}),
 				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
 				...(llmMcpApps.length > 0 ? { mcpApps: llmMcpApps } : {}),
+				...(openCodeToolsUsed.length > 0 ? { toolsUsed: openCodeToolsUsed } : {}),
+				...(openCodeToolCalls.length > 0 ? { toolCalls: openCodeToolCalls } : {}),
+				...(openCodeToolResults.length > 0 ? { toolResults: openCodeToolResults } : {}),
+				...(openCodeMutationTracking && openCodeMutationTracking.processedEdits.length > 0 ? {
+					pendingEdit: openCodeMutationTracking.processedEdits[openCodeMutationTracking.processedEdits.length - 1],
+					pendingEdits: openCodeMutationTracking.processedEdits,
+				} : {}),
+				...(openCodeMutationTracking && openCodeMutationTracking.processedDeletes.length > 0 ? {
+					pendingDelete: openCodeMutationTracking.processedDeletes[openCodeMutationTracking.processedDeletes.length - 1],
+					pendingDeletes: openCodeMutationTracking.processedDeletes,
+				} : {}),
+				...(openCodeMutationTracking && openCodeMutationTracking.processedRenames.length > 0 ? {
+					pendingRename: openCodeMutationTracking.processedRenames[openCodeMutationTracking.processedRenames.length - 1],
+					pendingRenames: openCodeMutationTracking.processedRenames,
+				} : {}),
 			};
 
 			const newMessages = [...messages, userMessage, assistantMessage];
@@ -2752,6 +2915,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			tracing.traceEnd(llmTraceId, { output: errorMessageText, metadata: { error: true } });
 			tracing.score(llmTraceId, { name: "status", value: 0, comment: errorMessageText });
 		} finally {
+			if (openCodeMcpToolExecutor) {
+				try {
+					await openCodeMcpToolExecutor.cleanup();
+				} catch (error) {
+					console.warn("OpenCode MCP cleanup failed:", error);
+				}
+			}
 			cleanupStream(abortController);
 		}
 	};
@@ -2803,6 +2973,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			let systemPrompt = `You are a helpful AI assistant in an Obsidian vault.
 Always be helpful and provide clear, concise responses. When working with notes, confirm actions and provide relevant feedback.`;
 
+			if (vaultToolMode !== "none") {
+				systemPrompt += FILE_MENTION_TOOL_PROMPT;
+			}
+
 			if (settings.systemPrompt) {
 				systemPrompt += `\n\nAdditional instructions: ${settings.systemPrompt}`;
 			}
@@ -2835,7 +3009,14 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						localRagSources = localRag.sources;
 						// Attach multimodal RAG files so the LLM can see actual content
 						if (localRag.mediaReferences.length > 0) {
-							const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
+							const pdfMode = resolveApiProviderPdfInputMode(providerConfig);
+							const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
+								.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
+							// A dropped PDF leaves only its label in the indexed chunk text,
+							// so its pages go into the prompt as extracted text instead.
+							if (pdfMode !== "native") {
+								systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
+							}
 							if (ragAttachments.length > 0) {
 								const existing = userMessage.attachments || [];
 								(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
@@ -2861,6 +3042,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				maxNoteChars: settings.maxNoteChars,
 				limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
 				cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+				pdfInputMode: resolveApiProviderPdfInputMode(providerConfig),
 			});
 
 			// Fetch MCP tools
@@ -3348,6 +3530,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						maxNoteChars: settings.maxNoteChars,
 						limitVaultToolScope: shouldLimitLlmVaultTools(allowedModel),
 						cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+						pdfInputMode: providerConfig ? resolveApiProviderPdfInputMode(providerConfig) : "native",
 					})
 					: undefined;
 
@@ -3678,6 +3861,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
 
 				if (toolsEnabled) {
+					systemPrompt += FILE_MENTION_TOOL_PROMPT;
 					systemPrompt += `
 
 Available tools allow you to:
@@ -3736,7 +3920,14 @@ Always be helpful and provide clear, concise responses. When working with notes,
 							localRagSources = localRag.sources;
 							// Attach multimodal RAG files so the LLM can see actual content
 							if (localRag.mediaReferences.length > 0) {
-								const ragAttachments = await loadRagMediaAttachments(plugin.app, localRag.mediaReferences);
+								const pdfMode = providerConfig ? resolveApiProviderPdfInputMode(providerConfig) : "native";
+								const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
+									.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
+								// A dropped PDF leaves only its label in the indexed chunk text,
+								// so its pages go into the prompt as extracted text instead.
+								if (pdfMode !== "native") {
+									systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
+								}
 								if (ragAttachments.length > 0) {
 									const existing = userMessage.attachments || [];
 									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];

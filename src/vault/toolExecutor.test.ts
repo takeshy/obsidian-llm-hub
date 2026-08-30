@@ -85,6 +85,22 @@ describe("LLM vault tool folder scope", () => {
     expect(String(result.error)).toContain("Access denied");
   });
 
+  it("blocks an out-of-scope PDF looked up by bare file name", async () => {
+    const app = makeApp([
+      makeFile("Public/Note.md", "public"),
+      makeFile("Private/secret.pdf", ""),
+    ]);
+
+    const result = await executeToolCall(app, "read_note", { fileName: "secret.pdf" }, {
+      limitVaultToolScope: true,
+      cloudVaultToolAllowedFolders: ["Public"],
+      pdfInputMode: "native",
+    });
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Access denied");
+  });
+
   it("blocks traversal paths that would escape configured folders", async () => {
     const app = makeApp([
       makeFile("Public/Note.md", "public"),

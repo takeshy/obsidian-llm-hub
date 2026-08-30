@@ -5,9 +5,11 @@ import { getEditHistoryManager } from "src/core/editHistory";
 import {
   compareFileLookupPriority,
   ensureMarkdownExtensionIfMissing,
+  getPathExtension,
   getVaultTextFiles,
   hasExplicitExtension,
   isMarkdownPath,
+  isVaultTextFile,
   normalizeLookupTerm,
   splitFileName,
 } from "./fileTypes";
@@ -69,6 +71,32 @@ export function findFileByName(app: App, fileName: string): TFile | null {
   return null;
 }
 
+/** Base64 of a PDF inflates by 4/3 and providers cap a whole request near 32 MB. */
+const MAX_NATIVE_PDF_BYTES = 15 * 1024 * 1024;
+
+// Resolve the file a note tool acts on. toolExecutor runs this same lookup for
+// its folder-scope check, so both must stay on this one function: a file the
+// guard fails to resolve is treated as "not found" and silently allowed.
+export function resolveNoteFile(app: App, fileName: string): TFile | null {
+  const direct = app.vault.getAbstractFileByPath(fileName);
+  if (direct instanceof TFile) return direct;
+
+  const match = findFileByName(app, fileName);
+  if (match) return match;
+
+  // findFileByName only walks text files, so a PDF named without its folder
+  // needs its own pass over the vault.
+  if (getPathExtension(fileName) !== "pdf") return null;
+  const lookup = fileName.toLowerCase().trim();
+  return app.vault.getFiles()
+    .filter((candidate) => candidate.extension.toLowerCase() === "pdf" && (
+      candidate.path.toLowerCase() === lookup
+      || candidate.name.toLowerCase() === lookup
+      || candidate.path.toLowerCase().includes(lookup)
+    ))
+    .sort((a, b) => a.path.length - b.path.length)[0] ?? null;
+}
+
 // Find a folder by path (fuzzy matching)
 export function findFolderByPath(app: App, folderPath: string): TFolder | null {
   const folders = app.vault
@@ -103,8 +131,9 @@ export async function readNote(
   app: App,
   fileName?: string,
   activeNote?: boolean,
-  maxChars: number = DEFAULT_SETTINGS.maxNoteChars
-): Promise<{ success: boolean; content?: string; path?: string; error?: string; truncated?: boolean }> {
+  maxChars: number = DEFAULT_SETTINGS.maxNoteChars,
+  pdfInputMode: import("src/types").PdfInputMode = "extract-text",
+): Promise<{ success: boolean; content?: string; path?: string; error?: string; truncated?: boolean; attachments?: import("src/types").Attachment[] }> {
   let file: TFile | null = null;
 
   if (activeNote) {
@@ -116,7 +145,7 @@ export async function readNote(
       };
     }
   } else if (fileName) {
-    file = findFileByName(app, fileName);
+    file = resolveNoteFile(app, fileName);
     if (!file) {
       return {
         success: false,
@@ -128,6 +157,60 @@ export async function readNote(
       success: false,
       error: "Please provide either a file name or set activeNote to true.",
     };
+  }
+
+  const extension = file.extension.toLowerCase();
+  if (!isVaultTextFile(file) && extension !== "pdf") {
+    return {
+      success: false,
+      path: file.path,
+      error: `"${file.path}" is not a readable note (unsupported file type "${extension || "none"}").`,
+    };
+  }
+
+  if (extension === "pdf") {
+    // Oversized PDFs fall back to text extraction rather than blowing the
+    // provider request limit (and blocking the renderer on btoa).
+    if (pdfInputMode === "native" && (file.stat?.size ?? 0) <= MAX_NATIVE_PDF_BYTES) {
+      const buffer = await app.vault.readBinary(file);
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      const batchSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += batchSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + batchSize));
+      }
+      return {
+        success: true,
+        // Providers deliberately keep the base64 out of the replayed history,
+        // so a later turn sees this line without the document behind it.
+        content: `PDF attached for this turn: ${file.path}. The attachment is not replayed in later turns — call read_note again if you still need it after this response.`,
+        path: file.path,
+        attachments: [{
+          name: file.name,
+          type: "pdf",
+          mimeType: "application/pdf",
+          data: btoa(binary),
+          sourcePath: file.path,
+        }],
+      };
+    }
+
+    const { extractPdfText } = await import("./search");
+    const extracted = await extractPdfText(app, file.path);
+    if (!extracted?.trim()) {
+      return {
+        success: false,
+        path: file.path,
+        error: "The PDF has no extractable text. Use native PDF input with a PDF-capable model for scanned pages, images, charts, or diagrams.",
+      };
+    }
+    let content = extracted;
+    let truncated = false;
+    if (content.length > maxChars) {
+      content = content.slice(0, maxChars) + "\n\n... [Content truncated. PDF is too long to read fully.]";
+      truncated = true;
+    }
+    return { success: true, content, path: file.path, truncated };
   }
 
   let content = await app.vault.read(file);

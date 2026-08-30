@@ -7,10 +7,11 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { Message, StreamChunk, ToolDefinition, WebSearchCitation } from "../types";
+import type { Attachment, Message, StreamChunk, ToolDefinition, WebSearchCitation } from "../types";
 import { calculateCost } from "./modelPricing";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
 import { continuationMatches, WEB_SEARCH_COST_PER_REQUEST } from "./webSearch";
+import { dedupeAttachments, getToolResultAttachments, withoutToolResultAttachments } from "./toolResultAttachments";
 
 // Match openaiProvider.buildSdkFetch — see that file for rationale. Routes
 // through Node http on desktop to bypass CORS for Anthropic-compatible
@@ -386,17 +387,23 @@ export async function* anthropicChatWithToolsStream(
       }
 
       // Execute tool calls
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      const toolResults: Anthropic.ContentBlockParam[] = [];
+      // Every tool_result block must come before any other block in the turn,
+      // so documents from parallel tool calls are collected and appended after
+      // the loop instead of being interleaved between the results.
+      const roundAttachments: Attachment[] = [];
       for (const tu of toolUses) {
         try {
           const result = await executeToolCall(tu.name, tu.input);
-          const resultStr = typeof result === "string" ? result : JSON.stringify(result);
-          yield { type: "tool_result", toolResult: { toolCallId: tu.id, result } };
+          const cleanResult = withoutToolResultAttachments(result);
+          const resultStr = typeof cleanResult === "string" ? cleanResult : JSON.stringify(cleanResult);
+          yield { type: "tool_result", toolResult: { toolCallId: tu.id, result: cleanResult } };
           toolResults.push({
             type: "tool_result",
             tool_use_id: tu.id,
             content: resultStr,
           });
+          roundAttachments.push(...getToolResultAttachments(result).filter(a => a.type === "pdf"));
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           toolResults.push({
@@ -408,12 +415,27 @@ export async function* anthropicChatWithToolsStream(
         }
       }
 
+      const toolDocuments: Anthropic.ContentBlockParam[] = dedupeAttachments(roundAttachments)
+        .map(attachment => ({
+          type: "document" as const,
+          source: {
+            type: "base64" as const,
+            media_type: "application/pdf" as const,
+            data: attachment.data,
+          },
+          title: attachment.name,
+        }));
+
       const resultTurn: Anthropic.MessageParam = {
         role: "user",
-        content: toolResults,
+        content: [...toolResults, ...toolDocuments],
       };
       conversationMessages.push(resultTurn);
-      continuationMessages.push(resultTurn);
+      // Documents belong to this round only: replaying their base64 through the
+      // saved continuation would bloat the chat file and re-upload every turn.
+      continuationMessages.push(
+        toolDocuments.length > 0 ? { role: "user", content: toolResults } : resultTurn,
+      );
   }
 
   yield { type: "error", error: "Maximum tool call rounds exceeded" };

@@ -139,11 +139,12 @@ export async function* localLlmChatStream(
   systemPrompt: string,
   signal?: AbortSignal,
   attachments?: Attachment[],
+  vaultMcpUrl?: string,
 ): AsyncGenerator<StreamChunk> {
   if (config.framework === "ollama") {
     yield* ollamaChatStream(config, messages, systemPrompt, signal, attachments);
   } else if (config.framework === "opencode") {
-    yield* opencodeLocalChatStream(config, messages, systemPrompt, signal, attachments);
+    yield* opencodeLocalChatStream(config, messages, systemPrompt, signal, attachments, vaultMcpUrl);
   } else {
     yield* openaiChatStream(config, messages, systemPrompt, signal, attachments);
   }
@@ -632,4 +633,3 @@ export function getHttpModule(protocol: string): typeof import("http") {
   const moduleName = protocol === "https:" ? "https" : "http";
   return loader(moduleName) as typeof import("http");
 }
-
