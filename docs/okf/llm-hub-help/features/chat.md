@@ -44,7 +44,11 @@ Only cited sources are shown. OpenAI and Anthropic citation positions are render
 
 Chat can also use selected RAG stores, MCP servers, a sandboxed `execute_javascript` tool, active skills (via `run_skill_workflow` and `run_skill_script`), and active OKF knowledge.
 
-Chat history is stored as Markdown files under the configured workspace folder when history saving is enabled. History files can optionally be encrypted with the chat history encryption setting. The saved chat remains complete even when the conversation context limit sends only a subset of its messages to the model.
+The expand/shrink control toggles a desktop chat sidebar between normal and expanded widths.
+
+Chat history is stored as Markdown files under the configured workspace folder when history saving is enabled. History files can optionally be encrypted with the chat history encryption setting. A configurable maximum removes the oldest automatic histories above the limit; zero is unlimited. Existing installations default to unlimited, while new installations default to 100. The saved chat remains complete even when the conversation context limit sends only a subset of its messages to the model.
+
+Save as note exports a non-empty conversation separately as compact Markdown named `YYYYMMDD-HHmmss_Chat title.md`. It omits frontmatter and restoration metadata, and re-saving the same chat during the session overwrites that note. Chat settings control the vault-relative destination; blank uses the vault root.
 
 # Related
 

@@ -180,6 +180,8 @@ export interface LlmHubSettings {
   skillsFolderPath?: string;
   hideWorkspaceFolder: boolean;
   saveChatHistory: boolean;
+  maxSavedChatHistories: number;
+  manualChatSaveFolder: string;
   systemPrompt: string;
 
   // Slash commands
@@ -946,6 +948,8 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   skillsFolder: SKILLS_FOLDER,
   hideWorkspaceFolder: true,
   saveChatHistory: true,
+  maxSavedChatHistories: 100,
+  manualChatSaveFolder: "",
   systemPrompt: "",
   slashCommands: DEFAULT_SLASH_COMMANDS,
   knowledgeSources: [],

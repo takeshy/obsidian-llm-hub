@@ -56,6 +56,15 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   overflow: hidden;
 }
 
+.workspace-split.mod-left-split.llm-hub-wide-sidebar,
+.workspace-split.mod-right-split.llm-hub-wide-sidebar {
+  width: min(50vw, 800px) !important;
+}
+
+.is-mobile .llm-hub-sidebar-width-btn {
+  display: none;
+}
+
 /* Mobile: remove extra bottom padding */
 .is-mobile .workspace-leaf-content.llm-hub-chat-view {
   padding-bottom: 0;

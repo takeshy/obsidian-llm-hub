@@ -6,6 +6,7 @@ import { displayCredentialStorageSettings } from "src/ui/settings/credentialStor
 import { displayCliSettings } from "src/ui/settings/cliSettings";
 import { displayLocalLlmSettings } from "src/ui/settings/localLlmSettings";
 import { displayWorkspaceSettings } from "src/ui/settings/workspaceSettings";
+import { displayChatSettings } from "src/ui/settings/chatSettings";
 import { displayKnowledgeSettings } from "src/ui/settings/knowledgeSettings";
 import { displayEditHistorySettings } from "src/ui/settings/editHistorySettings";
 import { displayEncryptionSettings } from "src/ui/settings/encryptionSettings";
@@ -55,6 +56,7 @@ export class SettingsTab extends PluginSettingTab {
         displayApiProviderSettings(containerEl, ctx);
         displayProxySettings(containerEl, ctx);
         displayWorkspaceSettings(containerEl, ctx);
+        displayChatSettings(containerEl, ctx);
         displayKnowledgeSettings(containerEl, ctx);
         displayEditHistorySettings(containerEl, ctx);
         displayEncryptionSettings(containerEl, ctx);

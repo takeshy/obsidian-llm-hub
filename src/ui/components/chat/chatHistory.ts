@@ -14,6 +14,13 @@ export interface EncryptionConfig {
 	salt?: string;
 }
 
+export function messagesToCompactMarkdown(msgs: Message[]): string {
+	return msgs.map((msg) => {
+		const role = msg.role === "user" ? "You" : (msg.modelDisplayName || msg.model || "AI");
+		return `## ${role}\n\n${msg.content.trim()}`;
+	}).join("\n\n");
+}
+
 // Convert messages to Markdown format
 export async function messagesToMarkdown(
 	msgs: Message[],

@@ -9,6 +9,7 @@ export class ChatView extends ItemView {
   plugin: LlmHubPlugin;
   reactRoot!: Root;
   private tabContainerRef: TabContainerRef | null = null;
+  private widenedSidebar: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: LlmHubPlugin) {
     super(leaf);
@@ -41,6 +42,7 @@ export class ChatView extends ItemView {
           this.tabContainerRef = ref;
         }}
         plugin={this.plugin}
+        onToggleSidebarWidth={() => this.toggleSidebarWidth()}
       />
     );
     this.reactRoot = root;
@@ -49,9 +51,22 @@ export class ChatView extends ItemView {
   async onClose(): Promise<void> {
     // Clear selection highlight when chat view is closed
     this.plugin.clearSelectionHighlight();
+    this.widenedSidebar?.removeClass("llm-hub-wide-sidebar");
     this.reactRoot?.unmount();
     this.containerEl.removeClass("llm-hub-chat-view");
     await Promise.resolve();
+  }
+
+  private toggleSidebarWidth(): boolean {
+    const sidebar = this.containerEl.closest<HTMLElement>(
+      ".workspace-split.mod-left-split, .workspace-split.mod-right-split"
+    );
+    if (!sidebar) return false;
+    sidebar.toggleClass("llm-hub-wide-sidebar", !sidebar.hasClass("llm-hub-wide-sidebar"));
+    const isWide = sidebar.hasClass("llm-hub-wide-sidebar");
+    this.widenedSidebar = isWide ? sidebar : null;
+    window.setTimeout(() => this.leaf.onResize(), 0);
+    return isWide;
   }
 
   getActiveChat(): TFile | null {

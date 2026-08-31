@@ -711,11 +711,15 @@ export class LlmHubPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    const loaded = (await this.loadData() ?? {}) as Partial<LlmHubSettings>;
+    const savedData = await this.loadData() as Partial<LlmHubSettings> | null;
+    const isExistingInstall = savedData !== null && Object.keys(savedData).length > 0;
+    const loaded = savedData ?? {};
 
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...loaded,
+      maxSavedChatHistories: loaded.maxSavedChatHistories
+        ?? (isExistingInstall ? 0 : DEFAULT_SETTINGS.maxSavedChatHistories),
       skillsFolder: typeof loaded.skillsFolder === "string"
         ? loaded.skillsFolder
         : (typeof loaded.skillsFolderPath === "string" ? loaded.skillsFolderPath : DEFAULT_SETTINGS.skillsFolder),

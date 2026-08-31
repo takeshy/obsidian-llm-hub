@@ -69,8 +69,14 @@ For Gemini and official OpenAI, Anthropic, or Grok providers, Chat's search menu
 - Workspace folder - vault-relative folder for LLM Hub data. Defaults to `LLMHub`. Absolute paths and `..` traversal are rejected. If the old folder exists, the user can move existing data or skip moving.
 - Hide workspace folder - available only when the workspace folder is the default `LLMHub`; hides or shows that folder in Obsidian.
 - Save chat history - toggles chat history file persistence. Turning it off asks whether to delete existing chat history files.
+- Maximum saved chat histories - removes oldest automatic histories above the limit. Zero is unlimited; existing installations default to zero and new installations to 100.
 - System prompt - additional user-defined instructions appended to the chat system prompt.
 - Folders AI can access automatically - comma-separated vault-relative allowlist for automatic AI vault tool access. Empty means whole-vault access. Invalid traversal paths are rejected.
+
+# Chat Settings
+
+- Manual chat save folder - vault-relative destination used by Save as note. Blank uses the vault root.
+- Manual notes use `YYYYMMDD-HHmmss_Chat title.md`, omit history metadata, and are overwritten when the same chat is saved again during the session.
 
 # Tool Limit Settings
 

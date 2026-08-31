@@ -70,6 +70,8 @@ The AI Chat feature provides an interactive conversation interface with your cho
 - **Stop button** - Stop generation
 - **+ button** - New chat
 - **History button** - Load previous chats
+- **Expand / shrink button** - Toggle the sidebar between normal and expanded widths
+- **Save as note button** - Export compact Markdown; saving the same chat again overwrites its exported note
 - **↑ / ↓ in the input** - Recall up to 100 sent prompts across chats and Obsidian restarts. Up recalls history only from the first line and Down advances only from the last line, preserving normal multiline cursor movement. Advancing past the newest entry restores the unsent draft.
 
 ## Web Search
@@ -741,11 +743,17 @@ If detection fails, specify the CLI executable path directly (e.g., `~/.local/bi
 
 ### Workspace Settings
 - **Workspace Folder** - Chat history and settings location
+- **Automatically save chat history** - Keep restorable histories in the workspace folder
+- **Maximum saved chat histories** - Oldest automatic histories are deleted above the limit; `0` is unlimited
 - **System Prompt** - Additional AI instructions
 - **Tool Limits** - Control function call limits
 - **Edit History** - Track and restore AI-made changes
 
 ![Tool Limits & Edit History](docs/images/setting_tool_history.png)
+
+### Chat Settings
+- **Manual chat save folder** - Vault-relative destination for the **Save as note** button; blank uses the vault root
+- Exports use `YYYYMMDD-HHmmss_Chat title.md` and omit frontmatter and restoration metadata
 
 ### Encryption
 

@@ -15,6 +15,8 @@ import Lock from "lucide-react/dist/esm/icons/lock";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import Check from "lucide-react/dist/esm/icons/check";
+import Maximize2 from "lucide-react/dist/esm/icons/maximize-2";
+import Minimize2 from "lucide-react/dist/esm/icons/minimize-2";
 import type { LlmHubPlugin } from "src/plugin";
 import {
 	DEFAULT_CLI_CONFIG,
@@ -136,6 +138,7 @@ import {
 } from "./chat/chatUtils";
 import {
 	messagesToMarkdown,
+	messagesToCompactMarkdown,
 	parseMarkdownToMessages,
 	formatHistoryDate,
 } from "./chat/chatHistory";
@@ -446,9 +449,10 @@ function shouldLimitLlmVaultTools(model: ModelType): boolean {
 
 interface ChatProps {
 	plugin: LlmHubPlugin;
+	onToggleSidebarWidth: () => boolean;
 }
 
-const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
+const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, ref) => {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [maxPreviousMessages, setMaxPreviousMessages] = useState(() => {
 		const saved = plugin.workspaceState.maxPreviousMessages;
@@ -464,6 +468,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 	const [chatHistories, setChatHistories] = useState<ChatHistory[]>([]);
 	const [showHistory, setShowHistory] = useState(false);
 	const [saveNoteState, setSaveNoteState] = useState<"idle" | "saving" | "saved">("idle");
+	const [isSidebarWide, setIsSidebarWide] = useState(false);
+	const savedNotePathsRef = useRef(new Map<string, string>());
 	const [isLoading, setIsLoading] = useState(false);
 	const [isCompacting, setIsCompacting] = useState(false);
 	const [streamingContent, setStreamingContent] = useState("");
@@ -733,25 +739,42 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 		return `${getChatHistoryFolder()}/${chatId}.md`;
 	};
 
-	// Save current chat as a note file (in vault root)
+	const ensureFolderExists = async (folder: string) => {
+		let currentFolder = "";
+		for (const segment of folder.split("/").filter(Boolean)) {
+			currentFolder = currentFolder ? `${currentFolder}/${segment}` : segment;
+			if (!(await plugin.app.vault.adapter.exists(currentFolder))) {
+				await plugin.app.vault.adapter.mkdir(currentFolder);
+			}
+		}
+	};
+
+	// Save current chat as a compact note. Re-saving the same chat overwrites it.
 	const handleSaveAsNote = useCallback(async () => {
 		if (saveNoteState !== "idle" || messages.length === 0) return;
 		setSaveNoteState("saving");
 		try {
 			const chatTitle = messages[0].content.slice(0, 50) + (messages[0].content.length > 50 ? "..." : "");
-			const markdown = await messagesToMarkdown(messages, chatTitle, messages[0].timestamp, plugin.settings.encryption, cliSession ?? undefined);
+			const markdown = messagesToCompactMarkdown(messages);
 			const now = new Date();
 			const pad = (n: number) => String(n).padStart(2, "0");
-			const fileName = `chat-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.md`;
-			await plugin.app.vault.create(fileName, markdown);
-			new Notice(t("chat.savedAsNote", { path: fileName }));
+			const dateTime = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+			const safeTitle = chatTitle.replace(/[\\/:*?"<>|#^[\]\r\n]+/g, " ").replace(/\s+/g, " ").replace(/^\.+|\.+$/g, "").trim().slice(0, 80) || "Chat";
+			const folder = plugin.settings.manualChatSaveFolder.trim();
+			if (folder) await ensureFolderExists(folder);
+			const chatKey = currentChatId ?? String(messages[0].timestamp);
+			const newPath = `${folder ? `${folder}/` : ""}${dateTime}_${safeTitle}.md`;
+			const filePath = savedNotePathsRef.current.get(chatKey) ?? newPath;
+			await plugin.app.vault.adapter.write(filePath, markdown);
+			savedNotePathsRef.current.set(chatKey, filePath);
+			new Notice(t("chat.savedAsNote", { path: filePath }));
 			setSaveNoteState("saved");
 			window.setTimeout(() => setSaveNoteState("idle"), 3000);
 		} catch (error) {
 			new Notice(t("common.error") + ": " + formatError(error));
 			setSaveNoteState("idle");
 		}
-	}, [saveNoteState, messages, plugin, cliSession]);
+	}, [saveNoteState, messages, currentChatId, plugin]);
 
 	// Load chat histories from folder
 	const loadChatHistories = useCallback(async () => {
@@ -900,7 +923,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			} else {
 				updated = [newHistory, ...prev];
 			}
-			return updated.slice(0, 50);
+			updated.sort((a, b) => b.updatedAt - a.updatedAt);
+			const limit = Math.max(0, plugin.settings.maxSavedChatHistories);
+			if (limit === 0 || updated.length <= limit) return updated;
+			const expired = updated.slice(limit);
+			void Promise.all(expired.flatMap((history) => {
+				const basePath = getChatFilePath(history.id);
+				return [basePath, `${basePath}.encrypted`].map(async (path) => {
+					if (await plugin.app.vault.adapter.exists(path)) await plugin.app.vault.adapter.remove(path);
+				});
+			})).catch((error: unknown) => console.warn("Failed to prune old chat histories:", formatError(error)));
+			return updated.slice(0, limit);
 		});
 
 		if (foreground) {
@@ -4423,6 +4456,13 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			<div className="llm-hub-chat-header">
 				<h3>{t("chat.title")}</h3>
 				<div className="llm-hub-header-actions">
+					<button
+						className="llm-hub-icon-btn llm-hub-sidebar-width-btn"
+						onClick={() => setIsSidebarWide(onToggleSidebarWidth())}
+						title={isSidebarWide ? t("chat.narrowSidebar") : t("chat.widenSidebar")}
+					>
+						{isSidebarWide ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+					</button>
 					<button
 						className="llm-hub-icon-btn"
 						onClick={() => { void handleSaveAsNote(); }}
