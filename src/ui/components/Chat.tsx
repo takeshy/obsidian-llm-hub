@@ -65,6 +65,7 @@ import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsW
 import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments, buildRagPdfTextContext } from "src/core/localRagStore";
 import { resolveApiProviderPdfInputMode, resolveLocalLlmPdfInputMode } from "src/core/pdfInputMode";
 import { createRagSearchRunner, RAG_SEARCH_SYSTEM_PROMPT, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
+import { filterVaultToolsForMode } from "src/core/vaultToolMode";
 import { buildNoDiscoverySystemPrompt } from "./chat/noDiscoveryPrompt";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import { extractPdfText } from "src/vault/search";
@@ -420,6 +421,7 @@ function getPendingInfos<T>(items: T[]): T[] | undefined {
 const FILE_MENTION_TOOL_PROMPT = "\n\nA bare vault-relative path in the user's message (for example `folder/note.md` or `folder/document.pdf`) is a file the user referenced by mention, not a literal string. Its content is not inlined into the message. Call read_note with that exact path before answering anything that depends on it.";
 
 const MAX_BACKGROUND_STREAMS = 3;
+const AUTOMATIC_RAG_RETRIEVAL = false;
 const CODEX_VAULT_TOOLS = new Set([
 	"read_timeline",
 	"read_note",
@@ -2049,7 +2051,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
 
 			// Local RAG: search and inject context into system prompt
-			if (selectedRagSetting) {
+			if (AUTOMATIC_RAG_RETRIEVAL && selectedRagSetting) {
 				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
 				if (ragSettingObj) {
 					try {
@@ -2060,7 +2062,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 						);
 						// A search that threw never reached the index, so it must not consume
 						// the turn budget the model is told it has.
-						ragSearchRunner?.countAutomaticSearch();
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
 							localRagSources = localRag.sources;
@@ -2399,7 +2400,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					),
 					(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
 				);
-				try {
+				if (AUTOMATIC_RAG_RETRIEVAL) try {
 					const localRag = await searchLocalRag(
 						selectedRagSetting, resolvedContent,
 						ragSettingObj, getGeminiApiKey(plugin.settings),
@@ -2407,7 +2408,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					);
 					// A search that threw never reached the index, so it must not consume
 					// the turn budget the model is told it has.
-					ragSearchRunner.countAutomaticSearch();
 					if (localRag.sources.length > 0) {
 						systemPrompt += localRag.context;
 						localRagSources = localRag.sources;
@@ -2609,7 +2609,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin }, ref) => {
 					toolsBundle = toolsBundle.filter(t => !SEARCH_NAMES.has(t.name));
 				}
 
-				// The automatic retrieval already ran; let the model refine the query.
+				// Let the model search the selected index on demand.
 				// Kept out of `systemPrompt` itself: a tools rejection falls through to
 				// the marker flow below, which has no tool to offer.
 				if (ragSearchRunner) toolsBundle.push(RAG_SEARCH_TOOL);
@@ -2995,7 +2995,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					),
 					(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
 				);
-				try {
+				if (AUTOMATIC_RAG_RETRIEVAL) try {
 					const localRag = await searchLocalRag(
 						selectedRagSetting, resolvedContent,
 						ragSettingObj, getGeminiApiKey(plugin.settings),
@@ -3003,7 +3003,6 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					);
 					// A search that threw never reached the index, so it must not consume
 					// the turn budget the model is told it has.
-					ragSearchRunner.countAutomaticSearch();
 					if (localRag.sources.length > 0) {
 						systemPrompt += localRag.context;
 						localRagSources = localRag.sources;
@@ -3036,7 +3035,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 			// Build vault tools (same as Gemini path)
 			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
-			let tools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false });
+			let tools = filterVaultToolsForMode(
+				getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false }),
+				vaultToolMode,
+			);
 			const obsidianToolExecutor = createToolExecutor(plugin.app, {
 				listNotesLimit: settings.listNotesLimit,
 				maxNoteChars: settings.maxNoteChars,
@@ -3084,7 +3086,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				tools.push(skillScriptTool);
 			}
 
-			// The automatic retrieval already ran; let the model refine the query.
+			// Let the model search the selected index on demand.
 			if (ragSearchRunner) {
 				tools.push(RAG_SEARCH_TOOL);
 				systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
@@ -3906,7 +3908,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						),
 						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
 					);
-					try {
+					if (AUTOMATIC_RAG_RETRIEVAL) try {
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
 							ragSettingObj, getGeminiApiKey(plugin.settings),
@@ -3914,7 +3916,6 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						);
 						// A search that threw never reached the index, so it must not consume
 						// the turn budget the model is told it has.
-						ragSearchRunner.countAutomaticSearch();
 						if (localRag.sources.length > 0) {
 							systemPrompt += localRag.context;
 							localRagSources = localRag.sources;
@@ -3945,7 +3946,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					});
 				}
 
-				// The automatic retrieval already ran; let the model refine the query.
+				// Let the model search the selected index on demand.
 				if (toolsEnabled && ragSearchRunner) tools.push(RAG_SEARCH_TOOL);
 
 				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);

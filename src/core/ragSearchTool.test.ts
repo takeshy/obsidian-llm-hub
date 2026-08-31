@@ -26,15 +26,13 @@ describe("rag_search tool", () => {
 
   it("returns chunks and the remaining budget", async () => {
     const runner = createRagSearchRunner(async () => [chunk("spec/product.md", "Product details")]);
-    runner.countAutomaticSearch();
-
     const result = await runner.run({ query: "  product overview  " }) as ToolResult;
 
     expect(result.query).toBe("product overview");
     expect(result.results).toEqual([
       { filePath: "spec/product.md", score: 0.8, text: "Product details" },
     ]);
-    expect(result.remainingSearches).toBe(MAX_RAG_SEARCHES_PER_TURN - 2);
+    expect(result.remainingSearches).toBe(MAX_RAG_SEARCHES_PER_TURN - 1);
   });
 
   it("caps how many chunks a follow-up search may pull", async () => {
@@ -43,18 +41,16 @@ describe("rag_search tool", () => {
     expect(search).toHaveBeenCalledWith("q", MAX_DYNAMIC_RAG_RESULTS);
   });
 
-  it("counts the automatic retrieval against the per-turn budget", async () => {
+  it("allows three on-demand searches per turn", async () => {
     const search = vi.fn(async () => [chunk("a.md")]);
     const runner = createRagSearchRunner(search);
-    runner.countAutomaticSearch();
-
-    for (let i = 0; i < MAX_RAG_SEARCHES_PER_TURN - 1; i++) {
+    for (let i = 0; i < MAX_RAG_SEARCHES_PER_TURN; i++) {
       expect((await runner.run({ query: `q${i}` }) as ToolResult).error).toBeUndefined();
     }
     const exhausted = await runner.run({ query: "one too many" }) as ToolResult;
 
     expect(exhausted.error).toMatch(/limit reached/);
-    expect(search).toHaveBeenCalledTimes(MAX_RAG_SEARCHES_PER_TURN - 1);
+    expect(search).toHaveBeenCalledTimes(MAX_RAG_SEARCHES_PER_TURN);
   });
 
   it("does not charge a failed search against the budget", async () => {
