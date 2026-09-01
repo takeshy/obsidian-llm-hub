@@ -102,6 +102,8 @@ export const ja: Record<string, string> = {
   "settings.localLlmModal.temperatureDesc": "0.0-2.0（空欄 = サーバーデフォルト）",
   "settings.localLlmModal.maxTokens": "最大トークン数",
   "settings.localLlmModal.maxTokensDesc": "レスポンスの最大トークン数（空欄 = サーバーデフォルト）",
+  "settings.localLlmModal.streamIdleTimeout": "ストリーム待機タイムアウト（秒）",
+  "settings.localLlmModal.streamIdleTimeoutDesc": "サーバーからストリームデータが届かない状態で待機する秒数。空欄の場合は120秒です。大きなプロンプトでは長めに設定してください。",
   "settings.localLlmModal.serverDefault": "サーバーデフォルト",
   "settings.localLlmModal.baseUrlRequired": "ベースURLは必須です",
   "settings.localLlmModal.fetchRequired": "先にモデルを取得してください",

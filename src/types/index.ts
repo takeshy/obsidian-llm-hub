@@ -406,6 +406,7 @@ export interface LocalLlmConfig {
   apiKey?: string;              // Optional API key (for services that require it)
   temperature?: number;         // 0.0-2.0 (undefined = server default)
   maxTokens?: number;           // Max response tokens (undefined = server default)
+  streamIdleTimeoutSeconds?: number; // Seconds without streamed data before aborting (undefined = 120)
   username?: string;            // Basic Auth username (e.g. OpenCode local server)
   password?: string;            // Basic Auth password (e.g. OpenCode local server)
   verified?: boolean;           // Whether this entry has been verified

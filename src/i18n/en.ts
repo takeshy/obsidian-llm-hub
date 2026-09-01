@@ -102,6 +102,8 @@ export const en = {
   "settings.localLlmModal.temperatureDesc": "0.0-2.0 (empty = server default)",
   "settings.localLlmModal.maxTokens": "Max tokens",
   "settings.localLlmModal.maxTokensDesc": "Maximum response tokens (empty = server default)",
+  "settings.localLlmModal.streamIdleTimeout": "Stream idle timeout (seconds)",
+  "settings.localLlmModal.streamIdleTimeoutDesc": "Stop the request when the server sends no streaming data for this many seconds. Leave empty for 120 seconds. Large prompts may need a longer timeout.",
   "settings.localLlmModal.serverDefault": "Server default",
   "settings.localLlmModal.baseUrlRequired": "Base URL is required",
   "settings.localLlmModal.fetchRequired": "Please fetch models first",

@@ -30,7 +30,7 @@
 
 import { requestUrl } from "obsidian";
 import type { Message, StreamChunk, LocalLlmConfig, Attachment } from "../types";
-import { getHttpModule, StreamSignal, STREAM_IDLE_TIMEOUT_MS } from "./localLlmProvider";
+import { formatStreamIdleTimeoutError, getHttpModule, getStreamIdleTimeoutMs, StreamSignal } from "./localLlmProvider";
 
 interface OpenCodeProviderInfo {
   id?: string;
@@ -609,9 +609,10 @@ export async function* opencodeLocalChatStream(
       }
       if (streamDone) break;
       if (signal?.aborted) return;
-      const ok = await signal$.wait(STREAM_IDLE_TIMEOUT_MS);
+      const idleTimeoutMs = getStreamIdleTimeoutMs(config);
+      const ok = await signal$.wait(idleTimeoutMs);
       if (!ok) {
-        yield { type: "error", error: "Stream timed out: no data received for 2 minutes" };
+        yield { type: "error", error: formatStreamIdleTimeoutError(idleTimeoutMs) };
         sseReq.destroy();
         return;
       }
