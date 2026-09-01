@@ -387,7 +387,7 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
 
 
 // Supported local LLM frameworks
-export type LlmFramework = "ollama" | "lm-studio" | "anythingllm" | "vllm" | "opencode";
+export type LlmFramework = "ollama" | "lm-studio" | "anythingllm" | "vllm" | "geniex" | "opencode";
 
 // Local LLM configuration (OpenAI-compatible API)
 export interface LocalLlmConfig {
@@ -424,12 +424,11 @@ export interface LocalLlmConfig {
 }
 
 /**
- * Frameworks whose endpoints accept the OpenAI `/v1/chat/completions` shape
- * (and therefore can route through `openaiChatWithToolsStream` for native
- * function-calling support). Ollama is intentionally excluded because the
- * existing path uses Ollama's native `/api/chat` and a separate tool format;
- * users wanting tools with Ollama can point the entry at the `/v1` endpoint
- * via the lm-studio framework. OpenCode local has its own session API.
+ * Frameworks whose endpoints accept the OpenAI chat completions shape
+ * and can route through native function calling. GenieX is intentionally
+ * excluded for now: its QAIRT chat models are most reliable through plain
+ * chat completions without OpenAI tool payloads. Ollama keeps using its
+ * native chat path. OpenCode local has its own session API.
  */
 export function isToolsCompatibleFramework(framework: LlmFramework): boolean {
   return framework === "lm-studio" || framework === "anythingllm" || framework === "vllm";

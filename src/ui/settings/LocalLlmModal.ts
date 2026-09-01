@@ -47,6 +47,7 @@ export class LocalLlmModal extends Modal {
       "lm-studio": "http://localhost:1234",
       anythingllm: "http://localhost:3001/api",
       vllm: "http://localhost:8000",
+      geniex: "http://127.0.0.1:18181",
       opencode: "http://localhost:4096",
     };
 
@@ -59,6 +60,7 @@ export class LocalLlmModal extends Modal {
           .addOption("lm-studio", "LM Studio (OpenAI compatible)")
           .addOption("anythingllm", "AnythingLLM")
           .addOption("vllm", "vLLM")
+          .addOption("geniex", "GenieX (OpenAI compatible)")
           .addOption("opencode", "OpenCode (local)")
           .setValue(this.config.framework)
           .onChange((value) => {

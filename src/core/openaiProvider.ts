@@ -786,7 +786,7 @@ export async function* openaiChatWithToolsStream(
   let totalOutputTokens = 0;
 
   // State for parsing <think> tags in content stream (used by OpenRouter models)
-  let inThinkTag = false;
+  let inThinkTag: boolean | string = false;
   let tagBuffer = "";
   let hasNativeReasoning = false;
   let retryEmptyAfterRead = false;

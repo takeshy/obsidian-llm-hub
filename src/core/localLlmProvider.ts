@@ -42,6 +42,36 @@ interface OpenAiModelsResponse {
   data: OpenAiModel[];
 }
 
+
+function isGenieXConfig(config: LocalLlmConfig): boolean {
+  return config.framework === "geniex";
+}
+
+export function normalizeGenieXModelId(model: string): string {
+  const trimmed = model.trim();
+  const withoutPrecision = trimmed.replace(/:(?:W\d+A\d+|Q\d(?:_\d)?|F\d+)$/i, "");
+  const match = withoutPrecision.match(/^qualcomm\/(.+)$/i);
+  return match ? `ai-hub-models/${match[1]}` : trimmed;
+}
+
+/**
+ * GenieX decodes greedily by default, which makes its small on-device
+ * models (e.g. Gemma 4 E4B W4A16) fall into repetition loops on longer
+ * answers. Nudge sampling and penalise repeats unless the user overrides
+ * temperature in the config.
+ */
+const GENIEX_SAMPLING_DEFAULTS = {
+  temperature: 0.7,
+  top_p: 0.9,
+  top_k: 40,
+  repetition_penalty: 1.1,
+  presence_penalty: 0.5,
+  frequency_penalty: 0.5,
+} as const;
+
+function toOpenAiRequestModel(config: LocalLlmConfig): string {
+  return isGenieXConfig(config) ? normalizeGenieXModelId(config.model) : config.model;
+}
 /** Families that are embedding-only models (not usable for chat) */
 const EMBEDDING_FAMILIES = new Set(["nomic-bert", "bert", "snowflake-arctic-embed"]);
 
@@ -97,7 +127,7 @@ export async function verifyLocalLlm(config: LocalLlmConfig): Promise<{
       const data = response.json as OpenAiModelsResponse;
       const models = (data.data || [])
         .filter((m: OpenAiModel) => !isEmbeddingModelByName(m.id))
-        .map((m: OpenAiModel) => m.id);
+        .map((m: OpenAiModel) => isGenieXConfig(config) ? normalizeGenieXModelId(m.id) : m.id);
       return { success: true, models };
     } catch {
       return { success: false, error: `Cannot connect to ${config.baseUrl}. Is the server running?` };
@@ -203,7 +233,7 @@ async function* ollamaChatStream(
   let streamDone = false;
   let streamError: Error | null = null;
 
-  let inThinkTag = false;
+  let inThinkTag: boolean | string = false;
   let tagBuffer = "";
   let hasNativeThinking = false;
 
@@ -365,15 +395,23 @@ async function* openaiChatStream(
   signal?: AbortSignal,
   attachments?: Attachment[],
 ): AsyncGenerator<StreamChunk> {
-  const openaiMessages: OpenAiMessage[] = [
-    { role: "system", content: systemPrompt },
-  ];
+  const openaiMessages: OpenAiMessage[] = [];
+  const systemText = systemPrompt.trim();
+  const foldSystemIntoFirstUser = isGenieXConfig(config) && systemText.length > 0;
+  let foldedSystem = false;
+
+  if (systemText && !foldSystemIntoFirstUser) {
+    openaiMessages.push({ role: "system", content: systemText });
+  }
 
   for (const msg of messages) {
-    openaiMessages.push({
-      role: msg.role === "user" ? "user" : "assistant",
-      content: msg.llmContent ?? msg.content,
-    });
+    const role = msg.role === "user" ? "user" : "assistant";
+    let content = msg.llmContent ?? msg.content;
+    if (foldSystemIntoFirstUser && !foldedSystem && role === "user") {
+      content = `${systemText}\n\nUser message:\n${content}`;
+      foldedSystem = true;
+    }
+    openaiMessages.push({ role, content });
   }
 
   // Add image attachments to the last user message as multimodal content parts
@@ -402,11 +440,14 @@ async function* openaiChatStream(
   }
 
   const requestBody: Record<string, unknown> = {
-    model: config.model,
+    model: toOpenAiRequestModel(config),
     messages: openaiMessages,
     stream: true,
+    ...(isGenieXConfig(config) ? GENIEX_SAMPLING_DEFAULTS : {}),
     ...(config.temperature != null && { temperature: config.temperature }),
-    ...(config.maxTokens != null && { max_tokens: config.maxTokens }),
+    ...(isGenieXConfig(config)
+      ? { max_tokens: config.maxTokens ?? 512, chat_template_kwargs: { enable_thinking: false } }
+      : config.maxTokens != null ? { max_tokens: config.maxTokens } : {}),
   };
 
   const body = JSON.stringify(requestBody);
@@ -440,7 +481,7 @@ async function* openaiChatStream(
       }
 
       let buffer = "";
-      let inThinkTag = false;
+      let inThinkTag: boolean | string = false;
       let tagBuffer = "";
       let hasNativeReasoning = false;
 
@@ -451,9 +492,11 @@ async function* openaiChatStream(
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          // SSE allows "data:" with or without a following space; GenieX
+          // emits "data:{...}" while most servers emit "data: {...}".
+          if (!trimmed || !trimmed.startsWith("data:")) continue;
 
-          const data = trimmed.slice(6);
+          const data = trimmed.slice(5).trim();
           if (data === "[DONE]") {
             if (tagBuffer) {
               chunks.push({ type: inThinkTag ? "thinking" : "text", content: tagBuffer });

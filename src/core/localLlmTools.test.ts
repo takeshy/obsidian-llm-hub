@@ -6,6 +6,11 @@ function config(framework: LocalLlmConfig["framework"]): LocalLlmConfig {
 }
 
 describe("local LLM tool capability", () => {
+  it("does not enable OpenAI tools for GenieX QAIRT models", () => {
+    expect(isToolsCompatibleFramework("geniex")).toBe(false);
+    expect(isLocalLlmToolsEnabled(config("geniex"), "provider/model")).toBe(false);
+  });
+
   it("enables OpenCode tools through its MCP path without treating it as OpenAI-compatible", () => {
     expect(isToolsCompatibleFramework("opencode")).toBe(false);
     expect(isLocalLlmToolsEnabled(config("opencode"), "provider/model")).toBe(true);
