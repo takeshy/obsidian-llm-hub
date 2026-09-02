@@ -16,7 +16,7 @@ export interface TokenPricing {
 export const MODEL_PRICING: Record<string, TokenPricing> = {
   // Gemini models
   // Introductory pricing through December 31, 2026.
-  "gemini-3.7-flash":                    { input: 0.75  / 1e6, output:   3.75 / 1e6 },
+  "gemini-3.8-flash":                    { input: 0.75  / 1e6, output:   3.75 / 1e6 },
   "gemini-3.5-flash-lite":               { input: 0.30  / 1e6, output:   2.50 / 1e6 },
   "gemini-3.1-pro-preview":              { input: 2.00  / 1e6, output:  12.00 / 1e6 },
   "gemini-3.1-pro-preview-customtools":  { input: 2.00  / 1e6, output:  12.00 / 1e6 },

@@ -515,7 +515,7 @@ AI Discussion は、別プラグインの [Discussion Hub](https://github.com/ta
 | ------------------------ | ----------------------------------------- |
 | Gemini 3.1 Pro Preview | 最新のフラッグシップモデル、1Mコンテキスト（推奨） |
 | Gemini 3.1 Pro Preview (Custom Tools) | カスタムツールとbash向けに最適化されたエージェントワークフロー |
-| Gemini 3.7 Flash | 最新の高速モデル、1Mコンテキスト（推奨） |
+| Gemini 3.8 Flash | 最新の高速モデル、1Mコンテキスト（推奨） |
 | Gemini 3.5 Flash Lite | 最新の高速・低コストモデル、1Mコンテキスト |
 | Gemini 3 Pro (Image)     | Pro品質の画像生成、4K                          |
 | Gemini 3.1 Flash (Image) | 高速・低コストの画像生成 |

@@ -29,6 +29,7 @@ describe("WorkspaceStateManager combined search persistence", () => {
     "gemini-3-flash-preview",
     "gemini-3.5-flash",
     "gemini-3.6-flash",
+    "gemini-3.7-flash",
     "gemini-2.5-flash",
   ])("migrates superseded Gemini Flash model %s", async (legacyModel) => {
     const harness = createManager(JSON.stringify({
@@ -38,7 +39,7 @@ describe("WorkspaceStateManager combined search persistence", () => {
 
     await harness.manager.loadWorkspaceState();
 
-    expect(harness.manager.workspaceState.selectedModel).toBe("api:gemini:gemini-3.7-flash");
+    expect(harness.manager.workspaceState.selectedModel).toBe("api:gemini:gemini-3.8-flash");
   });
 
   it("migrates retired Gemini 2.5 Pro", async () => {

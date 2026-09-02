@@ -31,7 +31,7 @@ Chat and embeddings are independent: a cloud chat provider can be combined with 
 
 # Thinking Mode
 
-Chat can enable thinking based on message keywords such as "think", "analyze", or "consider". Gemini 3.1 Pro always uses thinking mode. LLM Hub requests low thinking for Gemini 3.7 Flash normally and high thinking when Always Think is enabled. Other Flash model families can also be forced to always think from the tool menu; Flash is off by default and Flash Lite is on by default.
+Chat can enable thinking based on message keywords such as "think", "analyze", or "consider". Gemini 3.1 Pro always uses thinking mode. LLM Hub requests low thinking for Gemini 3.8 Flash normally and high thinking when Always Think is enabled. Other Flash model families can also be forced to always think from the tool menu; Flash is off by default and Flash Lite is on by default.
 
 # Installation
 
