@@ -48,11 +48,12 @@ import {
 	type McpAppInfo,
 	type WebSearchCitation,
 	type ProviderContinuation,
+	type ReasoningEffort,
 	isImageGenerationModel,
 	DEFAULT_WORKSPACE_FOLDER,
 	SKILLS_FOLDER,
 } from "src/types";
-import { getGeminiClient, isThinkingRequired } from "src/core/gemini";
+import { getGeminiClient } from "src/core/gemini";
 import { tracing } from "src/core/tracingHooks";
 import { getEnabledTools, skillWorkflowTool, skillScriptTool } from "src/core/tools";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "src/core/sandboxExecutor";
@@ -560,26 +561,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	const [decryptPassword, setDecryptPassword] = useState("");
 	// Pending feedback for edit rejection (to be sent after state update)
 	const [pendingEditFeedback, setPendingEditFeedback] = useState<{ filePath: string; request: string } | null>(null);
-	// Per-model always-think toggles (set of full model IDs, e.g. "api:gemini:gemini-3.5-flash-lite")
-	const [alwaysThinkModels, setAlwaysThinkModels] = useState<Set<string>>(() => {
-		// Load from workspace state if available
-		const saved = plugin.workspaceState.alwaysThinkModels;
-		if (saved && saved.length > 0) {
-			return new Set(saved);
-		}
-		// Default: Flash Lite and thinking-required models have thinking on
-		const defaults = new Set<string>();
-		const providers = !Platform.isMobile ? plugin.settings.apiProviders.filter(p => p.enabled && p.verified) : [];
-		for (const p of providers) {
-			for (const m of p.enabledModels) {
-				const modelId = `api:${p.id}:${m}`;
-				if (m.toLowerCase().includes("flash-lite") || isThinkingRequired(modelId)) {
-					defaults.add(modelId);
-				}
-			}
-		}
-		return defaults;
-	});
+	const [reasoningEffortByModel, setReasoningEffortByModel] = useState<Record<string, ReasoningEffort>>(
+		() => ({ ...(plugin.workspaceState.reasoningEffortByModel ?? {}) }),
+	);
 
 	// Agent Skills state (initialise with built-in skills so they are available synchronously)
 	const [availableSkills, setAvailableSkills] = useState<SkillMetadata[]>(getBuiltinSkillMetadata);
@@ -657,10 +641,31 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		&& providerSupportsWebSearch(activeSearchProvider, getApiProviderModelName(currentModel) || "");
 	// Server RAG needs API mode; local RAG works everywhere
 	const allowRag = ragEnabledState;
+	const resolvedApiModelName = getApiProviderModelName(currentModel) || "";
+	const reasoningEffortOptions: ReasoningEffort[] = (() => {
+		if (!activeSearchProvider || isImageGenerationModel(currentModel)) return [];
+		const modelName = resolvedApiModelName.toLowerCase();
+		if (activeSearchProvider.type === "openai" && /^(?:gpt-5\.6(?:-|$)|gpt-6-astra(?:-|$))/.test(modelName)) {
+			return ["default", "none", "low", "medium", "high", "xhigh", "max"];
+		}
+		if (activeSearchProvider.type !== "gemini" || modelName.includes("gemma-4")) return [];
+		if (modelName.includes("flash-lite-image")) return ["default", "minimal", "high"];
+		if (modelName.includes("3.1-pro") || modelName.includes("3-pro") || modelName.includes("3.7-flash")) {
+			return ["default", "low", "medium", "high"];
+		}
+		if (modelName.includes("gemini-3")) {
+			return ["default", "minimal", "low", "medium", "high"];
+		}
+		return [];
+	})();
+	const savedReasoningEffort = reasoningEffortByModel[currentModel] ?? "default";
+	const selectedReasoningEffort = reasoningEffortOptions.includes(savedReasoningEffort)
+		? savedReasoningEffort
+		: "default";
 
-	// Resolve thinking toggle for the current model
+	// Reasoning is controlled only by the selected effort.
 	const getThinkingToggle = (): boolean | undefined => {
-		if (alwaysThinkModels.has(currentModel) || isThinkingRequired(currentModel)) return true;
+		if (selectedReasoningEffort !== "default") return selectedReasoningEffort !== "none";
 		return undefined;
 	};
 
@@ -3205,7 +3210,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						systemPrompt, executeToolCall, abortController.signal,
 						apiEnableThinking,
 						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
-						isWebSearch,
+						isWebSearch, selectedReasoningEffort,
 					);
 
 			for await (const chunk of streamFn) {
@@ -4043,6 +4048,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 							},
 							disableTools: !toolsEnabled,
 							enableThinking: getThinkingToggle(),
+							reasoningEffort: selectedReasoningEffort,
 							traceId,
 							previousInteractionId,
 						}
@@ -4583,7 +4589,6 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								isLoading={isLoading}
 								onApplyEdit={handleApplyEdit}
 							onDiscardEdit={handleDiscardEdit}
-							alwaysThink={getThinkingToggle() === true}
 							app={plugin.app}
 							localLlmConfigs={plugin.settings.localLlmConfigs}
 							skillsFolder={plugin.settings.skillsFolder}
@@ -4610,6 +4615,18 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								codexModel={cliConfig.codexCliModel}
 								codexReasoningEffort={cliConfig.codexCliReasoningEffort || "low"}
 								onCodexConfigChange={handleCodexConfigChange}
+								reasoningEffort={selectedReasoningEffort}
+								reasoningEffortOptions={reasoningEffortOptions}
+								onReasoningEffortChange={(effort) => {
+									setReasoningEffortByModel(previous => {
+										const next = { ...previous };
+										if (effort === "default") delete next[currentModel];
+										else next[currentModel] = effort;
+										plugin.workspaceState.reasoningEffortByModel = next;
+										void plugin.saveWorkspaceState();
+										return next;
+									});
+								}}
 								allowWebSearch={allowWebSearch}
 								webSearchEnabled={webSearchEnabled}
 								ragEnabled={allowRag}
@@ -4630,16 +4647,6 @@ Always be helpful and provide clear, concise responses. When working with notes,
 									setSentPromptHistory(previous => {
 										const next = [...previous, prompt].slice(-100);
 										plugin.workspaceState.sentPromptHistory = next;
-										void plugin.saveWorkspaceState();
-										return next;
-									});
-								}}
-								alwaysThinkModels={alwaysThinkModels}
-								onAlwaysThinkModelToggle={(modelId, enabled) => {
-									setAlwaysThinkModels(prev => {
-										const next = new Set(prev);
-										if (enabled) next.add(modelId); else next.delete(modelId);
-										plugin.workspaceState.alwaysThinkModels = Array.from(next);
 										void plugin.saveWorkspaceState();
 										return next;
 									});

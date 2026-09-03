@@ -156,6 +156,39 @@ describe("OpenAI native web search", () => {
     expect(mocks.openAiChatCreate).not.toHaveBeenCalled();
   });
 
+  it("always uses Responses for GPT-6 Astra function tools without removing GPT-5.6 routing", async () => {
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{
+      type: "response.completed",
+      response: { id: "resp_astra", output: [], usage: { input_tokens: 1, output_tokens: 1 } },
+    }]));
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://api.openai.com", "key", "gpt-6-astra",
+      [{ role: "user", content: "Read my note", timestamp: 1 }],
+      [tool], "system", vi.fn(), undefined, false,
+    ));
+
+    expect(chunks.at(-1)?.type).toBe("done");
+    expect(mocks.openAiResponsesStream).toHaveBeenCalledOnce();
+    expect(mocks.openAiChatCreate).not.toHaveBeenCalled();
+  });
+
+  it("passes the selected GPT-6 Astra reasoning effort to Responses", async () => {
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{
+      type: "response.completed",
+      response: { id: "resp_astra_max", output: [], usage: { input_tokens: 1, output_tokens: 1 } },
+    }]));
+    await collect(openaiChatWithToolsStream(
+      "https://api.openai.com", "key", "gpt-6-astra",
+      [{ role: "user", content: "Solve this", timestamp: 1 }],
+      [], "system", vi.fn(), undefined, undefined, undefined, undefined, false, "max",
+    ));
+
+    expect(mocks.openAiResponsesStream.mock.calls[0][0].reasoning).toEqual({
+      effort: "max",
+      summary: "detailed",
+    });
+  });
+
   it("replays matching native continuation items after their triggering user", async () => {
     const priorItem = { id: "prior", type: "message", role: "assistant", status: "completed", content: [] };
     mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{

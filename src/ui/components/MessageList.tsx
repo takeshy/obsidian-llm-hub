@@ -19,7 +19,6 @@ interface MessageListProps {
   isLoading: boolean;
   onApplyEdit?: (messageIndex: number) => Promise<void>;
   onDiscardEdit?: (messageIndex: number) => void;
-  alwaysThink?: boolean;
   app: App;
   localLlmConfigs?: LocalLlmConfig[];
   skillsFolder?: string;
@@ -48,7 +47,6 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
   isLoading,
   onApplyEdit,
   onDiscardEdit,
-  alwaysThink,
   app,
   localLlmConfigs,
   skillsFolder,
@@ -131,12 +129,6 @@ const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
             </div>
           </div>
           <div className="llm-hub-empty-tips">
-            {!alwaysThink && (
-              <div className="llm-hub-empty-tip">
-                <span className="llm-hub-empty-tip-icon">💭</span>
-                <span>{t("chat.welcomeThinking")}</span>
-              </div>
-            )}
             <div className="llm-hub-empty-tip">
               <span className="llm-hub-empty-tip-icon">🎨</span>
               <span>{t("chat.welcomeImage")}</span>

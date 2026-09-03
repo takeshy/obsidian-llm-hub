@@ -24,7 +24,7 @@ import type { EditConfirmationResult } from "../ui/components/workflow/EditConfi
 import { TFile } from "obsidian";
 import { openaiChatWithToolsStream } from "./openaiProvider";
 import { anthropicChatWithToolsStream } from "./anthropicProvider";
-import { GeminiClient, getGeminiClient, shouldEnableThinkingByKeyword } from "./gemini";
+import { GeminiClient, getGeminiClient } from "./gemini";
 import { localLlmChatStream } from "./localLlmProvider";
 import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "./cliProvider";
 import { searchLocalRag } from "./localRagStore";
@@ -1191,9 +1191,7 @@ export class DiscordService {
         const { response, interactionId } = await this.generateViaGemini(
           messages, tools, systemPrompt, executeToolCall,
           getApiProviderModelName(model) || providerConfig.enabledModels[0] || "",
-          shouldEnableThinkingByKeyword(
-            ([...messages].reverse().find(m => m.role === "user")?.content || ""),
-          ),
+          false,
           conversation.lastInteractionId,
           webSearchEnabled,
         );
@@ -1265,8 +1263,7 @@ export class DiscordService {
     if (!providerConfig) throw new Error("No enabled API provider configured");
 
     const modelName = getApiProviderModelName(model) || providerConfig.enabledModels[0] || "";
-    const lastUserMessage = [...messages].reverse().find(message => message.role === "user");
-    const enableThinking = shouldEnableThinkingByKeyword(lastUserMessage?.content || "");
+    const enableThinking = false;
 
     // For Gemini-type API providers, fall through to Gemini client
     // (normally handled in generateResponse for Interactions API chaining, but kept as safety fallback)

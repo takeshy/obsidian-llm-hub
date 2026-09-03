@@ -24,8 +24,12 @@ export const MODEL_PRICING: Record<string, TokenPricing> = {
   "gemini-3.1-flash-image":              { input: 0.50  / 1e6, output:  60.00 / 1e6 },
   "gemini-3.1-flash-lite-image":         { input: 0.25  / 1e6, output:  30.00 / 1e6 },
 
-  // OpenAI models (March 2026)
-  // Source: https://openai.com/api/pricing/
+  // OpenAI models
+  // Source: https://developers.openai.com/api/docs/models
+  "gpt-6-astra":   { input: 10.00  / 1e6, output: 50.00 / 1e6 },
+  "gpt-5.6-sol":   { input:  4.00  / 1e6, output: 20.00 / 1e6 },
+  "gpt-5.6-terra": { input:  2.00  / 1e6, output: 12.00 / 1e6 },
+  "gpt-5.6-luna":  { input:  0.20  / 1e6, output:  1.20 / 1e6 },
   "gpt-5.4":       { input:  2.50  / 1e6, output: 15.00 / 1e6 },
   "gpt-5.4-mini":  { input:  0.75  / 1e6, output:  4.50 / 1e6 },
   "gpt-5.4-nano":  { input:  0.20  / 1e6, output:  1.25 / 1e6 },

@@ -94,7 +94,7 @@ export class CliPathModal extends Modal {
         .setName(t("settings.codexCliReasoningEffort"))
         .setDesc(t("settings.codexCliReasoningEffort.desc"))
         .addDropdown((dropdown) => {
-          const efforts: CodexReasoningEffort[] = ["minimal", "low", "medium", "high", "xhigh"];
+          const efforts: CodexReasoningEffort[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
           for (const effort of efforts) dropdown.addOption(effort, effort);
           dropdown.setValue(this.currentReasoningEffort);
           dropdown.onChange((effort) => {

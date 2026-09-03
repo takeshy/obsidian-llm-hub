@@ -533,23 +533,13 @@ See the [Discussion Hub documentation](https://github.com/takeshy/obsidian-discu
 | Gemini 3.1 Flash (Image) | Fast, low-cost image generation |
 | Gemma 4 | Free, function calling and RAG/Web Search are mutually exclusive |
 
-> **Thinking mode:** Use the **Always Think** toggles for supported chat models. **Gemini 3.1 Pro** always uses thinking mode and does not support disabling it.
-
-**Always Think toggle:**
-
-Click the Database icon (📦) to open the tool menu, and check the toggles under **Always Think**:
-
-- **Flash** — OFF by default. Check to always enable thinking for Flash models.
-- **Flash Lite** — ON by default. Flash Lite has minimal cost and speed difference with thinking enabled, so it is recommended to keep this on.
-
-When a toggle is ON, thinking is always active for that model family regardless of message content. When OFF, the existing keyword-based detection is used.
-
-![Always Think Settings](docs/images/setting_thinking.png)
+> **Thinking mode:** For supported OpenAI and Gemini API models, choose the reasoning effort beside the model picker. `default` leaves the choice to the provider, while `none` is available when the model can disable reasoning. Gemini models that cannot fully disable thinking expose their lowest supported effort instead. Prompts no longer change the effort automatically.
 
 ### OpenAI
 
 | Model | Description |
 |-------|-------------|
+| GPT-6 Astra | Most capable model for complex end-to-end work |
 | GPT-5.6 Sol | Highest-quality GPT-5.6 tier; web search live-tested |
 | GPT-5.6 Terra | Balanced GPT-5.6 tier |
 | GPT-5.6 Luna | Fast, economical GPT-5.6 tier |

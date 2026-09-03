@@ -10,14 +10,13 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import Wrench from "lucide-react/dist/esm/icons/wrench";
 import X from "lucide-react/dist/esm/icons/x";
 import { Notice, Platform, type App } from "obsidian";
-import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode, type CodexReasoningEffort } from "src/types";
+import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode, type CodexReasoningEffort, type ReasoningEffort } from "src/types";
 import type { CodexModelOption } from "src/core/cliProvider";
 import { RagSourceModal } from "./RagSourceModal";
 import type { SkillMetadata } from "src/core/skillsLoader";
 import type { OkfBundle } from "src/core/okfLoader";
 import SkillSelector from "./SkillSelector";
 import OkfSelector from "./OkfSelector";
-import { isThinkingRequired } from "src/core/gemini";
 import { t } from "src/i18n";
 import { isCaretOnFirstLine, isCaretOnLastLine } from "./chat/chatUtils";
 import ModelSelector from "./ModelSelector";
@@ -41,6 +40,9 @@ interface InputAreaProps {
   codexModel?: string;
   codexReasoningEffort: CodexReasoningEffort;
   onCodexConfigChange: (model: string | undefined, reasoningEffort: CodexReasoningEffort) => void;
+  reasoningEffort: ReasoningEffort;
+  reasoningEffortOptions: ReasoningEffort[];
+  onReasoningEffortChange: (effort: ReasoningEffort) => void;
   allowWebSearch: boolean;
   webSearchEnabled: boolean;
   ragEnabled: boolean;
@@ -54,8 +56,6 @@ interface InputAreaProps {
   onMaxPreviousMessagesChange: (count: number) => void;
   inputHistory: string[];
   onInputHistoryAdd: (prompt: string) => void;
-  alwaysThinkModels: Set<string>;
-  onAlwaysThinkModelToggle: (modelId: string, enabled: boolean) => void;
   mcpServers: McpServerConfig[]; // MCP server configurations
   onMcpServerToggle: (serverName: string, enabled: boolean) => void; // Per-server toggle handler
   slashCommands: SlashCommand[];
@@ -111,6 +111,9 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   codexModel,
   codexReasoningEffort,
   onCodexConfigChange,
+  reasoningEffort,
+  reasoningEffortOptions,
+  onReasoningEffortChange,
   allowWebSearch,
   webSearchEnabled,
   ragEnabled,
@@ -124,8 +127,6 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   onMaxPreviousMessagesChange,
   inputHistory,
   onInputHistoryAdd,
-  alwaysThinkModels,
-  onAlwaysThinkModelToggle,
   mcpServers,
   onMcpServerToggle,
   slashCommands,
@@ -790,31 +791,6 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                     {HISTORY_LIMIT_OPTIONS.map(count => <option key={count} value={count}>{count}</option>)}
                   </select>
                 </label>
-                <div className="llm-hub-vault-tool-separator" />
-                <div className="llm-hub-vault-tool-section-label">{t("input.thinkingLabel")}</div>
-                {(() => {
-                  const apiModels = availableModels.filter(m => !m.isCliModel);
-                  const groups = new Map<string, typeof apiModels>();
-                  for (const m of apiModels) {
-                    const group = m.providerName || "Other";
-                    if (!groups.has(group)) groups.set(group, []);
-                    groups.get(group)!.push(m);
-                  }
-                  return Array.from(groups.entries()).map(([groupName, models]) => (
-                    <details key={groupName} className="llm-hub-think-group">
-                      <summary className="llm-hub-think-group-summary">{groupName}</summary>
-                      {models.map(m => {
-                        const required = isThinkingRequired(m.name);
-                        return (
-                          <label key={m.name} className="llm-hub-vault-tool-checkbox">
-                            <input type="checkbox" checked={required || alwaysThinkModels.has(m.name)} onChange={(e) => onAlwaysThinkModelToggle(m.name, e.target.checked)} disabled={required} />
-                            <span>{m.displayName}</span>
-                          </label>
-                        );
-                      })}
-                    </details>
-                  ));
-                })()}
               </div>
             )}
             {/* Modal for vault tool + MCP settings when MCP servers are configured */}
@@ -865,34 +841,6 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                           </label>
                         );
                       })}
-                    </div>
-                  </div>
-                  <div className="llm-hub-tool-settings-row">
-                    <label>{t("input.thinkingLabel")}</label>
-                    <div className="llm-hub-mcp-server-list">
-                      {(() => {
-                        const apiModels = availableModels.filter(m => !m.isCliModel);
-                        const groups = new Map<string, typeof apiModels>();
-                        for (const m of apiModels) {
-                          const group = m.providerName || "Other";
-                          if (!groups.has(group)) groups.set(group, []);
-                          groups.get(group)!.push(m);
-                        }
-                        return Array.from(groups.entries()).map(([groupName, models]) => (
-                          <details key={groupName} className="llm-hub-think-group">
-                            <summary className="llm-hub-think-group-summary">{groupName}</summary>
-                            {models.map(m => {
-                              const required = isThinkingRequired(m.name);
-                              return (
-                                <label key={m.name} className={`llm-hub-mcp-server-item${required ? " is-disabled" : ""}`}>
-                                  <input type="checkbox" checked={required || alwaysThinkModels.has(m.name)} onChange={(e) => onAlwaysThinkModelToggle(m.name, e.target.checked)} disabled={required} />
-                                  <span className="llm-hub-mcp-server-name">{m.displayName}</span>
-                                </label>
-                              );
-                            })}
-                          </details>
-                        ));
-                      })()}
                     </div>
                   </div>
                   <button
@@ -1004,11 +952,25 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                 disabled={isLoading}
                 title={t("settings.codexCliReasoningEffort")}
               >
-                {(["minimal", "low", "medium", "high", "xhigh"] as CodexReasoningEffort[]).map((effort) => (
+                {(["minimal", "low", "medium", "high", "xhigh", "max"] as CodexReasoningEffort[]).map((effort) => (
                   <option key={effort} value={effort}>{effort}</option>
                 ))}
               </select>
             </>
+          )}
+          {reasoningEffortOptions.length > 0 && (
+            <select
+              className="llm-hub-model-select"
+              value={reasoningEffort}
+              onChange={(e) => onReasoningEffortChange(e.target.value as ReasoningEffort)}
+              disabled={isLoading}
+              title="Reasoning effort"
+              aria-label="Reasoning effort"
+            >
+              {reasoningEffortOptions.map((effort) => (
+                <option key={effort} value={effort}>{effort}</option>
+              ))}
+            </select>
           )}
           <div className="llm-hub-search-selector" ref={searchMenuRef}>
             <button

@@ -11,7 +11,7 @@
 
 import { requestUrl } from "obsidian";
 import OpenAI from "openai";
-import type { Message, StreamChunk, ToolDefinition, GeneratedImage, WebSearchCitation, WebSearchSource } from "../types";
+import type { Message, StreamChunk, ToolDefinition, GeneratedImage, WebSearchCitation, WebSearchSource, ReasoningEffort } from "../types";
 import { calculateCost } from "./modelPricing";
 import { parseThinkTags } from "./thinkTagParser";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
@@ -461,7 +461,7 @@ async function* openaiResponsesStream(
   systemPrompt: string,
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>,
   signal?: AbortSignal,
-  enableThinking?: boolean,
+  reasoningEffort?: ReasoningEffort,
   webSearchEnabled?: boolean,
   continuationProvider: "openai" | "xai" = "openai",
 ): AsyncGenerator<StreamChunk> {
@@ -510,7 +510,9 @@ async function* openaiResponsesStream(
         instructions: systemPrompt || undefined,
         tools: responsesTools.length > 0 ? responsesTools : undefined,
         tool_choice: webSearchEnabled ? "auto" : undefined,
-        ...(enableThinking ? { reasoning: { effort: "high", summary: "detailed" as const } } : {}),
+        ...(reasoningEffort && reasoningEffort !== "default"
+          ? { reasoning: { effort: reasoningEffort as "low", summary: "detailed" as const } }
+          : {}),
         // Search-capable models such as GPT-5.6 Sol may emit reasoning items
         // even when the UI thinking toggle is off. Always retain their opaque
         // encrypted state so our stateless history replay remains valid.
@@ -723,7 +725,7 @@ async function* openaiResponsesStream(
  * Stream chat completion with function calling support via OpenAI SDK.
  * When enableThinking is true, uses Responses API first for official OpenAI.
  * A tool-enabled reasoning request must not fall back to Chat Completions:
- * current GPT-5.6 models reject that combination on /v1/chat/completions.
+ * current GPT-5.6 models and GPT-6 Astra use Responses for that combination.
  */
 export async function* openaiChatWithToolsStream(
   baseUrl: string,
@@ -738,15 +740,17 @@ export async function* openaiChatWithToolsStream(
   proxyUrl?: string,
   proxyBypass?: string,
   webSearchEnabled?: boolean,
+  reasoningEffort?: ReasoningEffort,
 ): AsyncGenerator<StreamChunk> {
   const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
-  const useReasoning = enableThinking === true;
+  const selectedEffort = reasoningEffort && reasoningEffort !== "default" ? reasoningEffort : undefined;
+  const useReasoning = enableThinking === true || (selectedEffort !== undefined && selectedEffort !== "none");
 
   // Native search uses Responses on the official OpenAI and xAI endpoints.
   // Other compatible gateways continue to use Chat Completions.
   const responsesProvider = getOfficialResponsesProvider(baseUrl);
   const requiresResponsesForTools = responsesProvider === "openai"
-    && /^gpt-5\.6(?:-|$)/i.test(model)
+    && /^(?:gpt-5\.6(?:-|$)|gpt-6-astra(?:-|$))/i.test(model)
     && tools.length > 0;
 
   // Preserve existing non-search behavior: only OpenAI reasoning requests use
@@ -759,7 +763,7 @@ export async function* openaiChatWithToolsStream(
     let initialResponsesError: StreamChunk | undefined;
     const responsesStream = openaiResponsesStream(
       client, baseUrl, model, messages, tools, systemPrompt, executeToolCall, signal,
-      useReasoning, webSearchEnabled, responsesProvider,
+      selectedEffort ?? (useReasoning ? "high" : undefined), webSearchEnabled, responsesProvider,
     );
     for await (const chunk of responsesStream) {
       // If Responses API returns an error on the first chunk, fall through to Chat Completions
@@ -816,7 +820,9 @@ export async function* openaiChatWithToolsStream(
         tools: openaiTools,
         stream: true,
         stream_options: { include_usage: true },
-        ...(useReasoning ? { reasoning_effort: "high" as const } : {}),
+        ...(selectedEffort
+          ? { reasoning_effort: selectedEffort as "low" }
+          : useReasoning ? { reasoning_effort: "high" as const } : {}),
       }, { signal });
 
       for await (const chunk of stream) {

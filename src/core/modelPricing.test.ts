@@ -42,6 +42,22 @@ describe("Claude Opus 5", () => {
   });
 });
 
+describe("current OpenAI models", () => {
+  it("offers GPT-6 Astra without removing the GPT-5.6 family", () => {
+    const models = getKnownModels("openai");
+    expect(models).toContain("gpt-6-astra");
+    expect(models).toEqual(expect.arrayContaining([
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+    ]));
+  });
+
+  it("uses the published GPT-6 Astra token pricing", () => {
+    expect(calculateCost("gpt-6-astra", 1_000_000, 1_000_000)).toBe(60);
+  });
+});
+
 describe("OpenCode Go", () => {
   it("does not inject a stale static model catalog", () => {
     expect(getKnownModels("opencodego")).toEqual([]);
