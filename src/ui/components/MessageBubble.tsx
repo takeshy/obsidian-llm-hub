@@ -18,6 +18,7 @@ import { t } from "src/i18n";
 import { formatError } from "src/utils/error";
 import { isSafeWebUrl } from "src/core/webSearch";
 import { chatLinkFileRef } from "./chat/localFileLink";
+import { getReadNotePageRange } from "./toolDisplay";
 import { ConfirmModal } from "./ConfirmModal";
 
 interface MessageBubbleProps {
@@ -322,6 +323,13 @@ export default function MessageBubble({
       parts.push("(active note)");
     }
 
+    const toolResult = message.toolResults?.find((item) => item.toolCallId === toolCall.id)?.result;
+    const resultArgs = toolResult && typeof toolResult === "object"
+      ? toolResult as Record<string, unknown>
+      : {};
+    const pageRange = getReadNotePageRange(toolCall.name, { ...args, ...resultArgs });
+    if (pageRange) parts.push(pageRange);
+
     return parts.join(": ");
   };
 
@@ -610,7 +618,18 @@ export default function MessageBubble({
                     }}
                     title={
                       noteTarget
-                        ? t("message.clickToOpen", { source: noteTarget })
+                        ? t("message.clickToOpen", {
+                            source: [
+                              noteTarget,
+                              getReadNotePageRange(toolCall.name, {
+                                ...toolCall.args,
+                                ...((message.toolResults?.find((item) => item.toolCallId === toolCall.id)?.result
+                                  ?? {}) as Record<string, unknown>),
+                              }),
+                            ]
+                              .filter(Boolean)
+                              .join(" — "),
+                          })
                         : t("message.clickToSeeDetails")
                     }
                   >

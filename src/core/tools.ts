@@ -23,7 +23,7 @@ export const obsidianTools: ToolDefinition[] = [
   {
     name: "read_note",
     description:
-      "Read a supported vault file in Obsidian by name or by detecting the currently active file. Text files return their content; PDFs are attached for PDF-capable models or have their text extracted as a fallback.",
+      "Read a supported vault file in Obsidian by name or by detecting the currently active file. Text files return their content; PDFs are attached for PDF-capable models or have their text extracted as a fallback. For PDFs, an inclusive page range can be selected with startPage and endPage.",
     parameters: {
       type: "object",
       properties: {
@@ -35,6 +35,14 @@ export const obsidianTools: ToolDefinition[] = [
           type: "boolean",
           description:
             "If no filename provided, set to true to read the currently active note",
+        },
+        startPage: {
+          type: "integer",
+          description: "For PDFs, the 1-based first page to read (inclusive). Defaults to page 1.",
+        },
+        endPage: {
+          type: "integer",
+          description: "For PDFs, the 1-based last page to read (inclusive). Defaults to the final page.",
         },
       },
     },

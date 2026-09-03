@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { App, TFile } from "obsidian";
 import { findFileByName, readNote, resolveNoteFile } from "./notes";
 import { extractPdfText } from "./search";
+import { PDFDocument } from "pdf-lib";
 
 vi.mock("./search", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./search")>()),
@@ -20,13 +21,13 @@ function makeFile(path: string, size = 1024): TFile {
   return file;
 }
 
-function makeApp(files: TFile[]): App {
+function makeApp(files: TFile[], binary = new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer): App {
   return {
     vault: {
       getFiles: () => files,
       getAbstractFileByPath: (path: string) => files.find(file => file.path === path) ?? null,
       read: vi.fn(async () => "text content"),
-      readBinary: vi.fn(async () => new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer),
+      readBinary: vi.fn(async () => binary),
     },
   } as unknown as App;
 }
@@ -64,6 +65,21 @@ describe("readNote PDF support", () => {
     });
   });
 
+  it("passes the selected page range to PDF text extraction", async () => {
+    const pdf = makeFile("Docs/report.pdf");
+    await readNote(makeApp([pdf]), pdf.path, false, 1000, "extract-text", 3, 7);
+
+    expect(extractPdfText).toHaveBeenLastCalledWith(expect.anything(), pdf.path, 3, 7);
+  });
+
+  it("returns the selected range as result metadata", async () => {
+    const pdf = makeFile("Docs/report.pdf");
+
+    const result = await readNote(makeApp([pdf]), pdf.path, false, 1000, "extract-text", 42, 43);
+
+    expect(result).toEqual(expect.objectContaining({ startPage: 42, endPage: 43 }));
+  });
+
   it("returns a native PDF attachment when requested", async () => {
     const pdf = makeFile("Docs/report.pdf");
     const result = await readNote(makeApp([pdf]), pdf.path, false, 1000, "native");
@@ -84,6 +100,33 @@ describe("readNote PDF support", () => {
 
     expect(result.content).toContain("for this turn");
     expect(result.content).toContain("read_note again");
+  });
+
+  it("attaches only the selected pages in native PDF mode", async () => {
+    const source = await PDFDocument.create();
+    source.addPage();
+    source.addPage();
+    source.addPage();
+    const bytes = await source.save();
+    const pdf = makeFile("Docs/report.pdf", bytes.byteLength);
+
+    const result = await readNote(
+      makeApp([pdf], bytes.buffer as ArrayBuffer), pdf.path, false, 1000, "native", 2, 3,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain("pages 2-3");
+    const attached = Uint8Array.from(atob(result.attachments![0].data), character => character.charCodeAt(0));
+    expect((await PDFDocument.load(attached)).getPageCount()).toBe(2);
+  });
+
+  it("rejects invalid PDF page ranges", async () => {
+    const pdf = makeFile("Docs/report.pdf");
+
+    const result = await readNote(makeApp([pdf]), pdf.path, false, 1000, "extract-text", 5, 2);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("less than or equal");
   });
 
   it("falls back to text extraction when a native PDF is too large to send", async () => {

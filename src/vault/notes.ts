@@ -2,6 +2,7 @@ import { TFile, TFolder, type App } from "obsidian";
 import { formatError } from "src/utils/error";
 import { DEFAULT_SETTINGS } from "src/types";
 import { getEditHistoryManager } from "src/core/editHistory";
+import { PDFDocument } from "pdf-lib";
 import {
   compareFileLookupPriority,
   ensureMarkdownExtensionIfMissing,
@@ -133,7 +134,9 @@ export async function readNote(
   activeNote?: boolean,
   maxChars: number = DEFAULT_SETTINGS.maxNoteChars,
   pdfInputMode: import("src/types").PdfInputMode = "extract-text",
-): Promise<{ success: boolean; content?: string; path?: string; error?: string; truncated?: boolean; attachments?: import("src/types").Attachment[] }> {
+  startPage?: number,
+  endPage?: number,
+): Promise<{ success: boolean; content?: string; path?: string; error?: string; truncated?: boolean; attachments?: import("src/types").Attachment[]; startPage?: number; endPage?: number }> {
   let file: TFile | null = null;
 
   if (activeNote) {
@@ -169,34 +172,67 @@ export async function readNote(
   }
 
   if (extension === "pdf") {
+    if ((startPage !== undefined && (!Number.isInteger(startPage) || startPage < 1))
+      || (endPage !== undefined && (!Number.isInteger(endPage) || endPage < 1))) {
+      return { success: false, path: file.path, error: "startPage and endPage must be positive integers" };
+    }
+    if (startPage !== undefined && endPage !== undefined && startPage > endPage) {
+      return { success: false, path: file.path, error: "startPage must be less than or equal to endPage" };
+    }
+
+    const hasPageRange = startPage !== undefined || endPage !== undefined;
+    let attachedPageRange: string | undefined;
+    let attachedStartPage: number | undefined;
+    let attachedEndPage: number | undefined;
     // Oversized PDFs fall back to text extraction rather than blowing the
     // provider request limit (and blocking the renderer on btoa).
-    if (pdfInputMode === "native" && (file.stat?.size ?? 0) <= MAX_NATIVE_PDF_BYTES) {
+    if (pdfInputMode === "native" && (hasPageRange || (file.stat?.size ?? 0) <= MAX_NATIVE_PDF_BYTES)) {
       const buffer = await app.vault.readBinary(file);
-      let binary = "";
-      const bytes = new Uint8Array(buffer);
-      const batchSize = 0x8000;
-      for (let i = 0; i < bytes.length; i += batchSize) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + batchSize));
+      let attachmentBytes: Uint8Array<ArrayBufferLike> = new Uint8Array(buffer);
+      if (hasPageRange) {
+        const source = await PDFDocument.load(attachmentBytes, { ignoreEncryption: true });
+        const totalPages = source.getPageCount();
+        const from = startPage ?? 1;
+        const to = Math.min(endPage ?? totalPages, totalPages);
+        if (from > totalPages) {
+          return { success: false, path: file.path, error: `startPage ${from} exceeds the PDF's ${totalPages} pages` };
+        }
+        const selected = await PDFDocument.create();
+        const indices = Array.from({ length: to - from + 1 }, (_, index) => from - 1 + index);
+        const pages = await selected.copyPages(source, indices);
+        for (const page of pages) selected.addPage(page);
+        attachmentBytes = await selected.save();
+        attachedPageRange = `${from}-${to}`;
+        attachedStartPage = from;
+        attachedEndPage = to;
       }
-      return {
-        success: true,
-        // Providers deliberately keep the base64 out of the replayed history,
-        // so a later turn sees this line without the document behind it.
-        content: `PDF attached for this turn: ${file.path}. The attachment is not replayed in later turns — call read_note again if you still need it after this response.`,
-        path: file.path,
-        attachments: [{
-          name: file.name,
-          type: "pdf",
-          mimeType: "application/pdf",
-          data: btoa(binary),
-          sourcePath: file.path,
-        }],
-      };
+      if (attachmentBytes.byteLength <= MAX_NATIVE_PDF_BYTES) {
+        let binary = "";
+        const bytes = attachmentBytes;
+        const batchSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += batchSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + batchSize));
+        }
+        return {
+          success: true,
+          // Providers deliberately keep the base64 out of the replayed history,
+          // so a later turn sees this line without the document behind it.
+          content: `PDF${attachedPageRange ? ` pages ${attachedPageRange}` : ""} attached for this turn: ${file.path}. The attachment is not replayed in later turns — call read_note again if you still need it after this response.`,
+          path: file.path,
+          ...(attachedPageRange ? { startPage: attachedStartPage, endPage: attachedEndPage } : {}),
+          attachments: [{
+            name: file.name,
+            type: "pdf",
+            mimeType: "application/pdf",
+            data: btoa(binary),
+            sourcePath: file.path,
+          }],
+        };
+      }
     }
 
     const { extractPdfText } = await import("./search");
-    const extracted = await extractPdfText(app, file.path);
+    const extracted = await extractPdfText(app, file.path, startPage, endPage);
     if (!extracted?.trim()) {
       return {
         success: false,
@@ -210,7 +246,13 @@ export async function readNote(
       content = content.slice(0, maxChars) + "\n\n... [Content truncated. PDF is too long to read fully.]";
       truncated = true;
     }
-    return { success: true, content, path: file.path, truncated };
+    return {
+      success: true,
+      content,
+      path: file.path,
+      truncated,
+      ...(hasPageRange ? { startPage: startPage ?? 1, endPage } : {}),
+    };
   }
 
   let content = await app.vault.read(file);

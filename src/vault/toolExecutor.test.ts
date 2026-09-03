@@ -101,6 +101,18 @@ describe("LLM vault tool folder scope", () => {
     expect(String(result.error)).toContain("Access denied");
   });
 
+  it("validates read_note PDF page arguments", async () => {
+    const app = makeApp([makeFile("Public/report.pdf")]);
+
+    const result = await executeToolCall(app, "read_note", {
+      fileName: "Public/report.pdf",
+      startPage: 1.5,
+    });
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("positive integers");
+  });
+
   it("blocks traversal paths that would escape configured folders", async () => {
     const app = makeApp([
       makeFile("Public/Note.md", "public"),

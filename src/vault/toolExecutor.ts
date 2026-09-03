@@ -109,6 +109,12 @@ function asString(value: unknown): string | undefined {
   try { return JSON.stringify(value); } catch { return undefined; }
 }
 
+function asPageNumber(value: unknown): number | undefined {
+  if (value == null) return undefined;
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(number) ? number : Number.NaN;
+}
+
 function localDay(date = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -142,6 +148,15 @@ async function executeToolCallInternal(
 
     case "read_note": {
       const fileName = asString(args.fileName);
+      const startPage = asPageNumber(args.startPage);
+      const endPage = asPageNumber(args.endPage);
+      if ((startPage !== undefined && (Number.isNaN(startPage) || startPage < 1))
+        || (endPage !== undefined && (Number.isNaN(endPage) || endPage < 1))) {
+        return { success: false, error: "startPage and endPage must be positive integers" };
+      }
+      if (startPage !== undefined && endPage !== undefined && startPage > endPage) {
+        return { success: false, error: "startPage must be less than or equal to endPage" };
+      }
       const denied = denyIfCloudVaultToolFileOutsideScope(app, fileName, args.activeNote as boolean | undefined, context);
       if (denied) return denied;
       return readNote(
@@ -150,6 +165,8 @@ async function executeToolCallInternal(
         args.activeNote as boolean | undefined,
         context?.maxNoteChars ?? DEFAULT_SETTINGS.maxNoteChars,
         context?.pdfInputMode ?? "extract-text",
+        startPage,
+        endPage,
       );
     }
 
