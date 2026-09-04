@@ -1,5 +1,17 @@
 // Japanese translations
 export const ja: Record<string, string> = {
+  "nodeEditor.mcpConfirm": "MCPツール実行の確認",
+  "nodeEditor.mcpConfirm.desc": "falseにすると、自動実行を含め、このノードでのMCP承認を省略します。",
+  "settings.mcpAutoApprove": "常に承認",
+  "settings.mcpAutoApprove.desc": "このサーバーの全ツールを確認なしで許可します。OFFの場合は許可リスト以外のツールを実行する前に確認します。",
+  "settings.mcpAllowedTools": "許可リスト",
+  "settings.mcpAllowedTools.desc": "確認なしで実行するツールです。リストから削除して保存すると、再び承認が必要になります。",
+  "mcp.approval.title": "MCPツール実行の承認",
+  "mcp.approval.tool": "ツール名",
+  "mcp.approval.arguments": "実行引数",
+  "mcp.approval.deny": "拒否",
+  "mcp.approval.once": "今回だけ許可",
+  "mcp.approval.always": "このツールを常に許可",
   // Settings - Credential storage
   "settings.credentialStorage": "認証情報の保存先",
   "settings.credentialStorage.mode": "APIキーの保存先",

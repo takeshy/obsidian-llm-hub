@@ -41,6 +41,8 @@ export interface McpServerConfig {
   agentPlugin?: { pluginName: string; serverName: string };
   // Common
   enabled: boolean;       // Whether this server is enabled for chat
+  autoApprove?: boolean; // Skip approval for all tools on this server
+  allowedTools?: string[]; // Exact MCP tool names approved by the user
   toolHints?: string[];   // Tool names from test connection (for display hints)
 }
 

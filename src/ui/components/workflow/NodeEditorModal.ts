@@ -214,6 +214,7 @@ export class NodeEditorModal extends Modal {
         break;
 
       case "command": {
+        this.addDropdown(container, "confirm", t("nodeEditor.mcpConfirm"), ["true", "false"], t("nodeEditor.mcpConfirm.desc"));
         this.addTextArea(container, "prompt", t("nodeEditor.prompt"), t("nodeEditor.prompt.placeholder"), true);
 
         // Build model options based on enabled providers
@@ -494,6 +495,7 @@ export class NodeEditorModal extends Modal {
         break;
 
       case "mcp":
+        this.addDropdown(container, "confirm", t("nodeEditor.mcpConfirm"), ["true", "false"], t("nodeEditor.mcpConfirm.desc"));
         this.addTextField(container, "url", t("nodeEditor.mcpUrl"), t("nodeEditor.mcpUrl.placeholder"));
         this.addTextField(container, "tool", t("nodeEditor.mcpTool"), t("nodeEditor.mcpTool.placeholder"));
         this.addTextArea(container, "args", t("nodeEditor.mcpArgs"), t("nodeEditor.mcpArgs.placeholder"));

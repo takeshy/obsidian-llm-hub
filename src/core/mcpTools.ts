@@ -253,7 +253,8 @@ export interface McpToolExecutor {
  */
 export function createMcpToolExecutor(
   mcpTools: McpToolDefinition[],
-  traceId?: string | null
+  traceId?: string | null,
+  skipApproval = false
 ): McpToolExecutor {
   // Create a map for quick lookup
   const toolMap = new Map<string, McpToolDefinition>();
@@ -294,7 +295,7 @@ export function createMcpToolExecutor(
     try {
       const client = await getClient(tool.mcpServer);
       // Use callToolWithUi to get full result including UI metadata
-      const appResult = await client.callToolWithUi(tool.mcpToolName, args);
+      const appResult = await client.callToolWithUi(tool.mcpToolName, args, skipApproval);
 
       // Extract text content for the result
       const textContents = appResult.content

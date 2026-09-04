@@ -435,7 +435,7 @@ Please revise the output based on the user's feedback above.`;
           try {
             const mcpTools = await fetchMcpTools(enabledServers);
             apiTools = [...apiTools, ...mcpTools];
-            apiMcpToolExecutor = createMcpToolExecutor(mcpTools, traceId);
+            apiMcpToolExecutor = createMcpToolExecutor(mcpTools, traceId, node.properties["confirm"] === "false");
           } catch (error) {
             console.error("Failed to fetch MCP tools:", error);
           }
@@ -688,7 +688,7 @@ Please revise the output based on the user's feedback above.`;
           // Add MCP tools to the tools array
           tools = [...tools, ...mcpTools];
           // Create MCP tool executor
-          mcpToolExecutor = createMcpToolExecutor(mcpTools, traceId);
+          mcpToolExecutor = createMcpToolExecutor(mcpTools, traceId, node.properties["confirm"] === "false");
         } catch (error) {
           console.error("Failed to fetch MCP tools:", error);
           // Continue without MCP tools
@@ -735,7 +735,7 @@ Please revise the output based on the user's feedback above.`;
       try {
         const mcpTools = await fetchMcpTools(enabledServers);
         tools = [...mcpTools, EXECUTE_JAVASCRIPT_TOOL];
-        mcpToolExecutor = createMcpToolExecutor(mcpTools, traceId);
+        mcpToolExecutor = createMcpToolExecutor(mcpTools, traceId, node.properties["confirm"] === "false");
         toolExecutor = async (name: string, args: Record<string, unknown>) => {
           if (name === "execute_javascript") {
             return await handleExecuteJavascriptTool(args);

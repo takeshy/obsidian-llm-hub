@@ -1,5 +1,17 @@
 // English translations (base language)
 export const en = {
+  "nodeEditor.mcpConfirm": "Confirm MCP tool calls",
+  "nodeEditor.mcpConfirm.desc": "Set false to skip MCP approval for this node, including automatic execution.",
+  "settings.mcpAutoApprove": "Always approve",
+  "settings.mcpAutoApprove.desc": "Allow all tools on this server without asking. When off, ask before running tools outside the allowed list.",
+  "settings.mcpAllowedTools": "Allowed tools",
+  "settings.mcpAllowedTools.desc": "These tools run without asking. Remove a tool and save to require approval again.",
+  "mcp.approval.title": "Approve MCP tool call",
+  "mcp.approval.tool": "Tool",
+  "mcp.approval.arguments": "Arguments",
+  "mcp.approval.deny": "Deny",
+  "mcp.approval.once": "Allow once",
+  "mcp.approval.always": "Always allow this tool",
   // Settings - Credential storage
   "settings.credentialStorage": "Credential storage",
   "settings.credentialStorage.mode": "Store API keys in",

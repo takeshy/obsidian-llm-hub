@@ -50,7 +50,7 @@ export class McpServerModal extends Modal {
     // For existing servers with toolHints, consider connection already tested
     this.connectionTested = server !== null && Array.isArray(server.toolHints) && server.toolHints.length > 0;
     this.server = server
-      ? { ...server }
+      ? { ...server, allowedTools: [...(server.allowedTools ?? [])] }
       : {
           name: "",
           transport: "http",
@@ -87,6 +87,27 @@ export class McpServerModal extends Modal {
           }
         });
       });
+
+    new Setting(contentEl)
+      .setName(t("settings.mcpAutoApprove"))
+      .setDesc(t("settings.mcpAutoApprove.desc"))
+      .addToggle(toggle => toggle.setValue(this.server.autoApprove ?? false)
+        .onChange(value => { this.server.autoApprove = value; }));
+
+    const allowedEl = contentEl.createDiv();
+    const renderAllowedTools = () => {
+      allowedEl.empty();
+      new Setting(allowedEl).setName(t("settings.mcpAllowedTools")).setDesc(t("settings.mcpAllowedTools.desc"));
+      for (const tool of this.server.allowedTools ?? []) {
+        new Setting(allowedEl).setName(tool).addExtraButton(btn => btn
+          .setIcon("trash").setTooltip(t("common.delete"))
+          .onClick(() => {
+            this.server.allowedTools = this.server.allowedTools?.filter(name => name !== tool);
+            renderAllowedTools();
+          }));
+      }
+    };
+    renderAllowedTools();
 
     // Transport selector
     const transportSetting = new Setting(contentEl)

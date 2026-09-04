@@ -9033,3 +9033,11 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 body .llm-hub-hidden.llm-hub-hidden {
   display: none;
 }
+
+.llm-hub-mcp-approval-args {
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

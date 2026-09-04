@@ -162,6 +162,7 @@ Pause execution.
 ### AI & LLM
 
 #### command
+- **confirm** (optional, default: "true"): Set "false" to skip MCP tool approval for this node, including automatic execution. Otherwise server approval settings apply.
 Execute LLM prompt.
 - **prompt** (required): Prompt template (supports {{variables}})
 - **model** (optional): Model override. Available: ${modelList}
@@ -207,6 +208,7 @@ Make HTTP request.
 \`\`\`
 
 #### mcp
+- **confirm** (optional, default: "true"): Set "false" to skip MCP tool approval for this node, including automatic execution. Otherwise server approval settings apply.
 Call MCP server tool.
 - **url** (required): MCP server endpoint URL (supports {{variables}})
 - **tool** (required): Tool name to call

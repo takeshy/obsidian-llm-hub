@@ -1,3 +1,4 @@
+import { requireMcpApproval } from "./mcpApproval";
 // MCP (Model Context Protocol) client for Streamable HTTP transport
 // Reference: https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http
 
@@ -115,8 +116,8 @@ export interface IMcpClient {
   initialize(): Promise<McpInitializeResult>;
   listTools(): Promise<McpToolInfo[]>;
   getToolsCacheTtlMs(): number | null;
-  callToolRaw(toolName: string, args?: Record<string, unknown>): Promise<McpToolCallResult>;
-  callToolWithUi(toolName: string, args?: Record<string, unknown>): Promise<McpAppResult>;
+  callToolRaw(toolName: string, args?: Record<string, unknown>, skipApproval?: boolean): Promise<McpToolCallResult>;
+  callToolWithUi(toolName: string, args?: Record<string, unknown>, skipApproval?: boolean): Promise<McpAppResult>;
   readResource(uri: string): Promise<McpAppUiResource | null>;
   close(): Promise<void>;
 }
@@ -405,7 +406,8 @@ export class McpHttpClient implements IMcpClient {
   /**
    * Call a tool on the MCP server (returns full result with UI metadata)
    */
-  async callToolRaw(toolName: string, args?: Record<string, unknown>): Promise<McpToolCallResult> {
+  async callToolRaw(toolName: string, args?: Record<string, unknown>, skipApproval?: boolean): Promise<McpToolCallResult> {
+    if (!skipApproval) await requireMcpApproval(this.config, toolName, args || {});
     if (!this.initialized) {
       await this.initialize();
     }
@@ -421,8 +423,8 @@ export class McpHttpClient implements IMcpClient {
   /**
    * Call a tool and return MCP Apps result if available
    */
-  async callToolWithUi(toolName: string, args?: Record<string, unknown>): Promise<McpAppResult> {
-    const result = await this.callToolRaw(toolName, args);
+  async callToolWithUi(toolName: string, args?: Record<string, unknown>, skipApproval?: boolean): Promise<McpAppResult> {
+    const result = await this.callToolRaw(toolName, args, skipApproval);
     return mapToolCallToAppResult(result);
   }
 
