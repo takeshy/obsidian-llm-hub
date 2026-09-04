@@ -1,3 +1,4 @@
+import { normalizeSpawnCommand } from "./commandLine";
 import { requireMcpApproval } from "./mcpApproval";
 // MCP (Model Context Protocol) client for stdio transport
 // Spawns a local process and communicates via stdin/stdout using JSON-RPC 2.0
@@ -53,6 +54,7 @@ export class McpStdioClient implements IMcpClient {
   private readBuffer = Buffer.alloc(0);
   private initialized = false;
   private stderrLog: string[] = [];
+  private processFailure: Error | null = null;
   private config: McpServerConfig;
   private protocolEra: McpProtocolEra | null = null;
   private cachedInitResult: McpInitializeResult | null = null;
@@ -78,6 +80,15 @@ export class McpStdioClient implements IMcpClient {
    * Initialize the MCP session - spawns the process and performs handshake
    */
   async initialize(): Promise<McpInitializeResult> {
+    try {
+      return await this.initializeSession();
+    } catch (error) {
+      await this.close().catch(() => {});
+      throw error;
+    }
+  }
+
+  private async initializeSession(): Promise<McpInitializeResult> {
     if (this.initialized && this.cachedInitResult) {
       return this.cachedInitResult;
     }
@@ -102,6 +113,7 @@ export class McpStdioClient implements IMcpClient {
         return result;
       }
     } catch {
+      if (this.processFailure) throw this.processFailure;
       // A 2025-era server reports MethodNotFound/UnsupportedProtocolVersion.
     }
 
@@ -204,12 +216,13 @@ export class McpStdioClient implements IMcpClient {
     }
     this.pending.clear();
 
-    if (proc && !proc.killed) {
+    if (proc && !proc.killed && proc.exitCode === null && proc.signalCode === null && !(this.processFailure && !proc.pid)) {
       await new Promise<void>((resolve) => {
         const timer = window.setTimeout(() => {
           if (proc.exitCode === null && proc.signalCode === null) {
             proc.kill("SIGKILL");
           }
+          resolve();
         }, 3000);
         proc.on("close", () => {
           window.clearTimeout(timer);
@@ -225,8 +238,10 @@ export class McpStdioClient implements IMcpClient {
   private startProcess(): void {
     const { spawn } = getChildProcess();
 
-    const command = this.config.command!;
-    const args = this.config.args || [];
+    this.processFailure = null;
+    this.stderrLog = [];
+    this.readBuffer = Buffer.alloc(0);
+    const { command, args } = normalizeSpawnCommand(this.config.command!, this.config.args || []);
     const cwd = this.config.cwd;
     if (this.config.pluginRoot) {
       if (!this.config.pluginData || !cwd) throw new Error("Agent Plugin paths are incomplete");
@@ -248,11 +263,14 @@ export class McpStdioClient implements IMcpClient {
       cwd,
     });
 
+    const proc = this.process;
+
     this.process.stdout!.on("data", (data: Buffer) => {
-      this.handleData(data);
+      if (this.process === proc) this.handleData(data);
     });
 
     this.process.stderr!.on("data", (data: Buffer) => {
+      if (this.process !== proc) return;
       const msg = data.toString("utf8").trim();
       if (msg) {
         this.stderrLog.push(msg);
@@ -265,18 +283,22 @@ export class McpStdioClient implements IMcpClient {
     });
 
     this.process.on("error", (err: Error) => {
+      if (this.process !== proc) return;
       console.error("[MCP process error]", this.config.name, err.message);
       this.initialized = false;
+      this.processFailure = new Error(`MCP process error: ${err.message}`);
+      for (const [, handler] of this.pending) handler.reject(this.processFailure);
+      this.pending.clear();
     });
 
     this.process.on("close", (code: number | null) => {
+      if (this.process !== proc) return;
       this.initialized = false;
       const stderrMsg = this.stderrLog.join("\n");
+      this.processFailure ??= new Error(`MCP process closed (code=${code})${stderrMsg ? ": " + stderrMsg : ""}`);
       // Reject all pending requests
       for (const [, handler] of this.pending) {
-        handler.reject(new Error(
-          `MCP process closed (code=${code})${stderrMsg ? ": " + stderrMsg : ""}`
-        ));
+        handler.reject(this.processFailure);
       }
       this.pending.clear();
     });
@@ -306,6 +328,10 @@ export class McpStdioClient implements IMcpClient {
     timeoutMs?: number,
   ): Promise<unknown> {
     return new Promise((resolve, reject) => {
+      if (this.processFailure) {
+        reject(this.processFailure);
+        return;
+      }
       if (!this.process || this.process.killed) {
         reject(new Error("MCP process not running"));
         return;
@@ -324,7 +350,8 @@ export class McpStdioClient implements IMcpClient {
       const timeout = window.setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
-          reject(new Error(`MCP request timed out: ${method}`));
+          const stderrMsg = this.stderrLog.join("\n");
+          reject(new Error(`MCP request timed out: ${method}${stderrMsg ? ": " + stderrMsg : ""}`));
         }
       }, effectiveTimeout);
 

@@ -26,3 +26,7 @@ Security behavior: MCP App iframes are sandboxed with `allow-scripts` and `allow
 
 - [Chat](./chat.md) explains MCP in chat.
 - [Workflows](./workflows.md) explains the `mcp` workflow node.
+
+# Stdio connection troubleshooting
+
+The Command field accepts a full command line; inline arguments precede the Arguments field. Quote paths and arguments containing spaces. Windows backslashes and saved quoted arguments are preserved. Test connection displays a checking state and disables editing and saving until it finishes. Launch errors such as ENOENT are reported immediately. Timeout errors include recent stderr, and failed handshakes stop the child process. A failed check keeps the dialog open for correction.

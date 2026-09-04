@@ -1,3 +1,4 @@
+import { joinCommandLine, normalizeSpawnCommand, splitCommandLine } from "src/core/commandLine";
 import { Modal, Setting, Notice, Platform } from "obsidian";
 import type { McpServerConfig, McpTransport, McpFraming } from "src/types";
 import { createMcpClient } from "src/core/mcpClient";
@@ -27,6 +28,8 @@ export class McpServerModal extends Modal {
   private envText = "";
   private argsText = "";
   private connectionTested = false;
+  private busy = false;
+  private testClient: ReturnType<typeof createMcpClient> | null = null;
   private saveBtn: import("obsidian").ButtonComponent | null = null;
   private testRequiredEl: HTMLElement | null = null;
   // Container elements for conditional field visibility
@@ -61,7 +64,7 @@ export class McpServerModal extends Modal {
         };
     this.headersText = this.server.headers ? JSON.stringify(this.server.headers, null, 2) : "";
     this.envText = this.server.env ? JSON.stringify(this.server.env, null, 2) : "";
-    this.argsText = (this.server.args || []).join(" ");
+    this.argsText = joinCommandLine(this.server.args || []);
     this.onSubmit = onSubmit;
   }
 
@@ -274,6 +277,7 @@ export class McpServerModal extends Modal {
         .setButtonText(this.isNew ? t("common.create") : t("common.save"))
         .setCta()
         .onClick(() => {
+          if (this.busy) return;
           if (!this.server.name.trim()) {
             new Notice(t("settings.mcpServerNameRequired"));
             return;
@@ -298,10 +302,7 @@ export class McpServerModal extends Modal {
 
           // Parse transport-specific fields
           if (this.server.transport === "stdio") {
-            // Parse args from space-separated string
-            this.server.args = this.argsText.trim()
-              ? this.argsText.trim().split(/\s+/)
-              : [];
+            this.server.args = splitCommandLine(this.argsText);
             // Parse env
             if (this.envText.trim()) {
               try {
@@ -327,8 +328,7 @@ export class McpServerModal extends Modal {
             }
           }
 
-          void this.onSubmit(this.server);
-          this.close();
+          void this.saveServer(testStatusEl);
         });
       // Disable save button if connection not tested
       btn.setDisabled(!this.connectionTested);
@@ -346,10 +346,43 @@ export class McpServerModal extends Modal {
     }
   }
 
+  private lockControls(): () => void {
+    this.busy = true;
+    const controls = Array.from(this.contentEl.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement | HTMLTextAreaElement>("input, button, select, textarea"));
+    const disabled = controls.map(control => control.disabled);
+    controls.forEach(control => { control.disabled = true; });
+    return () => {
+      controls.forEach((control, i) => { control.disabled = disabled[i]; });
+      this.busy = false;
+      this.saveBtn?.setDisabled(!this.connectionTested);
+    };
+  }
+
+  private async saveServer(statusEl: HTMLElement): Promise<void> {
+    const unlock = this.lockControls();
+    try {
+      const config = this.server.transport === "stdio"
+        ? { ...this.server, ...normalizeSpawnCommand(this.server.command!, this.server.args || []) }
+        : this.server;
+      await this.onSubmit(config);
+      this.close();
+    } catch (error) {
+      statusEl.removeClass("llm-hub-mcp-status--success");
+      statusEl.addClass("llm-hub-mcp-status--error");
+      statusEl.setText(t("settings.mcpSaveFailed", { error: formatError(error) }));
+    } finally {
+      unlock();
+    }
+  }
+
   private async testConnection(statusEl: HTMLElement, btnEl: HTMLButtonElement): Promise<void> {
+    if (this.busy) return;
+    const unlock = this.lockControls();
+    this.invalidateConnectionTest();
     statusEl.empty();
     statusEl.removeClass("llm-hub-mcp-status--success", "llm-hub-mcp-status--error");
-    statusEl.setText("Testing...");
+    statusEl.setText(t("settings.mcpChecking"));
+    btnEl.textContent = t("settings.mcpChecking");
     btnEl.disabled = true;
     let client: ReturnType<typeof createMcpClient> | null = null;
 
@@ -381,8 +414,7 @@ export class McpServerModal extends Modal {
           name: this.server.name || "test",
           transport: "stdio",
           url: "",
-          command: this.server.command,
-          args: this.argsText.trim() ? this.argsText.trim().split(/\s+/) : [],
+          ...normalizeSpawnCommand(this.server.command, splitCommandLine(this.argsText)),
           env,
           framing: this.server.framing || "newline",
           enabled: true,
@@ -411,6 +443,7 @@ export class McpServerModal extends Modal {
       }
 
       client = createMcpClient(testConfig);
+      this.testClient = client;
 
       await client.initialize();
       const tools = await client.listTools();
@@ -421,9 +454,7 @@ export class McpServerModal extends Modal {
 
       // Mark connection as tested and enable save button
       this.connectionTested = true;
-      if (this.saveBtn) {
-        this.saveBtn.setDisabled(false);
-      }
+
       if (this.testRequiredEl) {
         this.testRequiredEl.addClass("llm-hub-hidden");
       }
@@ -455,11 +486,14 @@ export class McpServerModal extends Modal {
       statusEl.setText(t("settings.mcpConnectionFailed", { error: formatError(error) }));
     } finally {
       await client?.close().catch(() => {});
-      btnEl.disabled = false;
+      this.testClient = null;
+      btnEl.textContent = t("settings.testMcpConnection");
+      unlock();
     }
   }
 
   onClose() {
+    void this.testClient?.close().catch(() => {});
     this.contentEl.empty();
   }
 }

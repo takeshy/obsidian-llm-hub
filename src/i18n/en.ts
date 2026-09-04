@@ -1,5 +1,7 @@
 // English translations (base language)
 export const en = {
+  "settings.mcpChecking": "Checking connection…",
+  "settings.mcpSaveFailed": "Failed to save MCP server: {{error}}",
   "nodeEditor.mcpConfirm": "Confirm MCP tool calls",
   "nodeEditor.mcpConfirm.desc": "Set false to skip MCP approval for this node, including automatic execution.",
   "settings.mcpAutoApprove": "Always approve",

@@ -252,6 +252,8 @@ MCP (Model Context Protocol) servers provide additional tools that extend the AI
 5. Click **Test connection** to verify and retrieve available tools
 6. Save the server configuration
 
+You can paste a full command line into **Command**; inline arguments are prepended to the **Arguments** field. Quote paths or arguments containing spaces, for example `"C:\Program Files\nodejs\node.exe" "C:\my app\server.js"`. Backslashes in Windows paths are preserved. During **Test connection**, editing and saving are disabled. Failed checks keep the dialog open with the launch or connection error; timeout errors include recent stderr output. Failed handshakes stop the child process.
+
 > **Note:** Stdio transport launches a local process and is desktop-only. Test connection is required before saving.
 
 ![MCP Server Settings](docs/images/setting_mcp.png)

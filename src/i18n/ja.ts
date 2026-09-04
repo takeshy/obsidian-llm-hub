@@ -1,5 +1,7 @@
 // Japanese translations
 export const ja: Record<string, string> = {
+  "settings.mcpChecking": "接続を確認中…",
+  "settings.mcpSaveFailed": "MCPサーバーの保存に失敗しました: {{error}}",
   "nodeEditor.mcpConfirm": "MCPツール実行の確認",
   "nodeEditor.mcpConfirm.desc": "falseにすると、自動実行を含め、このノードでのMCP承認を省略します。",
   "settings.mcpAutoApprove": "常に承認",
