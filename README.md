@@ -150,6 +150,7 @@ When the AI handles notes in Chat, it uses Vault tools. Control which vault tool
 |------|-------------|-----------------|
 | **Vault: All** | Full vault access | All tools |
 | **Vault: No search** | Exclude search tools | All except `search_notes`, `list_notes` |
+| **Vault: Read only** | Search and read without file changes | `read_note`, `read_timeline`, `search_notes`, `list_notes`, `list_folders`, `get_active_note_info` |
 | **Vault: Off** | No vault access | None |
 
 The same Database icon menu also has **Previous messages (0-99)**. This controls how many messages before the current prompt are sent to the model as conversation context. Set it to **0** to send only the current prompt, such as when processing unrelated files one at a time. The value is saved for the workspace.
@@ -158,6 +159,7 @@ The same Database icon menu also has **Previous messages (0-99)**. This controls
 
 - **Vault: All** - Default mode for general use. The AI can read, write, and search your vault.
 - **Vault: No search** - Use when you already know the target file. This avoids redundant vault searches, saving tokens and improving response time.
+- **Vault: Read only** - Search and read notes without creating, editing, deleting, or renaming files. External MCP and skill tools retain their own permissions.
 - **Vault: Off** - Use when you don't need vault access at all.
 
 **Automatic mode selection:**
@@ -258,6 +260,10 @@ MCP (Model Context Protocol) servers provide additional tools that extend the AI
 
 - **In Chat:** Click the Database icon (📦) to open tool settings. Enable/disable MCP servers per conversation.
 - **In Workflows:** Use the `mcp` node to call MCP server tools.
+
+**Tool approval:** By default, each call shows the server name, tool name, and arguments. Choose **Allow once**, **Always allow this tool**, or **Deny**; closing the dialog denies the call. In each server’s settings, enable **Always approve** to skip all confirmations, or remove a tool from the allowed list and save to require approval again. Unsaved servers only support one-time approval.
+
+Workflow `mcp` and `command` nodes can set `confirm: "false"` to skip MCP approval for that node, including automatic execution. The node editor exposes this as **Confirm MCP tool calls**. Later interactive calls from MCP Apps still follow server approval settings. For `command` nodes, `vaultTools: "readOnly"` limits built-in Vault tools to search and reading; it does not control external MCP permissions.
 
 **Tool hints:** After successful connection test, available tool names are saved and displayed in both settings and chat UI for easy reference.
 
