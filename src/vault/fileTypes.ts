@@ -1,9 +1,11 @@
 import { TFile, type App } from "obsidian";
 
 const TEXT_VAULT_EXTENSIONS = new Set([
+  "base",
   "canvas",
   "css",
   "csv",
+  "dashboard",
   "html",
   "js",
   "json",

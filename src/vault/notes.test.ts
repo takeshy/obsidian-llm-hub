@@ -50,6 +50,18 @@ describe("findFileByName", () => {
 
     expect(findFileByName(app, "Plan.canvas")?.path).toBe("Plan.canvas");
   });
+
+  it("resolves Obsidian Base files", () => {
+    const app = makeApp([makeFile("Dashboards/Projects.base")]);
+
+    expect(findFileByName(app, "Projects.base")?.path).toBe("Dashboards/Projects.base");
+  });
+
+  it("resolves Dashboard files", () => {
+    const app = makeApp([makeFile("Dashboards/Projects.dashboard")]);
+
+    expect(findFileByName(app, "Projects.dashboard")?.path).toBe("Dashboards/Projects.dashboard");
+  });
 });
 
 describe("readNote PDF support", () => {
@@ -165,6 +177,36 @@ describe("resolveNoteFile", () => {
 });
 
 describe("readNote non-text files", () => {
+  it("reads Obsidian Base files as text", async () => {
+    const base = makeFile("Dashboards/Projects.base");
+    const app = makeApp([base]);
+    vi.mocked(app.vault.read).mockResolvedValueOnce("views:\n  - type: table");
+
+    const result = await readNote(app, base.path);
+
+    expect(result).toEqual({
+      success: true,
+      content: "views:\n  - type: table",
+      path: base.path,
+      truncated: false,
+    });
+  });
+
+  it("reads Dashboard files as text", async () => {
+    const dashboard = makeFile("Dashboards/Projects.dashboard");
+    const app = makeApp([dashboard]);
+    vi.mocked(app.vault.read).mockResolvedValueOnce("layout:\n  type: grid");
+
+    const result = await readNote(app, dashboard.path);
+
+    expect(result).toEqual({
+      success: true,
+      content: "layout:\n  type: grid",
+      path: dashboard.path,
+      truncated: false,
+    });
+  });
+
   it("refuses binaries that are not PDFs instead of returning mojibake", async () => {
     const png = makeFile("Assets/photo.png");
     const result = await readNote(makeApp([png]), png.path, false, 1000, "extract-text");
