@@ -183,6 +183,7 @@ export class SlashCommandModal extends Modal {
         dropdown.addOption("__current__", t("settings.useCurrentSetting"));
         dropdown.addOption("all", t("input.vaultToolAll"));
         dropdown.addOption("noSearch", t("input.vaultToolNoSearch"));
+        dropdown.addOption("readOnly", t("input.vaultToolReadOnly"));
         dropdown.addOption("none", t("input.vaultToolNone"));
         // Map stored value to dropdown value
         const storedValue = this.command.vaultToolMode;

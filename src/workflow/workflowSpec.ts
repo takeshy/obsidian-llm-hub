@@ -167,7 +167,7 @@ Execute LLM prompt.
 - **prompt** (required): Prompt template (supports {{variables}})
 - **model** (optional): Model override. Available: ${modelList}
 - **ragSetting** (optional): __websearch__, __none__, or RAG setting name. ${ragList}
-- **vaultTools** (optional): "all" (default), "noSearch", "none"
+- **vaultTools** (optional): "all" (default), "noSearch", "readOnly" (search/read without file changes), "none"
 - **mcpServers** (optional): Comma-separated MCP server names. ${mcpServerList}
 - **enableThinking** (optional): "true" (default) or "false". Enable deep thinking mode
 - **attachments** (optional): Comma-separated variable names containing FileExplorerData

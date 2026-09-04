@@ -16,6 +16,7 @@ The Database icon menu also contains the chat **Previous messages (0-99)** setti
 
 - Vault: all - full vault access through available tools.
 - Vault: no search - disables `search_notes` and `list_notes` while keeping direct read/write tools and `list_folders`.
+- Vault: read only - allows Vault search and reading, but blocks note/folder creation, editing, deletion, and renaming. External MCP and skill tools retain their own permissions.
 - Vault: off - disables vault tools.
 
 # Chat Tools

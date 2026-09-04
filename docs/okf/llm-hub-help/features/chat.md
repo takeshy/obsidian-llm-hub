@@ -26,6 +26,7 @@ Vault tools let the AI read, create, search, rename, edit, and delete notes and 
 
 - Vault: all - all vault tools.
 - Vault: no search - disables `search_notes` and `list_notes`; other tools, including `list_folders`, stay available.
+- Vault: read only - allows Vault search and reading, but blocks note/folder creation, editing, deletion, and renaming. External MCP and skill tools retain their own permissions.
 - Vault: off - no vault tools.
 
 # Conversation Context Limit

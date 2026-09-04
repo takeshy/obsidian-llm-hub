@@ -252,6 +252,7 @@ export class NodeEditorModal extends Modal {
         const vaultToolOptions = [
           { value: "all", label: t("nodeEditor.vaultToolsAll") },
           { value: "noSearch", label: t("nodeEditor.vaultToolsNoSearch") },
+          { value: "readOnly", label: t("nodeEditor.vaultToolsReadOnly") },
           { value: "none", label: t("nodeEditor.vaultToolsNone") },
         ];
 

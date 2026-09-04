@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "src/types";
+import type { ToolDefinition, VaultToolMode } from "src/types";
 
 // Tool definitions for Gemini Function Calling
 export const obsidianTools: ToolDefinition[] = [
@@ -438,3 +438,20 @@ export const skillScriptTool: ToolDefinition = {
     required: ["scriptId"],
   },
 };
+
+function isReadOnlyVaultTool(name: string): boolean {
+  return ["read_timeline", "read_note", "search_notes", "list_notes", "list_folders", "get_active_note_info"].includes(name);
+}
+
+// Shared policy for built-in Vault tools. External MCP and skill tools keep
+// their own permissions and are not controlled by the Vault tools selector.
+export function isVaultToolAllowed(name: string, mode: VaultToolMode): boolean {
+  const isVaultTool = obsidianTools.some(tool => tool.name === name);
+  if (!isVaultTool) return true;
+  if (mode === "none") return false;
+  if (mode === "noSearch") return !["search_notes", "list_notes"].includes(name);
+  if (mode === "readOnly") {
+    return isReadOnlyVaultTool(name);
+  }
+  return true;
+}

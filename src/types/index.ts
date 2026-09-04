@@ -123,7 +123,7 @@ export interface WorkflowEventTrigger {
 }
 
 // Vault tool mode type
-export type VaultToolMode = "all" | "noSearch" | "none";
+export type VaultToolMode = "all" | "noSearch" | "readOnly" | "none";
 
 // Reason why vault tools are set to "none"
 // "manual" = user manually turned off (MCP servers remain unchanged)

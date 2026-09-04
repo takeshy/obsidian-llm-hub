@@ -777,6 +777,12 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                   <div className="llm-hub-vault-tool-item-desc">{t("input.vaultToolNoSearchDesc")}</div>
                 </div>
                 <div
+                  className={`llm-hub-vault-tool-item ${vaultToolMode === "readOnly" ? "selected" : ""} ${vaultToolModeOnlyNone ? "disabled" : ""}`}
+                  onClick={() => { if (!vaultToolModeOnlyNone) { onVaultToolModeChange("readOnly"); setShowVaultToolMenu(false); } }}
+                >
+                  {t("input.vaultToolReadOnly")}
+                </div>
+                <div
                   className={`llm-hub-vault-tool-item ${vaultToolMode === "none" ? "selected" : ""}`}
                   onClick={() => { onVaultToolModeChange("none"); setShowVaultToolMenu(false); }}
                 >
@@ -806,6 +812,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                     >
                       <option value="all" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolAll")}</option>
                       <option value="noSearch" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolNoSearch")}</option>
+                      <option value="readOnly" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolReadOnly")}</option>
                       <option value="none">{t("input.vaultToolNone")}</option>
                     </select>
                   </div>

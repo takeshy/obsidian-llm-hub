@@ -3,7 +3,7 @@ import type { LlmHubPlugin } from "../../plugin";
 import { GeminiClient, getGeminiClient } from "../../core/gemini";
 import { PersistentCliSession } from "../../core/cliProvider";
 import { isImageGenerationModel, isApiProviderModel, getApiProviderId, getApiProviderModelName, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, normalizeDeprecatedModelIdentifier, type ToolDefinition, type McpAppInfo, type StreamChunkUsage } from "../../types";
-import { getEnabledTools } from "../../core/tools";
+import { isVaultToolAllowed, getEnabledTools } from "../../core/tools";
 import { fetchMcpTools, createMcpToolExecutor, type McpToolDefinition } from "../../core/mcpTools";
 import { createToolExecutor } from "../../vault/toolExecutor";
 import { WorkflowNode, ExecutionContext, PromptCallbacks, FileExplorerData } from "../types";
@@ -400,13 +400,14 @@ Please revise the output based on the user's feedback above.`;
       }
 
       // Build tools
-      const apiVaultToolMode = (node.properties["vaultTools"] || "all") as "all" | "noSearch" | "none";
+      const apiVaultToolMode = (node.properties["vaultTools"] || "all") as "all" | "noSearch" | "readOnly" | "none";
       let apiTools: ToolDefinition[] = [];
       const searchToolNames = ["search_notes", "list_notes"];
 
       if (apiVaultToolMode !== "none") {
         const vaultTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false });
         apiTools = vaultTools.filter(tool => {
+          if (apiVaultToolMode === "readOnly") return isVaultToolAllowed(tool.name, apiVaultToolMode);
           if (apiVaultToolMode === "noSearch") return !searchToolNames.includes(tool.name);
           return true;
         });
@@ -634,7 +635,7 @@ Please revise the output based on the user's feedback above.`;
 
   // Get vault tools mode (default: "all")
   // "all" = all vault tools, "noSearch" = exclude search_notes/list_notes, "none" = no vault tools
-  const vaultToolMode = (node.properties["vaultTools"] || "all") as "all" | "noSearch" | "none";
+  const vaultToolMode = (node.properties["vaultTools"] || "all") as "all" | "noSearch" | "readOnly" | "none";
 
   // Get MCP server names to enable (comma-separated)
   const mcpServersStr = node.properties["mcpServers"] || "";
@@ -662,6 +663,7 @@ Please revise the output based on the user's feedback above.`;
     const searchToolNames = ["search_notes", "list_notes"];
 
     tools = vaultTools.filter(tool => {
+      if (vaultToolMode === "readOnly") return isVaultToolAllowed(tool.name, vaultToolMode);
       if (vaultToolMode === "noSearch") {
         return !searchToolNames.includes(tool.name);
       }

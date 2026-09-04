@@ -55,7 +55,7 @@ import {
 } from "src/types";
 import { getGeminiClient } from "src/core/gemini";
 import { tracing } from "src/core/tracingHooks";
-import { getEnabledTools, skillWorkflowTool, skillScriptTool } from "src/core/tools";
+import { isVaultToolAllowed, getEnabledTools, skillWorkflowTool, skillScriptTool } from "src/core/tools";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "src/core/sandboxExecutor";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "src/workflow/workflowSpec";
 import { fetchMcpTools, createMcpToolExecutor, isMcpTool, type McpToolDefinition, type McpToolExecutor } from "src/core/mcpTools";
@@ -484,7 +484,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	);
 	const [webSearchEnabled, setWebSearchEnabled] = useState(plugin.workspaceState.webSearchEnabled === true);
 
-	// Vault tool mode: "all" = use all tools, "noSearch" = exclude search_notes/list_notes, "none" = no vault tools
+	// Vault tool mode includes readOnly for search/read without mutations.
 	// Gemma 4 + RAG/Web Search: must disable function calling tools (mutually exclusive)
 	const initialModel = plugin.getSelectedModel();
 	// Mirror isCliMode's exception for tools-capable Local LLMs: they should
@@ -499,7 +499,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		|| (isLocalLlmModel(initialModel) && !initialLocalLlmToolsCapable);
 	const initialGemma4Rag = initialModel.toLowerCase().includes("gemma-4")
 		&& (plugin.workspaceState.selectedRagSetting != null || plugin.workspaceState.webSearchEnabled === true);
-	const [vaultToolMode, setVaultToolMode] = useState<"all" | "noSearch" | "none">(
+	const [vaultToolMode, setVaultToolMode] = useState<VaultToolMode>(
 		(isInitialVaultRestrictedCli || initialGemma4Rag) ? "none" : "all"
 	);
 	// Reason why vault tools are "none" - determines whether MCP should also be disabled
@@ -1445,7 +1445,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	};
 
 	// Handle vault tool mode change from UI
-	const handleVaultToolModeChange = (mode: "all" | "noSearch" | "none") => {
+	const handleVaultToolModeChange = (mode: VaultToolMode) => {
 		setVaultToolMode(mode);
 		setVaultToolNoneReason(mode === "none" ? "manual" : null);
 		// Gemma 4: vault tools enabled → clear RAG/Web Search
@@ -1989,7 +1989,12 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				systemPrompt += "\n\nYou can read Vault files directly, but the filesystem is read-only. Never attempt to modify, delete, rename, or create Vault files directly.";
 				if (vaultToolMode !== "none") {
 					systemPrompt += " The llm_hub_vault MCP also provides Obsidian-aware read tools. When the user refers to the open, active, or current file without naming it, call read_note with activeNote=true (or get_active_note_info when only its metadata is needed).";
-					systemPrompt += "\n\nFor a new Vault file, use the llm_hub_vault MCP create_note tool; it creates the file immediately, including text-based formats such as .canvas and .base. For changes to existing files, use propose_edit, bulk_propose_edit, propose_delete, bulk_propose_delete, rename_note, or bulk_propose_rename. Existing-file mutations show a diff or confirmation and apply only after approval. Do not claim a change was applied unless the tool result says it was applied.";
+					if (vaultToolMode === "noSearch") {
+						systemPrompt += " Vault search and note-listing tools are disabled for this chat.";
+					}
+					systemPrompt += vaultToolMode === "readOnly"
+						? "\n\nVault tools are read-only. Answer in chat; do not create or change Vault files."
+						: "\n\nFor a new Vault file, use the llm_hub_vault MCP create_note tool; it creates the file immediately, including text-based formats such as .canvas and .base. For changes to existing files, use propose_edit, bulk_propose_edit, propose_delete, bulk_propose_delete, rename_note, or bulk_propose_rename. Existing-file mutations show a diff or confirmation and apply only after approval. Do not claim a change was applied unless the tool result says it was applied.";
 				}
 			} else {
 				systemPrompt += `\n\nNote: You are running in ${cliName} mode with limited capabilities. You can read and search vault files, but cannot modify them.`;
@@ -2035,8 +2040,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			if (isCodexCli) {
 				const codexTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false })
 					.filter((tool) => CODEX_VAULT_TOOLS.has(tool.name))
-					.filter((tool) => vaultToolMode === "all"
-						|| (vaultToolMode === "noSearch" && !["search_notes", "list_notes"].includes(tool.name)));
+					.filter((tool) => isVaultToolAllowed(tool.name, vaultToolMode));
 				const skillWorkflowMap = collectSkillWorkflows(cliLoadedSkills);
 				const skillScriptMap = collectSkillScripts(cliLoadedSkills);
 				if (skillWorkflowMap.size > 0) codexTools.push(skillWorkflowTool);
@@ -2638,14 +2642,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				if (llmLoadedSkills.some(s => s.workflows.length > 0)) toolsBundle.push(skillWorkflowTool);
 				if (llmLoadedSkills.some(s => s.scripts.length > 0)) toolsBundle.push(skillScriptTool);
 
-				// vaultToolMode name filter — mirrors the Gemini chat path (line ~2604).
-				// "noSearch" only strips search/list, not write/delete. MCP and skill
-				// tools are always preserved. ("none" never reaches here because
-				// `wantsTools` already false-gates the whole branch in that mode.)
-				if (vaultToolMode === "noSearch") {
-					const SEARCH_NAMES = new Set(["search_notes", "list_notes"]);
-					toolsBundle = toolsBundle.filter(t => !SEARCH_NAMES.has(t.name));
-				}
+				// Apply the Vault tool policy; external MCP and skill tools are preserved.
+				toolsBundle = toolsBundle.filter(tool => isVaultToolAllowed(tool.name, vaultToolMode));
 
 				// Let the model search the selected index on demand.
 				// Kept out of `systemPrompt` itself: a tools rejection falls through to
@@ -3536,6 +3534,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						return true;
 					}
 					// Filter Obsidian tools based on mode
+					if (vaultToolMode === "readOnly") return isVaultToolAllowed(tool.name, vaultToolMode);
 					if (vaultToolMode === "none") {
 						if (tool.name === "read_note" && hasActiveVaultSkill) return true;
 						return !vaultToolNames.includes(tool.name);
