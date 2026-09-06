@@ -1,3 +1,9 @@
+import {
+  acceptedAttachmentTypes,
+  detectComposerTrigger,
+  fileToAttachment,
+  isAttachmentRejection,
+} from "obsidian-llm-hub-common/chat";
 import { CollapsedInput } from "obsidian-llm-hub-common";
 import { InputArea as SharedInputArea } from "obsidian-llm-hub-common";
 import { Composer, Autocomplete, Attachments, VaultToolMenu, VaultToolButton, EnabledMcpServers, McpServerToggles, InputButtons, SearchSelector, ModelRow, ModelDropdown, HistoryLimit } from "obsidian-llm-hub-common";
@@ -86,15 +92,6 @@ interface MentionItem {
 }
 
 // 対応ファイル形式
-const SUPPORTED_TYPES = {
-  image: ["image/png", "image/jpeg", "image/gif", "image/webp"],
-  pdf: ["application/pdf"],
-  text: ["text/plain", "text/markdown", "text/csv", "application/json"],
-  audio: ["audio/mpeg", "audio/wav", "audio/flac", "audio/aac", "audio/mp4", "audio/opus", "audio/ogg"],
-  video: ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo", "video/x-matroska"],
-};
-
-const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
 const HISTORY_LIMIT_OPTIONS = Array.from({ length: 100 }, (_, index) => index);
 
 const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea({
@@ -179,8 +176,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
         setShowVaultToolMenu(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    activeDocument.addEventListener("mousedown", handleClickOutside);
+    return () => activeDocument.removeEventListener("mousedown", handleClickOutside);
   }, [showVaultToolMenu]);
 
   // Expose methods via ref
@@ -319,33 +316,20 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       setShowAutocomplete(false);
     }
 
-    // Check for [[ wikilink trigger
-    const textBeforeCursor = value.substring(0, cursorPos);
-    const wikiMatch = textBeforeCursor.match(/\[\[([^\]\n]*)$/);
-    if (wikiMatch) {
-      const query = wikiMatch[1];
-      const startPos = cursorPos - wikiMatch[0].length;
-      const mentions = buildWikilinkCandidates(query);
+    // Which menu the text calls for is decided in the shared library, so the
+    // three plugins cannot disagree about when one opens.
+    const trigger = detectComposerTrigger(value, cursorPos);
+    if (trigger && trigger.kind !== "command") {
+      const mentions = trigger.kind === "wikilink"
+        ? buildWikilinkCandidates(trigger.query)
+        : buildMentionCandidates(trigger.query);
       setFilteredMentions(mentions);
-      setMentionStartPos(startPos);
+      setMentionStartPos(trigger.startPos);
       setShowMentionAutocomplete(mentions.length > 0);
       setMentionIndex(0);
       return;
     }
-
-    // Check for @ mention trigger
-    const atMatch = textBeforeCursor.match(/@([^\s@]*)$/);
-    if (atMatch) {
-      const query = atMatch[1];
-      const startPos = cursorPos - atMatch[0].length;
-      const mentions = buildMentionCandidates(query);
-      setFilteredMentions(mentions);
-      setMentionStartPos(startPos);
-      setShowMentionAutocomplete(mentions.length > 0);
-      setMentionIndex(0);
-    } else {
-      setShowMentionAutocomplete(false);
-    }
+    setShowMentionAutocomplete(false);
   };
 
   const selectCommand = (command: SlashCommand | BuiltInCommand) => {
@@ -506,60 +490,12 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   };
 
   const processFile = async (file: File): Promise<Attachment | null> => {
-    const mimeType = file.type;
-
-    // ファイルサイズチェック（20MB制限）
-    if (file.size > MAX_ATTACHMENT_SIZE) {
-      new Notice(t("input.fileTooLarge", { name: file.name }));
+    const result = await fileToAttachment(file);
+    if (isAttachmentRejection(result)) {
+      if (result.reason === "too-large") new Notice(t("input.fileTooLarge", { name: file.name }));
       return null;
     }
-
-    // 画像
-    if (SUPPORTED_TYPES.image.includes(mimeType)) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "image", mimeType, data };
-    }
-
-    // PDF
-    if (SUPPORTED_TYPES.pdf.includes(mimeType)) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "pdf", mimeType, data };
-    }
-
-    // テキスト
-    if (SUPPORTED_TYPES.text.includes(mimeType) || file.name.endsWith(".md") || file.name.endsWith(".txt")) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "text", mimeType: mimeType || "text/plain", data };
-    }
-
-    // 音声
-    if (SUPPORTED_TYPES.audio.includes(mimeType)) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "audio", mimeType, data };
-    }
-
-    // 動画
-    if (SUPPORTED_TYPES.video.includes(mimeType)) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "video", mimeType, data };
-    }
-
-    // Unsupported file type
-    return null;
-  };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove data URL prefix (e.g., "data:image/png;base64,")
-        const base64 = result.split(",")[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    return result;
   };
 
   const removeAttachment = (index: number) => {
@@ -567,7 +503,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   };
 
   const getAllAcceptedTypes = () => {
-    return [...SUPPORTED_TYPES.image, ...SUPPORTED_TYPES.pdf, ...SUPPORTED_TYPES.text, ...SUPPORTED_TYPES.audio, ...SUPPORTED_TYPES.video, ".md", ".txt"].join(",");
+    return acceptedAttachmentTypes();
   };
 
   return (

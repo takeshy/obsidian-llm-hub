@@ -1092,12 +1092,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			}
 		};
 
-		document.addEventListener("focusin", handleFocusIn);
-		document.addEventListener("focusout", handleFocusOut);
+		// A popped-out chat has its own document; `document` is the main window's,
+		// so these never fired there and the keyboard tracking stayed stuck.
+		activeDocument.addEventListener("focusin", handleFocusIn);
+		activeDocument.addEventListener("focusout", handleFocusOut);
 
 		return () => {
-			document.removeEventListener("focusin", handleFocusIn);
-			document.removeEventListener("focusout", handleFocusOut);
+			activeDocument.removeEventListener("focusin", handleFocusIn);
+			activeDocument.removeEventListener("focusout", handleFocusOut);
 		};
 	}, []);
 
