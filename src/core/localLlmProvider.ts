@@ -13,9 +13,11 @@
 import { requestUrl } from "obsidian";
 import type { Message, StreamChunk, LocalLlmConfig, Attachment } from "../types";
 import {
+  fetchChatModels,
   formatStreamIdleTimeoutError,
   getHttpModule,
   getStreamIdleTimeoutMs,
+  openaiPathPrefix,
   parseThinkTags,
   StreamSignal,
 } from "obsidian-llm-hub-common/core";
@@ -39,23 +41,9 @@ interface OllamaMessage {
   images?: string[];  // Base64-encoded image data for vision models
 }
 
-interface OpenAiModel {
-  id: string;
-  object?: string;
-}
-
-interface OpenAiModelsResponse {
-  data: OpenAiModel[];
-}
-
-/** Families that are embedding-only models (not usable for chat) */
-const EMBEDDING_FAMILIES = new Set(["nomic-bert", "bert", "snowflake-arctic-embed"]);
-
-/** OpenAI-compatible API path prefix. AnythingLLM uses /v1/openai, others use /v1. */
-function openaiPathPrefix(config: LocalLlmConfig): string {
-  if (config.framework === "anythingllm") return "/v1/openai";
-  return "/v1";
-}
+/** Ask the server through Obsidian, which is how a local port is reached without CORS. */
+const getModelList = async (url: string, headers: Record<string, string>): Promise<unknown> =>
+  (await requestUrl({ url, method: "GET", ...(Object.keys(headers).length > 0 ? { headers } : {}) })).json;
 
 /**
  * Verify connection to local LLM server and check available models
@@ -65,65 +53,18 @@ export async function verifyLocalLlm(config: LocalLlmConfig): Promise<{
   error?: string;
   models?: string[];
 }> {
-  try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (config.apiKey) {
-      headers["Authorization"] = `Bearer ${config.apiKey}`;
-    }
-
-    if (config.framework === "ollama") {
-      try {
-        const ollamaResponse = await requestUrl({
-          url: `${config.baseUrl}/api/tags`,
-          method: "GET",
-        });
-        const ollamaData = ollamaResponse.json as {
-          models?: { name: string; details?: { families?: string[] } }[];
-        };
-        const models = (ollamaData.models || [])
-          .filter(m => !isEmbeddingModel(m.details?.families) && !isEmbeddingModelByName(m.name))
-          .map(m => m.name);
-        return { success: true, models };
-      } catch {
-        return { success: false, error: `Cannot connect to ${config.baseUrl}. Is the server running?` };
-      }
-    }
-
-    if (config.framework === "opencode") {
-      return await verifyOpencodeLocal(config);
-    }
-
-    // OpenAI-compatible /v1/models (LM Studio, AnythingLLM, vLLM, etc.)
-    try {
-      const response = await requestUrl({
-        url: `${config.baseUrl}${openaiPathPrefix(config)}/models`,
-        method: "GET",
-        headers,
-      });
-      const data = response.json as OpenAiModelsResponse;
-      const models = (data.data || [])
-        .filter((m: OpenAiModel) => !isEmbeddingModelByName(m.id))
-        .map((m: OpenAiModel) => m.id);
-      return { success: true, models };
-    } catch {
-      return { success: false, error: `Cannot connect to ${config.baseUrl}. Is the server running?` };
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
+  if (config.framework === "opencode") {
+    return await verifyOpencodeLocal(config);
   }
-}
-
-function isEmbeddingModel(families?: string[]): boolean {
-  if (!families) return false;
-  return families.some(f => EMBEDDING_FAMILIES.has(f));
-}
-
-/** Name patterns that indicate embedding-only models */
-const EMBEDDING_NAME_PATTERN = /embed|bge-|e5-|gte-|arctic-embed/i;
-
-function isEmbeddingModelByName(name: string): boolean {
-  return EMBEDDING_NAME_PATTERN.test(name);
+  try {
+    const models = await fetchChatModels(
+      { baseUrl: config.baseUrl, apiKey: config.apiKey, framework: config.framework },
+      getModelList,
+    );
+    return { success: true, models };
+  } catch {
+    return { success: false, error: `Cannot connect to ${config.baseUrl}. Is the server running?` };
+  }
 }
 
 /**
@@ -417,7 +358,7 @@ async function* openaiChatStream(
 
   const body = JSON.stringify(requestBody);
 
-  const url = new URL(`${config.baseUrl}${openaiPathPrefix(config)}/chat/completions`);
+  const url = new URL(`${config.baseUrl}${openaiPathPrefix(config.framework)}/chat/completions`);
   const httpModule = getHttpModule<typeof import("http")>(url.protocol);
 
   const chunks: StreamChunk[] = [];
