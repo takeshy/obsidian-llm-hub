@@ -44,14 +44,11 @@ import {
 	type Attachment,
 	type KnowledgeSource,
 	type SlashCommand,
-	type GeneratedImage,
 	type ChatProvider,
 	type VaultToolNoneReason,
 	type VaultToolMode,
 	type McpServerConfig,
 	type McpAppInfo,
-	type WebSearchCitation,
-	type ProviderContinuation,
 	type ReasoningEffort,
 	isImageGenerationModel,
 	DEFAULT_WORKSPACE_FOLDER,
@@ -95,7 +92,13 @@ import {
 } from "obsidian-llm-hub-common/core";
 import { cryptoCache } from "src/core/cryptoCache";
 import { formatError } from "obsidian-llm-hub-common/core";
-import { createConfirmingToolExecutor, withRateLimitRetry } from "obsidian-llm-hub-common/chat";
+import {
+	accumulateStreamChunk,
+	createConfirmingToolExecutor,
+	createStreamAccumulation,
+	pendingStatusFields,
+	withRateLimitRetry,
+} from "obsidian-llm-hub-common/chat";
 import { runSkillWorkflow } from "obsidian-llm-hub-common/workflow";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
@@ -180,15 +183,6 @@ function looksLikeToolsRejection(msg: string): boolean {
 function looksLikeAuthError(msg: string): boolean {
 	if (!msg) return false;
 	return /\b401\b|\b403\b|unauthorized|forbidden|authentication|invalid api[_ ]?key/i.test(msg);
-}
-
-
-function getLatestPendingInfo<T>(items: T[]): T | undefined {
-	return items.length > 0 ? items[items.length - 1] : undefined;
-}
-
-function getPendingInfos<T>(items: T[]): T[] | undefined {
-	return items.length > 0 ? items : undefined;
 }
 
 // File mentions stay as bare vault paths whenever the model has Vault tools
@@ -1616,12 +1610,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				modelDisplayName: isCodexCli
 					? ["Codex CLI", cliConfig.codexCliModel, cliConfig.codexCliReasoningEffort || "low"].filter(Boolean).join(" · ")
 					: undefined,
-				pendingEdit: codexMutationTracking?.processedEdits.at(-1),
-				pendingEdits: getPendingInfos(codexMutationTracking?.processedEdits || []),
-				pendingDelete: codexMutationTracking?.processedDeletes.at(-1),
-				pendingDeletes: getPendingInfos(codexMutationTracking?.processedDeletes || []),
-				pendingRename: codexMutationTracking?.processedRenames.at(-1),
-				pendingRenames: getPendingInfos(codexMutationTracking?.processedRenames || []),
+				...pendingStatusFields({
+					edits: codexMutationTracking?.processedEdits ?? [],
+					deletes: codexMutationTracking?.processedDeletes ?? [],
+					renames: codexMutationTracking?.processedRenames ?? [],
+				}),
 				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
 			};
 
@@ -1644,12 +1637,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					content: stoppedContent,
 					timestamp: Date.now(),
 					model: isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "antigravity-cli",
-					pendingEdit: codexMutationTracking?.processedEdits.at(-1),
-					pendingEdits: getPendingInfos(codexMutationTracking?.processedEdits || []),
-					pendingDelete: codexMutationTracking?.processedDeletes.at(-1),
-					pendingDeletes: getPendingInfos(codexMutationTracking?.processedDeletes || []),
-					pendingRename: codexMutationTracking?.processedRenames.at(-1),
-					pendingRenames: getPendingInfos(codexMutationTracking?.processedRenames || []),
+					...pendingStatusFields({
+						edits: codexMutationTracking?.processedEdits ?? [],
+						deletes: codexMutationTracking?.processedDeletes ?? [],
+						renames: codexMutationTracking?.processedRenames ?? [],
+					}),
 					...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
 				};
 				await saveResult([...messages, userMessage, assistantMessage]);
@@ -2027,13 +2019,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
 					createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, autoApplyEdits, () => abortController.abort());
 
-				const toolsUsed: string[] = [];
-				const toolCalls: Message["toolCalls"] = [];
-				const toolResults: Message["toolResults"] = [];
+				const stream = createStreamAccumulation();
 				let toolsFlowError: string | null = null;
 				let toolsFlowAborted = false;
-				let toolsFullContent = "";
-				let toolsThinking = "";
 
 				try {
 					for await (const chunk of openaiChatWithToolsStream(
@@ -2046,33 +2034,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						undefined, undefined, // proxy already handled by createNodeFetch
 					)) {
 						if (abortController.signal.aborted) { toolsFlowAborted = true; break; }
-						switch (chunk.type) {
-							case "text":
-								toolsFullContent += chunk.content || "";
-								if (isActive()) setStreamingContent(toolsFullContent);
-								break;
-							case "thinking":
-								toolsThinking += chunk.content || "";
-								if (isActive()) setStreamingThinking(toolsThinking);
-								break;
-							case "tool_call":
-								if (chunk.toolCall) {
-									toolCalls.push(chunk.toolCall);
-									if (!toolsUsed.includes(chunk.toolCall.name)) {
-										toolsUsed.push(chunk.toolCall.name);
-									}
-								}
-								break;
-							case "tool_result":
-								if (chunk.toolResult) toolResults.push(chunk.toolResult);
-								break;
-							case "error":
-								toolsFlowError = chunk.error || "Unknown error";
-								break;
-							case "done":
-								break;
+						// An "error" chunk throws out of here into the catch below,
+						// which is where toolsFlowError is set.
+						accumulateStreamChunk(stream, chunk);
+						if (isActive()) {
+							if (chunk.type === "text") setStreamingContent(stream.text);
+							else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
 						}
-						if (toolsFlowError) break;
 					}
 				} catch (err) {
 					toolsFlowError = err instanceof Error ? err.message : String(err);
@@ -2081,6 +2049,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						try { await mcpToolExecutor.cleanup(); } catch (e) { console.warn("MCP cleanup failed:", e); }
 					}
 				}
+
+				let toolsFullContent = stream.text;
 
 				// User-stop has priority over everything else: don't auto-disable,
 				// don't throw, just finalize whatever buffered content we have.
@@ -2141,16 +2111,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						content: toolsFullContent,
 						timestamp: Date.now(),
 						model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
-						toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
-						toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-						toolResults: toolResults.length > 0 ? toolResults : undefined,
-						thinking: toolsThinking || undefined,
-						pendingEdit: processedEdits[processedEdits.length - 1],
-						pendingEdits: processedEdits.length > 0 ? processedEdits : undefined,
-						pendingDelete: processedDeletes[processedDeletes.length - 1],
-						pendingDeletes: processedDeletes.length > 0 ? processedDeletes : undefined,
-						pendingRename: processedRenames[processedRenames.length - 1],
-						pendingRenames: processedRenames.length > 0 ? processedRenames : undefined,
+						toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
+						toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
+						toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
+						thinking: stream.thinking || undefined,
+						...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
 						ragUsed: localRagSources.length > 0,
 						ragSources: localRagSources.length > 0 ? localRagSources : undefined,
 					};
@@ -2259,18 +2224,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				...(openCodeToolsUsed.length > 0 ? { toolsUsed: openCodeToolsUsed } : {}),
 				...(openCodeToolCalls.length > 0 ? { toolCalls: openCodeToolCalls } : {}),
 				...(openCodeToolResults.length > 0 ? { toolResults: openCodeToolResults } : {}),
-				...(openCodeMutationTracking && openCodeMutationTracking.processedEdits.length > 0 ? {
-					pendingEdit: openCodeMutationTracking.processedEdits[openCodeMutationTracking.processedEdits.length - 1],
-					pendingEdits: openCodeMutationTracking.processedEdits,
-				} : {}),
-				...(openCodeMutationTracking && openCodeMutationTracking.processedDeletes.length > 0 ? {
-					pendingDelete: openCodeMutationTracking.processedDeletes[openCodeMutationTracking.processedDeletes.length - 1],
-					pendingDeletes: openCodeMutationTracking.processedDeletes,
-				} : {}),
-				...(openCodeMutationTracking && openCodeMutationTracking.processedRenames.length > 0 ? {
-					pendingRename: openCodeMutationTracking.processedRenames[openCodeMutationTracking.processedRenames.length - 1],
-					pendingRenames: openCodeMutationTracking.processedRenames,
-				} : {}),
+				...pendingStatusFields({
+					edits: openCodeMutationTracking?.processedEdits ?? [],
+					deletes: openCodeMutationTracking?.processedDeletes ?? [],
+					renames: openCodeMutationTracking?.processedRenames ?? [],
+				}),
 			};
 
 			const newMessages = [...messages, userMessage, assistantMessage];
@@ -2508,20 +2466,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
 				createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, autoApplyEdits, () => abortController.abort());
 
-			let fullContent = "";
-			let thinkingContent = "";
-			const toolsUsed: string[] = [];
 			// toolCalls/toolResults drive the tool badges in MessageBubble; toolsUsed
 			// alone only reaches the saved Markdown history.
-			const toolCalls: Message["toolCalls"] = [];
-			const toolResults: Message["toolResults"] = [];
-			const generatedImages: GeneratedImage[] = [];
+			const stream = createStreamAccumulation();
 			let stopped = false;
-			let streamUsage: Message["usage"] = undefined;
-			let webSearchUsed = false;
-			let webSearchCitations: WebSearchCitation[] = [];
-			let webSearchSources: Message["webSearchSources"];
-			let providerContinuation: ProviderContinuation | undefined;
 			const startTime = Date.now();
 
 			// Route to correct provider implementation
@@ -2560,58 +2508,21 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					break;
 				}
 
-				switch (chunk.type) {
-					case "text":
-						fullContent += chunk.content || "";
-						if (isActive()) setStreamingContent(fullContent);
-						break;
-
-					case "thinking":
-						thinkingContent += chunk.content || "";
-						if (isActive()) setStreamingThinking(thinkingContent);
-						break;
-
-					case "tool_call":
-						if (chunk.toolCall) {
-							toolCalls.push(chunk.toolCall);
-							if (!toolsUsed.includes(chunk.toolCall.name)) {
-								toolsUsed.push(chunk.toolCall.name);
-							}
-						}
-						break;
-
-					case "tool_result":
-						if (chunk.toolResult) {
-							toolResults.push(chunk.toolResult);
-						}
-						break;
-
-					case "image_generated":
-						if (chunk.generatedImage) {
-							generatedImages.push(chunk.generatedImage);
-						}
-						break;
-
-					case "web_search_used":
-						webSearchUsed = true;
-						break;
-
-					case "error":
-						throw new Error(chunk.error || "Unknown error");
-
-					case "done":
-						streamUsage = chunk.usage;
-						webSearchCitations = chunk.webSearchCitations ?? [];
-						webSearchSources = chunk.webSearchSources ?? webSearchSources;
-						providerContinuation = chunk.providerContinuation;
-						break;
+				accumulateStreamChunk(stream, chunk);
+				if (isActive()) {
+					if (chunk.type === "text") setStreamingContent(stream.text);
+					else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
 				}
 			}
 
+			let fullContent = stream.text;
+			let webSearchSources: Message["webSearchSources"] =
+				stream.webSearchSources.length > 0 ? stream.webSearchSources : undefined;
+
 			if (stopped && fullContent) {
 				fullContent += `\n\n${t("chat.generationStopped")}`;
-			} else if (!webSearchSources && webSearchCitations.length > 0) {
-				const formatted = formatWebSearchCitations(fullContent, webSearchCitations);
+			} else if (!webSearchSources && stream.webSearchCitations.length > 0) {
+				const formatted = formatWebSearchCitations(fullContent, stream.webSearchCitations);
 				fullContent = formatted.content;
 				webSearchSources = formatted.sources;
 				if (isActive()) setStreamingContent(fullContent);
@@ -2622,38 +2533,26 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				try { await mcpToolExecutor.cleanup(); } catch (e) { console.warn("MCP cleanup failed:", e); }
 			}
 
-			// Get processed edit/delete/rename info from tool executor
-			const pendingEditInfo = getLatestPendingInfo(processedEdits);
-			const pendingDeleteInfo = getLatestPendingInfo(processedDeletes);
-			const pendingRenameInfo = getLatestPendingInfo(processedRenames);
-			const pendingEdits = getPendingInfos(processedEdits);
-			const pendingDeletes = getPendingInfos(processedDeletes);
-			const pendingRenames = getPendingInfos(processedRenames);
-
 			const elapsedMs = Date.now() - startTime;
 			const assistantMessage: Message = {
 				role: "assistant",
 				content: fullContent,
 				timestamp: Date.now(),
 				model: currentModel,
-				toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
-				toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-				toolResults: toolResults.length > 0 ? toolResults : undefined,
-				thinking: thinkingContent || undefined,
-				pendingEdit: pendingEditInfo,
-				pendingEdits,
-				pendingDelete: pendingDeleteInfo,
-				pendingDeletes,
-				pendingRename: pendingRenameInfo,
-				pendingRenames,
+				toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
+				toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
+				toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
+				thinking: stream.thinking || undefined,
+				// Processed edit/delete/rename info from the tool executor.
+				...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
 				ragUsed: localRagSources.length > 0,
 				ragSources: localRagSources.length > 0 ? localRagSources : undefined,
-				generatedImages: generatedImages.length > 0 ? generatedImages : undefined,
-				imageGenerationUsed: generatedImages.length > 0 || undefined,
-				webSearchUsed: webSearchUsed || undefined,
+				generatedImages: stream.generatedImages.length > 0 ? stream.generatedImages : undefined,
+				imageGenerationUsed: stream.generatedImages.length > 0 || undefined,
+				webSearchUsed: stream.webSearchUsed || undefined,
 				webSearchSources,
-				providerContinuation,
-				usage: streamUsage,
+				providerContinuation: stream.providerContinuation,
+				usage: stream.usage,
 				elapsedMs,
 				mcpApps: apiMcpApps.length > 0 ? apiMcpApps : undefined,
 			};
@@ -3079,20 +2978,12 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 
 				// Use streaming with tools
-				let fullContent = "";
-				let thinkingContent = "";
-				const toolCalls: Message["toolCalls"] = [];
-				const toolResults: Message["toolResults"] = [];
-				const toolsUsed: string[] = [];
-				let ragUsed = localRagSources.length > 0;
-				// Aliased, not copied: rag_search runs mid-stream and appends to it.
-				const ragSources: string[] = localRagSources;
-				let webSearchUsed = false;
-				let webSearchSources: Message["webSearchSources"];
-				let imageGenerationUsed = false;
-				const generatedImages: GeneratedImage[] = [];
-				let streamUsage: Message["usage"] = undefined;
-				let streamInteractionId: string | undefined;
+				const stream = createStreamAccumulation();
+				// Local RAG ran before the stream, so its hits belong to this turn
+				// too; rag_search may append more to localRagSources mid-stream,
+				// which is merged in once the stream is done.
+				stream.ragSources.push(...localRagSources);
+				stream.ragUsed = localRagSources.length > 0;
 				const startTime = Date.now();
 
 				// Resolve previous interaction ID for Interactions API conversation chaining.
@@ -3150,82 +3041,23 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						break;
 					}
 
-				switch (chunk.type) {
-					case "text":
-						fullContent += chunk.content || "";
-						if (isActive()) setStreamingContent(fullContent);
-						break;
-
-					case "thinking":
-						thinkingContent += chunk.content || "";
-						if (isActive()) setStreamingThinking(thinkingContent);
-						break;
-
-					case "tool_call":
-						if (chunk.toolCall) {
-							toolCalls.push(chunk.toolCall);
-							if (!toolsUsed.includes(chunk.toolCall.name)) {
-								toolsUsed.push(chunk.toolCall.name);
-							}
-						}
-						break;
-
-					case "tool_result":
-						if (chunk.toolResult) {
-							toolResults.push(chunk.toolResult);
-						}
-						break;
-
-					case "rag_used":
-						ragUsed = true;
-						if (chunk.ragSources) {
-							for (const s of chunk.ragSources) {
-								if (!ragSources.includes(s)) {
-									ragSources.push(s);
-								}
-							}
-						}
-						break;
-
-					case "web_search_used":
-						webSearchUsed = true;
-						break;
-
-					case "image_generated":
-						imageGenerationUsed = true;
-						if (chunk.generatedImage) {
-							generatedImages.push(chunk.generatedImage);
-						}
-						break;
-
-					case "error":
-						throw new Error(chunk.error || "Unknown error");
-
-					case "done":
-						// Capture usage data and interaction ID from the final chunk
-						if (chunk.usage) {
-							streamUsage = chunk.usage;
-						}
-						if (chunk.interactionId) {
-							streamInteractionId = chunk.interactionId;
-						}
-						webSearchSources = chunk.webSearchSources ?? webSearchSources;
-						break;
+					accumulateStreamChunk(stream, chunk);
+					if (isActive()) {
+						if (chunk.type === "text") setStreamingContent(stream.text);
+						else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
+					}
 				}
-			}
+
+				// rag_search runs as a tool mid-stream and appends its hits here.
+				for (const source of localRagSources) {
+					if (!stream.ragSources.includes(source)) stream.ragSources.push(source);
+				}
+				let fullContent = stream.text;
 
 				// If stopped, add partial message if any content was received
 				if (stopped && fullContent) {
 					fullContent += `\n\n${t("chat.generationStopped")}`;
 				}
-
-				// Get processed edit/delete/rename info from tool executor (already confirmed during tool execution)
-				const pendingEditInfo = getLatestPendingInfo(processedEdits);
-				const pendingDeleteInfo = getLatestPendingInfo(processedDeletes);
-				const pendingRenameInfo = getLatestPendingInfo(processedRenames);
-				const pendingEdits = getPendingInfos(processedEdits);
-				const pendingDeletes = getPendingInfos(processedDeletes);
-				const pendingRenames = getPendingInfos(processedRenames);
 
 				// Add assistant message
 				const assistantMessage: Message = {
@@ -3233,26 +3065,23 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					content: fullContent,
 					timestamp: Date.now(),
 					model: allowedModel,
-					toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
+					toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
 					skillsUsed: skillsUsedNames.length > 0 ? skillsUsedNames : undefined,
-					pendingEdit: pendingEditInfo,
-					pendingEdits,
-					pendingDelete: pendingDeleteInfo,
-					pendingDeletes,
-					pendingRename: pendingRenameInfo,
-					pendingRenames,
-					toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-					toolResults: toolResults.length > 0 ? toolResults : undefined,
-					ragUsed: ragUsed || undefined,
-					ragSources: ragSources.length > 0 ? ragSources : undefined,
-					webSearchUsed: webSearchUsed || undefined,
-					webSearchSources,
-					imageGenerationUsed: imageGenerationUsed || undefined,
-					generatedImages: generatedImages.length > 0 ? generatedImages : undefined,
-					thinking: thinkingContent || undefined,
+					// Processed edit/delete/rename info from the tool executor
+					// (already confirmed during tool execution).
+					...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
+					toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
+					toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
+					ragUsed: stream.ragUsed || undefined,
+					ragSources: stream.ragSources.length > 0 ? stream.ragSources : undefined,
+					webSearchUsed: stream.webSearchUsed || undefined,
+					webSearchSources: stream.webSearchSources.length > 0 ? stream.webSearchSources : undefined,
+					imageGenerationUsed: stream.imageGenerationUsed || undefined,
+					generatedImages: stream.generatedImages.length > 0 ? stream.generatedImages : undefined,
+					thinking: stream.thinking || undefined,
 					mcpApps: collectedMcpApps.length > 0 ? collectedMcpApps : undefined,
-					usage: streamUsage,
-					interactionId: streamInteractionId,
+					usage: stream.usage,
+					interactionId: stream.interactionId,
 					elapsedMs: Date.now() - startTime,
 				};
 
@@ -3262,11 +3091,11 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				tracing.traceEnd(traceId, {
 					output: fullContent,
 					metadata: {
-						toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
-						ragUsed,
-						ragSources: ragSources.length > 0 ? ragSources : undefined,
-						webSearchUsed,
-						imageGenerationUsed,
+						toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
+						ragUsed: stream.ragUsed,
+						ragSources: stream.ragSources.length > 0 ? stream.ragSources : undefined,
+						webSearchUsed: stream.webSearchUsed,
+						imageGenerationUsed: stream.imageGenerationUsed,
 						stopped,
 					},
 				});
