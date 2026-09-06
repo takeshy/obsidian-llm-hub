@@ -143,7 +143,7 @@ export class McpServerModal extends Modal {
       .addText((text) => {
         text
           .setPlaceholder(t("settings.mcpServerUrl.placeholder"))
-          .setValue(this.server.url)
+          .setValue(this.server.url ?? "")
           .onChange((value) => {
             this.server.url = value;
             this.invalidateConnectionTest();
@@ -289,7 +289,7 @@ export class McpServerModal extends Modal {
               return;
             }
           } else {
-            if (!this.server.url.trim()) {
+            if (!this.server.url?.trim()) {
               new Notice(t("settings.mcpServerUrlRequired"));
               return;
             }

@@ -13,7 +13,7 @@ function getServerDescription(server: McpServerConfig): string {
   if (server.transport === "stdio") {
     desc = `stdio: ${server.command || ""} ${(server.args || []).join(" ")}`.trim();
   } else {
-    desc = server.url;
+    desc = server.url ?? "";
   }
   if (server.toolHints && server.toolHints.length > 0) {
     desc += `\n${t("settings.mcpToolHints", { tools: server.toolHints.join(", ") })}`;

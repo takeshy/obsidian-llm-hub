@@ -1,3 +1,4 @@
+import { configureMcpClientInfo, configureMcpStdioClient } from "obsidian-llm-hub-common/mcp";
 import { configureAgentPluginBase } from "obsidian-llm-hub-common/skills";
 import { handleCommandNode } from "src/workflow/handlers/command";
 import { handleMcpNode } from "src/workflow/handlers/mcp";
@@ -5,7 +6,7 @@ import { handleRagSyncNode } from "src/workflow/handlers/ragSync";
 import { handleShellNode } from "src/workflow/handlers/shell";
 import { setMcpApprovalHandler, sameMcpConnection } from "./core/mcpApproval";
 import { McpApprovalModal } from "./ui/components/McpApprovalModal";
-import { Plugin, WorkspaceLeaf, Notice, MarkdownView, TFile, Modal, type EventRef } from "obsidian";
+import { Plugin, WorkspaceLeaf, Notice, MarkdownView, TFile, Modal, type EventRef, Platform } from "obsidian";
 import { EventEmitter } from "src/utils/EventEmitter";
 import type { SelectionLocationInfo } from "src/ui/selectionHighlight";
 import { SelectionManager } from "src/plugin/selectionManager";
@@ -303,6 +304,15 @@ export class LlmHubPlugin extends Plugin {
     configureClassPrefix("llm-hub");
     configureStoragePrefix("llm-hub");
     configureAgentPluginBase(".llm-hub");
+    configureMcpClientInfo({ name: "obsidian-llm-hub", version: this.manifest.version });
+    // Desktop-only: registering it here keeps Node's child_process off the mobile startup path.
+    if (!Platform.isMobile) {
+      configureMcpStdioClient((config) => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- Load the stdio transport only where it can run.
+        const { McpStdioClient } = require("src/core/mcpStdioClient") as typeof import("src/core/mcpStdioClient");
+        return new McpStdioClient(config);
+      });
+    }
     configureWorkflowHost({
       getModelOptions: () => {
         const options: WorkflowModelOption[] = [];
