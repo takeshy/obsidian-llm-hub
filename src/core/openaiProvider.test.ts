@@ -67,6 +67,36 @@ describe("openaiChatWithToolsStream", () => {
     expect(chunks.find(c => c.type === "tool_call")?.toolCall?.args).toEqual({ path: "a.md" });
   });
 
+  it("replays what the tools did in an earlier turn", async () => {
+    // The history used to be flattened to the assistant's prose, so a
+    // follow-up like "delete the file you just read" reached the model with no
+    // record of which file that was.
+    createCompletion.mockResolvedValueOnce(round({ content: "Done." }));
+
+    const stream = openaiChatWithToolsStream(
+      "https://api.openai.com", "key", "gpt-5",
+      [
+        { role: "user", content: "read a.md", timestamp: 0 },
+        {
+          role: "assistant",
+          content: "It says hello.",
+          timestamp: 1,
+          toolCalls: [{ id: "call_1", name: "read_note", args: { path: "a.md" } }],
+          toolResults: [{ toolCallId: "call_1", result: "hello" }],
+        },
+        { role: "user", content: "now delete it", timestamp: 2 },
+      ],
+      [readNote], "system", async () => "", undefined, false,
+    );
+    for await (const _ of stream) { /* drain */ }
+
+    const sent = createCompletion.mock.calls[0][0].messages;
+    expect(sent.map((m: { role: string }) => m.role))
+      .toEqual(["system", "user", "assistant", "tool", "assistant", "user"]);
+    expect(sent[2].tool_calls[0].function).toEqual({ name: "read_note", arguments: '{"path":"a.md"}' });
+    expect(sent[3]).toEqual({ role: "tool", content: "hello", tool_call_id: "call_1" });
+  });
+
   it("leaves the text alone for a hosted model", async () => {
     // A hosted model asked to describe a tool call must be quoted, not obeyed.
     createCompletion.mockResolvedValueOnce(

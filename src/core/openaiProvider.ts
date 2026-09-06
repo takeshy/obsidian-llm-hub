@@ -13,7 +13,7 @@ import { requestUrl } from "obsidian";
 import OpenAI from "openai";
 import type { Message, StreamChunk, ToolDefinition, GeneratedImage, WebSearchCitation, WebSearchSource, ReasoningEffort } from "../types";
 import { calculateCost } from "./modelPricing";
-import { extractInlineToolCalls, parseThinkTags } from "obsidian-llm-hub-common/core";
+import { buildOpenAiMessages, extractInlineToolCalls, parseThinkTags } from "obsidian-llm-hub-common/core";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
 import { dedupeAttachments, getToolResultAttachments, withoutToolResultAttachments } from "./toolResultAttachments";
 import {
@@ -186,65 +186,6 @@ function createClient(baseUrl: string, apiKey: string, proxyUrl?: string, proxyB
     dangerouslyAllowBrowser: true,
     ...(sdkFetch ? { fetch: sdkFetch } : {}),
   });
-}
-
-/**
- * Build OpenAI SDK messages from plugin Message array with multimodal support
- */
-function buildMessages(
-  messages: Message[],
-  systemPrompt?: string,
-): OpenAI.ChatCompletionMessageParam[] {
-  const result: OpenAI.ChatCompletionMessageParam[] = [];
-
-  if (systemPrompt) {
-    result.push({ role: "system", content: systemPrompt });
-  }
-
-  for (const msg of messages) {
-    const role = msg.role === "user" ? "user" as const : "assistant" as const;
-
-    // Prefer `llmContent` (carries inlined non-image attachment text /
-    // workspace context built by Local LLM senders) over the bare display
-    // `content`. The display content is for the chat UI; the LLM needs the
-    // full prompt body. Other paths (API provider) don't set llmContent so
-    // this is a no-op for them.
-    const textBody = (role === "user" && msg.llmContent) ? msg.llmContent : msg.content;
-
-    if (role === "user" && msg.attachments && msg.attachments.length > 0) {
-      const multimodalAttachments = msg.attachments.filter(
-        a => a.type === "image" || a.type === "pdf"
-      );
-      if (multimodalAttachments.length > 0) {
-        const parts: OpenAI.ChatCompletionContentPart[] = [
-          { type: "text", text: textBody },
-        ];
-        for (const att of multimodalAttachments) {
-          if (att.type === "image") {
-            parts.push({
-              type: "image_url",
-              image_url: { url: `data:${att.mimeType};base64,${att.data}` },
-            });
-          } else if (att.type === "pdf") {
-            // OpenAI supports file input for PDFs
-            parts.push({
-              type: "file",
-              file: {
-                filename: att.name,
-                file_data: `data:${att.mimeType};base64,${att.data}`,
-              },
-            });
-          }
-        }
-        result.push({ role, content: parts });
-        continue;
-      }
-    }
-
-    result.push({ role, content: textBody });
-  }
-
-  return result;
 }
 
 /**
@@ -791,7 +732,9 @@ export async function* openaiChatWithToolsStream(
   }
 
   const openaiTools = tools.length > 0 ? toOpenAiTools(tools) : undefined;
-  const conversationMessages = buildMessages(messages, systemPrompt);
+  // The shared builder speaks the OpenAI wire format, which is what the SDK
+  // parameter type describes; the tool loop below appends to the same array.
+  const conversationMessages = buildOpenAiMessages(messages, systemPrompt) as unknown as OpenAI.ChatCompletionMessageParam[];
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
