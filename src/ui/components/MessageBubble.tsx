@@ -1,5 +1,5 @@
 import { ToolIndicator } from "obsidian-llm-hub-chat-ui";
-import { MessageBubble as SharedMessageBubble, MessageContent, Attachments, UsageInfo } from "obsidian-llm-hub-chat-ui";
+import { MessageBubble as SharedMessageBubble, MessageContent, Attachments, UsageInfo, SourceBadges, ToolsUsed, SkillsUsed } from "obsidian-llm-hub-chat-ui";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { type App, MarkdownRenderer, Component, Notice, Platform } from "obsidian";
 import Copy from "lucide-react/dist/esm/icons/copy";
@@ -511,34 +511,21 @@ export default function MessageBubble({
 
       {/* Web search indicator */}
       {message.webSearchUsed && (
-        <div className="llm-hub-rag-used">
-          <span className="llm-hub-rag-indicator">
-            🌐 {t("message.webSearchUsed")}
-          </span>
-          {message.webSearchSources && message.webSearchSources.length > 0 && (
-            <div className="llm-hub-rag-sources">
-              {message.webSearchSources.filter(source => isSafeWebUrl(source.url)).map((source, index) => (
-                <span
-                  key={`${source.url}-${index}`}
-                  className="llm-hub-rag-source llm-hub-tool-clickable"
-                  onClick={() => window.open(source.url, "_blank")}
-                  title={source.url}
-                >
-                  🌐 {source.title || source.url}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        <SourceBadges
+          classPrefix="llm-hub"
+          icon="🌐"
+          label={t("message.webSearchUsed")}
+          sources={(message.webSearchSources ?? []).filter((source) => isSafeWebUrl(source.url)).map((source) => ({
+            label: `🌐 ${source.title || source.url}`,
+            title: source.url,
+            onOpen: () => window.open(source.url, "_blank"),
+          }))}
+        />
       )}
 
       {/* Image generation indicator */}
       {message.imageGenerationUsed && (
-        <div className="llm-hub-rag-used">
-          <span className="llm-hub-rag-indicator">
-            🎨 {t("message.imageGenerated")}
-          </span>
-        </div>
+        <SourceBadges classPrefix="llm-hub" icon="🎨" label={t("message.imageGenerated")} />
       )}
 
       {/* Skills used indicator — vault skills are clickable to open SKILL.md; built-in skills are displayed as plain labels */}
@@ -548,37 +535,30 @@ export default function MessageBubble({
 
       {/* Semantic search indicator with sources */}
       {message.ragUsed && (
-        <div className="llm-hub-rag-used">
-          <span className="llm-hub-rag-indicator">
-            📚 {t("message.rag")}
-          </span>
-          {message.ragSources && message.ragSources.length > 0 && (
-            <div className="llm-hub-rag-sources">
-              {message.ragSources.map((source, index) => (
-                <span
-                  key={index}
-                  className="llm-hub-rag-source llm-hub-tool-clickable"
-                  onClick={() => {
-                    if (app.vault.getAbstractFileByPath(source)) {
-                      void app.workspace.openLinkText(source, "", false);
-                    } else {
-                      new Notice(`Source: ${source}`, 3000);
-                    }
-                  }}
-                  title={t("message.clickToOpen", { source })}
-                >
-                  📄 {source.split("/").pop() || source}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        <SourceBadges
+          classPrefix="llm-hub"
+          icon="📚"
+          label={t("message.rag")}
+          sources={(message.ragSources ?? []).map((source) => ({
+            label: `📄 ${source.split("/").pop() || source}`,
+            title: t("message.clickToOpen", { source }),
+            onOpen: () => {
+              if (app.vault.getAbstractFileByPath(source)) {
+                void app.workspace.openLinkText(source, "", false);
+              } else {
+                new Notice(`Source: ${source}`, 3000);
+              }
+            },
+          }))}
+        />
       )}
 
       {/* Tools used indicator */}
       {message.toolCalls && message.toolCalls.length > 0 && (
-        <>
-          <div className="llm-hub-tools-used">
+        <ToolsUsed
+          classPrefix="llm-hub"
+          errorHint={message.toolCalls.some(tc => getFailedWorkflowPath(tc, message.toolResults)) ? t("message.workflowErrorHint") : undefined}
+        >
             {message.toolCalls.map((toolCall, index) => {
               const { icon, label } = getToolDisplayInfo(toolCall.name);
               const failedWorkflowPath = getFailedWorkflowPath(toolCall, message.toolResults);
@@ -600,14 +580,7 @@ export default function MessageBubble({
                 />
               );
             })}
-          </div>
-          {/* Error hint — shown once if any skill workflow failed */}
-          {message.toolCalls.some(tc => getFailedWorkflowPath(tc, message.toolResults)) && (
-            <div className="llm-hub-workflow-error-hint">
-              {t("message.workflowErrorHint")}
-            </div>
-          )}
-        </>
+        </ToolsUsed>
       )}
 
       {/* Attachments display */}
@@ -838,28 +811,19 @@ function SkillsUsedIndicator({ skillNames, app, skillsFolder }: { skillNames: st
   }, [app, skillNames, skillsFolder]);
 
   return (
-    <div className="llm-hub-skills-used">
-      <span className="llm-hub-skills-indicator">
-        ✨ {t("message.skillsUsed")}:
-      </span>
-      {skillNames.map((skillName, index) => {
+    <SkillsUsed
+      classPrefix="llm-hub"
+      label={t("message.skillsUsed")}
+      skills={skillNames.map((skillName) => {
         const info = skillMap.get(skillName);
-        const isBuiltin = info?.builtin ?? false;
-        const isClickable = info && !isBuiltin;
-        return (
-          <span
-            key={index}
-            className={`llm-hub-skill-chip${isClickable ? " llm-hub-tool-clickable" : " is-static"}`}
-            onClick={isClickable ? () => {
-              void app.workspace.openLinkText(info.path, "", false);
-            } : undefined}
-            title={isClickable ? t("message.clickToOpen", { source: skillName }) : skillName}
-          >
-            {skillName}
-          </span>
-        );
+        const clickable = info && !info.builtin ? info : undefined;
+        return {
+          name: skillName,
+          title: clickable ? t("message.clickToOpen", { source: skillName }) : skillName,
+          open: clickable ? { onOpen: () => { void app.workspace.openLinkText(clickable.path, "", false); } } : undefined,
+        };
       })}
-    </div>
+    />
   );
 }
 

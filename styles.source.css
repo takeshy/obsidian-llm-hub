@@ -6938,23 +6938,6 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   text-align: right;
 }
 
-/* Skills used indicator in message */
-.llm-hub-skills-used {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.75em;
-  color: var(--text-muted);
-  padding: 2px 0;
-  flex-wrap: wrap;
-}
-
-.llm-hub-skills-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
 /* ===== Search Panel ===== */
 
 .llm-hub-search-panel {
@@ -7786,21 +7769,6 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 .ai-workflow-confirm-modal .workflow-preview-additional,
 .ai-workflow-confirm-modal .ai-workflow-buttons {
   flex-shrink: 0;
-}
-
-.llm-hub-skills-used {
-  flex-wrap: wrap;
-}
-
-/* Clickable only when not static (i.e., vault skills) */
-.llm-hub-skill-chip:not(.is-static):hover {
-  background: var(--background-modifier-active);
-  color: var(--text-normal);
-  cursor: pointer;
-}
-
-.llm-hub-skill-chip.is-static {
-  cursor: default;
 }
 
 /* Hide thinking details until content arrives (models with no reasoning output). */
