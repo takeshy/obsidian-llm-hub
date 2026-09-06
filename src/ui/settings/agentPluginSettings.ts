@@ -25,7 +25,7 @@ export function displayAgentPluginSettings(containerEl: HTMLElement, ctx: Settin
         const paths = agentPluginAbsolutePaths(plugin.app, preview.manifest.name);
         let managed: McpServerConfig[] = [];
         const mcp = preview.files["mcp.json"];
-        if (mcp) managed = parseAgentPluginMcp(new TextDecoder().decode(mcp), preview.manifest.name, paths.root, paths.data).servers.map(v => mergeServer(v, prior.get(v.agentPlugin!.serverName)));
+        if (mcp) managed = parseAgentPluginMcp<McpServerConfig>(new TextDecoder().decode(mcp), preview.manifest.name, paths.root, paths.data).servers.map(v => mergeServer(v, prior.get(v.agentPlugin!.serverName)));
         let metadata: AgentPluginInstall | null = null;
         new AgentPluginInstallModal(plugin.app, preview, managed, async () => {
           metadata = await installAgentPlugin(plugin.app, preview);

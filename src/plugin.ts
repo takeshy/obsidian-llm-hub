@@ -1,3 +1,4 @@
+import { configureAgentPluginBase } from "obsidian-llm-hub-common/skills";
 import { handleCommandNode } from "src/workflow/handlers/command";
 import { handleMcpNode } from "src/workflow/handlers/mcp";
 import { handleRagSyncNode } from "src/workflow/handlers/ragSync";
@@ -301,6 +302,7 @@ export class LlmHubPlugin extends Plugin {
     initLocale();
     configureClassPrefix("llm-hub");
     configureStoragePrefix("llm-hub");
+    configureAgentPluginBase(".llm-hub");
     configureWorkflowHost({
       getModelOptions: () => {
         const options: WorkflowModelOption[] = [];
