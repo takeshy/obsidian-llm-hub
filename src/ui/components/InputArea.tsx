@@ -6,7 +6,7 @@ import {
 } from "obsidian-llm-hub-common/chat";
 import { CollapsedInput } from "obsidian-llm-hub-common";
 import { InputArea as SharedInputArea } from "obsidian-llm-hub-common";
-import { Composer, Autocomplete, Attachments, VaultToolMenu, VaultToolButton, EnabledMcpServers, McpServerToggles, InputButtons, SearchSelector, ModelRow, ModelDropdown, HistoryLimit } from "obsidian-llm-hub-common";
+import { Composer, Autocomplete, Attachments, VaultToolControl, EnabledMcpServers, InputButtons, SearchSelector, ModelRow, ModelDropdown } from "obsidian-llm-hub-common";
 import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from "react";
 
 
@@ -92,7 +92,14 @@ interface MentionItem {
 }
 
 // 対応ファイル形式
-const HISTORY_LIMIT_OPTIONS = Array.from({ length: 100 }, (_, index) => index);
+
+/** Least restricted first: the Vault tool button reads as inactive only on the first. */
+const VAULT_TOOL_MODES = [
+  { id: "all" as VaultToolMode, label: t("input.vaultToolAll"), description: t("input.vaultToolAllDesc") },
+  { id: "noSearch" as VaultToolMode, label: t("input.vaultToolNoSearch"), description: t("input.vaultToolNoSearchDesc") },
+  { id: "readOnly" as VaultToolMode, label: t("input.vaultToolReadOnly"), description: t("input.vaultToolReadOnlyDesc") },
+  { id: "none" as VaultToolMode, label: t("input.vaultToolNone"), description: t("input.vaultToolNoneDesc") },
+];
 
 const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea({
   onSend,
@@ -569,86 +576,39 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           }}
         >
 
-          {/* Vault tool mode button */}
-          <VaultToolButton
+          <VaultToolControl<VaultToolMode>
             classPrefix="llm-hub"
             containerRef={vaultToolMenuRef}
             title={t("input.vaultToolTitle")}
-            active={vaultToolMode !== "all"}
+            open={showVaultToolMenu}
+            onToggle={setShowVaultToolMenu}
             disabled={isLoading || isImageGenerationModel(model)}
-            onClick={() => setShowVaultToolMenu(!showVaultToolMenu)}
-          >
-            {showVaultToolMenu && mcpServers.length === 0 && (
-              <VaultToolMenu<VaultToolMode>
-                classPrefix="llm-hub"
-                options={[
-                  { id: "all", label: t("input.vaultToolAll"), description: t("input.vaultToolAllDesc"), selected: vaultToolMode === "all", disabled: vaultToolModeOnlyNone },
-                  { id: "noSearch", label: t("input.vaultToolNoSearch"), description: t("input.vaultToolNoSearchDesc"), selected: vaultToolMode === "noSearch", disabled: vaultToolModeOnlyNone },
-                  { id: "readOnly", label: t("input.vaultToolReadOnly"), description: t("input.vaultToolReadOnlyDesc"), selected: vaultToolMode === "readOnly", disabled: vaultToolModeOnlyNone },
-                  { id: "none", label: t("input.vaultToolNone"), description: t("input.vaultToolNoneDesc"), selected: vaultToolMode === "none" },
-                ]}
-                onSelect={(mode) => { onVaultToolModeChange(mode); setShowVaultToolMenu(false); }}
-              >
-                <HistoryLimit classPrefix="llm-hub" label={t("input.historyLimit")}
-                  value={maxPreviousMessages} onChange={onMaxPreviousMessagesChange} />
-              </VaultToolMenu>
-            )}
-            {/* Modal for vault tool + MCP settings when MCP servers are configured */}
-            {showVaultToolMenu && mcpServers.length > 0 && (
-              <div className="llm-hub-tool-settings-modal">
-                <div className="llm-hub-tool-settings-content">
-                  <div className="llm-hub-tool-settings-row">
-                    <label>{t("input.vaultToolLabel")}</label>
-                    <select
-                      value={vaultToolMode}
-                      onChange={(e) => onVaultToolModeChange(e.target.value as VaultToolMode)}
-                      disabled={vaultToolModeOnlyNone}
-                    >
-                      <option value="all" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolAll")}</option>
-                      <option value="noSearch" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolNoSearch")}</option>
-                      <option value="readOnly" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolReadOnly")}</option>
-                      <option value="none">{t("input.vaultToolNone")}</option>
-                    </select>
-                  </div>
-                  <div className="llm-hub-tool-settings-row">
-                    <label>{t("input.historyLimit")}</label>
-                    <select value={maxPreviousMessages}
-                      onChange={(e) => onMaxPreviousMessagesChange(Number(e.target.value))}>
-                      {HISTORY_LIMIT_OPTIONS.map(count => <option key={count} value={count}>{count}</option>)}
-                    </select>
-                  </div>
-                  <div className="llm-hub-tool-settings-row">
-                    <label>{t("input.mcpServersLabel")}</label>
-                    <div className="llm-hub-mcp-server-list">
-                      <McpServerToggles
-                        classPrefix="llm-hub"
-                        disabled={vaultToolModeOnlyNone}
-                        onToggle={onMcpServerToggle}
-                        servers={mcpServers.map((server) => {
-                          const toolCount = server.toolHints?.length || 0;
-                          return {
-                            id: server.name,
-                            name: server.name,
-                            enabled: server.enabled,
-                            hint: toolCount > 0
-                              ? t("input.mcpToolHint", { count: String(toolCount), tools: server.toolHints?.slice(0, 3).join(", ") + (toolCount > 3 ? ", ..." : "") })
-                              : "",
-                            toolsTitle: server.toolHints?.join(", ") || "",
-                          };
-                        })}
-                      />
-                    </div>
-                  </div>
-                  <button
-                    className="llm-hub-tool-settings-close"
-                    onClick={() => setShowVaultToolMenu(false)}
-                  >
-                    {t("input.close")}
-                  </button>
-                </div>
-              </div>
-            )}
-          </VaultToolButton>
+            modes={VAULT_TOOL_MODES}
+            mode={vaultToolMode}
+            onModeChange={onVaultToolModeChange}
+            lockedTo={vaultToolModeOnlyNone ? "none" : undefined}
+            mcp={{
+              label: t("input.mcpServersLabel"),
+              onToggle: onMcpServerToggle,
+              servers: mcpServers.map((server) => {
+                const toolCount = server.toolHints?.length || 0;
+                return {
+                  id: server.name,
+                  name: server.name,
+                  enabled: server.enabled,
+                  hint: toolCount > 0
+                    ? t("input.mcpToolHint", { count: String(toolCount), tools: server.toolHints?.slice(0, 3).join(", ") + (toolCount > 3 ? ", ..." : "") })
+                    : "",
+                  toolsTitle: server.toolHints?.join(", ") || "",
+                };
+              }),
+            }}
+            historyLimit={{
+              label: t("input.historyLimit"),
+              value: maxPreviousMessages,
+              onChange: onMaxPreviousMessagesChange,
+            }}
+          />
         </InputButtons>
 
         </>}
