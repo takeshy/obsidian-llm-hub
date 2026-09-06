@@ -98,7 +98,7 @@ import {
 } from "obsidian-llm-hub-common/core";
 import { cryptoCache } from "src/core/cryptoCache";
 import { formatError } from "obsidian-llm-hub-common/core";
-import { createConfirmingToolExecutor } from "obsidian-llm-hub-common/chat";
+import { createConfirmingToolExecutor, withRateLimitRetry } from "obsidian-llm-hub-common/chat";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
 import { runtimeSkillPath } from "src/core/runtimeSkills";
@@ -118,8 +118,6 @@ import { t } from "src/i18n";
 import {
 	shouldUseImageModel,
 	PAID_RATE_LIMIT_RETRY_DELAYS_MS,
-	sleep,
-	isRetryableRateLimitError,
 	buildErrorMessage,
 	limitConversationHistory,
 	type CliSessionInfo,
@@ -3292,42 +3290,30 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				}
 			};
 
-			const retryDelays = PAID_RATE_LIMIT_RETRY_DELAYS_MS;
-			let retryCount = 0;
-
-			while (true) {
-				try {
-					await runStreamOnce();
-					break;
-				} catch (error) {
-					if (abortController.signal.aborted) {
-						if (isActive()) {
-							setStreamingContent("");
-							setStreamingThinking("");
-						}
-						tracing.traceEnd(traceId, { metadata: { status: "aborted" } });
-						tracing.score(traceId, { name: "status", value: 0.5, comment: "aborted during retry" });
-						return;
+			const outcome = await withRateLimitRetry(runStreamOnce, {
+				delays: PAID_RATE_LIMIT_RETRY_DELAYS_MS,
+				isAborted: () => abortController.signal.aborted,
+				onRetry: ({ attempt, total, delayMs }) => {
+					// The failed attempt left partial output on screen.
+					if (isActive()) {
+						setStreamingContent("");
+						setStreamingThinking("");
 					}
-					if (isRetryableRateLimitError(error) && retryCount < retryDelays.length) {
-						const delayMs = retryDelays[retryCount];
-						retryCount += 1;
-						if (isActive()) {
-							setStreamingContent("");
-							setStreamingThinking("");
-						}
-						new Notice(
-							t("chat.rateLimitRetrying", {
-								seconds: String(Math.ceil(delayMs / 1000)),
-								attempt: String(retryCount),
-								max: String(retryDelays.length),
-							})
-						);
-						await sleep(delayMs);
-						continue;
-					}
-					throw error;
+					new Notice(t("chat.rateLimitRetrying", {
+						seconds: String(Math.ceil(delayMs / 1000)),
+						attempt: String(attempt),
+						max: String(total),
+					}));
+				},
+			});
+			if (outcome === "aborted") {
+				if (isActive()) {
+					setStreamingContent("");
+					setStreamingThinking("");
 				}
+				tracing.traceEnd(traceId, { metadata: { status: "aborted" } });
+				tracing.score(traceId, { name: "status", value: 0.5, comment: "aborted during retry" });
+				return;
 			}
 		} catch (error) {
 			const errorMessageText = buildErrorMessage(error);
