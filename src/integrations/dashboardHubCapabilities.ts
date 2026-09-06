@@ -76,7 +76,7 @@ export async function runDashboardWorkflow(plugin: LlmHubPlugin, request: Dashbo
 function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[], systemPrompt: string, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
   const tools = getEnabledVaultTools({ allowWrite: false, allowDelete: false, ragSyncStatus: false });
   const execute = createToolExecutor(plugin.app, { listNotesLimit: plugin.settings.listNotesLimit, maxNoteChars: plugin.settings.maxNoteChars,
-    limitVaultToolScope: true, cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders });
+    limitVaultToolScope: true, vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders });
   if (isApiProviderModel(model)) {
     const provider = plugin.settings.apiProviders.find((entry) => entry.id === getApiProviderId(model) && entry.enabled && entry.verified);
     if (!provider) throw new Error(`Provider not found for model: ${model}`);

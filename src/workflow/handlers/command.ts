@@ -407,7 +407,7 @@ Please revise the output based on the user's feedback above.`;
         listNotesLimit: plugin.settings.listNotesLimit,
         maxNoteChars: plugin.settings.maxNoteChars,
         limitVaultToolScope: true,
-        cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+        vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
       });
 
       // Fetch MCP tools
@@ -650,7 +650,7 @@ Please revise the output based on the user's feedback above.`;
       listNotesLimit: plugin.settings.listNotesLimit,
       maxNoteChars: plugin.settings.maxNoteChars,
       limitVaultToolScope: shouldLimitLlmVaultTools,
-      cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+      vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
     });
 
     // Fetch MCP tools from specified servers

@@ -2103,7 +2103,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					listNotesLimit: plugin.settings.listNotesLimit,
 					maxNoteChars: plugin.settings.maxNoteChars,
 					limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
-					cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+					vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
 					pdfInputMode: resolveLocalLlmPdfInputMode(llmConfig),
 				});
 				const executeOpenCodeTool = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
@@ -2120,7 +2120,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							args.workflowId as string,
 							args.variables as string | undefined,
 							openCodeSkillWorkflowMap,
-							{ cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders },
+							{ vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders },
 						);
 					}
 					if (name === "run_skill_script" && openCodeSkillScriptMap.size > 0) {
@@ -2190,7 +2190,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					listNotesLimit: settings.listNotesLimit,
 					maxNoteChars: settings.maxNoteChars,
 					limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
-					cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+					vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 					pdfInputMode: resolveLocalLlmPdfInputMode(llmConfig),
 				});
 
@@ -2236,7 +2236,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					}
 					if (name === "run_skill_workflow" && llmSkillWorkflowMap.size > 0) {
 						return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, llmSkillWorkflowMap, {
-							cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+							vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 						});
 					}
 					if (name === "run_skill_script" && llmSkillScriptMap.size > 0) {
@@ -2456,7 +2456,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 				const markerResult = llmLoadedSkills.length > 0
 					? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills, abortController.signal, {
-						cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+						vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
 					})
 					: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
 
@@ -2654,7 +2654,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				listNotesLimit: settings.listNotesLimit,
 				maxNoteChars: settings.maxNoteChars,
 				limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
-				cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+				vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 				pdfInputMode: resolveApiProviderPdfInputMode(providerConfig),
 			});
 
@@ -2717,7 +2717,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				}
 				if (name === "run_skill_workflow" && apiSkillWorkflowMap.size > 0) {
 					return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, apiSkillWorkflowMap, {
-						cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+						vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 					});
 				}
 				if (name === "run_skill_script" && apiSkillScriptMap.size > 0) {
@@ -3130,7 +3130,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						listNotesLimit: settings.listNotesLimit,
 						maxNoteChars: settings.maxNoteChars,
 						limitVaultToolScope: shouldLimitLlmVaultTools(allowedModel),
-						cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+						vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 						pdfInputMode: providerConfig ? resolveApiProviderPdfInputMode(providerConfig) : "native",
 					})
 					: undefined;
@@ -3173,7 +3173,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 								args.variables as string | undefined,
 								skillWorkflowMap,
 								shouldLimitLlmVaultTools(allowedModel)
-									? { cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
+									? { vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
 									: undefined,
 							);
 						}
@@ -4254,7 +4254,7 @@ async function processSkillMarkers(
 	skills: LoadedSkill[],
 	signal?: AbortSignal,
 	options?: {
-		cloudVaultToolAllowedFolders?: string[];
+		vaultToolAllowedFolders?: string[];
 	},
 ): Promise<{ processedContent: string; followUpMessage?: string; aborted?: boolean }> {
 	if (skills.length === 0) return { processedContent: content };
@@ -4419,7 +4419,7 @@ async function executeSkillWorkflow(
 		vaultPath: string;
 	}>,
 	options?: {
-		cloudVaultToolAllowedFolders?: string[];
+		vaultToolAllowedFolders?: string[];
 	},
 ): Promise<Record<string, unknown>> {
 	const entry = skillWorkflowMap.get(workflowId);
@@ -4515,7 +4515,7 @@ async function executeSkillWorkflow(
 				workflowName: workflowDisplayName,
 				recordHistory: true,
 				abortSignal: abortController.signal,
-				vaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
+				vaultToolAllowedFolders: options?.vaultToolAllowedFolders,
 			},
 			callbacks,
 		);

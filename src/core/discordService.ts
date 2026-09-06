@@ -1047,7 +1047,7 @@ export class DiscordService {
       listNotesLimit: settings.listNotesLimit,
       maxNoteChars: settings.maxNoteChars,
       limitVaultToolScope: !isCliModel,
-      cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+      vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
     });
 
     const vaultBasePath = (this.app.vault.adapter as { basePath?: string }).basePath || ".";
@@ -1062,7 +1062,7 @@ export class DiscordService {
         return await this.executeSkillWorkflow(
           args.workflowId as string, args.variables as string | undefined, workflowMap,
           !isCliModel
-            ? { cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
+            ? { vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
             : undefined,
         );
       }
@@ -1350,7 +1350,7 @@ export class DiscordService {
 
     // Process text markers from response
     fullResponse = await this.processTextMarkers(fullResponse, scriptMap, workflowMap, vaultBasePath, {
-      cloudVaultToolAllowedFolders: this.plugin.settings.cloudVaultToolAllowedFolders,
+      vaultToolAllowedFolders: this.plugin.settings.cloudVaultToolAllowedFolders,
     });
 
     return fullResponse;
@@ -1406,7 +1406,7 @@ export class DiscordService {
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
     vaultBasePath: string,
     options?: {
-      cloudVaultToolAllowedFolders?: string[];
+      vaultToolAllowedFolders?: string[];
     },
   ): Promise<string> {
     let result = content;
@@ -1498,7 +1498,7 @@ export class DiscordService {
     variablesJson: string | undefined,
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
     options?: {
-      cloudVaultToolAllowedFolders?: string[];
+      vaultToolAllowedFolders?: string[];
     },
   ): Promise<Record<string, unknown>> {
     const entry = workflowMap.get(workflowId);
@@ -1550,7 +1550,7 @@ export class DiscordService {
         undefined,
         {
           workflowName: entry.vaultPath.substring(entry.vaultPath.lastIndexOf("/") + 1).replace(/\.md$/, "") || workflowId,
-          vaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
+          vaultToolAllowedFolders: options?.vaultToolAllowedFolders,
         },
         callbacks,
       );
