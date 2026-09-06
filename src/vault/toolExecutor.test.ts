@@ -173,3 +173,43 @@ describe("LLM vault tool folder scope", () => {
     expect(result.path).toBe("Private/Secret.md");
   });
 });
+
+describe("LLM vault tool folder scope edge cases", () => {
+  it("denies everything when every configured folder is unusable", async () => {
+    // The old private copy of the scope check returned "allowed" once nothing
+    // normalized, so a typo like "../notes" opened the whole vault.
+    const app = makeApp([makeFile("Private/Secret.md", "secret")]);
+
+    const result = await executeToolCall(app, "read_note", { fileName: "Private/Secret.md" }, {
+      limitVaultToolScope: true,
+      cloudVaultToolAllowedFolders: ["../escape"],
+    });
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Access denied");
+  });
+
+  it("treats folder names that differ only in case as different folders", async () => {
+    const app = makeApp([makeFile("public/Note.md", "other")]);
+
+    const result = await executeToolCall(app, "read_note", { fileName: "public/Note.md" }, {
+      limitVaultToolScope: true,
+      cloudVaultToolAllowedFolders: ["Public"],
+    });
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Access denied");
+  });
+
+  it("lists the ancestors needed to reach an allowed folder, and nothing beside them", async () => {
+    const app = makeApp([]);
+
+    const result = await executeToolCall(app, "list_folders", {}, {
+      limitVaultToolScope: true,
+      cloudVaultToolAllowedFolders: ["Public/Nested"],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.folders).toEqual(["Public", "Public/Nested"]);
+  });
+});

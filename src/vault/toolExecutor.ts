@@ -28,10 +28,11 @@ import { DEFAULT_SETTINGS } from "src/types";
 import { formatError } from "obsidian-llm-hub-common/core";
 import { readTimelineEntriesForDay, sanitizeTimelineName } from "./timelineReader";
 import {
-  CLOUD_VAULT_SCOPE_DENIED_MSG,
-  isFileAllowedForCloudVaultTools,
+  VAULT_TOOL_SCOPE_DENIED_MSG,
+  isFileAllowedForVaultTools,
   isPathInAllowedVaultFolders,
-} from "./cloudVaultScope";
+  isPathNavigableForVaultTools,
+} from "obsidian-llm-hub-common/core";
 
 /**
  * Whether this host can answer `get_rag_sync_status`. Its RAG store keeps no
@@ -58,7 +59,7 @@ function hasCloudVaultToolScope(context: ToolExecutionContext | undefined): bool
 
 function cloudVaultToolFileFilter(context: ToolExecutionContext | undefined): ((file: TFile) => boolean) | undefined {
   if (!hasCloudVaultToolScope(context)) return undefined;
-  return (file) => isFileAllowedForCloudVaultTools(file, context!.cloudVaultToolAllowedFolders);
+  return (file) => isFileAllowedForVaultTools(file, context!.cloudVaultToolAllowedFolders);
 }
 
 function resolveToolFile(app: App, fileName: string | undefined, activeNote: boolean | undefined): TFile | null {
@@ -73,7 +74,7 @@ function denyIfCloudVaultToolPathOutsideScope(path: string, context: ToolExecuti
   if (!hasCloudVaultToolScope(context)) return null;
   return isPathInAllowedVaultFolders(path, context!.cloudVaultToolAllowedFolders)
     ? null
-    : { success: false, error: CLOUD_VAULT_SCOPE_DENIED_MSG };
+    : { success: false, error: VAULT_TOOL_SCOPE_DENIED_MSG };
 }
 
 function denyIfCloudVaultToolFileOutsideScope(
@@ -85,9 +86,9 @@ function denyIfCloudVaultToolFileOutsideScope(
   if (!hasCloudVaultToolScope(context)) return null;
   const file = resolveToolFile(app, fileName, activeNote);
   if (!file) return null;
-  return isFileAllowedForCloudVaultTools(file, context!.cloudVaultToolAllowedFolders)
+  return isFileAllowedForVaultTools(file, context!.cloudVaultToolAllowedFolders)
     ? null
-    : { success: false, error: CLOUD_VAULT_SCOPE_DENIED_MSG };
+    : { success: false, error: VAULT_TOOL_SCOPE_DENIED_MSG };
 }
 
 // Execute a tool call and return the result
@@ -305,8 +306,11 @@ async function executeToolCallInternal(
       const parentFolder = asString(args.parentFolder);
       const denied = parentFolder ? denyIfCloudVaultToolPathOutsideScope(parentFolder, context) : null;
       if (denied) return denied;
+      // Ancestors of an allowed folder are listed so the user can navigate to
+      // it; they never authorize reading a file, which goes through
+      // isFileAllowedForVaultTools.
       const folders = listFolders(app, parentFolder)
-        .filter((folder) => isPathInAllowedVaultFolders(folder, hasCloudVaultToolScope(context) ? context!.cloudVaultToolAllowedFolders : undefined));
+        .filter((folder) => isPathNavigableForVaultTools(folder, hasCloudVaultToolScope(context) ? context!.cloudVaultToolAllowedFolders : undefined));
       return {
         success: true,
         folders,

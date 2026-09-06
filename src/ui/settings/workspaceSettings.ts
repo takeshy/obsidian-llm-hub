@@ -2,6 +2,7 @@ import { Setting, Notice } from "obsidian";
 import { t } from "src/i18n";
 import { DEFAULT_SETTINGS, DEFAULT_WORKSPACE_FOLDER } from "src/types";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
+import { normalizeVaultScopePath } from "obsidian-llm-hub-common/core";
 import { getLocalRagStore } from "src/core/localRagStore";
 import { ragCredentialSecretId } from "src/core/credentialBundle";
 import { clearSecret, copySecret, readSecretJson } from "src/core/secretStorage";
@@ -123,10 +124,22 @@ export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: Settings
         .setValue(plugin.settings.cloudVaultToolAllowedFolders.join(", "));
       text.inputEl.addEventListener("blur", () => {
         void (async () => {
-          plugin.settings.cloudVaultToolAllowedFolders = text.inputEl.value
+          // A folder the scope check cannot normalize is refused here rather
+          // than stored: an unusable entry denies every path, so accepting one
+          // silently would look like the Vault tools had simply stopped working.
+          const entered = text.inputEl.value
             .split(",")
-            .map((folder) => folder.trim().replace(/^\/+|\/+$/g, ""))
+            .map((folder) => folder.trim())
             .filter(Boolean);
+          const normalized = entered.map(normalizeVaultScopePath);
+          if (normalized.some((folder) => folder === null)) {
+            new Notice(t("settings.vaultToolAllowedFolders.invalidPath"));
+            text.setValue(plugin.settings.cloudVaultToolAllowedFolders.join(", "));
+            return;
+          }
+          plugin.settings.cloudVaultToolAllowedFolders = normalized.filter(
+            (folder): folder is string => folder !== null,
+          );
           text.setValue(plugin.settings.cloudVaultToolAllowedFolders.join(", "));
           await plugin.saveSettings();
         })();
