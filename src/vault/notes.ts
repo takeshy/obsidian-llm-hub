@@ -1,5 +1,5 @@
 import { TFile, TFolder, type App } from "obsidian";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { DEFAULT_SETTINGS } from "src/types";
 import { getEditHistoryManager } from "src/core/editHistory";
 import { PDFDocument } from "pdf-lib";

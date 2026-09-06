@@ -3,7 +3,7 @@ import type { McpAppInfo, McpAppUiResource } from "src/types";
 import type { IMcpClient } from "src/core/mcpClient";
 import { createClientFromAppInfo } from "src/core/mcpClientUtils";
 import { t } from "src/i18n";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { prepareMcpAppHtml } from "src/core/mcpAppCsp";
 
 // JSON-RPC message types for postMessage communication

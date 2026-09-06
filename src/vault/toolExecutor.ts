@@ -25,7 +25,7 @@ import {
   createFolder,
 } from "./search";
 import { DEFAULT_SETTINGS } from "src/types";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { readTimelineEntriesForDay, sanitizeTimelineName } from "./timelineReader";
 import {
   CLOUD_VAULT_SCOPE_DENIED_MSG,

@@ -27,7 +27,7 @@ import {
   type ReasoningEffort,
 } from "src/types";
 import { tracing, type TracingUsage } from "src/core/tracingHooks";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { Platform, requestUrl } from "obsidian";
 import { createProxyFetch } from "./proxyFetch";
 import { dedupeAttachments, getToolResultAttachments, withoutToolResultAttachments } from "./toolResultAttachments";

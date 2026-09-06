@@ -1,5 +1,5 @@
 import { TFolder, TFile, type App } from "obsidian";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { DEFAULT_SETTINGS } from "src/types";
 import { getSearchableVaultFiles } from "./fileTypes";
 import { extractPdfPageText, loadPdfDocument } from "../core/pdfJs";

@@ -1,7 +1,7 @@
 import { App, TFile } from "obsidian";
 import { WorkflowNode, ExecutionContext, PromptCallbacks } from "../types";
 import { replaceVariables, getVariable, parseJsonRecord } from "./utils";
-import { isEncryptedFile, decryptFileContent } from "../../core/crypto";
+import { isEncryptedFile, decryptFileContent } from "obsidian-llm-hub-common/core";
 import { cryptoCache } from "../../core/cryptoCache";
 import { CLOUD_VAULT_SCOPE_DENIED_MSG, isFileAllowedForCloudVaultTools, isPathInAllowedVaultFolders } from "../../vault/cloudVaultScope";
 

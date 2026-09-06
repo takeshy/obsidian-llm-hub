@@ -5,7 +5,7 @@ import { createMcpClient } from "./mcpClient";
 import type { IMcpClient } from "./mcpClient";
 import type { McpServerConfig, McpToolInfo, ToolDefinition, ToolPropertyDefinition, McpAppInfo } from "../types";
 import { tracing } from "./tracingHooks";
-import { formatError } from "../utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 
 // Extended tool definition with MCP server info
 export interface McpToolDefinition extends ToolDefinition {

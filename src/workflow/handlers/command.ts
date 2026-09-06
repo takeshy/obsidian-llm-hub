@@ -9,7 +9,7 @@ import { createToolExecutor } from "../../vault/toolExecutor";
 import { WorkflowNode, ExecutionContext, PromptCallbacks, FileExplorerData } from "../types";
 import { replaceVariables, setSystemVariable } from "./utils";
 import { tracing } from "../../core/tracingHooks";
-import { formatError } from "../../utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "../../core/sandboxExecutor";
 import { searchLocalRag, loadRagMediaAttachments } from "../../core/localRagStore";
 import { openaiChatWithToolsStream } from "../../core/openaiProvider";

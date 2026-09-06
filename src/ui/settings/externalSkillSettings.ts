@@ -10,7 +10,7 @@ import {
 } from "src/core/externalSkills";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { t } from "src/i18n";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { SKILLS_FOLDER } from "src/types";
 import type { SettingsContext } from "./settingsContext";
 

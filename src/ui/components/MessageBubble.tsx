@@ -17,7 +17,7 @@ import { isBuiltinSkillPath } from "src/core/builtinSkills";
 import { isRuntimeSkillPath } from "src/core/runtimeSkills";
 import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { t } from "src/i18n";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { isSafeWebUrl } from "src/core/webSearch";
 import { chatLinkFileRef } from "./chat/localFileLink";
 import { getReadNotePageRange } from "./toolDisplay";

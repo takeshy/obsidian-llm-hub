@@ -28,7 +28,7 @@ import { GeminiClient, getGeminiClient } from "./gemini";
 import { localLlmChatStream } from "./localLlmProvider";
 import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "./cliProvider";
 import { searchLocalRag } from "./localRagStore";
-import { formatError } from "../utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { formatWebSearchCitations, modelSupportsWebSearch } from "./webSearch";
 import {
 	getPendingEdit,

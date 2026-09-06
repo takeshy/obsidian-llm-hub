@@ -1,5 +1,5 @@
 import type { App } from "obsidian";
-import { formatError } from "../utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 
 /**
  * Thin wrapper around Obsidian's SecretStorage (App 1.11.4+).

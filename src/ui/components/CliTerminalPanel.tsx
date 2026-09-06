@@ -10,7 +10,7 @@ import {
   type ModelType,
 } from "src/types";
 import { resolveClaudeCommand } from "src/core/cliProvider";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 
 type NodePtyModule = typeof import("node-pty");
 export type TerminalProvider = Extract<ChatProvider, "claude-cli">;

@@ -17,7 +17,7 @@ import {
   getLocalLlmModelName,
   normalizeDeprecatedModelIdentifier,
 } from "../types";
-import { formatError } from "../utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { searchSelectionFromWorkspace } from "./webSearch";
 import {
   applyRagCredentials,

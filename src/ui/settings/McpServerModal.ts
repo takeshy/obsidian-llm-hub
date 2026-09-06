@@ -4,7 +4,7 @@ import type { McpServerConfig, McpTransport, McpFraming } from "src/types";
 import { createMcpClient } from "src/core/mcpClient";
 import { credentialSlot } from "src/core/credentialBundle";
 import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { t } from "src/i18n";
 import type { LlmHubPlugin } from "src/plugin";
 

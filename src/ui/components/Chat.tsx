@@ -105,10 +105,10 @@ import CliTerminalPanel, { isTerminalProvider } from "./CliTerminalPanel";
 import {
 	isEncryptedFile,
 	decryptFileContent,
-} from "src/core/crypto";
+} from "obsidian-llm-hub-common/core";
 import { cryptoCache } from "src/core/cryptoCache";
-import { formatError } from "src/utils/error";
-import { findFileMentionOccurrences } from "src/utils/mentionResolver";
+import { formatError } from "obsidian-llm-hub-common/core";
+import { findFileMentionOccurrences } from "obsidian-llm-hub-common/core";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
 import { runtimeSkillPath } from "src/core/runtimeSkills";
