@@ -19,8 +19,6 @@ const HOST_OWNED = [
   "chat-container",
   // a selector, not markup: mobile keyboard tracking uses closest()
   "input-container",
-  // workflow history and execution modals reuse the usage styling from plain DOM
-  "usage-info",
   // the Obsidian view container, added imperatively in ChatView
   "wide-sidebar",
 ];
@@ -31,6 +29,7 @@ const HOST_OWNED = [
  */
 const STILL_HOST_RENDERED: string[] = [
   "interactive-modal",
+  "modal-resizable",
   "pass-through-modal-container",
 ];
 
