@@ -1,4 +1,3 @@
-import type { ToolCall, ToolResult, WebSearchSource, GeneratedImage, ProviderContinuation } from "obsidian-llm-hub-common/chat";
 
 export type { Message, ToolCall, ToolResult, Attachment, PendingEditInfo, PendingDeleteInfo, PendingRenameInfo, WebSearchSource, GeneratedImage, ProviderContinuation } from "obsidian-llm-hub-common/chat";
 import type { WorkflowEventTrigger } from "obsidian-llm-hub-common/workflow";
@@ -500,7 +499,6 @@ export interface CliProviderConfig {
   codexCliReasoningEffort?: CodexReasoningEffort; // Reasoning effort override for Codex CLI
 }
 
-export type ReasoningEffort = "default" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type CodexReasoningEffort = Exclude<ReasoningEffort, "default" | "none">;
 
 export const DEFAULT_CLI_CONFIG: CliProviderConfig = {
@@ -754,45 +752,11 @@ export interface ConversationHistory {
 }
 
 // Tool definition for Function Calling
-export interface ToolPropertyDefinition {
-  type: string;
-  description: string;
-  enum?: string[];
-  properties?: Record<string, ToolPropertyDefinition>;
-  required?: string[];
-  items?: ToolPropertyDefinition | {
-    type: string;
-    properties?: Record<string, ToolPropertyDefinition>;
-    required?: string[];
-  };
-}
 
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  parameters: {
-    type: "object";
-    properties: Record<string, ToolPropertyDefinition>;
-    required?: string[];
-  };
-}
 
 // Usage info for streaming chunks and messages
-export interface StreamChunkUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  thinkingTokens?: number;
-  totalTokens?: number;
-  totalCost?: number;       // USD
-  webSearchRequests?: number;
-}
 
 
-export interface WebSearchCitation extends WebSearchSource {
-  /** Character offsets in the streamed plain-text response. */
-  startIndex: number;
-  endIndex: number;
-}
 
 /**
  * Provider-native response items that must be replayed verbatim for search,
@@ -801,21 +765,6 @@ export interface WebSearchCitation extends WebSearchSource {
  */
 
 // Streaming chunk types
-export interface StreamChunk {
-  type: "text" | "thinking" | "tool_call" | "tool_result" | "error" | "done" | "rag_used" | "web_search_used" | "image_generated" | "session_id";
-  content?: string;
-  toolCall?: ToolCall;
-  toolResult?: ToolResult;
-  error?: string;
-  ragSources?: string[];  // RAG検索で見つかったソースファイル
-  generatedImage?: GeneratedImage;  // 生成された画像
-  sessionId?: string;  // CLI session ID for resumption
-  usage?: StreamChunkUsage;  // Token usage and cost (populated on "done" chunks)
-  interactionId?: string;  // Interactions API interaction ID (populated on "done" chunks)
-  webSearchSources?: WebSearchSource[];
-  webSearchCitations?: WebSearchCitation[];
-  providerContinuation?: ProviderContinuation;
-}
 
 // Get default model: first enabled+verified API provider (first enabled model), or first verified CLI
 export function getDefaultModel(settings: LlmHubSettings): ModelType {
@@ -896,3 +845,16 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   // Discord
   discord: DEFAULT_DISCORD_SETTINGS,
 };
+
+// These provider-facing shapes live in the shared library so every plugin describes tools
+// and streams responses the same way.
+import type { ReasoningEffort } from "obsidian-llm-hub-common/core";
+
+export type {
+  ToolDefinition,
+  ToolPropertyDefinition,
+  StreamChunk,
+  StreamChunkUsage,
+  ReasoningEffort,
+  WebSearchCitation,
+} from "obsidian-llm-hub-common/core";

@@ -1,17 +1,9 @@
 // Chinese (Simplified) translations
 export const zh: Record<string, string> = {
   // Settings - Headings
-  "settings.api": "API",
   "settings.cliProviders": "CLI 提供商",
-  "settings.workspace": "工作区",
-  "settings.toolLimits": "工具限制",
-  "settings.slashCommands": "斜杠命令",
-  "settings.rag": "语义搜索 (RAG)",
-  "settings.advancedSemanticSearch": "高级语义搜索",
 
   // Settings - API
-  "settings.googleApiKey.placeholder": "输入您的 API 密钥",
-  "settings.showOrHideApiKey": "显示或隐藏 API 密钥",
 
   // Settings - CLI
   "settings.cliIntro": "验证 CLI 提供商以将其用作模型。已验证的提供商将显示在模型选择中。",
@@ -117,91 +109,16 @@ export const zh: Record<string, string> = {
   "chat.noApiProvider": "未配置 API 提供商。请在设置中添加并验证提供商。",
 
   // Settings - Workspace
-  "settings.workspaceFolder": "工作区文件夹",
-  "settings.workspaceFolder.desc": "用于存储聊天记录、RAG索引和工作流历史的文件夹名称。使用以 \".\" 开头的名称（如 \".LLMHub\"）可从 Obsidian 搜索和文件浏览器中隐藏。",
-  "settings.workspaceFolder.invalidPath": "绝对路径和 \"..\" 不允许使用。请使用保管库内的文件夹名称。",
-  "settings.moveWorkspaceFolder": "将现有数据从 \"{{from}}\" 移动到 \"{{to}}\"？",
-  "settings.moveWorkspaceFolder.move": "移动",
-  "settings.moveWorkspaceFolder.skip": "跳过",
-  "settings.moveWorkspaceFolder.error": "移动工作区文件夹失败: {{error}}",
-
-  "settings.hideWorkspaceFolder": "隐藏工作区文件夹",
-  "settings.hideWorkspaceFolder.desc": "在文件浏览器中隐藏工作区文件夹",
-  "settings.saveChatHistory": "保存聊天记录",
-  "settings.saveChatHistory.desc": "将聊天对话保存为工作区文件夹中的 Markdown 文件",
-  "settings.deleteChatHistoryConfirm": "是否要删除所有现有的聊天记录文件？",
-  "settings.chatHistoryDeleted": "已删除 {{count}} 个聊天记录文件",
-  "settings.systemPrompt": "系统提示",
-  "settings.systemPrompt.desc": "AI 助手的额外指令",
-  "settings.systemPrompt.placeholder": "用与问题相同的语言回答。",
 
   // Settings - Tool limits
-  "settings.maxToolCalls": "每次请求的最大工具调用次数",
-  "settings.maxToolCalls.desc": "单次响应期间函数调用的上限",
-  "settings.toolCallWarning": "工具调用警告阈值",
-  "settings.toolCallWarning.desc": "当剩余调用次数等于或低于此数字时发出警告",
-  "settings.listNotesLimit": "默认 list_notes 限制",
-  "settings.listNotesLimit.desc": "未指定限制时 list_notes 返回的最大笔记数",
-  "settings.maxNoteChars": "最大笔记字符数",
-  "settings.maxNoteChars.desc": "从笔记中读取的最大字符数（较长的笔记将被截断）",
-  "settings.resetToDefault": "重置为默认值（{{value}}）",
 
   // Settings - Slash commands
-  "settings.manageCommands": "管理命令",
-  "settings.manageCommands.desc": "创建可重复使用的提示模板，通过在聊天中输入 / 触发",
-  "settings.addCommand": "添加命令",
-  "settings.editCommand": "编辑命令",
-  "settings.deleteCommand": "删除命令",
-  "settings.commandCreated": "命令 \"/{{name}}\" 已创建",
-  "settings.commandUpdated": "命令 \"/{{name}}\" 已更新",
-  "settings.commandDeleted": "命令 \"/{{name}}\" 已删除",
 
   // Settings - Slash command modal
-  "settings.createSlashCommand": "创建斜杠命令",
-  "settings.editSlashCommand": "编辑斜杠命令",
-  "settings.commandName": "命令名称",
-  "settings.commandName.desc": "用于触发命令的名称（例如 'translate'）",
-  "settings.commandName.placeholder": "示例：translate",
-  "settings.commandName.required": "命令名称为必填项",
-  "settings.description": "描述",
-  "settings.description.desc": "自动完成中显示的简短描述",
-  "settings.description.placeholder": "将文本翻译成中文",
-  "settings.promptTemplate": "提示模板",
-  "settings.promptTemplate.desc": "使用 {selection} 表示选中的文本（如果没有选择则使用活动笔记），{content} 表示活动笔记",
-  "settings.promptTemplate.placeholder": "将以下内容翻译成中文：\n\n{selection}",
-  "settings.promptTemplate.required": "提示模板为必填项",
-  "settings.modelOptional": "模型（可选）",
-  "settings.modelOptional.desc": "使用此命令时覆盖当前模型",
-  "settings.useCurrentModel": "使用当前模型",
-  "settings.searchOptional": "搜索（可选）",
-  "settings.searchOptional.desc": "使用此命令时覆盖当前搜索设置",
-  "settings.useCurrentSetting": "使用当前设置",
-  "settings.confirmEdits": "确认编辑",
-  "settings.confirmEdits.desc": "为 propose_edit 显示应用/放弃按钮（禁用以自动应用）",
-  "settings.vaultToolModeOptional": "库工具（可选）",
-  "settings.vaultToolModeOptional.desc": "使用此命令时覆盖库工具模式",
-  "settings.mcpServersOptional": "MCP 服务器（可选）",
-  "settings.mcpServersOptional.desc": "使用此命令时覆盖启用的 MCP 服务器",
 
   // Settings - RAG
-  "settings.enableRag": "启用语义搜索 (RAG)",
-  "settings.enableRag.desc": "启用语义搜索以使用 AI 搜索您的库",
-  "settings.retrievedChunksLimit": "检索块限制",
-  "settings.retrievedChunksLimit.desc": "每次查询检索的最大文档块数（越少 = 令牌越少，速度越快）",
   "settings.scoreThreshold": "Score threshold",
   "settings.scoreThreshold.desc": "Minimum similarity score (0.0-1.0) to include in results. 0 = no filtering",
-  "settings.ragSetting": "RAG 设置",
-  "settings.ragSetting.desc": "选择或创建要使用的 RAG 设置",
-  "settings.createRagSetting": "创建新的 RAG 设置",
-  "settings.ragSettingCreated": "RAG 设置 \"{{name}}\" 已创建",
-  "settings.renameRagSetting": "重命名 RAG 设置",
-  "settings.renamedTo": "已重命名为 \"{{name}}\"",
-  "settings.settingsFor": "{{name}} 的设置",
-  "settings.configureThisSetting": "配置此 RAG 设置",
-  "settings.renameSetting": "重命名设置",
-  "settings.deleteSetting": "删除",
-  "settings.deleteSettingConfirm": "确定要删除 RAG 设置 \"{{name}}\" 吗？这不会删除服务器上的存储。",
-  "settings.ragSettingDeleted": "RAG 设置 \"{{name}}\" 已删除",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "Embedding model",
@@ -223,12 +140,10 @@ export const zh: Record<string, string> = {
   "settings.localClearIndex.desc": "Delete the local embedding index and vectors",
   "settings.localClearConfirm": "Are you sure you want to clear the local embedding index? You will need to re-sync to use local RAG.",
   "settings.localIndexCleared": "Local embedding index cleared",
-  "settings.ragMode": "Index mode",
   "settings.ragMode.desc": "Choose whether this setting builds its own index, combines internal indexes, or loads external indexes",
   "settings.ragMode.internal": "Internal",
   "settings.ragMode.combined": "Combine internal",
   "settings.ragMode.external": "External",
-  "settings.ragSourceSettings": "Source RAG settings",
   "settings.ragSourceSettings.desc": "Select the internal RAG settings to search together",
   "settings.ragSourceSettings.empty": "No internal RAG settings available",
   "settings.externalIndex": "Use external index",
@@ -252,33 +167,17 @@ export const zh: Record<string, string> = {
   "settings.localEmbeddingApiKey": "嵌入 API 密钥",
   "settings.localEmbeddingApiKey.desc": "嵌入服务器的 API 密钥（可选）",
   "settings.localEmbeddingApiKey.placeholder": "输入嵌入 API 密钥",
-  "settings.targetFolders": "目标文件夹",
-  "settings.targetFolders.desc": "要包含在语义搜索索引中的文件夹（逗号分隔）。留空则包含所有文件夹。",
-  "settings.targetFolders.placeholder": "例如：notes, projects, docs",
-  "settings.excludedPatterns": "排除模式（正则表达式）",
-  "settings.excludedPatterns.desc": "用于排除文件的正则表达式模式（每行一个）。例如：^daily/, \\.excalidraw\\.md$",
-  "settings.excludedPatterns.placeholder": "^daily/\n\\.excalidraw\\.md$\n^templates/",
   "settings.searchFileExtensions": "搜索文件扩展名",
   "settings.searchFileExtensions.desc": "用逗号分隔要包含在搜索结果中的文件扩展名（空 = 全部）。例如：md, pdf",
   "settings.searchFileExtensions.placeholder": "md, pdf",
 
   // Settings - Sync
-  "settings.syncStatusNever": "从未",
-  "settings.cancelSync": "取消",
-  "settings.cancellingSync": "正在取消同步...",
-  "settings.syncCancelled": "同步已取消",
-  "settings.syncPreparing": "准备中...",
-  "settings.syncFailed": "同步失败：{{error}}",
 
   // Settings - RAG Files Modal
 
   // Common buttons
   "common.ok": "确定",
-  "common.save": "保存",
-  "common.create": "创建",
-  "common.reset": "重置",
   "common.error": "错误：",
-  "common.none": "无",
 
   // RAG Setting Name Modal
   "modal.nameCannotBeEmpty": "名称不能为空",
@@ -286,268 +185,65 @@ export const zh: Record<string, string> = {
   "modal.enterName": "输入名称",
 
   // Chat
-  "chat.title": "Chat",
-  "tab.workflowSkill": "工作流 / 技能",
-  "chat.saveAsNote": "保存为笔记",
   "chat.savedAsNote": "已保存到 {{path}}",
-  "chat.newChat": "新建聊天",
-  "chat.chatHistory": "聊天记录",
-  "chat.noChatHistory": "暂无聊天记录",
   "chat.chatDeleted": "聊天已删除",
-  "chat.configRequired": "需要配置",
-  "chat.configRequiredDesc": "要使用 AI 聊天，请在设置中配置以下选项之一：",
-  "chat.configApiKey": "Google API 密钥",
-  "chat.configApiKeyDesc": "设置 API 密钥以直接使用 Gemini API",
   "chat.configGeminiCli": "Antigravity CLI",
   "chat.configGeminiCliDesc": "启用 CLI 模式并验证 Antigravity CLI 是否正常工作",
   "chat.configClaudeCli": "Claude CLI",
   "chat.configClaudeCliDesc": "启用 CLI 模式并验证 Claude CLI 是否正常工作",
   "chat.configLocalLlm": "本地 LLM",
   "chat.configLocalLlmDesc": "连接本地 LLM 服务器（Ollama、LM Studio 等）",
-  "chat.openSettings": "打开设置 → LLM Hub 进行配置。",
-  "chat.clientNotInitialized": "Gemini 客户端未初始化。请设置 API 密钥。",
-  "chat.rateLimitFree": "所选模型已达到速率限制。请使用其他模型直到明天。",
   "chat.rateLimitPaid": "此模型可能已达到速率限制。请尝试使用其他模型直到明天。",
-  "chat.rateLimitRetrying": "检测到速率限制。{{seconds}} 秒后重试（{{attempt}}/{{max}}）...",
   "chat.errorOccurred": "抱歉，发生错误：{{message}}",
   "chat.unknownError": "未知错误",
   "chat.localLlmNotConfigured": "所选的本地 LLM 条目未配置。请选择其他模型或在设置中添加一个。",
-  "chat.generationStopped": "_（生成已停止）_",
-  "chat.generationInProgress": "AI 正在生成。请先停止再继续。",
-  "chat.welcomeTitle": "开始与 AI 对话",
-  "chat.welcomeHint": "询问关于笔记的问题、创建新笔记或搜索您的库。",
-  "chat.welcomeThinking": "支持的模型可使用深度思考模式",
-  "chat.welcomeImage": "输入\"生成图片\"或\"创建图片\"自动切换到图像模型",
-  "chat.welcomeCompact": "输入 /compact 将长对话压缩为新聊天",
-  "chat.welcomeNewChat": "Gemini 没有记忆，每次都会发送整个聊天记录。切换话题时请务必点击 + 开始新聊天",
   "chat.compactNotAvailable": "CLI 模式下无法使用压缩功能",
-  "chat.compacted": "对话已压缩：{{before}} 条消息 → {{after}} 条",
-  "chat.compactedContext": "压缩的对话上下文",
-  "chat.compactFailed": "对话压缩失败",
-  "chat.compacting": "压缩中...",
   "chat.yesterday": "昨天",
 
   // InputArea
-  "input.placeholder": "输入您的消息...（Enter 发送，Shift+Enter 换行）",
-  "input.placeholderMobile": "输入您的消息...",
-  "input.send": "发送消息",
-  "input.stop": "停止生成",
-  "input.fileTooLarge": "文件太大（最大 20MB）：{{name}}",
-  "input.removeAttachment": "移除附件",
-  "input.searchNone": "搜索：无",
-  "input.webSearch": "网络搜索",
-  "input.rag": "语义搜索：{{name}}",
-  "input.vaultToolTitle": "库工具设置",
-  "input.vaultToolLabel": "库工具",
-  "input.vaultToolAll": "Vault: 全部",
-  "input.vaultToolNoSearch": "Vault: 无搜索",
-  "input.vaultToolReadOnly": "Vault: 只读",
-  "input.vaultToolNone": "Vault: 关闭",
-  "input.mcpServersLabel": "外部工具 (MCP)",
-  "input.close": "关闭",
-  "input.ragSettings": "索引设置",
-  "input.ragChunkSize": "分块大小",
-  "input.ragChunkOverlap": "分块重叠",
   "input.ragPdfChunkPages": "PDF分块页数",
-  "input.ragTargetFolders": "目标文件夹",
-  "input.ragTargetFolders.placeholder": "例如 notes, projects, docs",
-  "input.ragExcludedPatterns": "排除模式（正则表达式）",
-  "input.ragExcludedPatterns.placeholder": "例如 ^daily/",
-  "input.ragIndexedFiles": "已索引文件 ({{count}})",
-  "input.ragNoIndexedFiles": "尚未索引任何文件",
-  "input.ragLastSync": "上次同步",
   "input.thinkingLabel": "始终思考",
-  "input.selectionVariable": "编辑器中选中的文本",
-  "input.contentVariable": "活动笔记内容",
-  "input.vaultFile": "库文件",
-  "input.openFile": "打开文件（Ctrl+Shift+O）",
-  "input.collapse": "收起输入区域",
-  "input.expand": "展开输入区域",
 
   // MessageBubble
-  "message.you": "你",
-  "message.assistant": "AI",
-  "message.copyToClipboard": "复制到剪贴板",
-  "message.imageCopied": "图片已复制到剪贴板",
-  "message.imageCopyFailed": "复制图片失败",
-  "message.webSearchUsed": "使用了网络搜索",
-  "message.imageGenerated": "生成了图片",
-  "message.rag": "RAG",
-  "message.clickToOpen": "点击打开：{{source}}",
-  "message.clickToSeeDetails": "点击查看详情",
-  "message.openWorkflow": "打开工作流",
-  "message.workflowErrorHint": "提示：打开工作流，使用 AI 修改，参考执行历史选择失败的步骤，然后请 AI 进行修复。",
-  "message.htmlInfographic": "HTML 信息图",
-  "message.preview": "预览",
-  "message.previewHtml": "预览 HTML",
-  "message.saveHtml": "保存到库",
-  "message.downloadHtml": "下载 HTML",
-  "message.savedTo": "已保存到 {{path}}",
-  "message.saveFailed": "保存失败：{{error}}",
-  "message.copyImage": "复制图片",
-  "message.downloadImage": "下载图片",
-  "message.mermaidFlowchart": "Mermaid 流程图",
-  "message.edited": "已编辑",
-  "message.applyChanges": "应用更改",
-  "message.discard": "放弃",
-  "message.discardChanges": "放弃更改",
-  "message.regenerate": "重新生成",
-  "message.editFeedbackHeader": "对 \"{{filePath}}\" 的编辑建议已被拒绝。",
-  "message.editFeedbackUserRequest": "反馈：",
-  "message.editFeedbackRetry": "请尝试使用不同的方法重试。",
   // Diff viewer
   "diff.restoreSize": "恢复大小",
-  "diff.lineComments": "行评论",
-  "diff.lineCommentsCount": "{{count}} 条行评论",
-  "diff.generalFeedback": "整体反馈（可选）",
-  "message.appliedChanges": "已应用更改到",
-  "message.discardedChanges": "已放弃更改",
-  "message.deleted": "已删除",
-  "message.cancelledDeletion": "已取消删除",
-  "message.failedToDelete": "删除失败",
-  "message.renamed": "已重命名",
-  "message.cancelledRename": "已取消重命名",
-  "message.failedToRename": "重命名失败",
 
   // Tool display labels
-  "tool.read": "读取",
-  "tool.created": "创建",
-  "tool.updated": "更新",
-  "tool.deleted": "删除",
-  "tool.renamed": "重命名",
-  "tool.searched": "搜索",
-  "tool.listed": "列出",
-  "tool.listedFolders": "列出文件夹",
-  "tool.createdFolder": "创建文件夹",
-  "tool.gotActiveNote": "获取活动笔记",
-  "tool.checkedSync": "检查同步",
-  "tool.editing": "编辑中",
-  "tool.applied": "已应用",
-  "tool.discarded": "已放弃",
 
   // Workflow Panel - Node Types
-  "workflow.nodeType.imageGeneration": "图片生成",
 
   // Workflow Panel - UI Strings
-  "workflow.noWorkflows": "无工作流",
-  "workflow.aiModify": "AI 修改",
-  "workflow.running": "运行中...",
-  "workflow.mustHaveNameForHotkey": "工作流必须有名称才能启用热键",
-  "workflow.mustHaveNameForEvent": "工作流必须有名称才能启用事件触发器",
-  "workflow.noWorkflowToExport": "没有可导出的工作流",
 
   // Common - Edit
 
   // Edit Confirmation Modal
-  "editModal.confirmFileWrite": "确认文件写入",
-  "editModal.confirmFileDeletion": "确认文件删除",
-  "editModal.confirmBulkEdit": "确认批量编辑",
-  "editModal.confirmBulkDelete": "确认批量删除",
-  "editModal.createNewFile": "创建新文件",
-  "editModal.appendToFile": "追加到文件",
-  "editModal.overwriteFile": "覆盖文件",
-  "editModal.file": "文件：",
-  "editModal.changes": "更改：",
-  "editModal.contentToDelete": "要删除的内容：",
-  "editModal.moveToTrash": "移到回收站",
-  "editModal.selectAll": "全选",
-  "editModal.deselectAll": "取消全选",
-  "editModal.applyCount": "应用（{{count}}）",
-  "editModal.deleteCount": "删除（{{count}}）",
-  "editModal.previewShow": "预览",
-  "editModal.previewHide": "隐藏",
 
   // Value Prompt Modal
-  "valueModal.title": "输入值",
-  "valueModal.placeholder": "输入值...",
 
   // Dialog Prompt Modal (titles passed dynamically)
 
   // Edit History
-  "settings.editHistory": "编辑历史",
-  "settings.editHistoryEnabled": "启用编辑历史",
-  "settings.editHistoryEnabled.desc": "追踪 AI 对笔记的更改（unified diff 格式）",
-  "settings.editHistoryContextLines": "上下文行数",
-  "settings.editHistoryContextLines.desc": "差异中的上下文行数",
-  "settings.editHistoryViewStats": "查看统计",
-  "settings.editHistoryStats": "{{files}} 个文件，{{entries}} 条记录",
-  "settings.editHistoryCleared": "已清除 {{count}} 条编辑历史记录",
 
   // Workflow Modals
 
   // Edit History Modal
-  "editHistoryModal.title": "编辑历史：{{file}}",
-  "editHistoryModal.unsavedChanges": "未保存的更改",
-  "editHistoryModal.current": "当前",
-  "editHistoryModal.original": "（原始 - 无历史）",
-  "editHistoryModal.workflow": "工作流",
-  "editHistoryModal.proposeEdit": "propose_edit",
-  "editHistoryModal.diff": "差异",
-  "editHistoryModal.restore": "恢复",
-  "editHistoryModal.clearAll": "清除历史",
-  "editHistoryModal.entriesCount": "{{count}} 条记录",
-  "editHistoryModal.noHistory": "此文件没有编辑历史",
-  "editHistoryModal.confirmClear": "恢复到首次编辑前的状态并清除历史？",
   "editHistoryModal.confirmClearWithRemote": "恢复到远程状态并清除历史？",
-  "editHistoryModal.confirmRestore": "恢复此版本？当前内容将被覆盖。",
-  "editHistoryModal.restored": "已恢复到 {{timestamp}} 的版本",
-  "editHistoryModal.restoreFailed": "恢复失败：无法重建内容",
-  "editHistoryModal.cleared": "历史已清除",
-  "editHistoryModal.revertToBase": "恢复到基础版本",
-  "editHistoryModal.confirmRevertToBase": "恢复到基础快照？未保存的更改将被丢弃。",
-  "editHistoryModal.revertedToBase": "已恢复到基础快照",
-  "editHistoryModal.close": "关闭",
-  "editHistoryModal.copy": "复制",
-  "editHistoryModal.copyTo": "复制到",
-  "editHistoryModal.copied": "已复制到 {{path}}",
-  "editHistoryModal.copyFailed": "复制失败",
-  "editHistoryModal.fileExists": "文件已存在",
 
   // Diff Modal
-  "diffModal.title": "差异：{{timestamp}} - {{source}}",
-  "diffModal.restoreVersion": "恢复此版本",
-  "diffModal.close": "关闭",
-  "diffModal.additions": "+{{count}}",
-  "diffModal.deletions": "-{{count}}",
-  "diffModal.before": "变更前",
-  "diffModal.after": "变更后",
 
   // Edit History Buttons
-  "editHistory.showHistory": "显示编辑历史",
-  "editHistory.saveSnapshot": "保存快照",
-  "editHistory.noActiveFile": "没有活动文件",
-  "editHistory.notInitialized": "编辑历史未初始化",
-  "editHistory.saved": "快照已保存",
-  "editHistory.noChanges": "没有需要保存的更改",
-  "editHistoryModal.manual": "手动",
-  "editHistoryModal.auto": "自动",
   "editHistoryModal.showRemote": "显示远程",
   "editHistoryModal.loadingRemote": "加载中...",
   "editHistoryModal.originLocal": "本地",
   "editHistoryModal.originRemote": "远程",
 
   // Status bar
-  "statusBar.snapshot": "快照",
-  "statusBar.snapshotTooltip": "将当前状态保存为快照",
-  "statusBar.snapshotSaved": "快照已保存",
-  "statusBar.history": "历史",
-  "statusBar.historyTooltip": "查看编辑历史",
 
   // Commands
-  "command.showEditHistory": "显示编辑历史",
-  "command.restorePreviousVersion": "恢复到之前的版本",
-  "command.encryptFile": "加密当前文件",
-  "command.decryptFile": "解密当前文件",
-  "command.runWorkflow": "运行工作流",
-  "command.compact": "压缩对话历史",
 
   // Workflow Selector Modal
-  "workflowSelector.selectWorkflow": "选择工作流",
 
   // Errors
-  "error.failedToCreate": "创建失败：{{error}}",
-  "error.failedToRename": "重命名失败：{{error}}",
-  "error.failedToDelete": "删除设置失败：{{error}}",
 
   // Encryption
   "settings.encryption": "加密",
@@ -572,25 +268,16 @@ export const zh: Record<string, string> = {
   "settings.encryptionResetKeys.desc": "生成新的加密密钥。之前加密的聊天将无法读取。",
   "settings.encryptionResetKeysConfirm": "重置加密密钥？所有之前加密的聊天历史将无法读取。",
   "settings.encryptionKeysReset": "加密密钥已重置",
-  "settings.encryptionDisableConfirm": "禁用加密？已加密的聊天历史将保持加密状态，需要密码才能读取。",
 
   // Decryption
   "chat.encryptedChat": "加密聊天",
-  "chat.enterPasswordToDecrypt": "输入密码以查看",
-  "chat.decryptPassword": "密码",
-  "chat.decryptPassword.placeholder": "输入解密密码",
-  "chat.decrypt": "解密",
   "chat.decryptFailed": "解密失败。请检查您的密码。",
   "chat.decrypted": "解密成功",
 
   // Workflow Generation Modal
-  "workflow.generation.generating": "生成中",
   "workflow.generation.generatingWithCli": "使用{{cli}}生成中",
-  "workflow.generation.reviewSummary": "摘要",
 
   // Workflow Preview Modal
-  "workflow.preview.no": "否，修改",
-  "workflow.preview.regenerate": "重新生成",
 
   // Workflow Confirm Modal
 
@@ -599,28 +286,8 @@ export const zh: Record<string, string> = {
   // Workflow Execution Modal
 
   // CryptView - File Encryption
-  "crypt.encryptFile": "加密文件",
 
   // MCP Server Settings
-  "settings.mcpServers": "MCP 服务器",
-  "settings.mcpServers.desc": "配置外部 MCP（模型上下文协议）服务器以获取更多工具",
-  "settings.mcpServersIntro": "MCP 服务器提供额外的工具。添加服务器以启用其工具。",
-  "settings.addMcpServer": "添加服务器",
-  "settings.mcpServerName": "服务器名称",
-  "settings.mcpServerName.placeholder": "我的 MCP 服务器",
-  "settings.mcpServerUrl": "服务器 URL",
-  "settings.mcpServerUrl.placeholder": "https://example.com/mcp",
-  "settings.mcpServerHeaders": "请求头（JSON）",
-  "settings.mcpServerHeaders.placeholder": "{\"Authorization\": \"Bearer xxx\"}",
-  "settings.mcpServerHeaders.desc": "用于身份验证的可选请求头（JSON 格式）",
-  "settings.editMcpServer": "编辑 MCP 服务器",
-  "settings.createMcpServer": "添加 MCP 服务器",
-  "settings.mcpServerCreated": "MCP 服务器 \"{{name}}\" 已添加",
-  "settings.mcpServerUpdated": "MCP 服务器 \"{{name}}\" 已更新",
-  "settings.mcpServerDeleted": "MCP 服务器 \"{{name}}\" 已删除",
-  "settings.mcpServerNameRequired": "服务器名称为必填项",
-  "settings.mcpServerUrlRequired": "服务器 URL 为必填项",
-  "settings.mcpServerInvalidHeaders": "请求头 JSON 格式无效",
   "settings.mcpTransport": "传输方式",
   "settings.mcpTransport.http": "HTTP (Streamable HTTP)",
   "settings.mcpTransport.stdio": "Stdio (本地进程)",
@@ -637,67 +304,24 @@ export const zh: Record<string, string> = {
   "settings.mcpServerEnv.desc": "服务器进程的可选环境变量（JSON 格式）",
   "settings.mcpServerCommandRequired": "Stdio 传输需要命令",
   "settings.mcpServerInvalidEnv": "环境变量的 JSON 格式无效",
-  "settings.testMcpConnection": "测试连接",
-  "settings.mcpConnectionSuccess": "连接成功！{{count}} 个工具可用",
-  "settings.mcpConnectionFailed": "连接失败：{{error}}",
-  "settings.mcpNoServers": "未配置 MCP 服务器",
-  "settings.testConnectionRequired": "保存前需要测试连接",
-  "settings.mcpToolHints": "工具：{{tools}}",
 
   // Input - MCP tool hint
-  "input.mcpToolHint": "（{{count}} 个工具：{{tools}}）",
 
   // Skills Settings
 
   // Skills UI
-  "skills.add": "添加技能",
-  "message.skillsUsed": "技能",
 
   // HTML Preview Modal
-  "htmlPreview.title": "信息图预览",
-  "htmlPreview.copyCode": "复制代码",
 
   // AI Workflow Modal
-  "aiWorkflow.createAsSkill": "创建为代理技能",
 
   // Edit History Modal
-  "editHistoryModal.notInitialized": "编辑历史管理器未初始化",
 
   // Node Editor Modal
-  "nodeEditor.workflowName": "工作流名称",
-  "nodeEditor.workflowName.placeholder": "工作流名称（如果文件包含多个）",
 
   // MCP Apps
-  "mcpApp.loading": "正在加载 MCP App...",
-  "mcpApp.resourceNotFound": "未找到 UI 资源",
-  "mcpApp.fetchError": "获取 UI 资源失败",
-  "mcpApp.expand": "展开",
-  "mcpApp.collapse": "收起",
-  "mcpApp.error": "MCP App 错误",
-  "mcpApp.decodeError": "无法解码二进制内容",
 
   // Langfuse settings
-  "settings.langfuse": "Langfuse 可观测性",
-  "settings.langfuseNotAvailable": "此构建未包含 Langfuse。请使用 'npm run build:langfuse' 构建以包含 Langfuse 支持。",
-  "settings.langfusePublicKey": "公钥",
-  "settings.langfusePublicKey.desc": "Langfuse 项目公钥",
-  "settings.langfusePublicKey.placeholder": "输入您的公钥",
-  "settings.langfuseSecretKey": "密钥",
-  "settings.langfuseSecretKey.desc": "Langfuse 项目密钥",
-  "settings.langfuseSecretKey.placeholder": "输入您的密钥",
-  "settings.langfuseBaseUrl": "基础 URL",
-  "settings.langfuseBaseUrl.desc": "Langfuse 服务器 URL（留空使用 cloud.langfuse.com）",
-  "settings.langfuseLogPrompts": "记录提示词",
-  "settings.langfuseLogPrompts.desc": "在追踪中包含提示词内容（隐私：默认禁用，发送 [redacted] 代替实际内容）",
-  "settings.langfuseLogResponses": "记录响应",
-  "settings.langfuseLogResponses.desc": "在追踪中包含响应内容（隐私：默认禁用，发送 [redacted] 代替实际内容）",
-  "settings.langfuseTestConnection": "测试连接",
-  "settings.langfuseTestConnection.desc": "发送测试追踪以验证 Langfuse 连接",
-  "settings.langfuseTestBtn": "发送测试追踪",
-  "settings.langfuseTesting": "测试中...",
-  "settings.langfuseTestSuccess": "测试追踪发送成功！请检查您的 Langfuse 仪表板。",
-  "settings.langfuseTestFailed": "测试追踪失败：{{error}}",
-  "settings.langfuseTestMissingKeys": "请先输入公钥和密钥",
 
   // Discord integration
   "settings.discord": "Discord 集成",
@@ -736,44 +360,8 @@ export const zh: Record<string, string> = {
   "settings.discordMaxResponseLength.desc": "每条 Discord 消息的最大字符数（Discord 限制：2000）",
 
   // Search tab
-  "search.tab": "RAG 搜索",
-  "search.queryPlaceholder": "输入搜索查询...",
-  "search.search": "搜索",
-  "search.noRagSetting": "未选择 RAG 设置",
-  "search.noRagSettings": "没有可用的 RAG 设置",
-  "search.noRagSettingsGuide": "请在插件设置中注册 RAG 设置以启用语义搜索。",
-  "search.openSettings": "打开设置",
-  "search.enterQuery": "请输入搜索查询",
-  "search.ragSettingNotFound": "未找到 RAG 设置",
-  "search.searchFailed": "搜索失败",
-  "search.noResults": "未找到结果",
-  "search.selectAll": "全选",
-  "search.results": "条结果",
-  "search.chatWithSelected": "使用所选内容聊天",
   "search.discussWithSelected": "使用所选内容讨论",
-  "search.selected": "已选择",
-  "search.editChunk": "编辑分块",
-  "search.loadPrevChunk": "加载上一个分块",
-  "search.loadNextChunk": "加载下一个分块",
-  "search.keywordFilter": "按关键词筛选...",
-  "search.keywordFilterOr": "OR关键词（空格分隔）...",
-  "search.addFilter": "添加AND条件",
-  "search.addFilterLabel": "AND",
-  "search.removeFilter": "删除条件",
-  "search.aiSuggest": "AI建议类似关键词",
-  "search.aiSuggestFailed": "AI关键词建议失败",
-  "search.aiUndo": "撤销AI建议",
-  "search.refineWithAI": "AI优化",
-  "search.refining": "优化中...",
-  "search.refineModel": "AI优化模型",
-  "search.refineModelNone": "无（禁用AI优化）",
-  "search.refineModelRequired": "请在搜索设置中选择模型以启用AI优化",
-  "search.edited": "已编辑",
-  "search.selectResults": "请至少选择一条结果",
-  "search.scoreThreshold": "最低分数",
   "search.pdfMode": "PDF 结果",
-  "search.pdfMode.text": "以文本形式",
-  "search.pdfMode.pdf": "以 PDF 片段形式",
   "search.helpTitle": "参数帮助",
   "search.helpTopK": "Top K — 返回结果的最大数量。",
   "search.helpScoreThreshold": "最低分数 — 最低相似度分数（0.0–1.0）。低于此值的结果将被排除。",
@@ -783,13 +371,10 @@ export const zh: Record<string, string> = {
   "search.helpPdfChunkPages": "PDF 分块页数 — PDF 索引时合并为一个块的页数。",
 
   // RAG source modal
-  "ragSource.clickToView": "点击查看/编辑 RAG 文本",
-
 
   // LLM vault tool folders
   "settings.cloudVaultToolAllowedFolders": "LLM 仓库工具文件夹",
   "settings.cloudVaultToolAllowedFolders.desc": "以逗号分隔的文件夹，LLM 仓库工具和由 LLM 触发的技能工作流可以访问这些文件夹。留空则允许访问整个仓库。这不会限制 RAG、手动附件、@note 提及、MCP 工具、脚本或 shell 命令。",
   "settings.cloudVaultToolAllowedFolders.placeholder": "示例：Public, Shared/Docs",
 
-  "command.createDashboard": "创建仪表板",
 };

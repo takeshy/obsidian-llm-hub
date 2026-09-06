@@ -1,17 +1,9 @@
 // Korean translations
 export const ko: Record<string, string> = {
   // Settings - Headings
-  "settings.api": "API",
   "settings.cliProviders": "CLI 제공자",
-  "settings.workspace": "워크스페이스",
-  "settings.toolLimits": "도구 제한",
-  "settings.slashCommands": "슬래시 명령어",
-  "settings.rag": "시맨틱 검색 (RAG)",
-  "settings.advancedSemanticSearch": "고급 시맨틱 검색",
 
   // Settings - API
-  "settings.googleApiKey.placeholder": "API 키를 입력하세요",
-  "settings.showOrHideApiKey": "API 키 표시/숨기기",
 
   // Settings - CLI
   "settings.cliIntro": "CLI 제공자를 확인하여 모델로 사용하세요. 확인된 제공자는 모델 선택에 표시됩니다.",
@@ -117,91 +109,16 @@ export const ko: Record<string, string> = {
   "chat.noApiProvider": "API 제공자가 설정되지 않았습니다. 설정에서 제공자를 추가하고 확인하세요.",
 
   // Settings - Workspace
-  "settings.workspaceFolder": "워크스페이스 폴더",
-  "settings.workspaceFolder.desc": "채팅 기록, RAG 인덱스, 워크플로 기록을 저장할 폴더 이름. \".\"로 시작하는 이름(예: \".LLMHub\")을 사용하면 Obsidian 검색 및 파일 탐색기에서 숨길 수 있습니다.",
-  "settings.workspaceFolder.invalidPath": "절대 경로와 \"..\"는 사용할 수 없습니다. 보관함 내의 폴더 이름을 지정하세요.",
-  "settings.moveWorkspaceFolder": "기존 데이터를 \"{{from}}\"에서 \"{{to}}\"로 이동하시겠습니까?",
-  "settings.moveWorkspaceFolder.move": "이동",
-  "settings.moveWorkspaceFolder.skip": "건너뛰기",
-  "settings.moveWorkspaceFolder.error": "워크스페이스 폴더 이동 실패: {{error}}",
-
-  "settings.hideWorkspaceFolder": "워크스페이스 폴더 숨기기",
-  "settings.hideWorkspaceFolder.desc": "파일 탐색기에서 워크스페이스 폴더를 숨깁니다",
-  "settings.saveChatHistory": "채팅 기록 저장",
-  "settings.saveChatHistory.desc": "채팅 대화를 워크스페이스 폴더에 Markdown 파일로 저장",
-  "settings.deleteChatHistoryConfirm": "기존 채팅 기록 파일을 모두 삭제하시겠습니까?",
-  "settings.chatHistoryDeleted": "{{count}}개의 채팅 기록 파일이 삭제되었습니다",
-  "settings.systemPrompt": "시스템 프롬프트",
-  "settings.systemPrompt.desc": "AI 어시스턴트를 위한 추가 지침",
-  "settings.systemPrompt.placeholder": "질문과 같은 언어로 응답하세요.",
 
   // Settings - Tool limits
-  "settings.maxToolCalls": "요청당 최대 도구 호출 횟수",
-  "settings.maxToolCalls.desc": "단일 응답 중 함수 호출의 상한",
-  "settings.toolCallWarning": "도구 호출 경고 임계값",
-  "settings.toolCallWarning.desc": "남은 호출 횟수가 이 숫자 이하일 때 경고",
-  "settings.listNotesLimit": "기본 list_notes 제한",
-  "settings.listNotesLimit.desc": "제한이 지정되지 않았을 때 list_notes가 반환하는 최대 노트 수",
-  "settings.maxNoteChars": "최대 노트 문자 수",
-  "settings.maxNoteChars.desc": "노트에서 읽을 최대 문자 수 (긴 노트는 잘림)",
-  "settings.resetToDefault": "기본값으로 재설정 ({{value}})",
 
   // Settings - Slash commands
-  "settings.manageCommands": "명령어 관리",
-  "settings.manageCommands.desc": "채팅에서 /를 입력하여 트리거되는 재사용 가능한 프롬프트 템플릿 생성",
-  "settings.addCommand": "명령어 추가",
-  "settings.editCommand": "명령어 편집",
-  "settings.deleteCommand": "명령어 삭제",
-  "settings.commandCreated": "명령어 \"/{{name}}\" 생성됨",
-  "settings.commandUpdated": "명령어 \"/{{name}}\" 업데이트됨",
-  "settings.commandDeleted": "명령어 \"/{{name}}\" 삭제됨",
 
   // Settings - Slash command modal
-  "settings.createSlashCommand": "슬래시 명령어 생성",
-  "settings.editSlashCommand": "슬래시 명령어 편집",
-  "settings.commandName": "명령어 이름",
-  "settings.commandName.desc": "명령어를 트리거하는 데 사용되는 이름 (예: 'translate')",
-  "settings.commandName.placeholder": "예: translate",
-  "settings.commandName.required": "명령어 이름은 필수입니다",
-  "settings.description": "설명",
-  "settings.description.desc": "자동 완성에 표시되는 간단한 설명",
-  "settings.description.placeholder": "텍스트를 한국어로 번역",
-  "settings.promptTemplate": "프롬프트 템플릿",
-  "settings.promptTemplate.desc": "{selection}으로 선택한 텍스트 (선택이 없으면 활성 노트로 대체), {content}로 활성 노트",
-  "settings.promptTemplate.placeholder": "다음을 한국어로 번역하세요:\n\n{selection}",
-  "settings.promptTemplate.required": "프롬프트 템플릿은 필수입니다",
-  "settings.modelOptional": "모델 (선택)",
-  "settings.modelOptional.desc": "이 명령어 사용 시 현재 모델을 재정의",
-  "settings.useCurrentModel": "현재 모델 사용",
-  "settings.searchOptional": "검색 (선택)",
-  "settings.searchOptional.desc": "이 명령어 사용 시 현재 검색 설정을 재정의",
-  "settings.useCurrentSetting": "현재 설정 사용",
-  "settings.confirmEdits": "편집 확인",
-  "settings.confirmEdits.desc": "propose_edit에 적용/취소 버튼 표시 (비활성화하면 자동 적용)",
-  "settings.vaultToolModeOptional": "보관함 도구 (선택사항)",
-  "settings.vaultToolModeOptional.desc": "이 명령어 사용 시 보관함 도구 모드를 재정의",
-  "settings.mcpServersOptional": "MCP 서버 (선택사항)",
-  "settings.mcpServersOptional.desc": "이 명령어 사용 시 활성화할 MCP 서버를 재정의",
 
   // Settings - RAG
-  "settings.enableRag": "시맨틱 검색 (RAG) 활성화",
-  "settings.enableRag.desc": "AI로 보관함을 검색하는 시맨틱 검색 활성화",
-  "settings.retrievedChunksLimit": "검색 청크 제한",
-  "settings.retrievedChunksLimit.desc": "쿼리당 검색할 최대 문서 청크 수 (적을수록 토큰이 적고 빠름)",
   "settings.scoreThreshold": "Score threshold",
   "settings.scoreThreshold.desc": "Minimum similarity score (0.0-1.0) to include in results. 0 = no filtering",
-  "settings.ragSetting": "RAG 설정",
-  "settings.ragSetting.desc": "사용할 RAG 설정 선택 또는 생성",
-  "settings.createRagSetting": "새 RAG 설정 생성",
-  "settings.ragSettingCreated": "RAG 설정 \"{{name}}\" 생성됨",
-  "settings.renameRagSetting": "RAG 설정 이름 변경",
-  "settings.renamedTo": "\"{{name}}\"으로 이름 변경됨",
-  "settings.settingsFor": "{{name}} 설정",
-  "settings.configureThisSetting": "이 RAG 설정 구성",
-  "settings.renameSetting": "설정 이름 변경",
-  "settings.deleteSetting": "삭제",
-  "settings.deleteSettingConfirm": "RAG 설정 \"{{name}}\"을(를) 삭제하시겠습니까? 서버의 스토어는 삭제되지 않습니다.",
-  "settings.ragSettingDeleted": "RAG 설정 \"{{name}}\" 삭제됨",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "Embedding model",
@@ -223,12 +140,10 @@ export const ko: Record<string, string> = {
   "settings.localClearIndex.desc": "Delete the local embedding index and vectors",
   "settings.localClearConfirm": "Are you sure you want to clear the local embedding index? You will need to re-sync to use local RAG.",
   "settings.localIndexCleared": "Local embedding index cleared",
-  "settings.ragMode": "Index mode",
   "settings.ragMode.desc": "Choose whether this setting builds its own index, combines internal indexes, or loads external indexes",
   "settings.ragMode.internal": "Internal",
   "settings.ragMode.combined": "Combine internal",
   "settings.ragMode.external": "External",
-  "settings.ragSourceSettings": "Source RAG settings",
   "settings.ragSourceSettings.desc": "Select the internal RAG settings to search together",
   "settings.ragSourceSettings.empty": "No internal RAG settings available",
   "settings.externalIndex": "Use external index",
@@ -252,33 +167,17 @@ export const ko: Record<string, string> = {
   "settings.localEmbeddingApiKey": "임베딩 API 키",
   "settings.localEmbeddingApiKey.desc": "임베딩 서버용 API 키 (선택사항)",
   "settings.localEmbeddingApiKey.placeholder": "임베딩 API 키 입력",
-  "settings.targetFolders": "대상 폴더",
-  "settings.targetFolders.desc": "시맨틱 검색 인덱싱에 포함할 폴더 (쉼표로 구분). 비워두면 모든 폴더 포함.",
-  "settings.targetFolders.placeholder": "예: notes, projects, docs",
-  "settings.excludedPatterns": "제외 패턴 (정규식)",
-  "settings.excludedPatterns.desc": "파일을 제외하는 정규 표현식 패턴 (한 줄에 하나씩). 예: ^daily/, \\.excalidraw\\.md$",
-  "settings.excludedPatterns.placeholder": "^daily/\n\\.excalidraw\\.md$\n^templates/",
   "settings.searchFileExtensions": "검색 파일 확장자",
   "settings.searchFileExtensions.desc": "검색 결과에 포함할 파일 확장자를 쉼표로 구분 (비어 있으면 전체). 예: md, pdf",
   "settings.searchFileExtensions.placeholder": "md, pdf",
 
   // Settings - Sync
-  "settings.syncStatusNever": "없음",
-  "settings.cancelSync": "취소",
-  "settings.cancellingSync": "동기화 취소 중...",
-  "settings.syncCancelled": "동기화 취소됨",
-  "settings.syncPreparing": "준비 중...",
-  "settings.syncFailed": "동기화 실패: {{error}}",
 
   // Settings - RAG Files Modal
 
   // Common buttons
   "common.ok": "확인",
-  "common.save": "저장",
-  "common.create": "생성",
-  "common.reset": "재설정",
   "common.error": "오류: ",
-  "common.none": "없음",
 
   // RAG Setting Name Modal
   "modal.nameCannotBeEmpty": "이름은 비워둘 수 없습니다",
@@ -286,268 +185,65 @@ export const ko: Record<string, string> = {
   "modal.enterName": "이름 입력",
 
   // Chat
-  "chat.title": "Chat",
-  "tab.workflowSkill": "워크플로우 / 스킬",
-  "chat.saveAsNote": "노트로 저장",
   "chat.savedAsNote": "{{path}}에 저장됨",
-  "chat.newChat": "새 채팅",
-  "chat.chatHistory": "채팅 기록",
-  "chat.noChatHistory": "채팅 기록이 없습니다",
   "chat.chatDeleted": "채팅 삭제됨",
-  "chat.configRequired": "설정 필요",
-  "chat.configRequiredDesc": "AI 채팅을 사용하려면 설정에서 다음 중 하나를 구성하세요:",
-  "chat.configApiKey": "Google API 키",
-  "chat.configApiKeyDesc": "Gemini API를 직접 사용하려면 API 키를 설정하세요",
   "chat.configGeminiCli": "Antigravity CLI",
   "chat.configGeminiCliDesc": "CLI 모드를 활성화하고 Antigravity CLI가 작동하는지 확인하세요",
   "chat.configClaudeCli": "Claude CLI",
   "chat.configClaudeCliDesc": "CLI 모드를 활성화하고 Claude CLI가 작동하는지 확인하세요",
   "chat.configLocalLlm": "로컬 LLM",
   "chat.configLocalLlmDesc": "로컬 LLM 서버에 연결 (Ollama, LM Studio 등)",
-  "chat.openSettings": "설정 → LLM Hub를 열어 구성하세요.",
-  "chat.clientNotInitialized": "Gemini 클라이언트가 초기화되지 않았습니다. API 키를 설정하세요.",
-  "chat.rateLimitFree": "선택한 모델이 속도 제한되었습니다. 내일까지 다른 모델을 사용하세요.",
   "chat.rateLimitPaid": "이 모델이 속도 제한될 수 있습니다. 내일까지 다른 모델을 시도하세요.",
-  "chat.rateLimitRetrying": "속도 제한이 감지되었습니다. {{seconds}}초 후 재시도 ({{attempt}}/{{max}})...",
   "chat.errorOccurred": "죄송합니다, 오류가 발생했습니다: {{message}}",
   "chat.unknownError": "알 수 없는 오류",
   "chat.localLlmNotConfigured": "선택한 로컬 LLM 항목이 구성되지 않았습니다. 다른 모델을 선택하거나 설정에서 추가하세요.",
-  "chat.generationStopped": "_(생성 중지됨)_",
-  "chat.generationInProgress": "AI가 생성 중입니다. 중지한 다음 계속해 주세요.",
-  "chat.welcomeTitle": "AI와 대화를 시작하세요",
-  "chat.welcomeHint": "노트에 대해 질문하거나, 새로 만들거나, 보관함을 검색하세요.",
-  "chat.welcomeThinking": "지원되는 모델에서 깊은 사고 모드를 사용할 수 있습니다",
-  "chat.welcomeImage": "\"이미지 생성\"이나 \"그림 그려\"로 이미지 모델로 자동 전환됩니다",
-  "chat.welcomeCompact": "/compact를 입력하면 긴 대화를 요약해 새 채팅으로 이어갑니다",
-  "chat.welcomeNewChat": "Gemini는 기억력이 없어 매번 전체 채팅 기록이 전송됩니다. 주제를 바꿀 때는 반드시 + 버튼을 눌러 새 채팅을 시작하세요",
   "chat.compactNotAvailable": "CLI 모드에서는 압축을 사용할 수 없습니다",
-  "chat.compacted": "대화 압축 완료: {{before}}개 메시지 → {{after}}개",
-  "chat.compactedContext": "압축된 대화 컨텍스트",
-  "chat.compactFailed": "대화 압축에 실패했습니다",
-  "chat.compacting": "압축 중...",
   "chat.yesterday": "어제",
 
   // InputArea
-  "input.placeholder": "메시지를 입력하세요... (Enter로 전송, Shift+Enter로 줄바꿈)",
-  "input.placeholderMobile": "메시지를 입력하세요...",
-  "input.send": "메시지 보내기",
-  "input.stop": "생성 중지",
-  "input.fileTooLarge": "파일이 너무 큽니다 (최대 20MB): {{name}}",
-  "input.removeAttachment": "첨부 파일 제거",
-  "input.searchNone": "검색: 없음",
-  "input.webSearch": "웹 검색",
-  "input.rag": "시맨틱 검색: {{name}}",
-  "input.vaultToolTitle": "볼트 도구 설정",
-  "input.vaultToolLabel": "볼트 도구",
-  "input.vaultToolAll": "Vault: 전체",
-  "input.vaultToolNoSearch": "Vault: 검색 제외",
-  "input.vaultToolReadOnly": "Vault: 읽기 전용",
-  "input.vaultToolNone": "Vault: 끄기",
-  "input.mcpServersLabel": "외부 도구 (MCP)",
-  "input.close": "닫기",
-  "input.ragSettings": "인덱스 설정",
-  "input.ragChunkSize": "청크 크기",
-  "input.ragChunkOverlap": "청크 오버랩",
   "input.ragPdfChunkPages": "PDF 청크 페이지 수",
-  "input.ragTargetFolders": "대상 폴더",
-  "input.ragTargetFolders.placeholder": "예: notes, projects, docs",
-  "input.ragExcludedPatterns": "제외 패턴 (정규식)",
-  "input.ragExcludedPatterns.placeholder": "예: ^daily/",
-  "input.ragIndexedFiles": "인덱싱된 파일 ({{count}})",
-  "input.ragNoIndexedFiles": "아직 인덱싱된 파일이 없습니다",
-  "input.ragLastSync": "마지막 동기화",
   "input.thinkingLabel": "항상 사고",
-  "input.selectionVariable": "편집기에서 선택한 텍스트",
-  "input.contentVariable": "활성 노트 내용",
-  "input.vaultFile": "볼트 파일",
-  "input.openFile": "파일 열기 (Ctrl+Shift+O)",
-  "input.collapse": "입력 영역 축소",
-  "input.expand": "입력 영역 확대",
 
   // MessageBubble
-  "message.you": "나",
-  "message.assistant": "AI",
-  "message.copyToClipboard": "클립보드에 복사",
-  "message.imageCopied": "이미지가 클립보드에 복사됨",
-  "message.imageCopyFailed": "이미지 복사 실패",
-  "message.webSearchUsed": "웹 검색 사용됨",
-  "message.imageGenerated": "이미지 생성됨",
-  "message.rag": "RAG",
-  "message.clickToOpen": "클릭하여 열기: {{source}}",
-  "message.clickToSeeDetails": "클릭하여 세부 정보 보기",
-  "message.openWorkflow": "워크플로우 열기",
-  "message.workflowErrorHint": "팁: 워크플로우를 열고 AI로 수정하며, 실행 이력을 참조하여 실패한 단계를 선택한 후 AI에게 수정을 요청하세요.",
-  "message.htmlInfographic": "HTML 인포그래픽",
-  "message.preview": "미리보기",
-  "message.previewHtml": "HTML 미리보기",
-  "message.saveHtml": "볼트에 저장",
-  "message.downloadHtml": "HTML 다운로드",
-  "message.savedTo": "{{path}}에 저장됨",
-  "message.saveFailed": "저장 실패: {{error}}",
-  "message.copyImage": "이미지 복사",
-  "message.downloadImage": "이미지 다운로드",
-  "message.mermaidFlowchart": "Mermaid 플로우차트",
-  "message.edited": "편집됨",
-  "message.applyChanges": "변경 사항 적용",
-  "message.discard": "취소",
-  "message.discardChanges": "변경 사항 취소",
-  "message.regenerate": "재생성",
-  "message.editFeedbackHeader": "\"{{filePath}}\"에 대한 편집 제안이 거부되었습니다.",
-  "message.editFeedbackUserRequest": "피드백:",
-  "message.editFeedbackRetry": "다른 접근 방식으로 다시 시도해 주세요.",
   // Diff viewer
   "diff.restoreSize": "크기 복원",
-  "diff.lineComments": "줄 코멘트",
-  "diff.lineCommentsCount": "{{count}}개의 줄 코멘트",
-  "diff.generalFeedback": "전체 피드백 (선택사항)",
-  "message.appliedChanges": "변경 사항 적용됨:",
-  "message.discardedChanges": "변경 사항 취소됨",
-  "message.deleted": "삭제됨",
-  "message.cancelledDeletion": "삭제 취소됨:",
-  "message.failedToDelete": "삭제 실패",
-  "message.renamed": "이름 변경됨",
-  "message.cancelledRename": "이름 변경 취소",
-  "message.failedToRename": "이름 변경 실패",
 
   // Tool display labels
-  "tool.read": "읽기",
-  "tool.created": "생성됨",
-  "tool.updated": "업데이트됨",
-  "tool.deleted": "삭제됨",
-  "tool.renamed": "이름 변경됨",
-  "tool.searched": "검색됨",
-  "tool.listed": "목록",
-  "tool.listedFolders": "폴더 목록",
-  "tool.createdFolder": "폴더 생성됨",
-  "tool.gotActiveNote": "활성 노트 가져옴",
-  "tool.checkedSync": "동기화 확인됨",
-  "tool.editing": "편집 중",
-  "tool.applied": "적용됨",
-  "tool.discarded": "취소됨",
 
   // Workflow Panel - Node Types
-  "workflow.nodeType.imageGeneration": "이미지 생성",
 
   // Workflow Panel - UI Strings
-  "workflow.noWorkflows": "워크플로우 없음",
-  "workflow.aiModify": "AI 수정",
-  "workflow.running": "실행 중...",
-  "workflow.mustHaveNameForHotkey": "단축키를 활성화하려면 워크플로우에 이름이 있어야 합니다",
-  "workflow.mustHaveNameForEvent": "이벤트 트리거를 활성화하려면 워크플로우에 이름이 있어야 합니다",
-  "workflow.noWorkflowToExport": "내보낼 워크플로우가 없습니다",
 
   // Common - Edit
 
   // Edit Confirmation Modal
-  "editModal.confirmFileWrite": "파일 쓰기 확인",
-  "editModal.confirmFileDeletion": "파일 삭제 확인",
-  "editModal.confirmBulkEdit": "일괄 편집 확인",
-  "editModal.confirmBulkDelete": "일괄 삭제 확인",
-  "editModal.createNewFile": "새 파일 생성",
-  "editModal.appendToFile": "파일에 추가",
-  "editModal.overwriteFile": "파일 덮어쓰기",
-  "editModal.file": "파일:",
-  "editModal.changes": "변경 사항:",
-  "editModal.contentToDelete": "삭제할 내용:",
-  "editModal.moveToTrash": "휴지통으로 이동",
-  "editModal.selectAll": "모두 선택",
-  "editModal.deselectAll": "모두 선택 해제",
-  "editModal.applyCount": "적용 ({{count}})",
-  "editModal.deleteCount": "삭제 ({{count}})",
-  "editModal.previewShow": "미리보기",
-  "editModal.previewHide": "숨기기",
 
   // Value Prompt Modal
-  "valueModal.title": "값 입력",
-  "valueModal.placeholder": "값을 입력하세요...",
 
   // Dialog Prompt Modal (titles passed dynamically)
 
   // Edit History
-  "settings.editHistory": "편집 기록",
-  "settings.editHistoryEnabled": "편집 기록 활성화",
-  "settings.editHistoryEnabled.desc": "AI가 노트에 적용한 변경 사항을 추적합니다 (unified diff 형식)",
-  "settings.editHistoryContextLines": "컨텍스트 줄 수",
-  "settings.editHistoryContextLines.desc": "diff의 컨텍스트 줄 수",
-  "settings.editHistoryViewStats": "통계 보기",
-  "settings.editHistoryStats": "{{files}}개 파일, {{entries}}개 항목",
-  "settings.editHistoryCleared": "{{count}}개의 편집 기록 항목 삭제됨",
 
   // Workflow Modals
 
   // Edit History Modal
-  "editHistoryModal.title": "편집 기록: {{file}}",
-  "editHistoryModal.unsavedChanges": "저장되지 않은 변경 사항",
-  "editHistoryModal.current": "현재",
-  "editHistoryModal.original": "(원본 - 기록 없음)",
-  "editHistoryModal.workflow": "워크플로우",
-  "editHistoryModal.proposeEdit": "propose_edit",
-  "editHistoryModal.diff": "차이",
-  "editHistoryModal.restore": "복원",
-  "editHistoryModal.clearAll": "기록 지우기",
-  "editHistoryModal.entriesCount": "{{count}}개 항목",
-  "editHistoryModal.noHistory": "이 파일의 편집 기록이 없습니다",
-  "editHistoryModal.confirmClear": "첫 번째 편집 전 상태로 복원하고 기록을 지우시겠습니까?",
   "editHistoryModal.confirmClearWithRemote": "원격 상태로 복원하고 기록을 지우시겠습니까?",
-  "editHistoryModal.confirmRestore": "이 버전을 복원하시겠습니까? 현재 내용이 덮어씌워집니다.",
-  "editHistoryModal.restored": "{{timestamp}} 버전으로 복원되었습니다",
-  "editHistoryModal.restoreFailed": "복원 실패: 내용을 재구성할 수 없습니다",
-  "editHistoryModal.cleared": "기록이 지워졌습니다",
-  "editHistoryModal.revertToBase": "기본으로 되돌리기",
-  "editHistoryModal.confirmRevertToBase": "기본 스냅샷으로 되돌리시겠습니까? 저장되지 않은 변경 사항이 삭제됩니다.",
-  "editHistoryModal.revertedToBase": "기본 스냅샷으로 되돌렸습니다",
-  "editHistoryModal.close": "닫기",
-  "editHistoryModal.copy": "복사",
-  "editHistoryModal.copyTo": "복사 위치",
-  "editHistoryModal.copied": "{{path}}에 복사됨",
-  "editHistoryModal.copyFailed": "복사 실패",
-  "editHistoryModal.fileExists": "파일이 이미 존재합니다",
 
   // Diff Modal
-  "diffModal.title": "차이: {{timestamp}} - {{source}}",
-  "diffModal.restoreVersion": "이 버전으로 복원",
-  "diffModal.close": "닫기",
-  "diffModal.additions": "+{{count}}",
-  "diffModal.deletions": "-{{count}}",
-  "diffModal.before": "변경 전",
-  "diffModal.after": "변경 후",
 
   // Edit History Buttons
-  "editHistory.showHistory": "편집 기록 보기",
-  "editHistory.saveSnapshot": "스냅샷 저장",
-  "editHistory.noActiveFile": "활성 파일 없음",
-  "editHistory.notInitialized": "편집 기록이 초기화되지 않았습니다",
-  "editHistory.saved": "스냅샷 저장됨",
-  "editHistory.noChanges": "저장할 변경 사항 없음",
-  "editHistoryModal.manual": "수동",
-  "editHistoryModal.auto": "자동",
   "editHistoryModal.showRemote": "원격 보기",
   "editHistoryModal.loadingRemote": "로딩 중...",
   "editHistoryModal.originLocal": "로컬",
   "editHistoryModal.originRemote": "원격",
 
   // Status bar
-  "statusBar.snapshot": "스냅샷",
-  "statusBar.snapshotTooltip": "현재 상태를 스냅샷으로 저장",
-  "statusBar.snapshotSaved": "스냅샷 저장됨",
-  "statusBar.history": "기록",
-  "statusBar.historyTooltip": "편집 기록 보기",
 
   // Commands
-  "command.showEditHistory": "편집 기록 보기",
-  "command.restorePreviousVersion": "이전 버전으로 복원",
-  "command.encryptFile": "현재 파일 암호화",
-  "command.decryptFile": "현재 파일 복호화",
-  "command.runWorkflow": "워크플로우 실행",
-  "command.compact": "대화 기록 압축",
 
   // Workflow Selector Modal
-  "workflowSelector.selectWorkflow": "워크플로우 선택",
 
   // Errors
-  "error.failedToCreate": "생성 실패: {{error}}",
-  "error.failedToRename": "이름 변경 실패: {{error}}",
-  "error.failedToDelete": "설정 삭제 실패: {{error}}",
 
   // Encryption
   "settings.encryption": "암호화",
@@ -572,25 +268,16 @@ export const ko: Record<string, string> = {
   "settings.encryptionResetKeys.desc": "새 암호화 키를 생성합니다. 이전에 암호화된 채팅은 읽을 수 없게 됩니다.",
   "settings.encryptionResetKeysConfirm": "암호화 키를 재설정하시겠습니까? 이전에 암호화된 모든 채팅 기록을 읽을 수 없게 됩니다.",
   "settings.encryptionKeysReset": "암호화 키가 재설정되었습니다",
-  "settings.encryptionDisableConfirm": "암호화를 비활성화하시겠습니까? 암호화된 채팅 기록은 암호화된 상태로 유지되며 비밀번호가 필요합니다.",
 
   // Decryption
   "chat.encryptedChat": "암호화된 채팅",
-  "chat.enterPasswordToDecrypt": "내용을 보려면 비밀번호 입력",
-  "chat.decryptPassword": "비밀번호",
-  "chat.decryptPassword.placeholder": "복호화 비밀번호 입력",
-  "chat.decrypt": "복호화",
   "chat.decryptFailed": "복호화 실패. 비밀번호를 확인하세요.",
   "chat.decrypted": "복호화 성공",
 
   // Workflow Generation Modal
-  "workflow.generation.generating": "생성 중",
   "workflow.generation.generatingWithCli": "{{cli}}로 생성 중",
-  "workflow.generation.reviewSummary": "요약",
 
   // Workflow Preview Modal
-  "workflow.preview.no": "수정하기",
-  "workflow.preview.regenerate": "다시 생성",
 
   // Workflow Confirm Modal
 
@@ -599,28 +286,8 @@ export const ko: Record<string, string> = {
   // Workflow Execution Modal
 
   // CryptView - File Encryption
-  "crypt.encryptFile": "파일 암호화",
 
   // MCP Server Settings
-  "settings.mcpServers": "MCP 서버",
-  "settings.mcpServers.desc": "추가 도구를 위한 외부 MCP (Model Context Protocol) 서버 구성",
-  "settings.mcpServersIntro": "MCP 서버는 추가 도구를 제공합니다. 서버를 추가하여 도구를 활성화하세요.",
-  "settings.addMcpServer": "서버 추가",
-  "settings.mcpServerName": "서버 이름",
-  "settings.mcpServerName.placeholder": "내 MCP 서버",
-  "settings.mcpServerUrl": "서버 URL",
-  "settings.mcpServerUrl.placeholder": "https://example.com/mcp",
-  "settings.mcpServerHeaders": "헤더 (JSON)",
-  "settings.mcpServerHeaders.placeholder": "{\"Authorization\": \"Bearer xxx\"}",
-  "settings.mcpServerHeaders.desc": "인증을 위한 선택적 헤더 (JSON 형식)",
-  "settings.editMcpServer": "MCP 서버 편집",
-  "settings.createMcpServer": "MCP 서버 추가",
-  "settings.mcpServerCreated": "MCP 서버 \"{{name}}\" 추가됨",
-  "settings.mcpServerUpdated": "MCP 서버 \"{{name}}\" 업데이트됨",
-  "settings.mcpServerDeleted": "MCP 서버 \"{{name}}\" 삭제됨",
-  "settings.mcpServerNameRequired": "서버 이름은 필수입니다",
-  "settings.mcpServerUrlRequired": "서버 URL은 필수입니다",
-  "settings.mcpServerInvalidHeaders": "헤더의 JSON 형식이 잘못되었습니다",
   "settings.mcpTransport": "전송 방식",
   "settings.mcpTransport.http": "HTTP (Streamable HTTP)",
   "settings.mcpTransport.stdio": "Stdio (로컬 프로세스)",
@@ -637,67 +304,24 @@ export const ko: Record<string, string> = {
   "settings.mcpServerEnv.desc": "서버 프로세스의 선택적 환경 변수 (JSON 형식)",
   "settings.mcpServerCommandRequired": "Stdio 전송에는 명령어가 필요합니다",
   "settings.mcpServerInvalidEnv": "환경 변수의 JSON 형식이 잘못되었습니다",
-  "settings.testMcpConnection": "연결 테스트",
-  "settings.mcpConnectionSuccess": "연결 성공! {{count}}개의 도구를 사용할 수 있습니다",
-  "settings.mcpConnectionFailed": "연결 실패: {{error}}",
-  "settings.mcpNoServers": "구성된 MCP 서버가 없습니다",
-  "settings.testConnectionRequired": "저장 전 연결 테스트가 필요합니다",
-  "settings.mcpToolHints": "도구: {{tools}}",
 
   // Input - MCP tool hint
-  "input.mcpToolHint": "({{count}}개 도구: {{tools}})",
 
   // Skills Settings
 
   // Skills UI
-  "skills.add": "스킬 추가",
-  "message.skillsUsed": "스킬",
 
   // HTML Preview Modal
-  "htmlPreview.title": "인포그래픽 미리보기",
-  "htmlPreview.copyCode": "코드 복사",
 
   // AI Workflow Modal
-  "aiWorkflow.createAsSkill": "에이전트 스킬로 생성",
 
   // Edit History Modal
-  "editHistoryModal.notInitialized": "편집 기록 관리자가 초기화되지 않았습니다",
 
   // Node Editor Modal
-  "nodeEditor.workflowName": "워크플로우 이름",
-  "nodeEditor.workflowName.placeholder": "워크플로우 이름 (파일에 여러 개가 있는 경우)",
 
   // MCP Apps
-  "mcpApp.loading": "MCP App 로딩 중...",
-  "mcpApp.resourceNotFound": "UI 리소스를 찾을 수 없습니다",
-  "mcpApp.fetchError": "UI 리소스를 가져오지 못했습니다",
-  "mcpApp.expand": "확대",
-  "mcpApp.collapse": "축소",
-  "mcpApp.error": "MCP App 오류",
-  "mcpApp.decodeError": "바이너리 콘텐츠 디코딩 실패",
 
   // Langfuse settings
-  "settings.langfuse": "Langfuse 관측성",
-  "settings.langfuseNotAvailable": "이 빌드에는 Langfuse가 포함되어 있지 않습니다. Langfuse 지원으로 빌드하려면 'npm run build:langfuse'를 사용하세요.",
-  "settings.langfusePublicKey": "공개 키",
-  "settings.langfusePublicKey.desc": "Langfuse 프로젝트 공개 키",
-  "settings.langfusePublicKey.placeholder": "공개 키를 입력하세요",
-  "settings.langfuseSecretKey": "비밀 키",
-  "settings.langfuseSecretKey.desc": "Langfuse 프로젝트 비밀 키",
-  "settings.langfuseSecretKey.placeholder": "비밀 키를 입력하세요",
-  "settings.langfuseBaseUrl": "기본 URL",
-  "settings.langfuseBaseUrl.desc": "Langfuse 서버 URL (cloud.langfuse.com을 사용하려면 비워두세요)",
-  "settings.langfuseLogPrompts": "프롬프트 기록",
-  "settings.langfuseLogPrompts.desc": "추적에 프롬프트 내용 포함 (개인정보: 기본적으로 비활성화, 대신 [redacted] 전송)",
-  "settings.langfuseLogResponses": "응답 기록",
-  "settings.langfuseLogResponses.desc": "추적에 응답 내용 포함 (개인정보: 기본적으로 비활성화, 대신 [redacted] 전송)",
-  "settings.langfuseTestConnection": "연결 테스트",
-  "settings.langfuseTestConnection.desc": "Langfuse 연결을 확인하기 위해 테스트 추적 전송",
-  "settings.langfuseTestBtn": "테스트 추적 전송",
-  "settings.langfuseTesting": "테스트 중...",
-  "settings.langfuseTestSuccess": "테스트 추적이 성공적으로 전송되었습니다! Langfuse 대시보드를 확인하세요.",
-  "settings.langfuseTestFailed": "테스트 추적 실패: {{error}}",
-  "settings.langfuseTestMissingKeys": "먼저 공개 키와 비밀 키를 모두 입력하세요",
 
   // Discord integration
   "settings.discord": "Discord 통합",
@@ -736,44 +360,8 @@ export const ko: Record<string, string> = {
   "settings.discordMaxResponseLength.desc": "Discord 메시지당 최대 문자 수 (Discord 제한: 2000)",
 
   // Search tab
-  "search.tab": "RAG 검색",
-  "search.queryPlaceholder": "검색어를 입력하세요...",
-  "search.search": "검색",
-  "search.noRagSetting": "RAG 설정이 선택되지 않았습니다",
-  "search.noRagSettings": "사용 가능한 RAG 설정이 없습니다",
-  "search.noRagSettingsGuide": "시맨틱 검색을 사용하려면 플러그인 설정에서 RAG 설정을 등록하세요.",
-  "search.openSettings": "설정 열기",
-  "search.enterQuery": "검색어를 입력해 주세요",
-  "search.ragSettingNotFound": "RAG 설정을 찾을 수 없습니다",
-  "search.searchFailed": "검색에 실패했습니다",
-  "search.noResults": "결과를 찾을 수 없습니다",
-  "search.selectAll": "전체 선택",
-  "search.results": "건",
-  "search.chatWithSelected": "선택 항목으로 채팅",
   "search.discussWithSelected": "선택 항목으로 토론",
-  "search.selected": "선택됨",
-  "search.editChunk": "청크 편집",
-  "search.loadPrevChunk": "이전 청크 로드",
-  "search.loadNextChunk": "다음 청크 로드",
-  "search.keywordFilter": "키워드로 필터...",
-  "search.keywordFilterOr": "OR 키워드 (공백 구분)...",
-  "search.addFilter": "AND 조건 추가",
-  "search.addFilterLabel": "AND",
-  "search.removeFilter": "조건 삭제",
-  "search.aiSuggest": "AI로 유사 키워드 제안",
-  "search.aiSuggestFailed": "AI 키워드 제안 실패",
-  "search.aiUndo": "AI 제안 취소",
-  "search.refineWithAI": "AI로 정리",
-  "search.refining": "정리 중...",
-  "search.refineModel": "AI 정리 모델",
-  "search.refineModelNone": "없음 (AI 정리 비활성화)",
-  "search.refineModelRequired": "AI 정리를 활성화하려면 검색 설정에서 모델을 선택하세요",
-  "search.edited": "편집됨",
-  "search.selectResults": "최소 하나의 결과를 선택해 주세요",
-  "search.scoreThreshold": "최소 점수",
   "search.pdfMode": "PDF 결과",
-  "search.pdfMode.text": "텍스트로",
-  "search.pdfMode.pdf": "PDF 청크로",
   "search.helpTitle": "매개변수 도움말",
   "search.helpTopK": "Top K — 반환할 최대 결과 수.",
   "search.helpScoreThreshold": "최소 점수 — 최소 유사도 점수 (0.0–1.0). 이 값 미만의 결과는 제외됩니다.",
@@ -783,13 +371,10 @@ export const ko: Record<string, string> = {
   "search.helpPdfChunkPages": "PDF 청크 페이지 — PDF 인덱싱 시 하나의 청크로 묶는 페이지 수.",
 
   // RAG source modal
-  "ragSource.clickToView": "클릭하여 RAG 텍스트 보기/편집",
-
 
   // LLM vault tool folders
   "settings.cloudVaultToolAllowedFolders": "LLM 보관소 도구 폴더",
   "settings.cloudVaultToolAllowedFolders.desc": "LLM 보관소 도구와 LLM이 트리거한 스킬 워크플로가 접근할 수 있는 폴더(쉼표로 구분). 비워 두면 보관소 전체를 허용합니다. 이는 RAG, 수동 첨부, @note 멘션, MCP 도구, 스크립트 또는 셸 명령을 제한하지 않습니다.",
   "settings.cloudVaultToolAllowedFolders.placeholder": "예: Public, Shared/Docs",
 
-  "command.createDashboard": "대시보드 만들기",
 };

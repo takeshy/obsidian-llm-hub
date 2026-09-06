@@ -1,17 +1,9 @@
 // Italian translations
 export const it: Record<string, string> = {
   // Settings - Headings
-  "settings.api": "API",
   "settings.cliProviders": "Provider CLI",
-  "settings.workspace": "Area di lavoro",
-  "settings.toolLimits": "Limiti strumenti",
-  "settings.slashCommands": "Comandi slash",
-  "settings.rag": "Ricerca semantica (RAG)",
-  "settings.advancedSemanticSearch": "Ricerca semantica avanzata",
 
   // Settings - API
-  "settings.googleApiKey.placeholder": "Inserisci la tua chiave API",
-  "settings.showOrHideApiKey": "Mostra o nascondi la chiave API",
 
   // Settings - CLI
   "settings.cliIntro": "Verifica i provider CLI per usarli come modelli. I provider verificati appariranno nella selezione modelli.",
@@ -117,91 +109,16 @@ export const it: Record<string, string> = {
   "chat.noApiProvider": "Nessun provider API configurato. Aggiungi e verifica un provider nelle impostazioni.",
 
   // Settings - Workspace
-  "settings.workspaceFolder": "Cartella area di lavoro",
-  "settings.workspaceFolder.desc": "Nome della cartella per archiviare cronologia chat, indici RAG e cronologia dei flussi di lavoro. Usa un nome che inizia con \".\" (es. \".LLMHub\") per nasconderlo dalla ricerca e dall'esploratore file di Obsidian.",
-  "settings.workspaceFolder.invalidPath": "I percorsi assoluti e \"..\" non sono consentiti. Usa un nome di cartella all'interno del vault.",
-  "settings.moveWorkspaceFolder": "Spostare i dati esistenti da \"{{from}}\" a \"{{to}}\"?",
-  "settings.moveWorkspaceFolder.move": "Sposta",
-  "settings.moveWorkspaceFolder.skip": "Salta",
-  "settings.moveWorkspaceFolder.error": "Errore nello spostamento della cartella: {{error}}",
-
-  "settings.hideWorkspaceFolder": "Nascondi cartella area di lavoro",
-  "settings.hideWorkspaceFolder.desc": "Nascondi la cartella dell'area di lavoro dall'esploratore file",
-  "settings.saveChatHistory": "Salva cronologia chat",
-  "settings.saveChatHistory.desc": "Salva le conversazioni come file Markdown nella cartella di lavoro",
-  "settings.deleteChatHistoryConfirm": "Vuoi eliminare tutti i file della cronologia chat esistenti?",
-  "settings.chatHistoryDeleted": "{{count}} file della cronologia chat eliminati",
-  "settings.systemPrompt": "Prompt di sistema",
-  "settings.systemPrompt.desc": "Istruzioni aggiuntive per l'assistente IA",
-  "settings.systemPrompt.placeholder": "Rispondi nella stessa lingua della domanda.",
 
   // Settings - Tool limits
-  "settings.maxToolCalls": "Chiamate strumenti max per richiesta",
-  "settings.maxToolCalls.desc": "Limite superiore per chiamate funzione durante una singola risposta",
-  "settings.toolCallWarning": "Soglia avviso chiamate",
-  "settings.toolCallWarning.desc": "Avvisa quando le chiamate rimanenti sono a questo numero o inferiori",
-  "settings.listNotesLimit": "Limite predefinito list_notes",
-  "settings.listNotesLimit.desc": "Numero massimo di note restituite da list_notes se non specificato",
-  "settings.maxNoteChars": "Caratteri max per nota",
-  "settings.maxNoteChars.desc": "Caratteri massimi da leggere da una nota (note più lunghe verranno troncate)",
-  "settings.resetToDefault": "Ripristina predefinito ({{value}})",
 
   // Settings - Slash commands
-  "settings.manageCommands": "Gestisci comandi",
-  "settings.manageCommands.desc": "Crea modelli di prompt riutilizzabili attivati digitando / nella chat",
-  "settings.addCommand": "Aggiungi comando",
-  "settings.editCommand": "Modifica comando",
-  "settings.deleteCommand": "Elimina comando",
-  "settings.commandCreated": "Comando \"/{{name}}\" creato",
-  "settings.commandUpdated": "Comando \"/{{name}}\" aggiornato",
-  "settings.commandDeleted": "Comando \"/{{name}}\" eliminato",
 
   // Settings - Slash command modal
-  "settings.createSlashCommand": "Crea comando slash",
-  "settings.editSlashCommand": "Modifica comando slash",
-  "settings.commandName": "Nome comando",
-  "settings.commandName.desc": "Nome usato per attivare il comando (es., 'translate')",
-  "settings.commandName.placeholder": "Esempio: translate",
-  "settings.commandName.required": "Il nome del comando è obbligatorio",
-  "settings.description": "Descrizione",
-  "settings.description.desc": "Breve descrizione mostrata nell'autocompletamento",
-  "settings.description.placeholder": "Traduci testo in italiano",
-  "settings.promptTemplate": "Modello prompt",
-  "settings.promptTemplate.desc": "Usa {selection} per testo selezionato (usa nota attiva se nessuna selezione), {content} per nota attiva",
-  "settings.promptTemplate.placeholder": "Traduci quanto segue in italiano:\n\n{selection}",
-  "settings.promptTemplate.required": "Il modello prompt è obbligatorio",
-  "settings.modelOptional": "Modello (opzionale)",
-  "settings.modelOptional.desc": "Sostituisci il modello corrente usando questo comando",
-  "settings.useCurrentModel": "Usa modello corrente",
-  "settings.searchOptional": "Ricerca (opzionale)",
-  "settings.searchOptional.desc": "Sostituisci l'impostazione di ricerca corrente usando questo comando",
-  "settings.useCurrentSetting": "Usa impostazione corrente",
-  "settings.confirmEdits": "Conferma modifiche",
-  "settings.confirmEdits.desc": "Mostra pulsanti applica/annulla per propose_edit (disabilita per auto-applicazione)",
-  "settings.vaultToolModeOptional": "Strumenti del vault (opzionale)",
-  "settings.vaultToolModeOptional.desc": "Sostituisci la modalità strumenti del vault usando questo comando",
-  "settings.mcpServersOptional": "Server MCP (opzionale)",
-  "settings.mcpServersOptional.desc": "Sostituisci quali server MCP sono abilitati usando questo comando",
 
   // Settings - RAG
-  "settings.enableRag": "Abilita ricerca semantica (RAG)",
-  "settings.enableRag.desc": "Abilita la ricerca semantica per cercare nel vault con l'IA",
-  "settings.retrievedChunksLimit": "Limite frammenti recuperati",
-  "settings.retrievedChunksLimit.desc": "Numero massimo di frammenti documento da recuperare per query (meno = meno token, più veloce)",
   "settings.scoreThreshold": "Score threshold",
   "settings.scoreThreshold.desc": "Minimum similarity score (0.0-1.0) to include in results. 0 = no filtering",
-  "settings.ragSetting": "Impostazione RAG",
-  "settings.ragSetting.desc": "Seleziona o crea un'impostazione RAG",
-  "settings.createRagSetting": "Crea nuova impostazione RAG",
-  "settings.ragSettingCreated": "Impostazione RAG \"{{name}}\" creata",
-  "settings.renameRagSetting": "Rinomina impostazione RAG",
-  "settings.renamedTo": "Rinominato in \"{{name}}\"",
-  "settings.settingsFor": "Impostazioni per {{name}}",
-  "settings.configureThisSetting": "Configura questa impostazione RAG",
-  "settings.renameSetting": "Rinomina impostazione",
-  "settings.deleteSetting": "Elimina",
-  "settings.deleteSettingConfirm": "Sei sicuro di voler eliminare l'impostazione RAG \"{{name}}\"? Questo non eliminerà lo store dal server.",
-  "settings.ragSettingDeleted": "Impostazione RAG \"{{name}}\" eliminata",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "Embedding model",
@@ -223,12 +140,10 @@ export const it: Record<string, string> = {
   "settings.localClearIndex.desc": "Delete the local embedding index and vectors",
   "settings.localClearConfirm": "Are you sure you want to clear the local embedding index? You will need to re-sync to use local RAG.",
   "settings.localIndexCleared": "Local embedding index cleared",
-  "settings.ragMode": "Index mode",
   "settings.ragMode.desc": "Choose whether this setting builds its own index, combines internal indexes, or loads external indexes",
   "settings.ragMode.internal": "Internal",
   "settings.ragMode.combined": "Combine internal",
   "settings.ragMode.external": "External",
-  "settings.ragSourceSettings": "Source RAG settings",
   "settings.ragSourceSettings.desc": "Select the internal RAG settings to search together",
   "settings.ragSourceSettings.empty": "No internal RAG settings available",
   "settings.externalIndex": "Use external index",
@@ -252,33 +167,17 @@ export const it: Record<string, string> = {
   "settings.localEmbeddingApiKey": "Chiave API di embedding",
   "settings.localEmbeddingApiKey.desc": "Chiave API per il server di embedding (opzionale)",
   "settings.localEmbeddingApiKey.placeholder": "Inserisci la chiave API di embedding",
-  "settings.targetFolders": "Cartelle target",
-  "settings.targetFolders.desc": "Cartelle da includere nell'indicizzazione (separate da virgole). Lascia vuoto per includerle tutte.",
-  "settings.targetFolders.placeholder": "Es., note, progetti, docs",
-  "settings.excludedPatterns": "Pattern esclusi (regex)",
-  "settings.excludedPatterns.desc": "Pattern regex per escludere file (uno per riga). Es., ^daily/, \\.excalidraw\\.md$",
-  "settings.excludedPatterns.placeholder": "^daily/\n\\.excalidraw\\.md$\n^templates/",
   "settings.searchFileExtensions": "Estensioni file di ricerca",
   "settings.searchFileExtensions.desc": "Estensioni file separate da virgola da includere nei risultati (vuoto = tutte). Es., md, pdf",
   "settings.searchFileExtensions.placeholder": "md, pdf",
 
   // Settings - Sync
-  "settings.syncStatusNever": "Mai",
-  "settings.cancelSync": "Annulla",
-  "settings.cancellingSync": "Annullamento sync...",
-  "settings.syncCancelled": "Sincronizzazione annullata",
-  "settings.syncPreparing": "Preparazione...",
-  "settings.syncFailed": "Sync fallita: {{error}}",
 
   // Settings - RAG Files Modal
 
   // Common buttons
   "common.ok": "OK",
-  "common.save": "Salva",
-  "common.create": "Crea",
-  "common.reset": "Ripristina",
   "common.error": "Errore: ",
-  "common.none": "Nessuno",
 
   // RAG Setting Name Modal
   "modal.nameCannotBeEmpty": "Il nome non può essere vuoto",
@@ -286,268 +185,65 @@ export const it: Record<string, string> = {
   "modal.enterName": "Inserisci nome",
 
   // Chat
-  "chat.title": "Chat",
-  "tab.workflowSkill": "Workflow / Skill",
-  "chat.saveAsNote": "Salva come nota",
   "chat.savedAsNote": "Salvato come {{path}}",
-  "chat.newChat": "Nuova chat",
-  "chat.chatHistory": "Cronologia chat",
-  "chat.noChatHistory": "Nessuna cronologia chat",
   "chat.chatDeleted": "Chat eliminata",
-  "chat.configRequired": "Configurazione richiesta",
-  "chat.configRequiredDesc": "Per usare la chat IA, configura una delle seguenti opzioni:",
-  "chat.configApiKey": "Chiave API Google",
-  "chat.configApiKeyDesc": "Configura la chiave API per usare l'API Gemini direttamente",
   "chat.configGeminiCli": "Antigravity CLI",
   "chat.configGeminiCliDesc": "Abilita modalità CLI e verifica che Antigravity CLI funzioni",
   "chat.configClaudeCli": "Claude CLI",
   "chat.configClaudeCliDesc": "Abilita modalità CLI e verifica che Claude CLI funzioni",
   "chat.configLocalLlm": "LLM locale",
   "chat.configLocalLlmDesc": "Connetti a un server LLM locale (Ollama, LM Studio, ecc.)",
-  "chat.openSettings": "Configura nelle impostazioni del plugin.",
-  "chat.clientNotInitialized": "Client Gemini non inizializzato. Configura la chiave API.",
-  "chat.rateLimitFree": "Il modello selezionato ha raggiunto il limite. Usa un altro modello fino a domani.",
   "chat.rateLimitPaid": "Questo modello potrebbe aver raggiunto il limite. Prova un altro modello fino a domani.",
-  "chat.rateLimitRetrying": "Limite raggiunto. Nuovo tentativo tra {{seconds}}s ({{attempt}}/{{max}})...",
   "chat.errorOccurred": "Spiacente, si è verificato un errore: {{message}}",
   "chat.unknownError": "Errore sconosciuto",
   "chat.localLlmNotConfigured": "La voce LLM locale selezionata non è configurata. Scegli un altro modello o aggiungine uno nelle impostazioni.",
-  "chat.generationStopped": "_(Generazione interrotta)_",
-  "chat.generationInProgress": "L'IA sta generando. Fermala prima di continuare.",
-  "chat.welcomeTitle": "Inizia una conversazione con l'AI",
-  "chat.welcomeHint": "Fai domande sulle tue note, creane di nuove o cerca nel tuo vault.",
-  "chat.welcomeThinking": "La modalita di pensiero profondo e disponibile per i modelli supportati",
-  "chat.welcomeImage": "\"Genera immagine\" o \"crea immagine\" per passare automaticamente al modello immagine",
-  "chat.welcomeCompact": "Digita /compact per comprimere una lunga conversazione in una nuova chat",
-  "chat.welcomeNewChat": "Gemini non ha memoria, quindi l'intera cronologia della chat viene inviata ogni volta. Clicca sempre + per iniziare una nuova chat quando cambi argomento",
   "chat.compactNotAvailable": "La compressione non è disponibile in modalità CLI",
-  "chat.compacted": "Conversazione compressa: {{before}} messaggi → {{after}}",
-  "chat.compactedContext": "Contesto conversazione compresso",
-  "chat.compactFailed": "Compressione della conversazione fallita",
-  "chat.compacting": "Compressione...",
   "chat.yesterday": "Ieri",
 
   // InputArea
-  "input.placeholder": "Scrivi il tuo messaggio... (Invio per inviare, Shift+Invio per nuova riga)",
-  "input.placeholderMobile": "Scrivi il tuo messaggio...",
-  "input.send": "Invia messaggio",
-  "input.stop": "Interrompi generazione",
-  "input.fileTooLarge": "Il file è troppo grande (max 20 MB): {{name}}",
-  "input.removeAttachment": "Rimuovi allegato",
-  "input.searchNone": "Ricerca: Nessuna",
-  "input.webSearch": "Ricerca web",
-  "input.rag": "Ricerca semantica: {{name}}",
-  "input.vaultToolTitle": "Impostazioni strumenti Vault",
-  "input.vaultToolLabel": "Strumenti vault",
-  "input.vaultToolAll": "Vault: Tutti",
-  "input.vaultToolNoSearch": "Vault: Senza ricerca",
-  "input.vaultToolReadOnly": "Vault: sola lettura",
-  "input.vaultToolNone": "Vault: Disattivato",
-  "input.mcpServersLabel": "Strumenti esterni (MCP)",
-  "input.close": "Chiudi",
-  "input.ragSettings": "Impostazioni indice",
-  "input.ragChunkSize": "Dimensione frammento",
-  "input.ragChunkOverlap": "Sovrapposizione frammenti",
   "input.ragPdfChunkPages": "Pagine PDF per frammento",
-  "input.ragTargetFolders": "Cartelle di destinazione",
-  "input.ragTargetFolders.placeholder": "es. notes, projects, docs",
-  "input.ragExcludedPatterns": "Pattern di esclusione (regex)",
-  "input.ragExcludedPatterns.placeholder": "es. ^daily/",
-  "input.ragIndexedFiles": "File indicizzati ({{count}})",
-  "input.ragNoIndexedFiles": "Nessun file ancora indicizzato",
-  "input.ragLastSync": "Ultima sincronizzazione",
   "input.thinkingLabel": "Pensare sempre",
-  "input.selectionVariable": "Testo selezionato nell'editor",
-  "input.contentVariable": "Contenuto nota attiva",
-  "input.vaultFile": "File del vault",
-  "input.openFile": "Apri file (Ctrl+Shift+O)",
-  "input.collapse": "Comprimi area di input",
-  "input.expand": "Espandi area di input",
 
   // MessageBubble
-  "message.you": "Tu",
-  "message.assistant": "AI",
-  "message.copyToClipboard": "Copia negli appunti",
-  "message.imageCopied": "Immagine copiata negli appunti",
-  "message.imageCopyFailed": "Errore copia immagine",
-  "message.webSearchUsed": "Usata ricerca web",
-  "message.imageGenerated": "Immagine generata",
-  "message.rag": "RAG",
-  "message.clickToOpen": "Clicca per aprire: {{source}}",
-  "message.clickToSeeDetails": "Clicca per vedere i dettagli",
-  "message.openWorkflow": "Apri workflow",
-  "message.workflowErrorHint": "Suggerimento: apri il workflow, modificalo con l'IA, consulta la cronologia di esecuzione per selezionare il passaggio fallito e chiedi all'IA di correggerlo.",
-  "message.htmlInfographic": "Infografica HTML",
-  "message.preview": "Anteprima",
-  "message.previewHtml": "Anteprima HTML",
-  "message.saveHtml": "Salva nel vault",
-  "message.downloadHtml": "Scarica HTML",
-  "message.savedTo": "Salvato in {{path}}",
-  "message.saveFailed": "Errore salvataggio: {{error}}",
-  "message.copyImage": "Copia immagine",
-  "message.downloadImage": "Scarica immagine",
-  "message.mermaidFlowchart": "Diagramma di flusso Mermaid",
-  "message.edited": "Modificato",
-  "message.applyChanges": "Applica modifiche",
-  "message.discard": "Annulla",
-  "message.discardChanges": "Annulla modifiche",
-  "message.regenerate": "Rigenera",
-  "message.editFeedbackHeader": "La modifica proposta per \"{{filePath}}\" è stata rifiutata.",
-  "message.editFeedbackUserRequest": "Feedback:",
-  "message.editFeedbackRetry": "Riprova con un approccio diverso.",
   // Diff viewer
   "diff.restoreSize": "Ripristina dimensioni",
-  "diff.lineComments": "Commenti di riga",
-  "diff.lineCommentsCount": "{{count}} commento/i di riga",
-  "diff.generalFeedback": "Feedback generale (opzionale)",
-  "message.appliedChanges": "Modifiche applicate a",
-  "message.discardedChanges": "Modifiche annullate",
-  "message.deleted": "Eliminato",
-  "message.cancelledDeletion": "Eliminazione annullata di",
-  "message.failedToDelete": "Errore eliminazione",
-  "message.renamed": "Rinominato",
-  "message.cancelledRename": "Rinominazione annullata di",
-  "message.failedToRename": "Rinominazione fallita",
 
   // Tool display labels
-  "tool.read": "Lettura",
-  "tool.created": "Creato",
-  "tool.updated": "Aggiornato",
-  "tool.deleted": "Eliminato",
-  "tool.renamed": "Rinominato",
-  "tool.searched": "Cercato",
-  "tool.listed": "Elencato",
-  "tool.listedFolders": "Cartelle elencate",
-  "tool.createdFolder": "Cartella creata",
-  "tool.gotActiveNote": "Nota attiva ottenuta",
-  "tool.checkedSync": "Sync verificata",
-  "tool.editing": "Modifica",
-  "tool.applied": "Applicato",
-  "tool.discarded": "Annullato",
 
   // Workflow Panel - Node Types
-  "workflow.nodeType.imageGeneration": "Generazione immagini",
 
   // Workflow Panel - UI Strings
-  "workflow.noWorkflows": "Nessun flusso di lavoro",
-  "workflow.aiModify": "Modifica con IA",
-  "workflow.running": "Esecuzione...",
-  "workflow.mustHaveNameForHotkey": "Il flusso di lavoro deve avere un nome per abilitare la scorciatoia",
-  "workflow.mustHaveNameForEvent": "Il flusso di lavoro deve avere un nome per abilitare i trigger degli eventi",
-  "workflow.noWorkflowToExport": "Nessun workflow da esportare",
 
   // Common - Edit
 
   // Edit Confirmation Modal
-  "editModal.confirmFileWrite": "Conferma scrittura file",
-  "editModal.confirmFileDeletion": "Conferma eliminazione file",
-  "editModal.confirmBulkEdit": "Conferma modifica multipla",
-  "editModal.confirmBulkDelete": "Conferma eliminazione multipla",
-  "editModal.createNewFile": "Crea nuovo file",
-  "editModal.appendToFile": "Aggiungi al file",
-  "editModal.overwriteFile": "Sovrascrivi file",
-  "editModal.file": "File:",
-  "editModal.changes": "Modifiche:",
-  "editModal.contentToDelete": "Contenuto da eliminare:",
-  "editModal.moveToTrash": "Sposta nel cestino",
-  "editModal.selectAll": "Seleziona tutto",
-  "editModal.deselectAll": "Deseleziona tutto",
-  "editModal.applyCount": "Applica ({{count}})",
-  "editModal.deleteCount": "Elimina ({{count}})",
-  "editModal.previewShow": "Anteprima",
-  "editModal.previewHide": "Nascondi",
 
   // Value Prompt Modal
-  "valueModal.title": "Inserisci valore",
-  "valueModal.placeholder": "Inserisci valore...",
 
   // Dialog Prompt Modal (titles passed dynamically)
 
   // Edit History
-  "settings.editHistory": "Cronologia modifiche",
-  "settings.editHistoryEnabled": "Abilita cronologia modifiche",
-  "settings.editHistoryEnabled.desc": "Traccia le modifiche fatte dall'IA alle tue note (formato diff unificato)",
-  "settings.editHistoryContextLines": "Righe di contesto",
-  "settings.editHistoryContextLines.desc": "Numero di righe di contesto nel diff",
-  "settings.editHistoryViewStats": "Visualizza statistiche",
-  "settings.editHistoryStats": "{{files}} file, {{entries}} voci",
-  "settings.editHistoryCleared": "{{count}} voci della cronologia modifiche eliminate",
 
   // Workflow Modals
 
   // Edit History Modal
-  "editHistoryModal.title": "Cronologia modifiche: {{file}}",
-  "editHistoryModal.unsavedChanges": "Modifiche non salvate",
-  "editHistoryModal.current": "Attuale",
-  "editHistoryModal.original": "(Originale - nessuna cronologia)",
-  "editHistoryModal.workflow": "flusso di lavoro",
-  "editHistoryModal.proposeEdit": "propose_edit",
-  "editHistoryModal.diff": "Differenze",
-  "editHistoryModal.restore": "Ripristina",
-  "editHistoryModal.clearAll": "Cancella cronologia",
-  "editHistoryModal.entriesCount": "{{count}} voci",
-  "editHistoryModal.noHistory": "Nessuna cronologia modifiche per questo file",
-  "editHistoryModal.confirmClear": "Ripristinare allo stato prima della prima modifica e cancellare la cronologia?",
   "editHistoryModal.confirmClearWithRemote": "Ripristinare allo stato remoto e cancellare la cronologia?",
-  "editHistoryModal.confirmRestore": "Ripristinare questa versione? Il contenuto attuale verrà sovrascritto.",
-  "editHistoryModal.restored": "Ripristinato alla versione del {{timestamp}}",
-  "editHistoryModal.restoreFailed": "Impossibile ripristinare: impossibile ricostruire il contenuto",
-  "editHistoryModal.cleared": "Cronologia cancellata",
-  "editHistoryModal.revertToBase": "Torna alla base",
-  "editHistoryModal.confirmRevertToBase": "Tornare allo snapshot base? Le modifiche non salvate andranno perse.",
-  "editHistoryModal.revertedToBase": "Tornato allo snapshot base",
-  "editHistoryModal.close": "Chiudi",
-  "editHistoryModal.copy": "Copia",
-  "editHistoryModal.copyTo": "Copia in",
-  "editHistoryModal.copied": "Copiato in {{path}}",
-  "editHistoryModal.copyFailed": "Copia fallita",
-  "editHistoryModal.fileExists": "Il file esiste già",
 
   // Diff Modal
-  "diffModal.title": "Diff: {{timestamp}} - {{source}}",
-  "diffModal.restoreVersion": "Ripristina questa versione",
-  "diffModal.close": "Chiudi",
-  "diffModal.additions": "+{{count}}",
-  "diffModal.deletions": "-{{count}}",
-  "diffModal.before": "Prima",
-  "diffModal.after": "Dopo",
 
   // Edit History Buttons
-  "editHistory.showHistory": "Mostra cronologia modifiche",
-  "editHistory.saveSnapshot": "Salva snapshot",
-  "editHistory.noActiveFile": "Nessun file attivo",
-  "editHistory.notInitialized": "Cronologia modifiche non inizializzata",
-  "editHistory.saved": "Snapshot salvato",
-  "editHistory.noChanges": "Nessuna modifica da salvare",
-  "editHistoryModal.manual": "manuale",
-  "editHistoryModal.auto": "auto",
   "editHistoryModal.showRemote": "Mostra remoto",
   "editHistoryModal.loadingRemote": "Caricamento...",
   "editHistoryModal.originLocal": "Locale",
   "editHistoryModal.originRemote": "Remoto",
 
   // Status bar
-  "statusBar.snapshot": "Snapshot",
-  "statusBar.snapshotTooltip": "Salva lo stato attuale come snapshot",
-  "statusBar.snapshotSaved": "Snapshot salvato",
-  "statusBar.history": "Cronologia",
-  "statusBar.historyTooltip": "Visualizza cronologia modifiche",
 
   // Commands
-  "command.showEditHistory": "Mostra cronologia modifiche",
-  "command.restorePreviousVersion": "Ripristina versione precedente",
-  "command.encryptFile": "Crittografa file corrente",
-  "command.decryptFile": "Decrittografa file corrente",
-  "command.runWorkflow": "Esegui workflow",
-  "command.compact": "Comprimi cronologia conversazione",
 
   // Workflow Selector Modal
-  "workflowSelector.selectWorkflow": "Seleziona workflow",
 
   // Errors
-  "error.failedToCreate": "Errore creazione: {{error}}",
-  "error.failedToRename": "Errore rinomina: {{error}}",
-  "error.failedToDelete": "Errore eliminazione impostazione: {{error}}",
 
   // Encryption
   "settings.encryption": "Crittografia",
@@ -572,25 +268,16 @@ export const it: Record<string, string> = {
   "settings.encryptionResetKeys.desc": "Genera nuove chiavi di crittografia. Le chat crittografate in precedenza non saranno più leggibili.",
   "settings.encryptionResetKeysConfirm": "Reimpostare le chiavi di crittografia? Tutta la cronologia chat crittografata in precedenza diventerà illeggibile.",
   "settings.encryptionKeysReset": "Le chiavi di crittografia sono state reimpostate",
-  "settings.encryptionDisableConfirm": "Disabilitare la crittografia? La cronologia chat crittografata rimarrà crittografata e richiederà la password per essere letta.",
 
   // Decryption
   "chat.encryptedChat": "Chat crittografata",
-  "chat.enterPasswordToDecrypt": "Inserisci la password per visualizzare",
-  "chat.decryptPassword": "Password",
-  "chat.decryptPassword.placeholder": "Inserisci la password di decrittografia",
-  "chat.decrypt": "Decrittografa",
   "chat.decryptFailed": "Decrittografia fallita. Verifica la password.",
   "chat.decrypted": "Decrittografato con successo",
 
   // Workflow Generation Modal
-  "workflow.generation.generating": "Generazione",
   "workflow.generation.generatingWithCli": "Generazione con {{cli}}",
-  "workflow.generation.reviewSummary": "Riepilogo",
 
   // Workflow Preview Modal
-  "workflow.preview.no": "No, modifica",
-  "workflow.preview.regenerate": "Rigenera",
 
   // Workflow Confirm Modal
 
@@ -599,28 +286,8 @@ export const it: Record<string, string> = {
   // Workflow Execution Modal
 
   // CryptView - File Encryption
-  "crypt.encryptFile": "Crittografa file",
 
   // MCP Server Settings
-  "settings.mcpServers": "Server MCP",
-  "settings.mcpServers.desc": "Configura server MCP (Model Context Protocol) esterni per strumenti aggiuntivi",
-  "settings.mcpServersIntro": "I server MCP forniscono strumenti aggiuntivi. Aggiungi server per abilitare i loro strumenti.",
-  "settings.addMcpServer": "Aggiungi server",
-  "settings.mcpServerName": "Nome server",
-  "settings.mcpServerName.placeholder": "Il mio server MCP",
-  "settings.mcpServerUrl": "URL server",
-  "settings.mcpServerUrl.placeholder": "https://example.com/mcp",
-  "settings.mcpServerHeaders": "Header (JSON)",
-  "settings.mcpServerHeaders.placeholder": "{\"Authorization\": \"Bearer xxx\"}",
-  "settings.mcpServerHeaders.desc": "Header opzionali per autenticazione (formato JSON)",
-  "settings.editMcpServer": "Modifica server MCP",
-  "settings.createMcpServer": "Aggiungi server MCP",
-  "settings.mcpServerCreated": "Server MCP \"{{name}}\" aggiunto",
-  "settings.mcpServerUpdated": "Server MCP \"{{name}}\" aggiornato",
-  "settings.mcpServerDeleted": "Server MCP \"{{name}}\" eliminato",
-  "settings.mcpServerNameRequired": "Il nome del server è obbligatorio",
-  "settings.mcpServerUrlRequired": "L'URL del server è obbligatorio",
-  "settings.mcpServerInvalidHeaders": "JSON non valido per gli header",
   "settings.mcpTransport": "Trasporto",
   "settings.mcpTransport.http": "HTTP (Streamable HTTP)",
   "settings.mcpTransport.stdio": "Stdio (processo locale)",
@@ -637,67 +304,24 @@ export const it: Record<string, string> = {
   "settings.mcpServerEnv.desc": "Variabili d'ambiente opzionali per il processo del server (formato JSON)",
   "settings.mcpServerCommandRequired": "Il comando è obbligatorio per il trasporto Stdio",
   "settings.mcpServerInvalidEnv": "JSON non valido per le variabili d'ambiente",
-  "settings.testMcpConnection": "Test connessione",
-  "settings.mcpConnectionSuccess": "Connessione riuscita! {{count}} strumento/i disponibile/i",
-  "settings.mcpConnectionFailed": "Connessione fallita: {{error}}",
-  "settings.mcpNoServers": "Nessun server MCP configurato",
-  "settings.testConnectionRequired": "Test di connessione obbligatorio prima del salvataggio",
-  "settings.mcpToolHints": "Strumenti: {{tools}}",
 
   // Input - MCP tool hint
-  "input.mcpToolHint": "({{count}} strumenti: {{tools}})",
 
   // Skills Settings
 
   // Skills UI
-  "skills.add": "Aggiungi skill",
-  "message.skillsUsed": "Skills",
 
   // HTML Preview Modal
-  "htmlPreview.title": "Anteprima infografica",
-  "htmlPreview.copyCode": "Copia codice",
 
   // AI Workflow Modal
-  "aiWorkflow.createAsSkill": "Crea come skill dell'agente",
 
   // Edit History Modal
-  "editHistoryModal.notInitialized": "Gestore cronologia modifiche non inizializzato",
 
   // Node Editor Modal
-  "nodeEditor.workflowName": "Nome flusso di lavoro",
-  "nodeEditor.workflowName.placeholder": "Nome del flusso di lavoro (se il file ne contiene più di uno)",
 
   // MCP Apps
-  "mcpApp.loading": "Caricamento MCP App...",
-  "mcpApp.resourceNotFound": "Risorsa UI non trovata",
-  "mcpApp.fetchError": "Impossibile recuperare la risorsa UI",
-  "mcpApp.expand": "Espandi",
-  "mcpApp.collapse": "Comprimi",
-  "mcpApp.error": "Errore MCP App",
-  "mcpApp.decodeError": "Impossibile decodificare il contenuto binario",
 
   // Langfuse settings
-  "settings.langfuse": "Osservabilità Langfuse",
-  "settings.langfuseNotAvailable": "Langfuse non è incluso in questa build. Usa 'npm run build:langfuse' per compilare con il supporto Langfuse.",
-  "settings.langfusePublicKey": "Chiave pubblica",
-  "settings.langfusePublicKey.desc": "Chiave pubblica del progetto Langfuse",
-  "settings.langfusePublicKey.placeholder": "Inserisci la tua chiave pubblica",
-  "settings.langfuseSecretKey": "Chiave segreta",
-  "settings.langfuseSecretKey.desc": "Chiave segreta del progetto Langfuse",
-  "settings.langfuseSecretKey.placeholder": "Inserisci la tua chiave segreta",
-  "settings.langfuseBaseUrl": "URL di base",
-  "settings.langfuseBaseUrl.desc": "URL del server Langfuse (lasciare vuoto per cloud.langfuse.com)",
-  "settings.langfuseLogPrompts": "Registra i prompt",
-  "settings.langfuseLogPrompts.desc": "Includi il contenuto dei prompt nelle tracce (privacy: disabilitato per impostazione predefinita, invia [redacted] al posto del contenuto)",
-  "settings.langfuseLogResponses": "Registra le risposte",
-  "settings.langfuseLogResponses.desc": "Includi il contenuto delle risposte nelle tracce (privacy: disabilitato per impostazione predefinita, invia [redacted] al posto del contenuto)",
-  "settings.langfuseTestConnection": "Testa connessione",
-  "settings.langfuseTestConnection.desc": "Invia una traccia di test per verificare la connettività con Langfuse",
-  "settings.langfuseTestBtn": "Invia traccia di test",
-  "settings.langfuseTesting": "Test in corso...",
-  "settings.langfuseTestSuccess": "Traccia di test inviata con successo! Controlla la tua dashboard Langfuse.",
-  "settings.langfuseTestFailed": "Traccia di test fallita: {{error}}",
-  "settings.langfuseTestMissingKeys": "Inserisci prima sia la chiave pubblica che quella segreta",
 
   // Discord integration
   "settings.discord": "Integrazione Discord",
@@ -736,44 +360,8 @@ export const it: Record<string, string> = {
   "settings.discordMaxResponseLength.desc": "Numero massimo di caratteri per messaggio Discord (limite Discord: 2000)",
 
   // Search tab
-  "search.tab": "Ricerca RAG",
-  "search.queryPlaceholder": "Inserisci la query di ricerca...",
-  "search.search": "Cerca",
-  "search.noRagSetting": "Nessuna impostazione RAG selezionata",
-  "search.noRagSettings": "Nessuna impostazione RAG disponibile",
-  "search.noRagSettingsGuide": "Registra un'impostazione RAG nelle impostazioni del plugin per abilitare la ricerca semantica.",
-  "search.openSettings": "Apri impostazioni",
-  "search.enterQuery": "Inserisci una query di ricerca",
-  "search.ragSettingNotFound": "Impostazione RAG non trovata",
-  "search.searchFailed": "Ricerca fallita",
-  "search.noResults": "Nessun risultato trovato",
-  "search.selectAll": "Seleziona tutto",
-  "search.results": "risultati",
-  "search.chatWithSelected": "Chatta con la selezione",
   "search.discussWithSelected": "Discuti con la selezione",
-  "search.selected": "Selezionati",
-  "search.editChunk": "Modifica frammento",
-  "search.loadPrevChunk": "Carica frammento precedente",
-  "search.loadNextChunk": "Carica frammento successivo",
-  "search.keywordFilter": "Filtra per parola chiave...",
-  "search.keywordFilterOr": "Parole chiave OR (separate da spazi)...",
-  "search.addFilter": "Aggiungi condizione AND",
-  "search.addFilterLabel": "E",
-  "search.removeFilter": "Rimuovi condizione",
-  "search.aiSuggest": "Suggerisci parole chiave simili con IA",
-  "search.aiSuggestFailed": "Suggerimento IA fallito",
-  "search.aiUndo": "Annulla suggerimento IA",
-  "search.refineWithAI": "Raffina con IA",
-  "search.refining": "Raffinamento...",
-  "search.refineModel": "Modello di raffinamento IA",
-  "search.refineModelNone": "Nessuno (disabilita raffinamento IA)",
-  "search.refineModelRequired": "Seleziona un modello nelle impostazioni di ricerca per abilitare il raffinamento IA",
-  "search.edited": "Modificato",
-  "search.selectResults": "Seleziona almeno un risultato",
-  "search.scoreThreshold": "Punteggio minimo",
   "search.pdfMode": "Risultati PDF",
-  "search.pdfMode.text": "Come testo",
-  "search.pdfMode.pdf": "Come frammento PDF",
   "search.helpTitle": "Aiuto parametri",
   "search.helpTopK": "Top K — Numero massimo di risultati da restituire.",
   "search.helpScoreThreshold": "Punteggio minimo — Punteggio di similarità minimo (0.0–1.0). I risultati inferiori vengono esclusi.",
@@ -783,13 +371,10 @@ export const it: Record<string, string> = {
   "search.helpPdfChunkPages": "Pagine per chunk PDF — Numero di pagine raggruppate in un singolo blocco durante l'indicizzazione dei PDF.",
 
   // RAG source modal
-  "ragSource.clickToView": "Clicca per visualizzare/modificare il testo RAG",
-
 
   // LLM vault tool folders
   "settings.cloudVaultToolAllowedFolders": "Cartelle degli strumenti vault LLM",
   "settings.cloudVaultToolAllowedFolders.desc": "Cartelle separate da virgole a cui gli strumenti vault LLM e i workflow di skill attivati dall'LLM possono accedere. Lascia vuoto per consentire l'intero vault. Questo non limita RAG, gli allegati manuali, le menzioni @note, gli strumenti MCP, gli script o i comandi della shell.",
   "settings.cloudVaultToolAllowedFolders.placeholder": "Esempio: Public, Shared/Docs",
 
-  "command.createDashboard": "Crea dashboard",
 };
