@@ -1,3 +1,4 @@
+import type { CommandNodeResult } from "obsidian-llm-hub-common/workflow";
 import { App } from "obsidian";
 import type { LlmHubPlugin } from "../../plugin";
 import { GeminiClient, getGeminiClient } from "../../core/gemini";
@@ -125,12 +126,6 @@ function wrapToolExecutorWithAutoApply(
 }
 
 // Result type for command node execution
-export interface CommandNodeResult {
-  mcpAppInfo?: McpAppInfo;
-  usedModel: string;
-  usage?: StreamChunkUsage;
-  elapsedMs?: number;
-}
 
 // Handle command node - execute LLM with prompt directly
 export async function handleCommandNode(

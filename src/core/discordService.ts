@@ -1541,7 +1541,7 @@ export class DiscordService {
       promptForDialog: () => Promise.resolve(null),
     };
 
-    const executor = new WorkflowExecutor(this.app, this.plugin);
+    const executor = new WorkflowExecutor(this.app);
     try {
       const result = await executor.execute(
         workflow,
@@ -1549,7 +1549,7 @@ export class DiscordService {
         undefined,
         {
           workflowName: entry.vaultPath.substring(entry.vaultPath.lastIndexOf("/") + 1).replace(/\.md$/, "") || workflowId,
-          cloudVaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
+          vaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
         },
         callbacks,
       );

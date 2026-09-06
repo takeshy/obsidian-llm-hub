@@ -4897,7 +4897,7 @@ async function executeSkillWorkflow(
 	}
 
 	// Execute with the same execution modal as the normal workflow panel
-	const executor = new WorkflowExecutor(plugin.app, plugin);
+	const executor = new WorkflowExecutor(plugin.app);
 	const abortController = new AbortController();
 
 	const modal = new WorkflowExecutionModal(
@@ -4951,7 +4951,7 @@ async function executeSkillWorkflow(
 				workflowName: workflowDisplayName,
 				recordHistory: true,
 				abortSignal: abortController.signal,
-				cloudVaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
+				vaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
 			},
 			callbacks,
 		);
