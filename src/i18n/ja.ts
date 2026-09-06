@@ -437,6 +437,7 @@ export const ja: Record<string, string> = {
   "input.vaultToolNone": "Vault: off",
   "input.vaultToolNoneDesc": "組み込みVaultツールをすべて無効化",
   "input.vaultToolReadOnly": "Vault: 読み取り専用",
+  "input.vaultToolReadOnlyDesc": "検索・読み取りのみ許可し、ファイルの作成・編集・削除・名前変更を禁止",
   "input.mcpServerEnabled": "MCPサーバー有効: {{name}}",
   "input.mcpServerDisable": "MCPサーバーを無効化: {{name}}",
   "input.historyLimit": "過去メッセージ数 (0〜99)",

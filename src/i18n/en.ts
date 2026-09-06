@@ -441,6 +441,7 @@ export const en = {
   "input.vaultToolNoSearch": "Vault: no discovery",
   "input.vaultToolNoSearchDesc": "Disable vault search and note listing; RAG and explicitly referenced notes remain available",
   "input.vaultToolReadOnly": "Vault: read only",
+  "input.vaultToolReadOnlyDesc": "Search and read without creating, editing, deleting, or renaming files",
   "input.vaultToolNone": "Vault: off",
   "input.vaultToolNoneDesc": "Disable all built-in vault tools",
   "input.mcpServerEnabled": "MCP server enabled: {{name}}",
@@ -1370,6 +1371,7 @@ export const en = {
   "crypt.metadataValue": "Value",
 
   "okf.add": "Add OKF knowledge",
+  "okf.remove": "Remove {{name}}",
   "okf.builtinHelpDescription": "Built-in LLM Hub feature reference",
 
   "memoList.filterPlaceholder": "Filter memos...",
