@@ -1,18 +1,20 @@
+import { CollapsedInput } from "obsidian-llm-hub-chat-ui";
+import { InputArea as SharedInputArea } from "obsidian-llm-hub-chat-ui";
+import { Composer, Autocomplete, Attachments } from "obsidian-llm-hub-chat-ui";
 import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from "react";
-import Send from "lucide-react/dist/esm/icons/send";
+
 import Paperclip from "lucide-react/dist/esm/icons/paperclip";
-import StopCircle from "lucide-react/dist/esm/icons/stop-circle";
-import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+
 import Eye from "lucide-react/dist/esm/icons/eye";
 import Database from "lucide-react/dist/esm/icons/database";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
+
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import Wrench from "lucide-react/dist/esm/icons/wrench";
 import X from "lucide-react/dist/esm/icons/x";
 import { Notice, Platform, type App } from "obsidian";
 import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode, type CodexReasoningEffort, type ReasoningEffort } from "src/types";
 import type { CodexModelOption } from "src/core/cliProvider";
-import { RagSourceModal } from "./RagSourceModal";
+
 import type { SkillMetadata } from "src/core/skillsLoader";
 import type { OkfBundle } from "src/core/okfLoader";
 import SkillSelector from "./SkillSelector";
@@ -599,7 +601,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   };
 
   return (
-    <div className={`llm-hub-input-container ${isCollapsed ? "collapsed" : ""}`}>
+    <SharedInputArea classPrefix="llm-hub" className={`llm-hub-input-container ${isCollapsed ? "collapsed" : ""}`} collapsed={isCollapsed}
+      beforeInput={<>
       {/* MCP servers enabled for this chat */}
       {!isCollapsed && mcpServers.some((server) => server.enabled) && (
         <div className="llm-hub-enabled-mcp-servers">
@@ -628,88 +631,22 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
 
       {/* Pending attachments display */}
       {!isCollapsed && pendingAttachments.length > 0 && (
-        <div className="llm-hub-pending-attachments">
-          {pendingAttachments.map((attachment, index) => (
-            <span
-              key={index}
-              className={`llm-hub-pending-attachment${attachment.sourcePath ? " llm-hub-clickable" : ""}`}
-              onClick={() => {
-                if (!attachment.sourcePath) return;
-                new RagSourceModal(app, attachment, (result) => {
-                  setPendingAttachments(prev => {
-                    const next = [...prev];
-                    next[index] = result.attachment;
-                    return next;
-                  });
-                }).open();
-              }}
-              title={attachment.sourcePath ? t("ragSource.clickToView") : undefined}
-            >
-              {attachment.type === "image" && "🖼️"}
-              {attachment.type === "pdf" && "📄"}
-              {attachment.type === "text" && "📃"}
-              {attachment.type === "audio" && "🎵"}
-              {attachment.type === "video" && "🎬"}
-              {" "}{attachment.name}
-              <button
-                className="llm-hub-pending-attachment-remove"
-                onClick={(e) => { e.stopPropagation(); removeAttachment(index); }}
-                title={t("input.removeAttachment")}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
+        <Attachments classPrefix="llm-hub" attachments={pendingAttachments} pending onRemove={removeAttachment} removeLabel={t("input.removeAttachment")} />
       )}
 
-      {!isCollapsed && (
-        <div className="llm-hub-input-area">
+      </>}
+      accessories={<>
           {/* Slash command autocomplete */}
           {showAutocomplete && (
-          <div className="llm-hub-autocomplete">
-            {filteredCommands.map((cmd, index) => (
-              <div
-                key={cmd.id}
-                className={`llm-hub-autocomplete-item ${
-                  index === autocompleteIndex ? "active" : ""
-                }`}
-                onClick={() => selectCommand(cmd)}
-                onMouseEnter={() => setAutocompleteIndex(index)}
-              >
-                <span className="llm-hub-autocomplete-name">
-                  {"id" in cmd && (cmd as BuiltInCommand).id?.startsWith("__skill__") ? `✨ /${cmd.name}` : `/${cmd.name}`}
-                </span>
-                {("description" in cmd) && cmd.description && (
-                  <span className="llm-hub-autocomplete-desc">
-                    {cmd.description}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+          <Autocomplete classPrefix="llm-hub"
+            items={filteredCommands.map(cmd => ({ id: cmd.id, label: "id" in cmd && (cmd as BuiltInCommand).id?.startsWith("__skill__") ? `✨ /${cmd.name}` : `/${cmd.name}`, description: "description" in cmd ? cmd.description : undefined }))}
+            activeIndex={autocompleteIndex} onSelect={index => selectCommand(filteredCommands[index])} onHover={setAutocompleteIndex} />
         )}
 
         {/* Mention autocomplete */}
         {showMentionAutocomplete && (
-          <div className="llm-hub-autocomplete" ref={mentionAutocompleteRef}>
-            {filteredMentions.map((mention, index) => (
-              <div
-                key={mention.value}
-                className={`llm-hub-autocomplete-item ${
-                  index === mentionIndex ? "active" : ""
-                }`}
-                onClick={() => selectMention(mention)}
-                onMouseEnter={() => setMentionIndex(index)}
-              >
-                <span className="llm-hub-autocomplete-name">
-                  {mention.kind === "wikilink" ? `[[${mention.value}]]` : mention.value}
-                </span>
-                <span className="llm-hub-autocomplete-desc">
-                  {mention.description}
-                </span>
-                {mention.kind !== "variable" && (
-                  <button
+          <Autocomplete classPrefix="llm-hub" containerRef={mentionAutocompleteRef}
+            items={filteredMentions.map(mention => ({ id: mention.value, label: mention.kind === "wikilink" ? `[[${mention.value}]]` : mention.value, description: mention.description, action: mention.kind !== "variable" ? (<button
                     className="llm-hub-preview-btn"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -719,11 +656,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                     title={t("input.openFile")}
                   >
                     <Eye size={12} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+                  </button>) : undefined }))}
+            activeIndex={mentionIndex} onSelect={index => selectMention(filteredMentions[index])} onHover={setMentionIndex} />
         )}
 
         {/* Hidden file input */}
@@ -862,67 +796,24 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           </div>
         </div>
 
-        <textarea
-          ref={textareaRef}
-          className="llm-hub-input"
-          value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder={isCompacting ? t("chat.compacting") : (Platform.isMobile ? t("input.placeholderMobile") : t("input.placeholder"))}
-          disabled={isCompacting}
-          rows={3}
-        />
-        <div className="llm-hub-send-buttons">
-          {isCompacting ? (
-            <button
-              className="llm-hub-send-btn"
-              disabled={true}
-              title={t("chat.compacting")}
-            >
-              <Loader2 size={18} className="llm-hub-spinner" />
-            </button>
-          ) : isLoading ? (
-            <button
-              className="llm-hub-stop-btn"
-              onClick={onStop}
-              title={t("input.stop")}
-            >
-              <StopCircle size={18} />
-            </button>
-          ) : (
-            <button
-              className="llm-hub-send-btn"
-              onClick={handleSubmit}
-              disabled={!input.trim() && pendingAttachments.length === 0}
-              title={t("input.send")}
-            >
-              <Send size={18} />
-            </button>
-          )}
-          {Platform.isMobile && (
-            <button
-              className="llm-hub-collapse-btn"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              title={isCollapsed ? t("input.expand") : t("input.collapse")}
-            >
-              {isCollapsed ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-          )}
-        </div>
-      </div>
-      )}
+        </>}
+      composer={<Composer classPrefix="llm-hub" textareaRef={textareaRef}
+          textarea={{ value: input,
+          onChange: handleInputChange,
+          onKeyDown: handleKeyDown,
+          placeholder: isCompacting ? t("chat.compacting") : (Platform.isMobile ? t("input.placeholderMobile") : t("input.placeholder")),
+          disabled: isCompacting }}
+          isLoading={isLoading} isCompacting={isCompacting} compactingLabel={t("chat.compacting")}
+          canSend={!!input.trim() || pendingAttachments.length > 0}
+          onSend={handleSubmit} onStop={onStop}
+          sendLabel={t("input.send")} stopLabel={t("input.stop")}
+          collapse={Platform.isMobile ? { collapsed: isCollapsed, onToggle: () => setIsCollapsed(!isCollapsed), label: isCollapsed ? t("input.expand") : t("input.collapse") } : undefined}
+        />}
+      footer={<>
 
       {/* Collapsed state: show only expand button */}
       {isCollapsed && Platform.isMobile && (
-        <div className="llm-hub-collapsed-bar">
-          <button
-            className="llm-hub-expand-btn"
-            onClick={() => setIsCollapsed(false)}
-            title={t("input.expand")}
-          >
-            <ChevronUp size={18} />
-          </button>
-        </div>
+        <CollapsedInput classPrefix="llm-hub" label={t("input.expand")} onExpand={() => setIsCollapsed(false)} />
       )}
 
       {!isCollapsed && (
@@ -936,7 +827,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           {model === "codex-cli" && (
             <>
               <select
-                className="llm-hub-model-select"
+                className="llm-hub-model-dropdown"
                 value={codexModel || ""}
                 onChange={(e) => onCodexConfigChange(e.target.value || undefined, codexReasoningEffort)}
                 disabled={isLoading}
@@ -953,7 +844,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                 )}
               </select>
               <select
-                className="llm-hub-model-select"
+                className="llm-hub-model-dropdown"
                 value={codexReasoningEffort}
                 onChange={(e) => onCodexConfigChange(codexModel, e.target.value as CodexReasoningEffort)}
                 disabled={isLoading}
@@ -967,7 +858,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           )}
           {reasoningEffortOptions.length > 0 && (
             <select
-              className="llm-hub-model-select"
+              className="llm-hub-model-dropdown"
               value={reasoningEffort}
               onChange={(e) => onReasoningEffortChange(e.target.value as ReasoningEffort)}
               disabled={isLoading}
@@ -983,7 +874,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
             <button
               ref={searchButtonRef}
               type="button"
-              className="llm-hub-model-select llm-hub-rag-select llm-hub-search-selector-button"
+              className="llm-hub-model-dropdown llm-hub-rag-select llm-hub-search-selector-button"
               onClick={() => setShowSearchMenu(open => !open)}
               disabled={isLoading}
               aria-haspopup="menu"
@@ -1057,7 +948,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           disabled={isLoading}
         />
       )}
-    </div>
+    </>}
+    />
   );
 });
 

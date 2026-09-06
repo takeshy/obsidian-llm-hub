@@ -53,14 +53,15 @@
     "diff": "^8.0.2",
     "fflate": "^0.8.3",
     "lucide-react": "^0.503.0",
+    "obsidian-llm-hub-chat-ui": "file:vendor/obsidian-llm-hub-chat-ui-0.1.0.tgz",
     "openai": "^6.32.0",
     "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "optionalDependencies": {
-    "node-pty": "^1.0.0",
+    "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
-    "@xterm/addon-fit": "^0.10.0"
+    "node-pty": "^1.0.0"
   }
 }

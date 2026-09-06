@@ -1,7 +1,9 @@
+import { ToolIndicator } from "obsidian-llm-hub-chat-ui";
+import { MessageBubble as SharedMessageBubble, MessageContent, Attachments, UsageInfo } from "obsidian-llm-hub-chat-ui";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { type App, MarkdownRenderer, Component, Notice, Platform } from "obsidian";
 import Copy from "lucide-react/dist/esm/icons/copy";
-import Check from "lucide-react/dist/esm/icons/check";
+
 import CheckCircle from "lucide-react/dist/esm/icons/check-circle";
 import XCircle from "lucide-react/dist/esm/icons/x-circle";
 import Download from "lucide-react/dist/esm/icons/download";
@@ -333,7 +335,6 @@ export default function MessageBubble({
     return parts.join(": ");
   };
 
-
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(message.content);
@@ -504,30 +505,9 @@ export default function MessageBubble({
   };
 
   return (
-    <div
-      className={`llm-hub-message ${
-        isUser ? "llm-hub-message-user" : "llm-hub-message-assistant"
-      } ${isStreaming ? "llm-hub-message-streaming" : ""}`}
-    >
-      <div className="llm-hub-message-header">
-        <span className="llm-hub-message-role">
-          {getModelDisplayName()}
-        </span>
-        <span className="llm-hub-message-time">
-          {formatTime(message.timestamp)}
-        </span>
-        {!isStreaming && (
-          <button
-            className="llm-hub-copy-btn"
-            onClick={() => {
-              void handleCopy();
-            }}
-            title={t("message.copyToClipboard")}
-          >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-          </button>
-        )}
-      </div>
+    <SharedMessageBubble classPrefix="llm-hub" isUser={isUser} isStreaming={isStreaming}
+      roleLabel={getModelDisplayName()} timeLabel={formatTime(message.timestamp)} copied={copied}
+      copyLabel={t("message.copyToClipboard")} onCopy={() => { void handleCopy(); }}>
 
       {/* Web search indicator */}
       {message.webSearchUsed && (
@@ -604,10 +584,8 @@ export default function MessageBubble({
               const failedWorkflowPath = getFailedWorkflowPath(toolCall, message.toolResults);
               const noteTarget = getToolNoteTarget(toolCall, message.toolResults);
               return (
-                <span key={index} className="llm-hub-tool-indicator-group">
-                  <span
-                    className="llm-hub-tool-indicator llm-hub-tool-clickable"
-                    onClick={() => {
+                <ToolIndicator key={index} classPrefix="llm-hub" icon={icon} label={label}
+                  detail={getToolDetail(toolCall)} onClick={() => {
                       if (noteTarget) {
                         void app.workspace.openLinkText(noteTarget, "", false).catch(() => {
                           new Notice(getToolDetail(toolCall), 3000);
@@ -616,37 +594,10 @@ export default function MessageBubble({
                         new Notice(getToolDetail(toolCall), 3000);
                       }
                     }}
-                    title={
-                      noteTarget
-                        ? t("message.clickToOpen", {
-                            source: [
-                              noteTarget,
-                              getReadNotePageRange(toolCall.name, {
-                                ...toolCall.args,
-                                ...((message.toolResults?.find((item) => item.toolCallId === toolCall.id)?.result
-                                  ?? {}) as Record<string, unknown>),
-                              }),
-                            ]
-                              .filter(Boolean)
-                              .join(" — "),
-                          })
-                        : t("message.clickToSeeDetails")
-                    }
-                  >
-                    {icon} {label}
-                  </span>
-                  {failedWorkflowPath && (
-                    <button
-                      className="llm-hub-tool-open-workflow-btn"
-                      onClick={() => {
+                  workflowAction={failedWorkflowPath ? { label: t("message.openWorkflow"), title: t("message.clickToOpen", { source: failedWorkflowPath }), onClick: () => {
                         void openWorkflowInPanel(app, failedWorkflowPath);
-                      }}
-                      title={t("message.clickToOpen", { source: failedWorkflowPath })}
-                    >
-                      📂 {t("message.openWorkflow")}
-                    </button>
-                  )}
-                </span>
+                      } } : undefined}
+                />
               );
             })}
           </div>
@@ -660,52 +611,16 @@ export default function MessageBubble({
       )}
 
       {/* Attachments display */}
-      {message.attachments && message.attachments.length > 0 && (
-        <div className="llm-hub-attachments">
-          {message.attachments.map((attachment, index) => (
-            <span key={index} className="llm-hub-attachment">
-              {attachment.type === "image" && "🖼️"}
-              {attachment.type === "pdf" && "📄"}
-              {attachment.type === "text" && "📃"}
-              {attachment.type === "audio" && "🎵"}
-              {attachment.type === "video" && "🎬"}
-              {" "}{attachment.name}
-            </span>
-          ))}
-        </div>
-      )}
+      <Attachments classPrefix="llm-hub" attachments={message.attachments} />
 
       {/* Thinking content (collapsible) */}
-      {message.thinking && (
-        <details className="llm-hub-thinking">
-          <summary className="llm-hub-thinking-summary">
-            💭 {t("message.thinking")}
-          </summary>
-          <div className="llm-hub-thinking-content">
-            {message.thinking}
-          </div>
-        </details>
-      )}
-
-      <div className="llm-hub-message-content" ref={contentRef} />
+      <MessageContent classPrefix="llm-hub" contentRef={contentRef} thinking={message.thinking}
+        thinkingLabel={t("message.thinking")} thinkingOpen={isStreaming || !message.content}  />
 
       {/* Usage info (tokens, cost, response time) */}
-      {!isUser && !isStreaming && (message.usage || message.elapsedMs) && (
-        <div className="llm-hub-usage-info">
-          {message.elapsedMs !== undefined && (
-            <span>{formatElapsed(message.elapsedMs)}</span>
-          )}
-          {message.usage && message.usage.inputTokens !== undefined && message.usage.outputTokens !== undefined && (
-            <span>
-              {formatNumber(message.usage.inputTokens)} → {formatNumber(message.usage.outputTokens)} {t("message.tokens")}
-              {message.usage.thinkingTokens ? ` (${t("message.thinkingTokens")} ${formatNumber(message.usage.thinkingTokens)})` : ""}
-            </span>
-          )}
-          {message.usage?.totalCost !== undefined && (
-            <span>${message.usage.totalCost.toFixed(4)}</span>
-          )}
-        </div>
-      )}
+      <UsageInfo classPrefix="llm-hub" isUser={isUser} isStreaming={isStreaming}
+        elapsedMs={message.elapsedMs} usage={message.usage}
+        tokensLabel={t("message.tokens")} thinkingTokensLabel={t("message.thinkingTokens")} />
 
       {/* HTML code block actions */}
       {htmlContent && !isStreaming && (
@@ -896,7 +811,7 @@ export default function MessageBubble({
             ❌ {t("message.failedToRename")} <strong>{rename.originalPath}</strong>
           </div>
         ))}
-    </div>
+    </SharedMessageBubble>
   );
 }
 
@@ -988,13 +903,4 @@ function formatTime(timestamp: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function formatElapsed(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function formatNumber(n: number): string {
-  return n.toLocaleString();
 }

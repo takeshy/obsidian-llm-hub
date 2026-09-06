@@ -1,3 +1,6 @@
+import { Trash2 } from "lucide-react";
+import { ChatHeader } from "obsidian-llm-hub-chat-ui";
+import { ChatLayout, HistoryList } from "obsidian-llm-hub-chat-ui";
 import {
 	useState,
 	useEffect,
@@ -10,7 +13,7 @@ import {
 import { TFile, Notice, MarkdownView, Platform } from "obsidian";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import History from "lucide-react/dist/esm/icons/history";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+
 import Lock from "lucide-react/dist/esm/icons/lock";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import Loader2 from "lucide-react/dist/esm/icons/loader-2";
@@ -3912,7 +3915,6 @@ Available tools allow you to:
 - Get information about the active note`;
 				}
 
-
 				systemPrompt += `
 
 Always be helpful and provide clear, concise responses. When working with notes, confirm actions and provide relevant feedback.`;
@@ -4457,73 +4459,49 @@ Always be helpful and provide clear, concise responses. When working with notes,
 	const chatClassName = `llm-hub-chat${isKeyboardVisible ? " keyboard-visible" : ""}${isDecryptInputFocused ? " decrypt-input-focused" : ""}`;
 
 	return (
-		<div className={chatClassName}>
-			<div className="llm-hub-chat-header">
-				<h3>{t("chat.title")}</h3>
-				<div className="llm-hub-header-actions">
+		<ChatLayout className={chatClassName}>
+			<ChatHeader classPrefix="llm-hub">
 					<button
-						className="llm-hub-icon-btn llm-hub-sidebar-width-btn"
+						className="llm-hub-header-btn llm-hub-sidebar-width-btn"
 						onClick={() => setIsSidebarWide(onToggleSidebarWidth())}
 						title={isSidebarWide ? t("chat.narrowSidebar") : t("chat.widenSidebar")}
 					>
-						{isSidebarWide ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+						{isSidebarWide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
 					</button>
 					<button
-						className="llm-hub-icon-btn"
+						className="llm-hub-header-btn"
 						onClick={() => { void handleSaveAsNote(); }}
 						disabled={saveNoteState === "saving" || messages.length === 0}
 						title={saveNoteState === "saved" ? t("chat.savedAsNote", { path: "" }) : t("chat.saveAsNote")}
 					>
-						{saveNoteState === "idle" && <FileText size={18} />}
-						{saveNoteState === "saving" && <Loader2 size={18} className="llm-hub-spinner" />}
-						{saveNoteState === "saved" && <Check size={18} />}
+						{saveNoteState === "idle" && <FileText size={16} />}
+						{saveNoteState === "saving" && <Loader2 size={16} className="llm-hub-spin" />}
+						{saveNoteState === "saved" && <Check size={16} />}
 					</button>
 					<button
-						className="llm-hub-icon-btn"
+						className="llm-hub-header-btn"
 						onClick={startNewChat}
 						title={t("chat.newChat")}
 					>
-						<Plus size={18} />
+						<Plus size={16} />
 					</button>
 					<button
-						className="llm-hub-icon-btn"
+						className="llm-hub-header-btn"
 						onClick={() => setShowHistory(!showHistory)}
 						title={t("chat.chatHistory")}
 					>
-						<History size={18} />
-						{showHistory && <ChevronDown size={14} className="llm-hub-chevron" />}
-					</button>
-				</div>
-			</div>
+						<History size={16} />
 
-			{showHistory && chatHistories.length > 0 && (
-				<div className="llm-hub-history-dropdown">
-					{chatHistories.map((history) => (
-						<div key={history.id}>
-							<div
-								className={`llm-hub-history-item ${currentChatId === history.id ? "active" : ""} ${history.isEncrypted ? "encrypted" : ""}`}
-								onClick={() => loadChat(history)}
-							>
-								<div className="llm-hub-history-title">
-									{history.isEncrypted && <Lock size={14} className="llm-hub-lock-icon" />}
-									{history.title}
-								</div>
-								<div className="llm-hub-history-meta">
-									<span className="llm-hub-history-date">
-										{formatHistoryDate(history.updatedAt)}
-									</span>
-									<button
-										className="llm-hub-history-delete"
-										onClick={(e) => {
-											void deleteChat(history.id, e);
-										}}
-										title={t("common.delete")}
-									>
-										×
-									</button>
-								</div>
-							</div>
-							{decryptingChatId === history.id && (
+					</button>
+				</ChatHeader>
+
+			{showHistory && <HistoryList classPrefix="llm-hub"
+        entries={chatHistories.map(history => ({ ...history, dateLabel: formatHistoryDate(history.updatedAt), encrypted: history.isEncrypted }))}
+        currentId={currentChatId} emptyLabel={t("chat.noChatHistory")} deleteLabel={t("common.delete")}
+        onSelect={history => { void loadChat(history); }}
+        onDelete={(history, event) => { void deleteChat(history.id, event); }}
+        panel deleteIcon={<Trash2 size={12} />} lockIcon={<Lock size={14} className="llm-hub-lock-icon" />}
+        renderExtra={history => (decryptingChatId === history.id && (
 								<div className="llm-hub-decrypt-form">
 									<input
 										type="password"
@@ -4556,17 +4534,8 @@ Always be helpful and provide clear, concise responses. When working with notes,
 										×
 									</button>
 								</div>
-							)}
-						</div>
-					))}
-				</div>
-			)}
-
-			{showHistory && chatHistories.length === 0 && (
-				<div className="llm-hub-history-dropdown">
-					<div className="llm-hub-history-empty">{t("chat.noChatHistory")}</div>
-				</div>
-			)}
+							))}
+      />}
 
 			{isConfigReady ? (
 				<>
@@ -4713,7 +4682,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					</div>
 				</div>
 			)}
-		</div>
+		</ChatLayout>
 	);
 });
 
