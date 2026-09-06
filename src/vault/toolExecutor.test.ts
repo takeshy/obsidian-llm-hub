@@ -213,3 +213,31 @@ describe("LLM vault tool folder scope edge cases", () => {
     expect(result.folders).toEqual(["Public", "Public/Nested"]);
   });
 });
+
+describe("list_folders under a restricted scope", () => {
+  it("answers about an ancestor it is willing to list", async () => {
+    // The gate used the strict check while the listing used the navigable one,
+    // so the tool listed "Public" and then refused to be asked about it.
+    const app = makeApp([]);
+
+    const result = await executeToolCall(app, "list_folders", { parentFolder: "Public" }, {
+      limitVaultToolScope: true,
+      cloudVaultToolAllowedFolders: ["Public/Nested"],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.folders).toEqual(["Public/Nested"]);
+  });
+
+  it("still refuses a folder that leads nowhere allowed", async () => {
+    const app = makeApp([]);
+
+    const result = await executeToolCall(app, "list_folders", { parentFolder: "Private" }, {
+      limitVaultToolScope: true,
+      cloudVaultToolAllowedFolders: ["Public/Nested"],
+    });
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Access denied");
+  });
+});

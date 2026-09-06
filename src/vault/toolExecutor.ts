@@ -304,13 +304,17 @@ async function executeToolCallInternal(
 
     case "list_folders": {
       const parentFolder = asString(args.parentFolder);
-      const denied = parentFolder ? denyIfCloudVaultToolPathOutsideScope(parentFolder, context) : null;
-      if (denied) return denied;
       // Ancestors of an allowed folder are listed so the user can navigate to
       // it; they never authorize reading a file, which goes through
-      // isFileAllowedForVaultTools.
-      const folders = listFolders(app, parentFolder)
-        .filter((folder) => isPathNavigableForVaultTools(folder, hasCloudVaultToolScope(context) ? context!.cloudVaultToolAllowedFolders : undefined));
+      // isFileAllowedForVaultTools. The same rule gates the folder asked about,
+      // or the tool would list an ancestor it then refuses to be asked about.
+      const folderFilter = hasCloudVaultToolScope(context)
+        ? (path: string) => isPathNavigableForVaultTools(path, context!.cloudVaultToolAllowedFolders)
+        : undefined;
+      if (parentFolder && folderFilter && !folderFilter(parentFolder)) {
+        return { success: false, error: VAULT_TOOL_SCOPE_DENIED_MSG };
+      }
+      const folders = listFolders(app, parentFolder, folderFilter);
       return {
         success: true,
         folders,
