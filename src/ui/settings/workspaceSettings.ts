@@ -1,367 +1,77 @@
-import { Setting, Notice } from "obsidian";
+import { Setting } from "obsidian";
+import {
+  addAllowedVaultFoldersSetting,
+  addHideWorkspaceFolderSetting,
+  addMaxSavedChatHistoriesSetting,
+  addSaveChatHistorySetting,
+  addSystemPromptSetting,
+  addToolLimitsSection,
+  addWorkspaceFolderSetting,
+} from "obsidian-llm-hub-common/settings";
 import { t } from "src/i18n";
 import { DEFAULT_SETTINGS, DEFAULT_WORKSPACE_FOLDER } from "src/types";
-import { ConfirmModal } from "src/ui/components/ConfirmModal";
-import { normalizeVaultScopePath } from "obsidian-llm-hub-common/core";
 import { getLocalRagStore } from "src/core/localRagStore";
 import { ragCredentialSecretId } from "src/core/credentialBundle";
 import { clearSecret, copySecret, readSecretJson } from "src/core/secretStorage";
 import type { SettingsContext } from "./settingsContext";
 
 export function displayWorkspaceSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
-  const { plugin, display } = ctx;
-  const app = plugin.app;
+  const { plugin } = ctx;
 
   new Setting(containerEl).setName(t("settings.workspace")).setHeading();
 
-  new Setting(containerEl)
-    .setName(t("settings.workspaceFolder"))
-    .setDesc(t("settings.workspaceFolder.desc"))
-    .addText((text) => {
-      text
-        .setPlaceholder(DEFAULT_WORKSPACE_FOLDER)
-        .setValue(plugin.settings.workspaceFolder);
-      text.inputEl.addEventListener("blur", () => {
-        void (async () => {
-          const trimmed = text.inputEl.value.trim().replace(/^\/+|\/+$/g, "");
-          const newFolder = trimmed || DEFAULT_WORKSPACE_FOLDER;
-          const oldFolder = plugin.settings.workspaceFolder || DEFAULT_WORKSPACE_FOLDER;
-
-          // Reset input to normalized value
-          text.setValue(newFolder);
-
-          if (newFolder === oldFolder) return;
-
-          // Block absolute paths and directory traversal
-          if (newFolder.startsWith("/") || newFolder.includes("..")) {
-            new Notice(t("settings.workspaceFolder.invalidPath"));
-            text.setValue(oldFolder);
-            return;
-          }
-
-          // Check if old folder exists and ask to move
-          let migratedOldSecretId: string | null = null;
-          const oldExists = await app.vault.adapter.exists(oldFolder);
-          if (oldExists) {
-            const confirmed = await new ConfirmModal(
-              app,
-              t("settings.moveWorkspaceFolder", { from: oldFolder, to: newFolder }),
-              t("settings.moveWorkspaceFolder.move"),
-              t("settings.moveWorkspaceFolder.skip")
-            ).openAndWait();
-
-            if (confirmed) {
-              const oldSecretId = ragCredentialSecretId(oldFolder);
-              const newSecretId = ragCredentialSecretId(newFolder);
-              const migrateSecret = plugin.isSecretCredentialStorage();
-              // Only the copy we make ourselves may be rolled back — a secret
-              // that was already there belongs to whatever used that name.
-              const secretWasCopied = migrateSecret && !readSecretJson(plugin.app, newSecretId);
-              if (migrateSecret && !copySecret(plugin.app, oldSecretId, newSecretId)) {
-                new Notice(t("settings.moveWorkspaceFolder.error", {
-                  error: t("settings.credentialStorage.workspaceMigrationFailed"),
-                }));
-                text.setValue(oldFolder);
-                return;
-              }
-
-              try {
-                await app.vault.adapter.rename(oldFolder, newFolder);
-              } catch (e) {
-                if (secretWasCopied) clearSecret(plugin.app, newSecretId);
-                new Notice(t("settings.moveWorkspaceFolder.error", { error: String(e) }));
-                text.setValue(oldFolder);
-                return;
-              }
-              if (migrateSecret) migratedOldSecretId = oldSecretId;
-            }
-          }
-
-          plugin.settings.workspaceFolder = newFolder;
-          await plugin.saveSettings();
-          plugin.updateWorkspaceFolderVisibility();
-
-          // Reload workspace state from new folder
-          await plugin.loadWorkspaceState();
-          if (migratedOldSecretId) clearSecret(plugin.app, migratedOldSecretId);
-
-          // Update LocalRagStore workspace folder and invalidate cache
-          const localRag = getLocalRagStore();
-          if (localRag) {
-            localRag.workspaceFolder = newFolder;
-            localRag.clearAll();
-          }
-
-          display();
-        })();
-      });
-    });
-
-  // Hide Workspace Folder (only for default folder name)
-  if ((plugin.settings.workspaceFolder || DEFAULT_WORKSPACE_FOLDER) === DEFAULT_WORKSPACE_FOLDER) {
-    new Setting(containerEl)
-      .setName(t("settings.hideWorkspaceFolder"))
-      .setDesc(t("settings.hideWorkspaceFolder.desc"))
-      .addToggle((toggle) =>
-        toggle
-          .setValue(plugin.settings.hideWorkspaceFolder)
-          .onChange((value) => {
-            void (async () => {
-              plugin.settings.hideWorkspaceFolder = value;
-              await plugin.saveSettings();
-              plugin.updateWorkspaceFolderVisibility();
-            })();
-          })
-      );
-  }
-
-  new Setting(containerEl)
-    .setName(t("settings.cloudVaultToolAllowedFolders"))
-    .setDesc(t("settings.cloudVaultToolAllowedFolders.desc"))
-    .addText((text) => {
-      text
-        .setPlaceholder(t("settings.cloudVaultToolAllowedFolders.placeholder"))
-        .setValue(plugin.settings.cloudVaultToolAllowedFolders.join(", "));
-      text.inputEl.addEventListener("blur", () => {
-        void (async () => {
-          // A folder the scope check cannot normalize is refused here rather
-          // than stored: an unusable entry denies every path, so accepting one
-          // silently would look like the Vault tools had simply stopped working.
-          const entered = text.inputEl.value
-            .split(",")
-            .map((folder) => folder.trim())
-            .filter(Boolean);
-          const normalized = entered.map(normalizeVaultScopePath);
-          if (normalized.some((folder) => folder === null)) {
-            new Notice(t("settings.vaultToolAllowedFolders.invalidPath"));
-            text.setValue(plugin.settings.cloudVaultToolAllowedFolders.join(", "));
-            return;
-          }
-          plugin.settings.cloudVaultToolAllowedFolders = normalized.filter(
-            (folder): folder is string => folder !== null,
-          );
-          text.setValue(plugin.settings.cloudVaultToolAllowedFolders.join(", "));
-          await plugin.saveSettings();
-        })();
-      });
-    });
-
-  // Save Chat History
-  new Setting(containerEl)
-    .setName(t("settings.saveChatHistory"))
-    .setDesc(t("settings.saveChatHistory.desc"))
-    .addToggle((toggle) =>
-      toggle
-        .setValue(plugin.settings.saveChatHistory)
-        .onChange((value) => {
-          void (async () => {
-            if (!value) {
-              const confirmed = await new ConfirmModal(
-                app,
-                t("settings.deleteChatHistoryConfirm"),
-                t("common.delete"),
-                t("common.cancel")
-              ).openAndWait();
-
-              if (confirmed) {
-                await deleteChatHistoryFiles(plugin);
-              }
-            }
-            plugin.settings.saveChatHistory = value;
-            await plugin.saveSettings();
-          })();
-        })
-    );
-
-  new Setting(containerEl)
-    .setName(t("settings.maxSavedChatHistories"))
-    .setDesc(t("settings.maxSavedChatHistories.desc"))
-    .addText((text) => {
-      text.setValue(String(plugin.settings.maxSavedChatHistories));
-      text.inputEl.type = "number";
-      text.inputEl.min = "0";
-      text.inputEl.step = "1";
-      text.inputEl.addEventListener("blur", () => {
-        const parsed = Number.parseInt(text.inputEl.value, 10);
-        const value = Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_SETTINGS.maxSavedChatHistories;
-        plugin.settings.maxSavedChatHistories = value;
-        text.inputEl.value = String(value);
-        void plugin.saveSettings();
-      });
-    });
-
-  // System Prompt
-  const systemPromptSetting = new Setting(containerEl)
-    .setName(t("settings.systemPrompt"))
-    .setDesc(t("settings.systemPrompt.desc"));
-
-  systemPromptSetting.settingEl.addClass("llm-hub-settings-textarea-container");
-
-  systemPromptSetting.addTextArea((text) => {
-    text
-      .setPlaceholder(t("settings.systemPrompt.placeholder"))
-      .setValue(plugin.settings.systemPrompt)
-      .onChange((value) => {
-        void (async () => {
-          plugin.settings.systemPrompt = value;
-          await plugin.saveSettings();
-        })();
-      });
-    text.inputEl.rows = 4;
-    text.inputEl.addClass("llm-hub-settings-textarea");
+  // The RAG credential bundle is stored under a name derived from the workspace
+  // folder, so it lives outside the folder the move renames and has to be
+  // carried across by hand.
+  let migratedOldSecretId: string | null = null;
+  addWorkspaceFolderSetting(containerEl, ctx, DEFAULT_WORKSPACE_FOLDER, {
+    beforeRename: (from, to) => {
+      migratedOldSecretId = null;
+      if (!plugin.isSecretCredentialStorage()) return {};
+      const oldSecretId = ragCredentialSecretId(from);
+      const newSecretId = ragCredentialSecretId(to);
+      // Only the copy we make ourselves may be rolled back — a secret that was
+      // already there belongs to whatever used that name.
+      const secretWasCopied = !readSecretJson(plugin.app, newSecretId);
+      if (!copySecret(plugin.app, oldSecretId, newSecretId)) {
+        return { error: t("settings.credentialStorage.workspaceMigrationFailed") };
+      }
+      migratedOldSecretId = oldSecretId;
+      return { rollback: secretWasCopied ? () => clearSecret(plugin.app, newSecretId) : undefined };
+    },
+    afterMove: () => {
+      if (migratedOldSecretId) clearSecret(plugin.app, migratedOldSecretId);
+      migratedOldSecretId = null;
+    },
+    afterChange: (folder) => {
+      // The local RAG index caches paths under the old folder name.
+      const localRag = getLocalRagStore();
+      if (localRag) {
+        localRag.workspaceFolder = folder;
+        localRag.clearAll();
+      }
+    },
   });
 
-  // Tool limits (collapsible)
-  const detailsEl = containerEl.createEl("details", { cls: "llm-hub-settings-details" });
-  detailsEl.createEl("summary", { text: t("settings.toolLimits"), cls: "llm-hub-settings-summary" });
+  addHideWorkspaceFolderSetting(containerEl, ctx, DEFAULT_WORKSPACE_FOLDER);
 
-  new Setting(detailsEl)
-    .setName(t("settings.maxToolCalls"))
-    .setDesc(t("settings.maxToolCalls.desc"))
-    .addSlider((slider) =>
-      slider
-        .setLimits(1, 50, 1)
-        .setValue(plugin.settings.maxFunctionCalls)
-        .onChange((value) => {
-          void (async () => {
-            plugin.settings.maxFunctionCalls = value;
-            const needsRefresh = plugin.settings.functionCallWarningThreshold > value;
-            if (needsRefresh) {
-              plugin.settings.functionCallWarningThreshold = value;
-            }
-            await plugin.saveSettings();
-            if (needsRefresh) {
-              display();
-            }
-          })();
-        })
-    )
-    .addExtraButton((button) =>
-      button
-        .setIcon("reset")
-        .setTooltip(t("settings.resetToDefault", { value: String(DEFAULT_SETTINGS.maxFunctionCalls) }))
-        .onClick(() => {
-          void (async () => {
-            plugin.settings.maxFunctionCalls = DEFAULT_SETTINGS.maxFunctionCalls;
-            if (plugin.settings.functionCallWarningThreshold > DEFAULT_SETTINGS.maxFunctionCalls) {
-              plugin.settings.functionCallWarningThreshold = DEFAULT_SETTINGS.maxFunctionCalls;
-            }
-            await plugin.saveSettings();
-            display();
-          })();
-        })
-    );
+  addAllowedVaultFoldersSetting(
+    containerEl,
+    ctx,
+    {
+      name: t("settings.cloudVaultToolAllowedFolders"),
+      desc: t("settings.cloudVaultToolAllowedFolders.desc"),
+      placeholder: t("settings.cloudVaultToolAllowedFolders.placeholder"),
+    },
+    {
+      get: () => plugin.settings.cloudVaultToolAllowedFolders,
+      set: (folders) => { plugin.settings.cloudVaultToolAllowedFolders = folders; },
+    },
+  );
 
-  new Setting(detailsEl)
-    .setName(t("settings.toolCallWarning"))
-    .setDesc(t("settings.toolCallWarning.desc"))
-    .addSlider((slider) =>
-      slider
-        .setLimits(1, 50, 1)
-        .setValue(plugin.settings.functionCallWarningThreshold)
-        .onChange((value) => {
-          void (async () => {
-            const maxAllowed = plugin.settings.maxFunctionCalls;
-            const nextValue = Math.min(value, maxAllowed);
-            plugin.settings.functionCallWarningThreshold = nextValue;
-            await plugin.saveSettings();
-            if (nextValue !== value) {
-              display();
-            }
-          })();
-        })
-    )
-    .addExtraButton((button) =>
-      button
-        .setIcon("reset")
-        .setTooltip(t("settings.resetToDefault", { value: String(DEFAULT_SETTINGS.functionCallWarningThreshold) }))
-        .onClick(() => {
-          void (async () => {
-            plugin.settings.functionCallWarningThreshold = DEFAULT_SETTINGS.functionCallWarningThreshold;
-            await plugin.saveSettings();
-            display();
-          })();
-        })
-    );
-
-  new Setting(detailsEl)
-    .setName(t("settings.listNotesLimit"))
-    .setDesc(t("settings.listNotesLimit.desc"))
-    .addSlider((slider) =>
-      slider
-        .setLimits(10, 200, 10)
-        .setValue(plugin.settings.listNotesLimit)
-        .onChange((value) => {
-          void (async () => {
-            plugin.settings.listNotesLimit = value;
-            await plugin.saveSettings();
-          })();
-        })
-    )
-    .addExtraButton((button) =>
-      button
-        .setIcon("reset")
-        .setTooltip(t("settings.resetToDefault", { value: String(DEFAULT_SETTINGS.listNotesLimit) }))
-        .onClick(() => {
-          void (async () => {
-            plugin.settings.listNotesLimit = DEFAULT_SETTINGS.listNotesLimit;
-            await plugin.saveSettings();
-            display();
-          })();
-        })
-    );
-
-  new Setting(detailsEl)
-    .setName(t("settings.maxNoteChars"))
-    .setDesc(t("settings.maxNoteChars.desc"))
-    .addSlider((slider) =>
-      slider
-        .setLimits(1000, 100000, 1000)
-        .setValue(plugin.settings.maxNoteChars)
-        .onChange((value) => {
-          void (async () => {
-            plugin.settings.maxNoteChars = value;
-            await plugin.saveSettings();
-          })();
-        })
-    )
-    .addExtraButton((button) =>
-      button
-        .setIcon("reset")
-        .setTooltip(t("settings.resetToDefault", { value: String(DEFAULT_SETTINGS.maxNoteChars) }))
-        .onClick(() => {
-          void (async () => {
-            plugin.settings.maxNoteChars = DEFAULT_SETTINGS.maxNoteChars;
-            await plugin.saveSettings();
-            display();
-          })();
-        })
-    );
-}
-
-async function deleteChatHistoryFiles(plugin: import("src/plugin").LlmHubPlugin): Promise<void> {
-  const app = plugin.app;
-  const folderPath = plugin.settings.workspaceFolder || DEFAULT_WORKSPACE_FOLDER;
-  const folderExists = await app.vault.adapter.exists(folderPath);
-  if (!folderExists) return;
-
-  const listed = await app.vault.adapter.list(folderPath);
-  const chatFiles = listed.files.filter((f) => {
-    const name = f.split("/").pop() || "";
-    return name.startsWith("chat_") && (name.endsWith(".md") || name.endsWith(".md.encrypted"));
-  });
-
-  let deletedCount = 0;
-  for (const file of chatFiles) {
-    try {
-      await app.vault.adapter.remove(file);
-      deletedCount++;
-    } catch {
-      // Ignore errors for individual files
-    }
-  }
-
-  if (deletedCount > 0) {
-    new Notice(t("settings.chatHistoryDeleted", { count: String(deletedCount) }));
-  }
+  // Chats are written straight into the workspace folder here.
+  addSaveChatHistorySetting(containerEl, ctx, () => plugin.settings.workspaceFolder || DEFAULT_WORKSPACE_FOLDER);
+  addMaxSavedChatHistoriesSetting(containerEl, ctx, DEFAULT_SETTINGS.maxSavedChatHistories);
+  addSystemPromptSetting(containerEl, ctx);
+  addToolLimitsSection(containerEl, ctx, DEFAULT_SETTINGS);
 }
