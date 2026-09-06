@@ -17,7 +17,15 @@ import {
   getLocalLlmModelName,
   normalizeDeprecatedModelIdentifier,
 } from "../types";
-import { formatError } from "obsidian-llm-hub-common/core";
+import {
+  assertNoRagSettingCollision,
+  deleteRagSettingFromState,
+  formatError,
+  pruneRagSettingSources,
+  renameRagSettingInState,
+} from "obsidian-llm-hub-common/core";
+import { deleteRagIndex, renameRagIndex } from "./localRagStorage";
+import { getLocalRagStore } from "./localRagStore";
 import { searchSelectionFromWorkspace } from "./webSearch";
 import {
   applyRagCredentials,
@@ -276,6 +284,7 @@ export class WorkspaceStateManager {
     if (this.workspaceState.ragSettings[name]) {
       throw new Error(`Semantic search setting "${name}" already exists`);
     }
+    assertNoRagSettingCollision(this.workspaceState, name);
 
     this.workspaceState.ragSettings[name] = {
       ...DEFAULT_RAG_SETTING,
@@ -293,17 +302,11 @@ export class WorkspaceStateManager {
       throw new Error(`Semantic search setting "${name}" not found`);
     }
 
-    const next = {
-      ...existing,
-      ...updates,
-    };
-    if (next.sourceRagSettings.length > 0) {
-      next.sourceRagSettings = next.sourceRagSettings.filter(sourceName =>
-        sourceName !== name && !!this.workspaceState.ragSettings[sourceName]
-      );
-    }
-
-    this.workspaceState.ragSettings[name] = next;
+    this.workspaceState.ragSettings[name] = pruneRagSettingSources(
+      this.workspaceState,
+      name,
+      { ...existing, ...updates },
+    );
 
     await this.saveWorkspaceState();
   }
@@ -314,15 +317,11 @@ export class WorkspaceStateManager {
       return;
     }
 
-    delete this.workspaceState.ragSettings[name];
-    for (const setting of Object.values(this.workspaceState.ragSettings)) {
-      setting.sourceRagSettings = setting.sourceRagSettings.filter(sourceName => sourceName !== name);
-    }
-
-    // If this was the selected setting, clear selection
-    if (this.workspaceState.selectedRagSetting === name) {
-      this.workspaceState.selectedRagSetting = null;
-    }
+    deleteRagSettingFromState(this.workspaceState, name);
+    // The index is stored under the setting's name, so it goes with it rather
+    // than sitting in the vault forever with nothing pointing at it.
+    await deleteRagIndex(this.app, name, this.workspaceFolder);
+    getLocalRagStore()?.clearAll();
 
     await this.saveWorkspaceState();
     this.settingsEmitter.emit("workspace-state-loaded", this.workspaceState);
@@ -336,19 +335,14 @@ export class WorkspaceStateManager {
     if (this.workspaceState.ragSettings[newName]) {
       throw new Error(`Semantic search setting "${newName}" already exists`);
     }
+    assertNoRagSettingCollision(this.workspaceState, newName, oldName);
 
-    this.workspaceState.ragSettings[newName] = this.workspaceState.ragSettings[oldName];
-    delete this.workspaceState.ragSettings[oldName];
-    for (const setting of Object.values(this.workspaceState.ragSettings)) {
-      setting.sourceRagSettings = setting.sourceRagSettings.map(sourceName =>
-        sourceName === oldName ? newName : sourceName
-      );
-    }
+    // The index directory is named after the setting, so it moves with it;
+    // otherwise the renamed setting starts from nothing and re-embeds the vault.
+    await renameRagIndex(this.app, oldName, newName, this.workspaceFolder);
+    getLocalRagStore()?.clearAll();
 
-    // Update selection if needed
-    if (this.workspaceState.selectedRagSetting === oldName) {
-      this.workspaceState.selectedRagSetting = newName;
-    }
+    renameRagSettingInState(this.workspaceState, oldName, newName);
 
     await this.saveWorkspaceState();
     this.settingsEmitter.emit("workspace-state-loaded", this.workspaceState);

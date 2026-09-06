@@ -21,7 +21,7 @@ function createManager(initialContent: string) {
     emitter,
     async () => ({}),
   );
-  return { manager, emitter, write, getContent: () => content };
+  return { manager, emitter, write, adapter, getContent: () => content };
 }
 
 describe("WorkspaceStateManager combined search persistence", () => {
@@ -98,5 +98,54 @@ describe("WorkspaceStateManager combined search persistence", () => {
       webSearchEnabled: true,
     });
     expect(listener).toHaveBeenCalledWith({ webSearch: true, ragSetting: "Research" });
+  });
+});
+
+describe("WorkspaceStateManager RAG setting names and their index", () => {
+  const setting = (overrides: Record<string, unknown> = {}) => ({
+    embeddingBaseUrl: "", embeddingApiKey: "", embeddingModel: "", chunkSize: 500, chunkOverlap: 100,
+    pdfChunkPages: 6, topK: 5, scoreThreshold: 0.3, targetFolders: [], excludePatterns: [],
+    searchFileExtensions: [], lastFullSync: null, externalIndexPath: "", sourceRagSettings: [],
+    indexMultimodal: false, ...overrides,
+  });
+
+  it("refuses a name whose index directory an existing setting already owns", async () => {
+    // Both reduce to "My_Index": one directory, two settings writing vectors to it.
+    const harness = createManager(JSON.stringify({ ragSettings: { "My Index": setting() } }));
+    await harness.manager.loadWorkspaceState();
+
+    await expect(harness.manager.createRagSetting("My/Index")).rejects.toThrow(/conflicts/);
+    await expect(harness.manager.renameRagSetting("My Index", "My.Index")).resolves.toBeUndefined();
+  });
+
+  it("moves the index with the setting when it is renamed", async () => {
+    const harness = createManager(JSON.stringify({
+      selectedRagSetting: "Old",
+      ragSettings: { Old: setting(), Bundle: setting({ sourceRagSettings: ["Old"] }) },
+    }));
+    await harness.manager.loadWorkspaceState();
+
+    await harness.manager.renameRagSetting("Old", "New");
+
+    // The rename reads the old index before writing the new one; leaving it
+    // behind meant the renamed setting re-embedded the whole vault.
+    expect(harness.adapter.exists).toHaveBeenCalledWith("LLMHub/rag/Old/index.json");
+    expect(harness.manager.workspaceState.ragSettings.Bundle.sourceRagSettings).toEqual(["New"]);
+    expect(harness.manager.workspaceState.selectedRagSetting).toBe("New");
+  });
+
+  it("removes the index when the setting is deleted", async () => {
+    const harness = createManager(JSON.stringify({
+      selectedRagSetting: "Gone",
+      ragSettings: { Gone: setting(), Bundle: setting({ sourceRagSettings: ["Gone", "Kept"] }), Kept: setting() },
+    }));
+    await harness.manager.loadWorkspaceState();
+
+    await harness.manager.deleteRagSetting("Gone");
+
+    expect(harness.adapter.exists).toHaveBeenCalledWith("LLMHub/rag/Gone/index.json");
+    expect(harness.manager.workspaceState.ragSettings.Gone).toBeUndefined();
+    expect(harness.manager.workspaceState.ragSettings.Bundle.sourceRagSettings).toEqual(["Kept"]);
+    expect(harness.manager.workspaceState.selectedRagSetting).toBeNull();
   });
 });
