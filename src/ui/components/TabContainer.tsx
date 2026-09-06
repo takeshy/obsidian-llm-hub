@@ -4,7 +4,7 @@ import type { TFile } from "obsidian";
 import type { Attachment } from "src/types";
 import Chat, { ChatRef } from "./Chat";
 import SearchPanel from "./SearchPanel";
-import WorkflowPanel from "./workflow/WorkflowPanel";
+import { WorkflowPanel } from "./workflow/WorkflowPanel";
 import { t } from "src/i18n";
 
 export type TabType = "chat" | "search" | "workflow";
@@ -78,7 +78,7 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
             <Chat ref={chatRef} plugin={plugin} onToggleSidebarWidth={onToggleSidebarWidth} />
           </div>
           <div className={`llm-hub-tab-panel ${activeTab === "workflow" ? "is-active" : ""}`}>
-            <WorkflowPanel plugin={plugin} />
+            <WorkflowPanel app={plugin.app} />
           </div>
           <div className={`llm-hub-tab-panel ${activeTab === "search" ? "is-active" : ""}`}>
             <SearchPanel plugin={plugin} onChatWithResults={handleChatWithResults} onDiscussionWithResults={handleDiscussionWithResults} />

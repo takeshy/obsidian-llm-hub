@@ -326,6 +326,24 @@ export class LlmHubPlugin extends Plugin {
       getSkillsFolder: () => this.settings.skillsFolder || SKILLS_FOLDER,
       getHistoryEncryption: () => this.settings.encryption,
       getPluginVersion: () => this.manifest.version,
+      getWorkflowHotkeys: () => this.settings.enabledWorkflowHotkeys,
+      setWorkflowHotkeys: (paths) => {
+        this.settings.enabledWorkflowHotkeys = paths;
+        void this.saveSettings();
+      },
+      getWorkflowEventTriggers: () => this.settings.enabledWorkflowEventTriggers,
+      setWorkflowEventTriggers: (triggers) => {
+        this.settings.enabledWorkflowEventTriggers = triggers;
+        void this.saveSettings();
+      },
+      runWorkflowFromHotkey: (path) => {
+        void this.executeWorkflowFromHotkey(path);
+      },
+      getLastSelectedWorkflow: () => this.settings.lastSelectedWorkflowPath,
+      setLastSelectedWorkflow: (path) => {
+        this.settings.lastSelectedWorkflowPath = path;
+        void this.saveSettings();
+      },
       streamChat: (request) => streamWorkflowChat(this, request),
       runCommandNode: ({ node, context, app, callbacks, traceId, abortSignal }) =>
         handleCommandNode(node, context, app, this, callbacks, traceId, abortSignal),
@@ -649,7 +667,7 @@ export class LlmHubPlugin extends Plugin {
       id: "run-workflow",
       name: t("command.runWorkflow"),
       callback: () => {
-        new WorkflowSelectorModal(this.app, this, (filePath) => {
+        new WorkflowSelectorModal(this.app, (filePath) => {
           void this.executeWorkflowFromHotkey(filePath);
         }).open();
       },
