@@ -1,7 +1,9 @@
 import { Setting, Notice } from "obsidian";
 import { clearMcpToolsCache } from "src/core/mcpTools";
 import { t } from "src/i18n";
-import { McpServerModal } from "./McpServerModal";
+import { McpServerModal, type McpServerModalOptions } from "obsidian-llm-hub-common/settings";
+import { credentialSlot } from "src/core/credentialBundle";
+import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
 import type { SettingsContext } from "./settingsContext";
 import type { McpServerConfig } from "src/types";
 
@@ -42,6 +44,17 @@ export function displayMcpServersSettings(containerEl: HTMLElement, ctx: Setting
   const introEl = containerEl.createDiv({ cls: "setting-item-description llm-hub-mcp-intro" });
   introEl.textContent = t("settings.mcpServersIntro");
 
+  // Headers and env may be held in the OS credential store instead of settings,
+  // in which case the box is empty on purpose and says so.
+  const modalOptions: McpServerModalOptions = {
+    markSecretField: (setting, field, server, text) => markCredentialConfiguredElsewhere(
+      setting,
+      plugin,
+      field === "headers" ? credentialSlot.mcpHeaders(server) : credentialSlot.mcpEnv(server),
+      text,
+    ),
+  };
+
   // Add new server button
   new Setting(containerEl)
     .setName(t("settings.mcpServers.desc"))
@@ -51,7 +64,7 @@ export function displayMcpServersSettings(containerEl: HTMLElement, ctx: Setting
         .setCta()
         .onClick(() => {
           new McpServerModal(
-            plugin,
+            plugin.app,
             null,
             async (server) => {
               plugin.settings.mcpServers.push(server);
@@ -59,7 +72,8 @@ export function displayMcpServersSettings(containerEl: HTMLElement, ctx: Setting
               clearMcpToolsCache();
               display();
               new Notice(t("settings.mcpServerCreated", { name: server.name }));
-            }
+            },
+            modalOptions,
           ).open();
         })
     );
@@ -84,7 +98,7 @@ export function displayMcpServersSettings(containerEl: HTMLElement, ctx: Setting
           .setTooltip(t("common.edit"))
           .onClick(() => {
             new McpServerModal(
-              plugin,
+              plugin.app,
               server,
               async (updated) => {
                 const index = plugin.settings.mcpServers.findIndex(
@@ -97,7 +111,8 @@ export function displayMcpServersSettings(containerEl: HTMLElement, ctx: Setting
                   display();
                   new Notice(t("settings.mcpServerUpdated", { name: updated.name }));
                 }
-              }
+              },
+              modalOptions,
             ).open();
           });
       });
