@@ -687,14 +687,14 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
             webSearch={{
               checked: webSearchEnabled,
               disabled: !allowWebSearch,
-              onChange: (checked) => onSearchSelectionChange({ webSearch: checked, ragSetting: selectedRagSetting }),
+              combinable: true,
             }}
             rag={{
               settings: ragSettings,
               selected: selectedRagSetting,
               disabled: !ragEnabled || isImageGenerationModel(model),
-              onSelect: (name) => onSearchSelectionChange({ webSearch: webSearchEnabled, ragSetting: name }),
             }}
+            onChange={onSearchSelectionChange}
           />
         </ModelRow>
       )}
