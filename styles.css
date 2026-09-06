@@ -2224,123 +2224,6 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   font-size: 14px;
 }
 
-/* Workflow Prompt Modals */
-.workflow-file-prompt-modal,
-.workflow-value-prompt-modal,
-.workflow-selection-prompt-modal {
-  padding: 20px;
-}
-
-.workflow-file-prompt-modal h2,
-.workflow-value-prompt-modal h2,
-.workflow-selection-prompt-modal h2 {
-  margin: 0 0 16px 0;
-}
-
-.workflow-file-selector {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.workflow-select-file-btn {
-  flex-shrink: 0;
-}
-
-.workflow-selected-file-label {
-  color: var(--text-muted);
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workflow-file-preview-container {
-  margin-bottom: 16px;
-}
-
-.workflow-file-preview-container h4 {
-  margin: 0 0 8px 0;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.workflow-file-preview {
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 12px;
-  background: var(--background-secondary);
-  border-radius: 6px;
-}
-
-.workflow-file-preview-image {
-  max-width: 100%;
-  max-height: 300px;
-}
-
-.workflow-file-path-input input {
-  width: 100%;
-  margin-bottom: 10px;
-  font-size: 13px;
-}
-
-.workflow-value-input-container {
-  margin-bottom: 16px;
-}
-
-.workflow-value-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.workflow-value-textarea {
-  width: 100%;
-  min-height: 150px;
-  padding: 8px 12px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  font-size: 14px;
-  resize: vertical;
-}
-
-.workflow-selection-instruction {
-  color: var(--text-muted);
-  font-size: 13px;
-  margin-bottom: 8px;
-}
-
-.workflow-selection-textarea-container {
-  margin-bottom: 12px;
-}
-
-.workflow-selection-textarea {
-  width: 100%;
-  height: 250px;
-  padding: 8px 12px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  font-size: 13px;
-  font-family: var(--font-monospace);
-  resize: vertical;
-}
-
-.workflow-selection-info {
-  color: var(--text-muted);
-  font-size: 12px;
-  margin-bottom: 16px;
-}
-
-.workflow-prompt-buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-}
-
 /* ===============================================
    Edit Confirmation Modal Styles
    =============================================== */
@@ -5414,7 +5297,6 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   overflow-y: auto;
 }
 
-
 .workflow-generation-plan {
   flex: 1;
   min-height: 40px;
@@ -5525,7 +5407,6 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   letter-spacing: 1px;
   border-top: 1px solid var(--background-modifier-border);
 }
-
 
 .workflow-generation-status {
   display: flex;
@@ -7894,15 +7775,6 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   text-align: center;
 }
 
-/* ===================================================================== */
-.llm-hub-pass-through-modal-container {
-  pointer-events: none;
-}
-
-.llm-hub-interactive-modal {
-  pointer-events: auto;
-}
-
 /* Keep the shared hidden state authoritative over component layout rules. */
 body .llm-hub-hidden.llm-hub-hidden {
   display: none;
@@ -9080,3 +8952,131 @@ body .llm-hub-hidden.llm-hub-hidden {
 /* Shared busy indicator used by the chat header. */
 .llm-hub-spin { animation: llm-hub-spin 1s linear infinite; }
 @keyframes llm-hub-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Workflow prompt modals */
+
+/* Workflow Prompt Modals */
+.llm-hub-workflow-file-prompt-modal,
+.llm-hub-workflow-value-prompt-modal,
+.llm-hub-workflow-selection-prompt-modal {
+  padding: 20px;
+}
+
+.llm-hub-workflow-file-prompt-modal h2,
+.llm-hub-workflow-value-prompt-modal h2,
+.llm-hub-workflow-selection-prompt-modal h2 {
+  margin: 0 0 16px 0;
+}
+
+.llm-hub-workflow-file-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.llm-hub-workflow-select-file-btn {
+  flex-shrink: 0;
+}
+
+.llm-hub-workflow-selected-file-label {
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.llm-hub-workflow-file-preview-container {
+  margin-bottom: 16px;
+}
+
+.llm-hub-workflow-file-preview-container h4 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.llm-hub-workflow-file-preview {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+.llm-hub-workflow-file-preview-image {
+  max-width: 100%;
+  max-height: 300px;
+}
+
+.llm-hub-workflow-file-path-input input {
+  width: 100%;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.llm-hub-workflow-value-input-container {
+  margin-bottom: 16px;
+}
+
+.llm-hub-workflow-value-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.llm-hub-workflow-value-textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.llm-hub-workflow-selection-instruction {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.llm-hub-workflow-selection-textarea-container {
+  margin-bottom: 12px;
+}
+
+.llm-hub-workflow-selection-textarea {
+  width: 100%;
+  height: 250px;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: var(--font-monospace);
+  resize: vertical;
+}
+
+.llm-hub-workflow-selection-info {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.llm-hub-workflow-prompt-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Modals that let clicks reach the note behind them */
+.llm-hub-pass-through-modal-container {
+  pointer-events: none;
+}
+
+.llm-hub-interactive-modal {
+  pointer-events: auto;
+}
