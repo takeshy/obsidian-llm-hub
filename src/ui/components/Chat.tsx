@@ -78,7 +78,7 @@ import { createRagSearchRunner, RAG_SEARCH_SYSTEM_PROMPT, RAG_SEARCH_TOOL, RAG_S
 import { filterVaultToolsForMode } from "src/core/vaultToolMode";
 import { buildNoDiscoverySystemPrompt } from "./chat/noDiscoveryPrompt";
 import { createToolExecutor } from "src/vault/toolExecutor";
-import { extractPdfText } from "src/vault/search";
+import { extractPdfText } from "obsidian-llm-hub-common/vault";
 import {
 	getPendingEdit,
 	applyEdit,

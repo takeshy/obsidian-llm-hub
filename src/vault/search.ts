@@ -2,63 +2,8 @@ import { TFolder, TFile, type App } from "obsidian";
 import { formatError } from "obsidian-llm-hub-common/core";
 import { DEFAULT_SETTINGS } from "src/types";
 import { getSearchableVaultFiles } from "./fileTypes";
-import { extractPdfPageText, loadPdfDocument } from "../core/pdfJs";
-
-// In-memory cache for extracted PDF text, keyed by "path:startPage-endPage"
-const pdfTextCache = new Map<string, { mtime: number; size: number; text: string | null }>();
-
-/**
- * Extract text from a PDF file (or specific page range) using Obsidian's built-in PDF.js.
- * Returns null if the PDF has no extractable text (e.g. scanned/image-only).
- * @param startPage 1-based start page (inclusive). Omit for all pages.
- * @param endPage 1-based end page (inclusive). Omit for all pages.
- */
-export async function extractPdfText(
-  app: App,
-  filePath: string,
-  startPage?: number,
-  endPage?: number,
-): Promise<string | null> {
-  const cacheKey = `${filePath}:${startPage ?? 0}-${endPage ?? 0}`;
-  const isAbsolute = filePath.startsWith("/") || /^[A-Z]:\\/i.test(filePath);
-  const stat = isAbsolute ? null : await app.vault.adapter.stat(filePath);
-  if (stat) {
-    const cached = pdfTextCache.get(cacheKey);
-    if (cached && cached.mtime === stat.mtime && cached.size === stat.size) {
-      return cached.text;
-    }
-  }
-
-  try {
-    let buffer: ArrayBuffer;
-    if (isAbsolute) {
-      const fs = (window as { require?: (id: string) => { promises: { readFile: (p: string) => Promise<Buffer> } } }).require?.("fs");
-      if (!fs) return null;
-      const nodeBuffer = await fs.promises.readFile(filePath);
-      buffer = nodeBuffer.buffer.slice(nodeBuffer.byteOffset, nodeBuffer.byteOffset + nodeBuffer.byteLength) as ArrayBuffer;
-    } else {
-      const file = app.vault.getAbstractFileByPath(filePath);
-      if (!(file instanceof TFile)) return null;
-      buffer = await app.vault.readBinary(file);
-    }
-
-    const pdf = await loadPdfDocument(buffer);
-
-    const from = startPage ?? 1;
-    const to = endPage ?? pdf.numPages;
-    const pages: string[] = [];
-    for (let i = from; i <= Math.min(to, pdf.numPages); i++) {
-      const text = await extractPdfPageText(pdf, i);
-      if (text.trim()) pages.push(text);
-    }
-    const result = pages.length > 0 ? pages.join("\n") : null;
-    if (stat) pdfTextCache.set(cacheKey, { mtime: stat.mtime, size: stat.size, text: result });
-    return result;
-  } catch {
-    if (stat) pdfTextCache.set(cacheKey, { mtime: stat.mtime, size: stat.size, text: null });
-    return null;
-  }
-}
+// PDF text extraction is shared; search only consumes it.
+import { extractPdfText } from "obsidian-llm-hub-common/vault";
 
 export interface SearchResult {
   path: string;
