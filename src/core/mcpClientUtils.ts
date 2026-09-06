@@ -1,3 +1,4 @@
+import type { McpServerConfig as SharedMcpServerConfig } from "obsidian-llm-hub-common/chat";
 // Shared utilities for MCP client implementations
 
 import type { McpAppResult, McpAppUiResource, McpServerConfig } from "../types";
@@ -43,7 +44,8 @@ export function mapResourceReadResult(result: McpResourceReadResult): McpAppUiRe
  * Used by McpAppRenderer and McpAppModal for backward-compatible client creation.
  */
 export function createClientFromAppInfo(
-  serverConfig?: McpServerConfig,
+  // As stored on a message: the shared record, looser than this plugin's own.
+  serverConfig?: SharedMcpServerConfig,
   serverUrl?: string,
   serverHeaders?: Record<string, string>,
 ): IMcpClient {
@@ -51,7 +53,8 @@ export function createClientFromAppInfo(
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- Resolve the circular client dependency only when an MCP app is created.
   const { createMcpClient, McpHttpClient } = require("./mcpClient") as typeof import("./mcpClient");
   if (serverConfig) {
-    return createMcpClient(serverConfig);
+    // A stored app config always carries the transport and url this plugin requires.
+    return createMcpClient(serverConfig as McpServerConfig);
   }
   return new McpHttpClient({
     name: "mcp-app",

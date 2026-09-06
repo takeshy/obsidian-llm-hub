@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { McpAppResult, McpAppUiResource, McpServerConfig } from "src/types";
+import type { McpAppResult, McpAppUiResource } from "src/types";
 import type { IMcpClient } from "src/core/mcpClient";
 import { createClientFromAppInfo } from "src/core/mcpClientUtils";
 import { t } from "src/i18n";
 import { prepareMcpAppHtml } from "src/core/mcpAppCsp";
+import type { McpServerConfig as SharedMcpServerConfig } from "obsidian-llm-hub-common/chat";
 
 // JSON-RPC message types for postMessage communication
 interface JsonRpcRequest {
@@ -30,7 +31,8 @@ interface McpAppRendererProps {
   // Optional headers for the MCP server
   serverHeaders?: Record<string, string>;
   // Full server config for creating the appropriate client (supports stdio)
-  serverConfig?: McpServerConfig;
+  /** As stored on the message: the shared record, which is looser than this plugin's own. */
+  serverConfig?: SharedMcpServerConfig;
   // The tool result containing UI metadata
   toolResult: McpAppResult;
   // Pre-fetched UI resource content (if available)

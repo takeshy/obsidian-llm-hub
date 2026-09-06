@@ -141,7 +141,8 @@ function buildMessages(
       result.push(...msg.providerContinuation.items as Anthropic.MessageParam[]);
     } else {
       result.push({
-        role: msg.role,
+        // Tool-role messages are a local-provider shape; this path never sees them.
+        role: msg.role === "tool" ? "assistant" : msg.role,
         content: msg.role === "user" ? buildContent(msg) : msg.content,
       });
     }

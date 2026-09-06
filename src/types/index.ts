@@ -1,3 +1,6 @@
+import type { ToolCall, ToolResult, WebSearchSource, GeneratedImage, ProviderContinuation } from "obsidian-llm-hub-common/chat";
+
+export type { Message, ToolCall, ToolResult, Attachment, PendingEditInfo, PendingDeleteInfo, PendingRenameInfo, WebSearchSource, GeneratedImage, ProviderContinuation } from "obsidian-llm-hub-common/chat";
 import type { WorkflowEventTrigger } from "obsidian-llm-hub-common/workflow";
 
 export type { ObsidianEventType, WorkflowEventTrigger } from "obsidian-llm-hub-common/workflow";
@@ -724,10 +727,6 @@ export function isImageGenerationModel(modelName: string): boolean {
 
 // Chat message types
 // Generated image from Gemini
-export interface GeneratedImage {
-  mimeType: string;
-  data: string;  // Base64 encoded image data
-}
 
 // MCP App info for rendering in messages
 export interface McpAppInfo {
@@ -738,77 +737,16 @@ export interface McpAppInfo {
   uiResource?: McpAppUiResource | null;
 }
 
-export interface Message {
-  role: "user" | "assistant";
-  content: string;
-  llmContent?: string;          // full content sent to the LLM (hidden from UI)
-  timestamp: number;
-  model?: ModelType;  // モデル名（assistantの場合のみ）
-  modelDisplayName?: string; // Exact runtime model configuration shown in chat/history
-  toolsUsed?: string[];  // 使用したツール名の配列
-  attachments?: Attachment[];  // 添付ファイル
-  pendingEdit?: PendingEditInfo;  // 保留中の編集情報
-  pendingEdits?: PendingEditInfo[];  // 複数の編集結果
-  pendingDelete?: PendingDeleteInfo;  // 保留中の削除情報
-  pendingDeletes?: PendingDeleteInfo[];  // 複数の削除結果
-  pendingRename?: PendingRenameInfo;  // 保留中のリネーム情報
-  pendingRenames?: PendingRenameInfo[];  // 複数のリネーム結果
-  toolCalls?: ToolCall[];
-  toolResults?: ToolResult[];
-  ragUsed?: boolean;  // RAG（File Search）が使用されたか
-  ragSources?: string[];  // RAG検索で見つかったソースファイル
-  webSearchUsed?: boolean;  // Web Searchが使用されたか
-  webSearchSources?: WebSearchSource[];  // Cited web sources in display order
-  providerContinuation?: ProviderContinuation;  // Opaque native context for stateless replay
-  imageGenerationUsed?: boolean;  // Image Generationが使用されたか
-  generatedImages?: GeneratedImage[];  // 生成された画像
-  thinking?: string;  // モデルの思考内容（thinkingモデル用）
-  skillsUsed?: string[];  // Names of active skills used
-  mcpApps?: McpAppInfo[];  // MCP Apps with UI (MCP Apps拡張)
-  usage?: StreamChunkUsage;  // Token usage and cost
-  elapsedMs?: number;        // Response time in milliseconds
-  interactionId?: string;    // Interactions API interaction ID for conversation chaining
-}
 
 // 保留中の編集情報
-export interface PendingEditInfo {
-  originalPath: string;
-  status: "pending" | "applied" | "discarded" | "failed";
-}
 
 // 保留中の削除情報
-export interface PendingDeleteInfo {
-  path: string;
-  status: "pending" | "deleted" | "cancelled" | "failed";
-}
 
 // 保留中のリネーム情報
-export interface PendingRenameInfo {
-  originalPath: string;
-  newPath: string;
-  status: "pending" | "applied" | "discarded" | "failed";
-}
 
 // 添付ファイル
-export interface Attachment {
-  name: string;
-  type: "image" | "pdf" | "text" | "audio" | "video";
-  mimeType: string;
-  data: string;  // Base64エンコードされたデータ
-  sourcePath?: string;  // RAG検索結果のソースファイルパス
-  pageLabel?: string;  // PDFページ範囲（例: "pages 1-6 of 24"）
-}
 
-export interface ToolCall {
-  id: string;
-  name: string;
-  args: Record<string, unknown>;
-}
 
-export interface ToolResult {
-  toolCallId: string;
-  result: unknown;
-}
 
 // Conversation history for Gemini API
 export interface ConversationHistory {
@@ -849,10 +787,6 @@ export interface StreamChunkUsage {
   webSearchRequests?: number;
 }
 
-export interface WebSearchSource {
-  title: string;
-  url: string;
-}
 
 export interface WebSearchCitation extends WebSearchSource {
   /** Character offsets in the streamed plain-text response. */
@@ -865,14 +799,6 @@ export interface WebSearchCitation extends WebSearchSource {
  * reasoning, and server/client-tool continuity. Kept opaque so shared types do
  * not depend on either provider SDK.
  */
-export interface ProviderContinuation {
-  provider: "openai" | "anthropic" | "xai";
-  baseUrl: string;
-  model: string;
-  items: unknown[];
-  /** Responses API response ID used for provider-native multi-turn chaining. */
-  responseId?: string;
-}
 
 // Streaming chunk types
 export interface StreamChunk {

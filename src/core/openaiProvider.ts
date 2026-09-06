@@ -385,7 +385,8 @@ function buildResponsesInput(
       }
       result.push({ role: "user", content });
     } else {
-      result.push({ role: msg.role, content: text });
+      // Tool-role messages are a local-provider shape; this path never sees them.
+      result.push({ role: msg.role === "tool" ? "assistant" : msg.role, content: text });
     }
   }
   return result;
