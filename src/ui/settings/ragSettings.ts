@@ -7,7 +7,14 @@ import type { RagSetting } from "src/types";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { formatError } from "obsidian-llm-hub-common/core";
 import { setDestructiveButton } from "obsidian-llm-hub-common/obsidian";
-import { RagSettingNameModal } from "./RagSettingNameModal";
+import {
+  addExcludePatternsSetting,
+  addRagSettingHeader,
+  addRagSettingSelector,
+  addTargetFoldersSetting,
+  useSettingTextArea,
+  type RagIndexScope,
+} from "obsidian-llm-hub-common/settings";
 import { markRagKeyConfiguredElsewhere } from "./credentialStorageSettings";
 import type { SettingsContext } from "./settingsContext";
 
@@ -24,54 +31,11 @@ function hasSameEmbeddingConfig(a: RagSetting, b: RagSetting): boolean {
 
 export function displayRagSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
   const { plugin, display } = ctx;
-  const app = plugin.app;
 
   new Setting(containerEl).setName(t("settings.rag")).setHeading();
 
-  const ragSettingNames = plugin.getRagSettingNames();
   const selectedName = plugin.workspaceState.selectedRagSetting;
-
-  // RAG setting selection
-  const ragSelectSetting = new Setting(containerEl)
-    .setName(t("settings.ragSetting"))
-    .setDesc(t("settings.ragSetting.desc"));
-
-  ragSelectSetting.addDropdown((dropdown) => {
-    ragSettingNames.forEach((name) => {
-      dropdown.addOption(name, name);
-    });
-
-    dropdown.setValue(selectedName || "").onChange((value) => {
-      void (async () => {
-        await plugin.selectRagSetting(value || null);
-        display();
-      })();
-    });
-  });
-
-  // Add new RAG setting button
-  ragSelectSetting.addExtraButton((btn) => {
-    btn
-      .setIcon("plus")
-      .setTooltip(t("settings.createRagSetting"))
-      .onClick(() => {
-        new RagSettingNameModal(
-          app,
-          t("settings.createRagSetting"),
-          "",
-          async (name) => {
-            try {
-              await plugin.createRagSetting(name);
-              await plugin.selectRagSetting(name);
-              display();
-              new Notice(t("settings.ragSettingCreated", { name }));
-            } catch (error) {
-              new Notice(t("error.failedToCreate", { error: formatError(error) }));
-            }
-          }
-        ).open();
-      });
-  });
+  addRagSettingSelector(containerEl, plugin, selectedName, display);
 
   // Show selected RAG setting details
   if (selectedName) {
@@ -89,59 +53,8 @@ function displaySelectedRagSetting(
   ragSetting: RagSetting
 ): void {
   const { plugin, display } = ctx;
-  const app = plugin.app;
 
-  // Setting header with rename/delete buttons
-  const headerSetting = new Setting(containerEl)
-    .setName(t("settings.settingsFor", { name }))
-    .setDesc(t("settings.configureThisSetting"));
-
-  headerSetting.addExtraButton((btn) => {
-    btn
-      .setIcon("pencil")
-      .setTooltip(t("settings.renameSetting"))
-      .onClick(() => {
-        new RagSettingNameModal(
-          app,
-          t("settings.renameRagSetting"),
-          name,
-          async (newName) => {
-            try {
-              await plugin.renameRagSetting(name, newName);
-              display();
-              new Notice(t("settings.renamedTo", { name: newName }));
-            } catch (error) {
-              new Notice(t("error.failedToRename", { error: formatError(error) }));
-            }
-          }
-        ).open();
-      });
-  });
-
-  headerSetting.addExtraButton((btn) => {
-    btn
-      .setIcon("trash")
-      .setTooltip(t("settings.deleteSetting"))
-      .onClick(() => {
-        void (async () => {
-          const confirmed = await new ConfirmModal(
-            app,
-            t("settings.deleteSettingConfirm", { name }),
-            t("common.delete"),
-            t("common.cancel")
-          ).openAndWait();
-          if (!confirmed) return;
-
-          try {
-            await plugin.deleteRagSetting(name);
-            display();
-            new Notice(t("settings.ragSettingDeleted", { name }));
-          } catch (error) {
-            new Notice(t("error.failedToDelete", { error: formatError(error) }));
-          }
-        })();
-      });
-  });
+  addRagSettingHeader(containerEl, plugin, name, display);
 
   // All RAG is now local - go directly to local store settings
   displayLocalStoreSettings(containerEl, ctx, name, ragSetting);
@@ -242,9 +155,10 @@ function displayLocalStoreSettings(
 
     // --- External index mode ---
     // External Index Path
-    new Setting(containerEl)
+    const externalPathSetting = new Setting(containerEl)
       .setName(t("settings.externalIndexPath"))
-      .setDesc(t("settings.externalIndexPath.desc"))
+      .setDesc(t("settings.externalIndexPath.desc"));
+    externalPathSetting
       .addTextArea((text) => {
         text
           .setPlaceholder(t("settings.externalIndexPath.placeholder"))
@@ -257,8 +171,7 @@ function displayLocalStoreSettings(
               refreshExternalIndexModel();
             })();
           });
-        text.inputEl.rows = 4;
-        text.inputEl.addClass("llm-hub-settings-textarea");
+        useSettingTextArea(externalPathSetting, text.inputEl);
       });
 
     // Embedding server URL for query embedding
@@ -309,48 +222,10 @@ function displayLocalStoreSettings(
     // Top K (per-setting)
     displayTopKSetting(containerEl, plugin, name, ragSetting, display);
 
-    // Target Folders
-    new Setting(containerEl)
-      .setName(t("settings.targetFolders"))
-      .setDesc(t("settings.targetFolders.desc"))
-      .addText((text) =>
-        text
-          .setPlaceholder(t("settings.targetFolders.placeholder"))
-          .setValue(ragSetting.targetFolders.join(", "))
-          .onChange((value) => {
-            void (async () => {
-              const folders = value
-                .split(",")
-                .map((s) => s.trim())
-                .filter((s) => s.length > 0);
-              await plugin.updateRagSetting(name, { targetFolders: folders });
-            })();
-          })
-      );
-
-    // Excluded Patterns
-    const excludePatternsSetting = new Setting(containerEl)
-      .setName(t("settings.excludedPatterns"))
-      .setDesc(t("settings.excludedPatterns.desc"));
-
-    excludePatternsSetting.settingEl.addClass("llm-hub-settings-textarea-container");
-
-    excludePatternsSetting.addTextArea((text) => {
-      text
-        .setPlaceholder(t("settings.excludedPatterns.placeholder"))
-        .setValue(ragSetting.excludePatterns.join("\n"))
-        .onChange((value) => {
-          void (async () => {
-            const patterns = value
-              .split("\n")
-              .map((s) => s.trim())
-              .filter((s) => s.length > 0);
-            await plugin.updateRagSetting(name, { excludePatterns: patterns });
-          })();
-        });
-      text.inputEl.rows = 4;
-      text.inputEl.addClass("llm-hub-settings-textarea");
-    });
+    // Which files this setting indexes
+    const saveScope = (updates: Partial<RagIndexScope>) => plugin.updateRagSetting(name, updates);
+    addTargetFoldersSetting(containerEl, ragSetting, saveScope);
+    addExcludePatternsSetting(containerEl, ragSetting, saveScope);
 
     // Index status
     displayIndexStatus(containerEl, app, name, ragSetting);

@@ -628,16 +628,6 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 }
 
 /* Settings Styles */
-.llm-hub-settings-textarea-container .setting-item-control {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.llm-hub-settings-textarea {
-  width: 100%;
-  min-height: 80px;
-  resize: vertical;
-}
 
 .llm-hub-settings-wide-input {
   width: 100%;
@@ -9132,4 +9122,17 @@ body .llm-hub-hidden.llm-hub-hidden {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
   border-color: var(--interactive-accent);
+}
+
+/* Settings rows whose control is a textarea */
+
+.llm-hub-settings-textarea-container .setting-item-control {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.llm-hub-settings-textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
 }
