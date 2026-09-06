@@ -683,18 +683,8 @@ export async function proposeEdit(
 // Whether to open/focus the file after applying an edit.
 // Remembered per-vault via Obsidian's local storage so the confirm dialog's
 // checkbox defaults to the user's last choice.
-const OPEN_FILE_AFTER_APPLY_KEY = "llm-hub-open-file-after-apply";
-
-export function getOpenFileAfterApplyPreference(app: App): boolean {
-  const stored: unknown = app.loadLocalStorage(OPEN_FILE_AFTER_APPLY_KEY);
-  return stored === false || stored === "false" ? false : true;
-}
-
-export function setOpenFileAfterApplyPreference(app: App, value: boolean): void {
-  // Store as a string: Obsidian's saveLocalStorage treats falsy data as
-  // "clear the entry", so a boolean false would be silently removed.
-  app.saveLocalStorage(OPEN_FILE_AFTER_APPLY_KEY, value ? "true" : "false");
-}
+// The remembered "open file after applying" choice lives in the shared package.
+export { getOpenFileAfterApplyPreference, setOpenFileAfterApplyPreference } from "obsidian-llm-hub-common/modals";
 
 // Apply the pending edit - actually writes to file
 // `options.openFile` defaults to true (preserving prior behavior for headless/automated

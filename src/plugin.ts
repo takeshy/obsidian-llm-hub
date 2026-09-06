@@ -12,7 +12,7 @@ import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
 import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
 import { SettingsTab } from "src/ui/SettingsTab";
 import { configureWorkflowHost, type WorkflowModelOption } from "obsidian-llm-hub-common/workflow";
-import { configureMcpAppViewer } from "obsidian-llm-hub-common/modals";
+import { configureMcpAppViewer, configureStoragePrefix } from "obsidian-llm-hub-common/modals";
 import { showMcpApp } from "src/ui/components/workflow/McpAppModal";
 import type { McpAppInfo } from "src/types";
 import {
@@ -292,6 +292,7 @@ export class LlmHubPlugin extends Plugin {
     // Initialize i18n locale
     initLocale();
     configureClassPrefix("llm-hub");
+    configureStoragePrefix("llm-hub");
     configureWorkflowHost({
       getModelOptions: () => {
         const options: WorkflowModelOption[] = [];

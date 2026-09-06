@@ -276,7 +276,7 @@ function createConfirmingToolExecutor(
 				const confirmResult = await promptForConfirmation(
 					app, pending.originalPath, pending.newContent, "overwrite", pending.originalContent,
 				);
-				if (confirmResult.confirmed) {
+				if (confirmResult.action === "save") {
 					const applyResult = await applyEdit(app, { openFile: getOpenFileAfterApplyPreference(app) });
 					if (applyResult.success) {
 						processedEdits.push({ originalPath: pending.originalPath, status: "applied" });
@@ -3685,7 +3685,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 										pending.originalContent
 									);
 
-									if (confirmResult.confirmed) {
+									if (confirmResult.action === "save") {
 										const applyResult = await applyEdit(plugin.app, { openFile: getOpenFileAfterApplyPreference(plugin.app) });
 										if (applyResult.success) {
 											processedEdits.push({ originalPath: pending.originalPath, status: "applied" });

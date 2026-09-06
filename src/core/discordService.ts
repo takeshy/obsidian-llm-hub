@@ -1537,7 +1537,7 @@ export class DiscordService {
       promptForFile: () => Promise.resolve(null),
       promptForSelection: () => Promise.resolve(null),
       promptForValue: (_prompt: string, defaultValue?: string) => Promise.resolve(defaultValue || null),
-      promptForConfirmation: () => Promise.resolve({ confirmed: true } as EditConfirmationResult),
+      promptForConfirmation: () => Promise.resolve({ action: "save" } as EditConfirmationResult),
       promptForDialog: () => Promise.resolve(null),
     };
 
