@@ -2,6 +2,7 @@ import { Trash2 } from "lucide-react";
 import {
 	resolveMessageVariables as resolveMessageVariablesShared,
 	useChatHistories,
+	useChatStreamSessions,
 	generateChatId,
 	chatFilePath,
 	type ChatStorageHost,
@@ -426,7 +427,6 @@ function getPendingInfos<T>(items: T[]): T[] | undefined {
 // (see resolveMessageVariables), so it has to fetch their contents itself.
 const FILE_MENTION_TOOL_PROMPT = "\n\nA bare vault-relative path in the user's message (for example `folder/note.md` or `folder/document.pdf`) is a file the user referenced by mention, not a literal string. Its content is not inlined into the message. Call read_note with that exact path before answering anything that depends on it.";
 
-const MAX_BACKGROUND_STREAMS = 3;
 const AUTOMATIC_RAG_RETRIEVAL = false;
 const CODEX_VAULT_TOOLS = new Set([
 	"read_timeline",
@@ -490,10 +490,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	const [cliSession, setCliSession] = useState<CliSessionInfo | null>(null);  // CLI session for resumption
 	const [showHistory, setShowHistory] = useState(false);
 	const [isSidebarWide, setIsSidebarWide] = useState(false);
-	const [isLoading, setIsLoading] = useState(false);
 	const [isCompacting, setIsCompacting] = useState(false);
-	const [streamingContent, setStreamingContent] = useState("");
-	const [streamingThinking, setStreamingThinking] = useState("");
 	const [currentModel, setCurrentModel] = useState<ModelType>(plugin.getSelectedModel());
 	const [codexModels, setCodexModels] = useState<CodexModelOption[]>([]);
 	const ragEnabledState = true;  // RAG is always available; individual stores managed in settings
@@ -532,7 +529,30 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			: [...plugin.settings.mcpServers]
 	);
 	const messagesContainerRef = useRef<HTMLDivElement>(null);
-	const abortControllerRef = useRef<AbortController | null>(null);
+	const {
+		isLoading,
+		setIsLoading,
+		streamingContent,
+		setStreamingContent,
+		streamingThinking,
+		setStreamingThinking,
+		abortControllerRef,
+		activeSessionIdRef,
+		createStreamSession,
+		leaveCurrentChat,
+	} = useChatStreamSessions({
+		setMessages,
+		saveChatToDisk,
+		currentChatId,
+		// A backgrounded stream owns the executor it is still using; just let go of it.
+		onDetachStream: () => { mcpExecutorRef.current = null; },
+		onLeaveIdle: () => {
+			if (mcpExecutorRef.current) {
+				void mcpExecutorRef.current.cleanup();
+				mcpExecutorRef.current = null;
+			}
+		},
+	});
 	const inputAreaRef = useRef<InputAreaHandle>(null);
 	const pendingExternalSelectionRef = useRef<{ text: string; sourcePath?: string } | null>(null);
 	const currentSlashCommandRef = useRef<SlashCommand | null>(null);
@@ -545,11 +565,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		mcpServers: McpServerConfig[];
 	} | null>(null);
 	const mcpExecutorRef = useRef<McpToolExecutor | null>(null);
-	// Session ID to track which chat session owns the UI; incremented on startNewChat
-	// so background streams can detect they've been detached from the UI.
-	const activeSessionIdRef = useRef(0);
-	// AbortControllers for background (detached) streams, capped at MAX_BACKGROUND_STREAMS.
-	const backgroundAbortControllersRef = useRef<AbortController[]>([]);
 	// Chat IDs that have been deleted — background streams check this to avoid
 	// resurrecting a deleted chat when they complete.
 	// Preserve the plugin-level last active chat across the component's first render
@@ -748,65 +763,6 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			inputAreaRef.current?.focus();
 		},
 	}));
-
-	// Create a stream session that tracks whether this stream still owns the UI.
-	// Each provider function calls this once at the top; the returned helpers
-	// centralise the isActive/save/finally logic that was previously duplicated.
-	const createStreamSession = useCallback(() => {
-		const mySessionId = activeSessionIdRef.current;
-		const myChatId = currentChatId || generateChatId();
-		const isActive = () => mySessionId === activeSessionIdRef.current;
-
-		const saveResult = async (msgs: Message[], session?: CliSessionInfo | null) => {
-			if (isActive()) {
-				setMessages(msgs);
-				await saveChatToDisk(msgs, myChatId, { session, foreground: true });
-			} else {
-				await saveChatToDisk(msgs, myChatId, { session });
-			}
-		};
-
-		// Called in `finally` — cleans up UI state if still foreground.
-		// Pass the stream's AbortController so it can be removed from
-		// the background tracking list when the stream was backgrounded.
-		const cleanup = (myAbortController?: AbortController | null) => {
-			if (isActive()) {
-				setIsLoading(false);
-				setStreamingContent("");
-				setStreamingThinking("");
-				abortControllerRef.current = null;
-			} else if (myAbortController) {
-				const bgList = backgroundAbortControllersRef.current;
-				backgroundAbortControllersRef.current = bgList.filter(ac => ac !== myAbortController);
-			}
-		};
-
-		return { mySessionId, myChatId, isActive, saveResult, cleanup };
-	}, [currentChatId, saveChatToDisk]);
-
-	// Detach the currently running stream (if any) so it continues in the
-	// background.  Moves its AbortController to the background list and
-	// aborts the oldest background stream if we exceed the cap.
-	const detachActiveStream = useCallback(() => {
-		activeSessionIdRef.current += 1;
-
-		// Move the foreground AbortController to the background list
-		if (abortControllerRef.current) {
-			backgroundAbortControllersRef.current.push(abortControllerRef.current);
-			abortControllerRef.current = null;
-			// Abort oldest if over the cap
-			while (backgroundAbortControllersRef.current.length > MAX_BACKGROUND_STREAMS) {
-				const oldest = backgroundAbortControllersRef.current.shift();
-				oldest?.abort();
-			}
-		}
-
-		// Detach MCP executor – background stream cleans up its own copy
-		mcpExecutorRef.current = null;
-		setIsLoading(false);
-		setStreamingContent("");
-		setStreamingThinking("");
-	}, []);
 
 	// Load chat histories on mount, and restore last active chat if available
 	useEffect(() => {
@@ -1458,17 +1414,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	// Start new chat (works even while a stream is running – the old stream
 	// continues in the background and saves its result to history when done).
 	const startNewChat = () => {
-		if (isLoading) {
-			detachActiveStream();
-		} else {
-			// Bump session ID even without an active stream so that
-			// pending async operations (e.g. mount-time restore) are cancelled.
-			activeSessionIdRef.current += 1;
-			if (mcpExecutorRef.current) {
-				void mcpExecutorRef.current.cleanup();
-				mcpExecutorRef.current = null;
-			}
-		}
+		leaveCurrentChat();
 
 		setMessages([]);
 		setCurrentChatId(null);
@@ -1485,11 +1431,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 	// Decrypt and load encrypted chat
 	const decryptAndLoadChat = async (chatId: string, password: string) => {
-		if (isLoading) {
-			detachActiveStream();
-		} else {
-			activeSessionIdRef.current += 1;
-		}
+		leaveCurrentChat();
 		try {
 			const parsed = await decryptChat(chatId, password);
 			setMessages(parsed.messages);
@@ -1514,11 +1456,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 	// Load a chat from history
 	const loadChat = (history: ChatHistory) => {
-		if (isLoading) {
-			detachActiveStream();
-		} else {
-			activeSessionIdRef.current += 1;
-		}
+		leaveCurrentChat();
 		if (history.isEncrypted) {
 			// If password is cached, try to decrypt automatically
 			const cachedPassword = cryptoCache.getPassword();
