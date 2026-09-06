@@ -974,7 +974,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
       const updatedNodes = newNodes.map((n) => (n.id === updatedNode.id ? updatedNode : n));
       setNodes(updatedNodes);
       void saveWorkflow(updatedNodes);
-    }, plugin);
+    });
     modal.open();
   };
 
@@ -987,7 +987,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
       const newNodes = nodes.map((n, i) => (i === index ? updatedNode : n));
       setNodes(newNodes);
       void saveWorkflow(newNodes);
-    }, plugin);
+    });
     modal.open();
   };
 

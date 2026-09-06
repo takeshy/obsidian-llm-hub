@@ -11,10 +11,13 @@ import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
 import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
 import { SettingsTab } from "src/ui/SettingsTab";
+import { configureWorkflowHost, type WorkflowModelOption } from "obsidian-llm-hub-common/workflow";
 import { configureMcpAppViewer } from "obsidian-llm-hub-common/modals";
 import { showMcpApp } from "src/ui/components/workflow/McpAppModal";
 import type { McpAppInfo } from "src/types";
 import {
+  CLI_MODEL,
+  CODEX_CLI_MODEL,
   type LlmHubSettings,
   type WorkspaceState,
   type RagSetting,
@@ -289,6 +292,21 @@ export class LlmHubPlugin extends Plugin {
     // Initialize i18n locale
     initLocale();
     configureClassPrefix("llm-hub");
+    configureWorkflowHost({
+      getModelOptions: () => {
+        const options: WorkflowModelOption[] = [];
+        for (const provider of this.settings.apiProviders.filter(p => p.enabled && p.verified)) {
+          for (const model of provider.enabledModels) {
+            options.push({ value: `api:${provider.id}:${model}`, label: `${provider.name} (${model})` });
+          }
+        }
+        if (this.settings.cliConfig?.cliVerified) options.push({ value: CLI_MODEL.name, label: CLI_MODEL.displayName });
+        if (this.settings.cliConfig?.codexCliVerified) options.push({ value: CODEX_CLI_MODEL.name, label: CODEX_CLI_MODEL.displayName });
+        return options;
+      },
+      getRagSettingNames: () => Object.keys(this.workspaceState.ragSettings || {}),
+      getMcpServerNames: () => (this.settings.mcpServers || []).map(server => server.name),
+    });
     configureMcpAppViewer((app, mcpApp) => showMcpApp(app, mcpApp as McpAppInfo));
 
     let approvalModal: McpApprovalModal | undefined;
