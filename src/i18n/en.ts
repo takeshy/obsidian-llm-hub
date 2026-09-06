@@ -432,6 +432,7 @@ export const en = {
   "input.modelFilterPlaceholder": "Filter models...",
   "input.modelFilterEmpty": "No matching models",
   "input.searchNone": "Search: none",
+  "input.reasoningEffort": "Thinking level",
   "input.webSearch": "Web search",
   "input.rag": "Semantic search: {{name}}",
   "input.vaultToolTitle": "Vault tool settings",

@@ -1,12 +1,11 @@
 import { CollapsedInput } from "obsidian-llm-hub-chat-ui";
 import { InputArea as SharedInputArea } from "obsidian-llm-hub-chat-ui";
-import { Composer, Autocomplete, Attachments, VaultToolMenu, VaultToolButton, EnabledMcpServers, McpServerToggles, InputButtons } from "obsidian-llm-hub-chat-ui";
+import { Composer, Autocomplete, Attachments, VaultToolMenu, VaultToolButton, EnabledMcpServers, McpServerToggles, InputButtons, SearchSelector, ModelRow, ModelDropdown, HistoryLimit } from "obsidian-llm-hub-chat-ui";
 import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from "react";
 
 
 import Eye from "lucide-react/dist/esm/icons/eye";
 
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { Notice, Platform, type App } from "obsidian";
 import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode, type CodexReasoningEffort, type ReasoningEffort } from "src/types";
 import type { CodexModelOption } from "src/core/cliProvider";
@@ -154,13 +153,10 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   const [filteredMentions, setFilteredMentions] = useState<MentionItem[]>([]);
   const [mentionStartPos, setMentionStartPos] = useState(0);
   const [showVaultToolMenu, setShowVaultToolMenu] = useState(false);
-  const [showSearchMenu, setShowSearchMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionAutocompleteRef = useRef<HTMLDivElement>(null);
   const vaultToolMenuRef = useRef<HTMLDivElement>(null);
-  const searchMenuRef = useRef<HTMLDivElement>(null);
-  const searchButtonRef = useRef<HTMLButtonElement>(null);
   const historyIndexRef = useRef<number | null>(null);
   const historyDraftRef = useRef("");
 
@@ -186,28 +182,6 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showVaultToolMenu]);
-
-  useEffect(() => {
-    if (!showSearchMenu) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchMenuRef.current && !searchMenuRef.current.contains(event.target as Node)) {
-        setShowSearchMenu(false);
-      }
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowSearchMenu(false);
-        searchButtonRef.current?.focus();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    window.setTimeout(() => searchMenuRef.current?.querySelector<HTMLInputElement>("input:not(:disabled)")?.focus(), 0);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [showSearchMenu]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -679,14 +653,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                 ]}
                 onSelect={(mode) => { onVaultToolModeChange(mode); setShowVaultToolMenu(false); }}
               >
-                <div className="llm-hub-vault-tool-separator" />
-                <label className="llm-hub-vault-tool-checkbox">
-                  <span>{t("input.historyLimit")}</span>
-                  <select value={maxPreviousMessages}
-                    onChange={(e) => onMaxPreviousMessagesChange(Number(e.target.value))}>
-                    {HISTORY_LIMIT_OPTIONS.map(count => <option key={count} value={count}>{count}</option>)}
-                  </select>
-                </label>
+                <HistoryLimit classPrefix="llm-hub" label={t("input.historyLimit")}
+                  value={maxPreviousMessages} onChange={onMaxPreviousMessagesChange} />
               </VaultToolMenu>
             )}
             {/* Modal for vault tool + MCP settings when MCP servers are configured */}
@@ -768,7 +736,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       )}
 
       {!isCollapsed && (
-        <div className="llm-hub-model-selector">
+        <ModelRow classPrefix="llm-hub">
           <ModelSelector
             models={availableModels}
             value={model}
@@ -777,110 +745,62 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           />
           {model === "codex-cli" && (
             <>
-              <select
-                className="llm-hub-model-dropdown"
+              <ModelDropdown
+                classPrefix="llm-hub"
                 value={codexModel || ""}
-                onChange={(e) => onCodexConfigChange(e.target.value || undefined, codexReasoningEffort)}
+                onChange={(value) => onCodexConfigChange(value || undefined, codexReasoningEffort)}
                 disabled={isLoading}
                 title={t("settings.codexCliModel")}
-              >
-                <option value="">{t("settings.codexCliModel.default")}</option>
-                {codexModels.map((option) => (
-                  <option key={option.slug} value={option.slug}>
-                    {option.displayName} ({option.slug})
-                  </option>
-                ))}
-                {codexModel && !codexModels.some((option) => option.slug === codexModel) && (
-                  <option value={codexModel}>{codexModel}</option>
-                )}
-              </select>
-              <select
-                className="llm-hub-model-dropdown"
+                options={[
+                  { value: "", label: t("settings.codexCliModel.default") },
+                  ...codexModels.map((option) => ({ value: option.slug, label: `${option.displayName} (${option.slug})` })),
+                  // Keep a configured model selectable even when it is missing from the list.
+                  ...(codexModel && !codexModels.some((option) => option.slug === codexModel) ? [{ value: codexModel, label: codexModel }] : []),
+                ]}
+              />
+              <ModelDropdown
+                classPrefix="llm-hub"
                 value={codexReasoningEffort}
-                onChange={(e) => onCodexConfigChange(codexModel, e.target.value as CodexReasoningEffort)}
+                onChange={(value) => onCodexConfigChange(codexModel, value as CodexReasoningEffort)}
                 disabled={isLoading}
                 title={t("settings.codexCliReasoningEffort")}
-              >
-                {(["minimal", "low", "medium", "high", "xhigh", "max"] as CodexReasoningEffort[]).map((effort) => (
-                  <option key={effort} value={effort}>{effort}</option>
-                ))}
-              </select>
+                options={(["minimal", "low", "medium", "high", "xhigh", "max"] as CodexReasoningEffort[]).map((effort) => ({ value: effort, label: effort }))}
+              />
             </>
           )}
           {reasoningEffortOptions.length > 0 && (
-            <select
-              className="llm-hub-model-dropdown"
+            <ModelDropdown
+              classPrefix="llm-hub"
               value={reasoningEffort}
-              onChange={(e) => onReasoningEffortChange(e.target.value as ReasoningEffort)}
+              onChange={(value) => onReasoningEffortChange(value as ReasoningEffort)}
               disabled={isLoading}
-              title="Reasoning effort"
-              aria-label="Reasoning effort"
-            >
-              {reasoningEffortOptions.map((effort) => (
-                <option key={effort} value={effort}>{effort}</option>
-              ))}
-            </select>
+              title={t("input.reasoningEffort")}
+              options={reasoningEffortOptions.map((effort) => ({ value: effort, label: effort }))}
+            />
           )}
-          <div className="llm-hub-search-selector" ref={searchMenuRef}>
-            <button
-              ref={searchButtonRef}
-              type="button"
-              className="llm-hub-model-dropdown llm-hub-rag-select llm-hub-search-selector-button"
-              onClick={() => setShowSearchMenu(open => !open)}
-              disabled={isLoading}
-              aria-haspopup="menu"
-              aria-expanded={showSearchMenu}
-            >
-              {webSearchEnabled && selectedRagSetting
-                ? `${t("input.webSearch")} + ${selectedRagSetting}`
-                : webSearchEnabled
-                  ? t("input.webSearch")
-                  : selectedRagSetting
-                    ? t("input.rag", { name: selectedRagSetting })
-                    : t("input.searchNone")}
-              <ChevronDown size={13} aria-hidden="true" />
-            </button>
-            {showSearchMenu && (
-              <div className="llm-hub-search-selector-menu" role="menu">
-                <label className={`llm-hub-search-selector-option ${!allowWebSearch ? "disabled" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={webSearchEnabled}
-                    disabled={!allowWebSearch}
-                    onChange={(event) => onSearchSelectionChange({
-                      webSearch: event.target.checked,
-                      ragSetting: selectedRagSetting,
-                    })}
-                  />
-                  <span>{t("input.webSearch")}</span>
-                </label>
-                <div className="llm-hub-search-selector-separator" />
-                <label className={`llm-hub-search-selector-option ${!ragEnabled || isImageGenerationModel(model) ? "disabled" : ""}`}>
-                  <input
-                    type="radio"
-                    name="llm-hub-rag-setting"
-                    checked={selectedRagSetting === null}
-                    disabled={!ragEnabled || isImageGenerationModel(model)}
-                    onChange={() => onSearchSelectionChange({ webSearch: webSearchEnabled, ragSetting: null })}
-                  />
-                  <span>{t("input.rag", { name: t("common.none") })}</span>
-                </label>
-                {ragSettings.map((name) => (
-                  <label key={name} className={`llm-hub-search-selector-option ${!ragEnabled || isImageGenerationModel(model) ? "disabled" : ""}`}>
-                    <input
-                      type="radio"
-                      name="llm-hub-rag-setting"
-                      checked={selectedRagSetting === name}
-                      disabled={!ragEnabled || isImageGenerationModel(model)}
-                      onChange={() => onSearchSelectionChange({ webSearch: webSearchEnabled, ragSetting: name })}
-                    />
-                    <span>{t("input.rag", { name })}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+          <SearchSelector
+            classPrefix="llm-hub"
+            ownerDocument={activeDocument}
+            disabled={isLoading}
+            labels={{
+              webSearch: t("input.webSearch"),
+              rag: (name) => t("input.rag", { name }),
+              ragNone: t("input.rag", { name: t("common.none") }),
+              none: t("input.searchNone"),
+            }}
+            webSearch={{
+              checked: webSearchEnabled,
+              disabled: !allowWebSearch,
+              onChange: (checked) => onSearchSelectionChange({ webSearch: checked, ragSetting: selectedRagSetting }),
+            }}
+            rag={{
+              settings: ragSettings,
+              selected: selectedRagSetting,
+              disabled: !ragEnabled || isImageGenerationModel(model),
+              onSelect: (name) => onSearchSelectionChange({ webSearch: webSearchEnabled, ragSetting: name }),
+            }}
+          />
+        </ModelRow>
       )}
       {!isCollapsed && availableSkills.length > 0 && (
         <SkillSelector

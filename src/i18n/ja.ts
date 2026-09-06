@@ -426,6 +426,7 @@ export const ja: Record<string, string> = {
   "input.modelFilterPlaceholder": "モデルを絞り込み...",
   "input.modelFilterEmpty": "一致するモデルがありません",
   "input.searchNone": "検索: なし",
+  "input.reasoningEffort": "思考レベル",
   "input.webSearch": "ウェブ検索",
   "input.rag": "セマンティック検索: {{name}}",
   "input.vaultToolTitle": "Vaultツール設定",
