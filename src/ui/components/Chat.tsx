@@ -87,9 +87,6 @@ import {
 	discardEdit,
 	getOpenFileAfterApplyPreference,
 } from "src/vault/notes";
-import {
-	promptForConfirmation,
-} from "./workflow/EditConfirmationModal";
 import MessageList from "./MessageList";
 import InputArea, { type InputAreaHandle } from "./InputArea";
 import CliTerminalPanel, { isTerminalProvider } from "./CliTerminalPanel";
@@ -99,21 +96,14 @@ import {
 import { cryptoCache } from "src/core/cryptoCache";
 import { formatError } from "obsidian-llm-hub-common/core";
 import { createConfirmingToolExecutor, withRateLimitRetry } from "obsidian-llm-hub-common/chat";
-import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillWorkflowRef, type SkillScriptRef } from "src/core/skillsLoader";
+import { runSkillWorkflow } from "obsidian-llm-hub-common/workflow";
+import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillScriptRef } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
 import { runtimeSkillPath } from "src/core/runtimeSkills";
 import { buildBuiltinOkfSystemPrompt, buildOkfSystemPrompt, discoverOkfBundles, getBuiltinOkfBundle, isBuiltinOkfBundleId, type OkfBundle } from "src/core/okfLoader";
 import { executeReadOkfDocumentTool, READ_OKF_DOCUMENT_TOOL, READ_OKF_DOCUMENT_TOOL_NAME } from "src/core/okfDocumentTool";
 import { getInterpreter, runScript } from "src/core/scriptRunner";
-import { parseWorkflowFromMarkdown } from "src/workflow/parser";
-import { WorkflowExecutor } from "src/workflow/executor";
-import { WorkflowExecutionModal } from "./workflow/WorkflowExecutionModal";
-import { promptForFile, promptForAnyFile, promptForNewFilePath } from "./workflow/FilePromptModal";
 import { promptForValue } from "./workflow/ValuePromptModal";
-import { promptForSelection } from "./workflow/SelectionPromptModal";
-import { promptForDialog } from "./workflow/DialogPromptModal";
-import { showMcpApp } from "./workflow/McpAppModal";
-import { promptForPassword } from "src/ui/passwordPrompt";
 import { t } from "src/i18n";
 import {
 	shouldUseImageModel,
@@ -1407,11 +1397,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				const codexToolExecutor = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
 					if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return ragSearchRunner.run(args);
 					if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
-						return executeSkillWorkflow(
-							plugin,
+						return runSkillWorkflow(
+							plugin.app,
 							args.workflowId as string,
 							args.variables as string | undefined,
 							skillWorkflowMap,
+							// A CLI provider already runs with the user's own permissions.
+							{ vaultToolAllowedFolders: undefined },
 						);
 					}
 					if (name === "run_skill_script" && skillScriptMap.size > 0) {
@@ -1891,8 +1883,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						return { result: mcpResult.result };
 					}
 					if (name === "run_skill_workflow" && openCodeSkillWorkflowMap.size > 0) {
-						return executeSkillWorkflow(
-							plugin,
+						return runSkillWorkflow(
+							plugin.app,
 							args.workflowId as string,
 							args.variables as string | undefined,
 							openCodeSkillWorkflowMap,
@@ -2011,7 +2003,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						return { result: mcpResult.result };
 					}
 					if (name === "run_skill_workflow" && llmSkillWorkflowMap.size > 0) {
-						return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, llmSkillWorkflowMap, {
+						return await runSkillWorkflow(plugin.app, args.workflowId as string, args.variables as string | undefined, llmSkillWorkflowMap, {
 							vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 						});
 					}
@@ -2492,7 +2484,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 					return { result: mcpResult.result };
 				}
 				if (name === "run_skill_workflow" && apiSkillWorkflowMap.size > 0) {
-					return await executeSkillWorkflow(plugin, args.workflowId as string, args.variables as string | undefined, apiSkillWorkflowMap, {
+					return await runSkillWorkflow(plugin.app, args.workflowId as string, args.variables as string | undefined, apiSkillWorkflowMap, {
 						vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 					});
 				}
@@ -2938,14 +2930,16 @@ Always be helpful and provide clear, concise responses. When working with notes,
 						}
 						// Skill workflow tool
 						if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
-							return await executeSkillWorkflow(
-								plugin,
+							return await runSkillWorkflow(
+								plugin.app,
 								args.workflowId as string,
 								args.variables as string | undefined,
 								skillWorkflowMap,
-								shouldLimitLlmVaultTools(allowedModel)
-									? { vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
-									: undefined,
+								{
+									vaultToolAllowedFolders: shouldLimitLlmVaultTools(allowedModel)
+										? settings.cloudVaultToolAllowedFolders
+										: undefined,
+								},
 							);
 						}
 						// Skill script tool
@@ -3820,7 +3814,8 @@ async function processSkillMarkers(
 		if (signal?.aborted) return { processedContent, aborted: true };
 		const workflowId = match[1].trim();
 		const variablesJson = match[2] || undefined;
-		const result = await executeSkillWorkflow(plugin, workflowId, variablesJson, skillWorkflowMap, options);
+		const result = await runSkillWorkflow(plugin.app, workflowId, variablesJson, skillWorkflowMap,
+			{ vaultToolAllowedFolders: options?.vaultToolAllowedFolders });
 		const resultText = JSON.stringify(result, null, 2);
 		processedContent = processedContent.replace(match[0],
 			`**Workflow executed: ${workflowId}**\n\`\`\`json\n${resultText}\n\`\`\``
@@ -3927,163 +3922,6 @@ async function executeSkillScript(
 		},
 	});
 	return { ...result };
-}
-
-/**
- * Execute a skill workflow with interactive modal and return results.
- */
-async function executeSkillWorkflow(
-	plugin: LlmHubPlugin,
-	workflowId: string,
-	variablesJson: string | undefined,
-	skillWorkflowMap: Map<string, {
-		skill: LoadedSkill;
-		workflowRef: SkillWorkflowRef;
-		vaultPath: string;
-	}>,
-	options?: {
-		vaultToolAllowedFolders?: string[];
-	},
-): Promise<Record<string, unknown>> {
-	const entry = skillWorkflowMap.get(workflowId);
-	if (!entry) {
-		const available = [...skillWorkflowMap.keys()].join(", ");
-		return { error: `Unknown workflow ID: ${workflowId}. Available: ${available}` };
-	}
-
-	const { vaultPath } = entry;
-	const workflowDisplayName = vaultPath.substring(vaultPath.lastIndexOf("/") + 1).replace(/\.md$/, "") || workflowId;
-
-	// Read workflow file
-	const file = plugin.app.vault.getAbstractFileByPath(vaultPath);
-	if (!(file instanceof TFile)) {
-		return { error: `Workflow file not found: ${vaultPath}`, workflowId, workflowPath: vaultPath };
-	}
-
-	const content = await plugin.app.vault.read(file);
-
-	// Parse workflow
-	let workflow;
-	try {
-		workflow = parseWorkflowFromMarkdown(content);
-	} catch (e) {
-		return { error: `Failed to parse workflow: ${e instanceof Error ? e.message : String(e)}`, workflowId, workflowPath: vaultPath };
-	}
-
-	// Build input variables
-	const variables = new Map<string, string | number>();
-	if (variablesJson) {
-		try {
-			const parsed = JSON.parse(variablesJson) as Record<string, string | number>;
-			for (const [key, value] of Object.entries(parsed)) {
-				variables.set(key, value);
-			}
-		} catch {
-			return { error: `Invalid variables JSON: ${variablesJson}`, workflowId, workflowPath: vaultPath };
-		}
-	}
-
-	// Execute with the same execution modal as the normal workflow panel
-	const executor = new WorkflowExecutor(plugin.app);
-	const abortController = new AbortController();
-
-	const modal = new WorkflowExecutionModal(
-		plugin.app, workflow, workflowDisplayName, abortController, () => {},
-	);
-	modal.open();
-
-	let executionModalRef: WorkflowExecutionModal | null = modal;
-
-	const callbacks = {
-		promptForFile: (_defaultPath?: string, title?: string) => promptForFile(plugin.app, title || "Select a file"),
-		promptForAnyFile: (extensions?: string[], _defaultPath?: string, title?: string) =>
-			promptForAnyFile(plugin.app, extensions, title),
-		promptForNewFilePath: (extensions?: string[], defaultPath?: string, title?: string) =>
-			promptForNewFilePath(plugin.app, extensions, defaultPath, title),
-		promptForSelection: () => promptForSelection(plugin.app, "Select text"),
-		promptForValue: (prompt: string, defaultValue?: string, multiline?: boolean) =>
-			promptForValue(plugin.app, prompt, defaultValue || "", multiline || false),
-		promptForConfirmation: (filePath: string, content: string, mode: string, originalContent?: string) =>
-			promptForConfirmation(plugin.app, filePath, content, mode, originalContent),
-		promptForDialog: (title: string, message: string, options: string[], multiSelect: boolean, button1: string, button2?: string, markdown?: boolean, inputTitle?: string, defaults?: { input?: string; selected?: string[] }, multiline?: boolean) =>
-			promptForDialog(plugin.app, title, message, options, multiSelect, button1, button2, markdown, inputTitle, defaults, multiline),
-		openFile: async (notePath: string) => {
-			const noteFile = plugin.app.vault.getAbstractFileByPath(notePath);
-			if (noteFile instanceof TFile) {
-				await plugin.app.workspace.getLeaf().openFile(noteFile);
-			}
-		},
-		promptForPassword: async () => {
-			const cached = cryptoCache.getPassword();
-			if (cached) return cached;
-			return promptForPassword(plugin.app);
-		},
-		showMcpApp: async (mcpApp: McpAppInfo) => {
-			if (executionModalRef) {
-				await showMcpApp(plugin.app, mcpApp);
-			}
-		},
-		onThinking: (nodeId: string, thinking: string) => {
-			executionModalRef?.updateThinking(nodeId, thinking);
-		},
-	};
-
-	try {
-		const result = await executor.execute(
-			workflow,
-			{ variables },
-			(log) => executionModalRef?.updateFromLog(log),
-			{
-				workflowPath: vaultPath,
-				workflowName: workflowDisplayName,
-				recordHistory: true,
-				abortSignal: abortController.signal,
-				vaultToolAllowedFolders: options?.vaultToolAllowedFolders,
-			},
-			callbacks,
-		);
-
-		modal.setComplete(true);
-
-		// Collect output variables
-		const outputVars: Record<string, string | number> = {};
-		result.context.variables.forEach((value, key) => {
-			// Skip internal variables
-			if (!key.startsWith("__")) {
-				outputVars[key] = value;
-			}
-		});
-
-		// Collect log summaries
-		const logs = result.context.logs.map(log => ({
-			node: log.nodeType,
-			status: log.status,
-			message: log.message,
-		}));
-
-		// Extract saved files from successful note/file operations
-		const fileNodeTypes = new Set(["note", "file-save"]);
-		const savedFiles = result.context.logs
-			.filter(log => fileNodeTypes.has(log.nodeType) && log.status === "success" && typeof log.output === "string")
-			.map(log => log.output as string);
-
-		return {
-			success: true,
-			workflowId,
-			variables: outputVars,
-			logs,
-			...(savedFiles.length > 0 ? { savedFiles } : {}),
-		};
-	} catch (e) {
-		modal.setComplete(false);
-		return {
-			error: `Workflow execution failed: ${e instanceof Error ? e.message : String(e)}. Do not retry automatically — report the error to the user and ask how to proceed.`,
-			workflowId,
-			workflowPath: vaultPath,
-		};
-	} finally {
-		executionModalRef = null;
-	}
 }
 
 export default Chat;
