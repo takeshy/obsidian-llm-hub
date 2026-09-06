@@ -673,7 +673,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
       // Under 1-file-1-workflow the currently open file is already taken, so
       // defaulting the output to its path would just trigger the collision
       // check. Fall through to the modal's default template (workflows/{{name}}).
-      const result = await promptForAIWorkflow(plugin.app, plugin, "create");
+      const result = await promptForAIWorkflow(plugin.app, "create");
 
       if (result && result.outputPath) {
         let targetFile: TFile;
@@ -751,7 +751,6 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
     }
     const result = await promptForAIWorkflow(
       plugin.app,
-      plugin,
       "modify",
       currentYaml,
       workflowName || undefined
@@ -877,7 +876,6 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
 
     const result = await promptForAIWorkflow(
       plugin.app,
-      plugin,
       "modify",
       currentYaml,
       skillName,
@@ -1269,7 +1267,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
   // Create workflow with AI (workflow-only: modal shows workflow-focused UI)
   const handleCreateWorkflowWithAI = async () => {
     const result = await promptForAIWorkflow(
-      plugin.app, plugin, "create", undefined, undefined, undefined, { isSkill: false }
+      plugin.app, "create", undefined, undefined, undefined, { isSkill: false }
     );
     if (!result || !result.outputPath) return;
     const created = await createWorkflowFile(plugin.app, result);
@@ -1280,7 +1278,7 @@ export default function WorkflowPanel({ plugin }: WorkflowPanelProps) {
   // Create skill with AI (skill-only: modal pins output to skills/, generates SKILL.md + workflow)
   const handleCreateSkillWithAI = async () => {
     const result = await promptForAIWorkflow(
-      plugin.app, plugin, "create", undefined, undefined, undefined, { isSkill: true }
+      plugin.app, "create", undefined, undefined, undefined, { isSkill: true }
     );
     if (!result || !result.outputPath) return;
     const targetFile = await createSkillFromResult(plugin.app, result, plugin.settings.skillsFolder);

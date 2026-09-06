@@ -15,9 +15,13 @@ import { configureWorkflowHost, type WorkflowModelOption } from "obsidian-llm-hu
 import { configureMcpAppViewer, configureStoragePrefix } from "obsidian-llm-hub-common/modals";
 import { showMcpApp } from "src/ui/components/workflow/McpAppModal";
 import type { McpAppInfo } from "src/types";
+import { streamWorkflowChat } from "src/core/workflowChat";
+import { tracing } from "src/core/tracingHooks";
+import { getWorkflowSpecification, buildWorkflowSpecContext } from "src/workflow/workflowSpec";
 import {
   CLI_MODEL,
   CODEX_CLI_MODEL,
+  SKILLS_FOLDER,
   type LlmHubSettings,
   type WorkspaceState,
   type RagSetting,
@@ -305,8 +309,21 @@ export class LlmHubPlugin extends Plugin {
         if (this.settings.cliConfig?.codexCliVerified) options.push({ value: CODEX_CLI_MODEL.name, label: CODEX_CLI_MODEL.displayName });
         return options;
       },
+      getCurrentModel: () => this.getSelectedModel(),
+      getLastWorkflowModel: () => this.settings.lastAIWorkflowModel,
+      setLastWorkflowModel: (model) => {
+        this.settings.lastAIWorkflowModel = model as ModelType;
+        void this.saveSettings();
+      },
       getRagSettingNames: () => Object.keys(this.workspaceState.ragSettings || {}),
       getMcpServerNames: () => (this.settings.mcpServers || []).map(server => server.name),
+      getWorkflowSpecification: () => getWorkflowSpecification(buildWorkflowSpecContext(this)),
+      getWorkspaceFolder: () => this.settings.workspaceFolder,
+      getSkillsFolder: () => this.settings.skillsFolder || SKILLS_FOLDER,
+      getHistoryEncryption: () => this.settings.encryption,
+      getPluginVersion: () => this.manifest.version,
+      streamChat: (request) => streamWorkflowChat(this, request),
+      tracing,
     });
     configureMcpAppViewer((app, mcpApp) => showMcpApp(app, mcpApp as McpAppInfo));
 
