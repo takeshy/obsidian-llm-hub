@@ -571,7 +571,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   };
 
   return (
-    <SharedInputArea classPrefix="llm-hub" className={`llm-hub-input-container ${isCollapsed ? "collapsed" : ""}`} collapsed={isCollapsed}
+    <SharedInputArea classPrefix="llm-hub" modifiers={[isCollapsed && "collapsed"]} collapsed={isCollapsed}
       beforeInput={<>
       {/* MCP servers enabled for this chat */}
       {!isCollapsed && (

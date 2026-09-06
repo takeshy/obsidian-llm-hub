@@ -1,6 +1,6 @@
 import { Trash2 } from "lucide-react";
 import { ChatHeader } from "obsidian-llm-hub-chat-ui";
-import { ChatLayout, HistoryList } from "obsidian-llm-hub-chat-ui";
+import { ChatLayout, HistoryList, HeaderButton, SidebarWidthButton, SaveNoteButton } from "obsidian-llm-hub-chat-ui";
 import {
 	useState,
 	useEffect,
@@ -15,11 +15,6 @@ import Plus from "lucide-react/dist/esm/icons/plus";
 import History from "lucide-react/dist/esm/icons/history";
 
 import Lock from "lucide-react/dist/esm/icons/lock";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import Loader2 from "lucide-react/dist/esm/icons/loader-2";
-import Check from "lucide-react/dist/esm/icons/check";
-import Maximize2 from "lucide-react/dist/esm/icons/maximize-2";
-import Minimize2 from "lucide-react/dist/esm/icons/minimize-2";
 import type { LlmHubPlugin } from "src/plugin";
 import {
 	DEFAULT_CLI_CONFIG,
@@ -4456,43 +4451,28 @@ Always be helpful and provide clear, concise responses. When working with notes,
 		inputAreaRef.current?.focus();
 	}, []);
 
-	const chatClassName = `llm-hub-chat${isKeyboardVisible ? " keyboard-visible" : ""}${isDecryptInputFocused ? " decrypt-input-focused" : ""}`;
-
 	return (
-		<ChatLayout className={chatClassName}>
+		<ChatLayout classPrefix="llm-hub" modifiers={[isKeyboardVisible && "keyboard-visible", isDecryptInputFocused && "decrypt-input-focused"]}>
 			<ChatHeader classPrefix="llm-hub">
-					<button
-						className="llm-hub-header-btn llm-hub-sidebar-width-btn"
-						onClick={() => setIsSidebarWide(onToggleSidebarWidth())}
+					<SidebarWidthButton
+						classPrefix="llm-hub"
+						wide={isSidebarWide}
 						title={isSidebarWide ? t("chat.narrowSidebar") : t("chat.widenSidebar")}
-					>
-						{isSidebarWide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-					</button>
-					<button
-						className="llm-hub-header-btn"
-						onClick={() => { void handleSaveAsNote(); }}
-						disabled={saveNoteState === "saving" || messages.length === 0}
+						onClick={() => setIsSidebarWide(onToggleSidebarWidth())}
+					/>
+					<SaveNoteButton
+						classPrefix="llm-hub"
+						state={saveNoteState}
+						disabled={messages.length === 0}
 						title={saveNoteState === "saved" ? t("chat.savedAsNote", { path: "" }) : t("chat.saveAsNote")}
-					>
-						{saveNoteState === "idle" && <FileText size={16} />}
-						{saveNoteState === "saving" && <Loader2 size={16} className="llm-hub-spin" />}
-						{saveNoteState === "saved" && <Check size={16} />}
-					</button>
-					<button
-						className="llm-hub-header-btn"
-						onClick={startNewChat}
-						title={t("chat.newChat")}
-					>
+						onClick={() => { void handleSaveAsNote(); }}
+					/>
+					<HeaderButton classPrefix="llm-hub" title={t("chat.newChat")} onClick={startNewChat}>
 						<Plus size={16} />
-					</button>
-					<button
-						className="llm-hub-header-btn"
-						onClick={() => setShowHistory(!showHistory)}
-						title={t("chat.chatHistory")}
-					>
+					</HeaderButton>
+					<HeaderButton classPrefix="llm-hub" title={t("chat.chatHistory")} onClick={() => setShowHistory(!showHistory)}>
 						<History size={16} />
-
-					</button>
+					</HeaderButton>
 				</ChatHeader>
 
 			{showHistory && <HistoryList classPrefix="llm-hub"
