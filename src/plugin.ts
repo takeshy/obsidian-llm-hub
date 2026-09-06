@@ -391,7 +391,7 @@ export class LlmHubPlugin extends Plugin {
     this.encryptionManager = new EncryptionManager(this);
 
     // Initialize workflow manager
-    this.workflowMgr = new WorkflowManager(this);
+    this.workflowMgr = new WorkflowManager(this, this.selectionManager);
 
     // Workflow code block: render as Mermaid diagram (Reading mode + Live Preview)
     registerWorkflowCodeBlockProcessor(this);
