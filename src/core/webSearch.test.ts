@@ -4,14 +4,9 @@ import {
   continuationMatches,
   deduplicateWebSearchSources,
   formatWebSearchCitations,
-  getEffectiveSearchSelection,
   getSearchSelectionForModel,
-  getSlashCommandSearchSelection,
   modelSupportsWebSearch,
-  normalizeSearchSelection,
   providerSupportsWebSearch,
-  searchSelectionFromLegacy,
-  searchSelectionFromWorkspace,
 } from "./webSearch";
 
 function provider(overrides: Partial<ApiProviderConfig>): ApiProviderConfig {
@@ -69,44 +64,8 @@ describe("web search capability", () => {
 });
 
 describe("combined search selection", () => {
-  it("migrates legacy slash-command values", () => {
-    expect(searchSelectionFromLegacy(null)).toBeNull();
-    expect(searchSelectionFromLegacy("")).toEqual({ webSearch: false, ragSetting: null });
-    expect(searchSelectionFromLegacy("__websearch__")).toEqual({ webSearch: true, ragSetting: null });
-    expect(searchSelectionFromLegacy("Research")).toEqual({ webSearch: false, ragSetting: "Research" });
-  });
-
-  it("prefers the new slash-command combination and preserves explicit current", () => {
-    expect(getSlashCommandSearchSelection({
-      searchSelection: { webSearch: true, ragSetting: "Research" },
-      searchSetting: "Old index",
-    })).toEqual({ webSearch: true, ragSetting: "Research" });
-    expect(getSlashCommandSearchSelection({
-      searchSelection: null,
-      searchSetting: "Old index",
-    })).toBeNull();
-  });
-
-  it("migrates workspace Web-only state and preserves combined state", () => {
-    expect(searchSelectionFromWorkspace("__websearch__", false)).toEqual({
-      webSearch: true, ragSetting: null,
-    });
-    expect(searchSelectionFromWorkspace("Research", true)).toEqual({
-      webSearch: true, ragSetting: "Research",
-    });
-  });
-
-  it("normalizes invalid values and resolves capabilities without erasing preferences", () => {
-    expect(normalizeSearchSelection({ webSearch: true, ragSetting: "" })).toEqual({
-      webSearch: true, ragSetting: null,
-    });
-    const remembered = { webSearch: true, ragSetting: "Research" };
-    expect(getEffectiveSearchSelection(remembered, false, false)).toEqual({
-      webSearch: false, ragSetting: null,
-    });
-    expect(remembered).toEqual({ webSearch: true, ragSetting: "Research" });
-  });
-
+  // Reading and combining the preferences is covered in the shared library;
+  // only the model-capability rule below belongs to this plugin.
   it("clears RAG for image models while preserving the independent Web Search setting", () => {
     expect(getSearchSelectionForModel(
       { webSearch: true, ragSetting: "Research" },

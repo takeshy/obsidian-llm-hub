@@ -100,11 +100,10 @@ export type { VaultToolMode };
 // "cli" = CLI mode (MCP servers also disabled)
 export type VaultToolNoneReason = "manual" | "cli";
 
-/** Independent search preferences used by Chat, slash commands, and Discord. */
-export interface SearchSelection {
-  webSearch: boolean;
-  ragSetting: string | null;
-}
+// Independent search preferences used by Chat, slash commands and Discord. The
+// shared search selector reports this shape, so it is defined once in the library.
+import type { SearchSelection } from "obsidian-llm-hub-common/core";
+export type { SearchSelection };
 
 // Slash command definition
 export interface SlashCommand {

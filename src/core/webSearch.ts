@@ -3,10 +3,10 @@ import type {
   ModelType,
   ProviderContinuation,
   SearchSelection,
-  SlashCommand,
   WebSearchCitation,
   WebSearchSource,
 } from "../types";
+import { normalizeSearchSelection } from "obsidian-llm-hub-common/core";
 import {
   getApiProviderId,
   getApiProviderModelName,
@@ -17,33 +17,16 @@ import {
 export const WEB_SEARCH_COST_PER_REQUEST = 10 / 1000;
 export const XAI_WEB_SEARCH_COST_PER_REQUEST = 5 / 1000;
 
-export const EMPTY_SEARCH_SELECTION: SearchSelection = { webSearch: false, ragSetting: null };
-
-/** Convert the legacy single-choice value into independent Web/RAG preferences. */
-export function searchSelectionFromLegacy(value: string | null | undefined): SearchSelection | null {
-  if (value === null || value === undefined) return null;
-  if (value === "") return { ...EMPTY_SEARCH_SELECTION };
-  if (value === "__websearch__") return { webSearch: true, ragSetting: null };
-  return { webSearch: false, ragSetting: value };
-}
-
-export function getSlashCommandSearchSelection(
-  command: Pick<SlashCommand, "searchSelection" | "searchSetting">,
-): SearchSelection | null {
-  if (command.searchSelection !== undefined) {
-    return command.searchSelection === null ? null : normalizeSearchSelection(command.searchSelection);
-  }
-  return searchSelectionFromLegacy(command.searchSetting);
-}
-
-export function normalizeSearchSelection(value: SearchSelection): SearchSelection {
-  return {
-    webSearch: value.webSearch === true,
-    ragSetting: typeof value.ragSetting === "string" && value.ragSetting.length > 0
-      ? value.ragSetting
-      : null,
-  };
-}
+// Reading and combining the Web/RAG preferences is host-independent and lives in
+// the shared library; only the model-capability rules below are this plugin's.
+export {
+  EMPTY_SEARCH_SELECTION,
+  getEffectiveSearchSelection,
+  getSlashCommandSearchSelection,
+  normalizeSearchSelection,
+  searchSelectionFromLegacy,
+  searchSelectionFromWorkspace,
+} from "obsidian-llm-hub-common/core";
 
 /** Image generation requests cannot use a RAG index. */
 export function getSearchSelectionForModel(
@@ -54,29 +37,6 @@ export function getSearchSelectionForModel(
   return isImageGenerationModel(model)
     ? { ...normalized, ragSetting: null }
     : normalized;
-}
-
-export function searchSelectionFromWorkspace(
-  selectedRagSetting: string | null | undefined,
-  webSearchEnabled: boolean | undefined,
-): SearchSelection {
-  if (selectedRagSetting === "__websearch__") return { webSearch: true, ragSetting: null };
-  return normalizeSearchSelection({
-    webSearch: webSearchEnabled === true,
-    ragSetting: selectedRagSetting ?? null,
-  });
-}
-
-/** Resolve capabilities without mutating the remembered preferences. */
-export function getEffectiveSearchSelection(
-  selection: SearchSelection,
-  webSearchSupported: boolean,
-  ragSupported: boolean,
-): SearchSelection {
-  return {
-    webSearch: selection.webSearch && webSearchSupported,
-    ragSetting: ragSupported ? selection.ragSetting : null,
-  };
 }
 
 function normalizedHostname(baseUrl: string): string | null {
