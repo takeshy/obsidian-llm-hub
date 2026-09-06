@@ -12,7 +12,13 @@
 
 import { requestUrl } from "obsidian";
 import type { Message, StreamChunk, LocalLlmConfig, Attachment } from "../types";
-import { parseThinkTags } from "./thinkTagParser";
+import {
+  formatStreamIdleTimeoutError,
+  getHttpModule,
+  getStreamIdleTimeoutMs,
+  parseThinkTags,
+  StreamSignal,
+} from "obsidian-llm-hub-common/core";
 import { verifyOpencodeLocal, opencodeLocalChatStream } from "./opencodeLocalProvider";
 
 // OpenAI-compatible multimodal content part
@@ -196,7 +202,7 @@ async function* ollamaChatStream(
 
   const body = JSON.stringify(requestBody);
   const url = new URL(`${config.baseUrl}/api/chat`);
-  const httpModule = getHttpModule(url.protocol);
+  const httpModule = getHttpModule<typeof import("http")>(url.protocol);
 
   const chunks: StreamChunk[] = [];
   const signal$ = new StreamSignal();
@@ -412,7 +418,7 @@ async function* openaiChatStream(
   const body = JSON.stringify(requestBody);
 
   const url = new URL(`${config.baseUrl}${openaiPathPrefix(config)}/chat/completions`);
-  const httpModule = getHttpModule(url.protocol);
+  const httpModule = getHttpModule<typeof import("http")>(url.protocol);
 
   const chunks: StreamChunk[] = [];
   const signal$ = new StreamSignal();
@@ -597,52 +603,14 @@ async function* openaiChatStream(
   }
 }
 
-/** Idle timeout for stream chunks (ms). */
-export const STREAM_IDLE_TIMEOUT_MS = 120_000;
+// The stream idle timeout, the signal that bridges Node callbacks to the
+// generator and the http module loader live in the shared package; the OpenCode
+// provider imports them from here so its call sites stay unchanged.
+export {
+  formatStreamIdleTimeoutError,
+  getHttpModule,
+  getStreamIdleTimeoutMs,
+  STREAM_IDLE_TIMEOUT_MS,
+  StreamSignal,
+} from "obsidian-llm-hub-common/core";
 
-export function getStreamIdleTimeoutMs(config: LocalLlmConfig): number {
-  const seconds = config.streamIdleTimeoutSeconds;
-  return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
-    ? seconds * 1000
-    : STREAM_IDLE_TIMEOUT_MS;
-}
-
-export function formatStreamIdleTimeoutError(timeoutMs: number): string {
-  return `Stream timed out: no data received for ${timeoutMs / 1000} seconds`;
-}
-
-/**
- * Robust signaling queue for bridging Node.js event callbacks to an async generator.
- */
-export class StreamSignal {
-  private version = 0;
-  private resolve: (() => void) | null = null;
-
-  notify(): void {
-    this.version++;
-    const fn = this.resolve;
-    this.resolve = null;
-    fn?.();
-  }
-
-  async wait(timeoutMs: number): Promise<boolean> {
-    const vBefore = this.version;
-    return new Promise<boolean>((res) => {
-      const timer = window.setTimeout(() => { this.resolve = null; res(false); }, timeoutMs);
-      this.resolve = () => { window.clearTimeout(timer); this.resolve = null; res(true); };
-      if (this.version !== vBefore) { window.clearTimeout(timer); this.resolve = null; res(true); }
-    });
-  }
-}
-
-/** Load Node.js http or https module (desktop only, bypasses CORS). */
-export function getHttpModule(protocol: string): typeof import("http") {
-  const loader =
-    (window as unknown as { require?: (id: string) => unknown }).require ||
-    (window as unknown as { module?: { require?: (id: string) => unknown } }).module?.require;
-  if (!loader) {
-    throw new Error("Node.js http module is not available in this environment");
-  }
-  const moduleName = protocol === "https:" ? "https" : "http";
-  return loader(moduleName) as typeof import("http");
-}

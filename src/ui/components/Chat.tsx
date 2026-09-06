@@ -2032,6 +2032,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						toolsSystemPrompt, executeToolCall, abortController.signal,
 						false, // local LLMs: don't request reasoning_effort
 						undefined, undefined, // proxy already handled by createNodeFetch
+						undefined, undefined, // no native web search, no reasoning effort
+						true, // recover tool calls a small local model writes as text
 					)) {
 						if (abortController.signal.aborted) { toolsFlowAborted = true; break; }
 						// An "error" chunk throws out of here into the catch below,

@@ -13,7 +13,7 @@ import { requestUrl } from "obsidian";
 import OpenAI from "openai";
 import type { Message, StreamChunk, ToolDefinition, GeneratedImage, WebSearchCitation, WebSearchSource, ReasoningEffort } from "../types";
 import { calculateCost } from "./modelPricing";
-import { parseThinkTags } from "./thinkTagParser";
+import { extractInlineToolCalls, parseThinkTags } from "obsidian-llm-hub-common/core";
 import { createProxyFetch, createNodeFetch } from "./proxyFetch";
 import { dedupeAttachments, getToolResultAttachments, withoutToolResultAttachments } from "./toolResultAttachments";
 import {
@@ -742,6 +742,12 @@ export async function* openaiChatWithToolsStream(
   proxyBypass?: string,
   webSearchEnabled?: boolean,
   reasoningEffort?: ReasoningEffort,
+  /**
+   * Recover tool calls a model wrote as JSON in its text instead of using the
+   * `tool_calls` field. Only for local servers: a hosted model that is asked
+   * to *describe* a tool call would otherwise have it executed instead.
+   */
+  inlineToolCalls?: boolean,
 ): AsyncGenerator<StreamChunk> {
   const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
   const selectedEffort = reasoningEffort && reasoningEffort !== "default" ? reasoningEffort : undefined;
@@ -903,6 +909,27 @@ export async function* openaiChatWithToolsStream(
       const msg = error instanceof Error ? error.message : String(error);
       yield { type: "error", error: msg };
       return;
+    }
+
+    // Small local models (llama3.1:8b, mistral 7b and friends) often write the
+    // call as JSON in the content instead of filling in `tool_calls`, so the
+    // tool never runs and the user is shown raw JSON. Recover those calls and
+    // tell the UI to drop the JSON it has already streamed.
+    if (inlineToolCalls && !hasToolCalls && textContent) {
+      const inline = extractInlineToolCalls(textContent, tools.map(tool => tool.name));
+      if (inline.toolCalls.length > 0) {
+        textContent = inline.cleanedText;
+        yield { type: "replace_text", content: inline.cleanedText };
+        let index = toolCallAccum.size;
+        for (const call of inline.toolCalls) {
+          toolCallAccum.set(index++, {
+            id: call.id,
+            name: call.name,
+            arguments: JSON.stringify(call.args),
+          });
+        }
+        hasToolCalls = true;
+      }
     }
 
     // Emit tool calls
