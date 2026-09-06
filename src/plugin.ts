@@ -11,6 +11,9 @@ import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
 import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
 import { SettingsTab } from "src/ui/SettingsTab";
+import { configureMcpAppViewer } from "obsidian-llm-hub-common/modals";
+import { showMcpApp } from "src/ui/components/workflow/McpAppModal";
+import type { McpAppInfo } from "src/types";
 import {
   type LlmHubSettings,
   type WorkspaceState,
@@ -286,6 +289,7 @@ export class LlmHubPlugin extends Plugin {
     // Initialize i18n locale
     initLocale();
     configureClassPrefix("llm-hub");
+    configureMcpAppViewer((app, mcpApp) => showMcpApp(app, mcpApp as McpAppInfo));
 
     let approvalModal: McpApprovalModal | undefined;
     setMcpApprovalHandler({
