@@ -62,7 +62,14 @@ import {
 } from "src/types";
 import { getGeminiClient } from "src/core/gemini";
 import { tracing } from "src/core/tracingHooks";
-import { isVaultToolAllowed, getEnabledTools, skillWorkflowTool, skillScriptTool } from "src/core/tools";
+import {
+	SEARCH_VAULT_TOOL_NAMES,
+	filterVaultToolsForMode,
+	getEnabledVaultTools,
+	isVaultToolAllowed,
+} from "obsidian-llm-hub-common/core";
+import { HOST_EXECUTES_RAG_SYNC_STATUS } from "src/vault/toolExecutor";
+import { skillWorkflowTool, skillScriptTool } from "src/core/skillTools";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "src/core/sandboxExecutor";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "src/workflow/workflowSpec";
 import { fetchMcpTools, createMcpToolExecutor, isMcpTool, type McpToolDefinition, type McpToolExecutor } from "src/core/mcpTools";
@@ -75,7 +82,6 @@ import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsW
 import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments, buildRagPdfTextContext } from "src/core/localRagStore";
 import { resolveApiProviderPdfInputMode, resolveLocalLlmPdfInputMode } from "src/core/pdfInputMode";
 import { createRagSearchRunner, RAG_SEARCH_SYSTEM_PROMPT, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
-import { filterVaultToolsForMode } from "src/core/vaultToolMode";
 import { buildNoDiscoverySystemPrompt } from "./chat/noDiscoveryPrompt";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import { extractPdfText } from "obsidian-llm-hub-common/vault";
@@ -1608,7 +1614,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			}
 
 			if (isCodexCli) {
-				const codexTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false })
+				const codexTools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS })
 					.filter((tool) => CODEX_VAULT_TOOLS.has(tool.name))
 					.filter((tool) => isVaultToolAllowed(tool.name, vaultToolMode));
 				const skillWorkflowMap = collectSkillWorkflows(cliLoadedSkills);
@@ -2065,10 +2071,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			// bundle as the other agent paths through a dynamically registered MCP
 			// server hosted by the plugin.
 			if (wantsTools && llmConfig.framework === "opencode") {
-				let openCodeTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false });
+				let openCodeTools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS });
 				if (vaultToolMode === "noSearch") {
-					const searchNames = new Set(["search_notes", "list_notes"]);
-					openCodeTools = openCodeTools.filter(tool => !searchNames.has(tool.name));
+					openCodeTools = openCodeTools.filter(tool => !SEARCH_VAULT_TOOL_NAMES.includes(tool.name));
 				}
 				if (ragSearchRunner) openCodeTools.push(RAG_SEARCH_TOOL);
 				openCodeTools.push(EXECUTE_JAVASCRIPT_TOOL, GET_WORKFLOW_SPEC_TOOL);
@@ -2176,10 +2181,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				// include write/delete; vaultToolMode-based name filtering happens
 				// after MCP merge so the modal toggle stays a UI-only affordance
 				// and doesn't accidentally drop propose_edit etc. in noSearch mode).
-				const vaultTools = getEnabledTools({
+				const vaultTools = getEnabledVaultTools({
 					allowWrite: true,
 					allowDelete: true,
-					ragEnabled: false,
+					ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS,
 				});
 				const obsidianToolExecutor = createToolExecutor(plugin.app, {
 					listNotesLimit: settings.listNotesLimit,
@@ -2642,7 +2647,7 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			// Build vault tools (same as Gemini path)
 			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 			let tools = filterVaultToolsForMode(
-				getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false }),
+				getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
 				vaultToolMode,
 			);
 			const obsidianToolExecutor = createToolExecutor(plugin.app, {
@@ -3040,10 +3045,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 			const runStreamOnce = async () => {
 				const { settings } = plugin;
 				const toolsEnabled = !isImageGenerationModel(allowedModel);
-				const obsidianTools = toolsEnabled ? getEnabledTools({
+				const obsidianTools = toolsEnabled ? getEnabledVaultTools({
 					allowWrite: true,
 					allowDelete: true,
-					ragEnabled: allowRag,
+					ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS,
 				}) : [];
 
 				// Activate skill if invoked via slash command
@@ -3085,13 +3090,10 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				// Merge Obsidian tools and MCP tools
 				const allTools = [...obsidianTools, ...mcpTools];
 
-				// Filter Obsidian tools based on vaultToolMode (MCP tools are not affected)
-				const vaultToolNames = [
-					"read_note", "create_note", "propose_edit", "propose_delete",
-					"rename_note", "search_notes", "list_notes", "list_folders",
-					"create_folder", "get_active_note", "check_rag_sync"
-				];
-				const searchToolNames = ["search_notes", "list_notes"];
+				// Filter Obsidian tools based on vaultToolMode (MCP tools are not affected).
+				// The names come from the shared definitions: the list kept here had
+				// drifted and let read_timeline, get_active_note_info and the bulk_*
+				// tools through with Vault access switched off.
 				// Vault skills are loaded lazily — their SKILL.md (workflow IDs,
 				// inputVariables, full instructions) is only reachable via read_note.
 				// If any such skill is active we must keep read_note available even
@@ -3100,19 +3102,9 @@ Always be helpful and provide clear, concise responses. When working with notes,
 				const hasActiveVaultSkill = loadedSkillsList.some(s => !isBuiltinSkillPath(s.folderPath));
 				const tools = allTools.filter(tool => {
 					// MCP tools are always included
-					if (isMcpTool(tool)) {
-						return true;
-					}
-					// Filter Obsidian tools based on mode
-					if (vaultToolMode === "readOnly") return isVaultToolAllowed(tool.name, vaultToolMode);
-					if (vaultToolMode === "none") {
-						if (tool.name === "read_note" && hasActiveVaultSkill) return true;
-						return !vaultToolNames.includes(tool.name);
-					}
-					if (vaultToolMode === "noSearch") {
-						return !searchToolNames.includes(tool.name);
-					}
-					return true; // "all" mode - keep all tools
+					if (isMcpTool(tool)) return true;
+					if (vaultToolMode === "none" && tool.name === "read_note" && hasActiveVaultSkill) return true;
+					return isVaultToolAllowed(tool.name, vaultToolMode);
 				});
 
 				// Add run_skill_workflow tool if any active skill has workflows

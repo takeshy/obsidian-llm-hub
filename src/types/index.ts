@@ -91,8 +91,9 @@ export interface McpAppUiResource {
 }
 
 
-// Vault tool mode type
-export type VaultToolMode = "all" | "noSearch" | "readOnly" | "none";
+// Vault tool mode type (shared: the built-in Vault tool policy lives in the library)
+import type { VaultToolMode } from "obsidian-llm-hub-common/core";
+export type { VaultToolMode };
 
 // Reason why vault tools are set to "none"
 // "manual" = user manually turned off (MCP servers remain unchanged)

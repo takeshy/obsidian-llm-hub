@@ -33,6 +33,14 @@ import {
   isPathInAllowedVaultFolders,
 } from "./cloudVaultScope";
 
+/**
+ * Whether this host can answer `get_rag_sync_status`. Its RAG store keeps no
+ * per-file import state, so the switch below has no case for the tool and
+ * `getEnabledVaultTools` must not advertise it. Flip this the day a case exists;
+ * toolExecutor.contract.test.ts fails if the two ever disagree.
+ */
+export const HOST_EXECUTES_RAG_SYNC_STATUS = false;
+
 export type ToolResult = Record<string, unknown>;
 
 // Context for tool execution

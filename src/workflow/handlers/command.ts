@@ -4,7 +4,8 @@ import type { LlmHubPlugin } from "../../plugin";
 import { GeminiClient, getGeminiClient } from "../../core/gemini";
 import { PersistentCliSession } from "../../core/cliProvider";
 import { isImageGenerationModel, isApiProviderModel, getApiProviderId, getApiProviderModelName, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, normalizeDeprecatedModelIdentifier, type ToolDefinition, type McpAppInfo, type StreamChunkUsage } from "../../types";
-import { isVaultToolAllowed, getEnabledTools } from "../../core/tools";
+import { filterVaultToolsForMode, getEnabledVaultTools, type VaultToolMode } from "obsidian-llm-hub-common/core";
+import { HOST_EXECUTES_RAG_SYNC_STATUS } from "../../vault/toolExecutor";
 import { fetchMcpTools, createMcpToolExecutor, type McpToolDefinition } from "../../core/mcpTools";
 import { createToolExecutor } from "../../vault/toolExecutor";
 import { WorkflowNode, ExecutionContext, PromptCallbacks, FileExplorerData } from "../types";
@@ -395,18 +396,11 @@ Please revise the output based on the user's feedback above.`;
       }
 
       // Build tools
-      const apiVaultToolMode = (node.properties["vaultTools"] || "all") as "all" | "noSearch" | "readOnly" | "none";
-      let apiTools: ToolDefinition[] = [];
-      const searchToolNames = ["search_notes", "list_notes"];
-
-      if (apiVaultToolMode !== "none") {
-        const vaultTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false });
-        apiTools = vaultTools.filter(tool => {
-          if (apiVaultToolMode === "readOnly") return isVaultToolAllowed(tool.name, apiVaultToolMode);
-          if (apiVaultToolMode === "noSearch") return !searchToolNames.includes(tool.name);
-          return true;
-        });
-      }
+      const apiVaultToolMode = (node.properties["vaultTools"] || "all") as VaultToolMode;
+      let apiTools: ToolDefinition[] = filterVaultToolsForMode(
+        getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
+        apiVaultToolMode,
+      );
       apiTools.push(EXECUTE_JAVASCRIPT_TOOL);
 
       const obsidianToolExecutor = createToolExecutor(app, {
@@ -646,24 +640,10 @@ Please revise the output based on the user's feedback above.`;
   const isImageModel = isImageGenerationModel(model);
 
   if (!isImageModel && vaultToolMode !== "none") {
-    // Get vault tools based on RAG setting
-    const allowRag = ragSettingName !== "__websearch__" && ragSettingName !== "__none__" && ragSettingName !== "";
-    const vaultTools = getEnabledTools({
-      allowWrite: true,
-      allowDelete: true,
-      ragEnabled: allowRag,
-    });
-
-    // Filter vault tools based on mode
-    const searchToolNames = ["search_notes", "list_notes"];
-
-    tools = vaultTools.filter(tool => {
-      if (vaultToolMode === "readOnly") return isVaultToolAllowed(tool.name, vaultToolMode);
-      if (vaultToolMode === "noSearch") {
-        return !searchToolNames.includes(tool.name);
-      }
-      return true; // "all" mode - keep all vault tools
-    });
+    tools = filterVaultToolsForMode(
+      getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
+      vaultToolMode,
+    );
 
     // Create vault tool executor
     const obsidianToolExecutor = createToolExecutor(app, {

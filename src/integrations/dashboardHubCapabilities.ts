@@ -6,7 +6,7 @@ import { openaiChatWithToolsStream } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "src/core/cliProvider";
-import { getEnabledTools } from "src/core/tools";
+import { getEnabledVaultTools } from "obsidian-llm-hub-common/core";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import { loadBuiltinSkill, builtinFolderPath } from "src/core/builtinSkills";
 import { WORKFLOW_SPECIFICATION } from "src/workflow/workflowSpec";
@@ -74,7 +74,7 @@ export async function runDashboardWorkflow(plugin: LlmHubPlugin, request: Dashbo
 }
 
 function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[], systemPrompt: string, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
-  const tools = getEnabledTools({ allowWrite: false, allowDelete: false, ragEnabled: false });
+  const tools = getEnabledVaultTools({ allowWrite: false, allowDelete: false, ragSyncStatus: false });
   const execute = createToolExecutor(plugin.app, { listNotesLimit: plugin.settings.listNotesLimit, maxNoteChars: plugin.settings.maxNoteChars,
     limitVaultToolScope: true, cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders });
   if (isApiProviderModel(model)) {

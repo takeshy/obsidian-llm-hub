@@ -12,7 +12,9 @@ import { App, Notice, requestUrl } from "obsidian";
 import type { LlmHubPlugin } from "../plugin";
 import type { DiscordSettings, Message, ToolDefinition, ModelType, SlashCommand, ProviderContinuation, WebSearchCitation, WebSearchSource } from "../types";
 import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, localLlmDisplayName, SKILLS_FOLDER } from "../types";
-import { getEnabledTools, skillScriptTool, skillWorkflowTool } from "./tools";
+import { getEnabledVaultTools } from "obsidian-llm-hub-common/core";
+import { HOST_EXECUTES_RAG_SYNC_STATUS } from "src/vault/toolExecutor";
+import { skillScriptTool, skillWorkflowTool } from "./skillTools";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "../workflow/workflowSpec";
 import { createToolExecutor } from "../vault/toolExecutor";
 import { discoverSkills, loadSkill, buildSkillSystemPrompt, collectSkillScripts, collectSkillWorkflows, type LoadedSkill, type SkillScriptRef, type SkillWorkflowRef } from "./skillsLoader";
@@ -985,7 +987,6 @@ export class DiscordService {
 
     // RAG context injection
     const ragSettingName = conversation.ragSetting;
-    const ragEnabled = !!ragSettingName;
     if (ragSettingName) {
       const ragSetting = this.plugin.getRagSearchSetting(ragSettingName);
       if (ragSetting) {
@@ -1029,7 +1030,7 @@ export class DiscordService {
     }
 
     // Build vault tools
-    const tools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled });
+    const tools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS });
 
     // Add skill tools if any active skill has scripts/workflows
     const scriptMap = collectSkillScripts(loadedSkills);
