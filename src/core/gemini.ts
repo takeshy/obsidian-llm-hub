@@ -28,11 +28,13 @@ import { tracing, type TracingUsage } from "src/core/tracingHooks";
 import {
   accumulateGeminiUsage as accumulateUsage,
   buildGeminiThinkingConfig,
+  collectGeminiWebSources as collectWebSources,
   extractGeminiUsage as extractUsage,
   formatError,
   GEMINI_MODEL_PRICING as MODEL_PRICING,
   GEMINI_SEARCH_GROUNDING_COST as SEARCH_GROUNDING_COST,
   getGeminiFinishReasonError as checkFinishReason,
+  serializeGeminiFunctionResult as serializeFunctionResult,
   toGeminiStreamChunkUsage as toStreamChunkUsage,
 } from "obsidian-llm-hub-common/core";
 import { Platform, requestUrl } from "obsidian";
@@ -159,77 +161,12 @@ async function mobileFetch(input: RequestInfo | URL, init?: RequestInit): Promis
   });
 }
 
-/**
- * Sanitize tool result for Gemini API: replace empty arrays/objects with
- * descriptive strings and strip undefined/null values so the API does not
- * reject the function_response payload.
- */
-function sanitizeToolResult(value: unknown): unknown {
-  if (value === null || value === undefined) return value;
-  if (Array.isArray(value)) {
-    if (value.length === 0) return null;
-    return value.map(sanitizeToolResult);
-  }
-  if (typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = sanitizeToolResult(v);
-    }
-    return out;
-  }
-  return value;
-}
-
-function serializeFunctionResult(value: unknown): string {
-  const sanitized = sanitizeToolResult(value);
-  if (typeof sanitized === "string") return sanitized || "null";
-  try {
-    return JSON.stringify(sanitized) || "null";
-  } catch {
-    return "null";
-  }
-}
-
 // Pick the right CORS-free fetch for the current platform
 function corsFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   if (Platform.isMobile) {
     return mobileFetch(input, init);
   }
   return nodeFetch(input, init);
-}
-
-function collectWebSources(value: unknown, sources: WebSearchSource[]): void {
-  if (typeof value === "string") {
-    // Server-side Google Search returns search_suggestions as an HTML snippet.
-    // In some tool-combination turns this is the only URL-bearing attribution.
-    const anchorPattern = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    for (const match of value.matchAll(anchorPattern)) {
-      const url = match[1].replace(/&amp;/g, "&");
-      const title = match[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim() || url;
-      if (/^https?:\/\//i.test(url) && !sources.some(source => source.url === url)) {
-        sources.push({ title, url });
-      }
-    }
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) collectWebSources(item, sources);
-    return;
-  }
-  if (!value || typeof value !== "object") return;
-
-  const record = value as Record<string, unknown>;
-  const rawUrl = [record.url, record.uri, record.link].find(candidate => typeof candidate === "string");
-  if (typeof rawUrl === "string" && /^https?:\/\//i.test(rawUrl)) {
-    const rawTitle = [record.title, record.name].find(candidate => typeof candidate === "string");
-    if (!sources.some(source => source.url === rawUrl)) {
-      sources.push({ title: typeof rawTitle === "string" ? rawTitle : rawUrl, url: rawUrl });
-    }
-  }
-
-  for (const nested of Object.values(record)) {
-    if (nested && typeof nested === "object") collectWebSources(nested, sources);
-  }
 }
 
 // Default safety settings per Gemini best practices
