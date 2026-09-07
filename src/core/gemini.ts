@@ -40,7 +40,7 @@ import {
   GEMINI_SEARCH_GROUNDING_COST as SEARCH_GROUNDING_COST,
   getGeminiFinishReasonError as checkFinishReason,
   messagesToGeminiContents,
-  serializeGeminiFunctionResult as serializeFunctionResult,
+  prepareGeminiToolResult,
   toGeminiStreamChunkUsage as toStreamChunkUsage,
 } from "obsidian-llm-hub-common/core";
 import { createProxyFetch } from "./proxyFetch";
@@ -410,9 +410,8 @@ export class GeminiClient {
           tracing.spanEnd(toolSpanId, { output: result });
 
           const cleanResult = withoutToolResultAttachments(result);
-          const serializedResult = serializeFunctionResult(cleanResult);
-          accumulatedOutput += `\n[tool_call: ${fc.name}(${JSON.stringify(fc.args)})]\n`;
-          accumulatedOutput += `[tool_result: ${serializedResult.length > 500 ? serializedResult.slice(0, 500) + "..." : serializedResult}]\n`;
+          const { serializedResult, trace } = prepareGeminiToolResult(fc.name, fc.args, cleanResult);
+          accumulatedOutput += trace;
 
           yield { type: "tool_result", toolResult: { toolCallId: toolCall.id, result: cleanResult } };
 
@@ -1039,10 +1038,8 @@ export class GeminiClient {
             tracing.spanEnd(toolSpanId, { output: result });
 
             const cleanResult = withoutToolResultAttachments(result);
-            const serializedResult = serializeFunctionResult(cleanResult);
-            const truncatedResult = serializedResult.length > 500 ? serializedResult.substring(0, 500) + "..." : serializedResult;
-            accumulatedOutput += `\n[tool_call: ${fc.name}(${JSON.stringify(fc.args)})]\n`;
-            accumulatedOutput += `[tool_result: ${truncatedResult}]\n`;
+            const { serializedResult, trace } = prepareGeminiToolResult(fc.name, fc.args, cleanResult);
+            accumulatedOutput += trace;
 
             yield {
               type: "tool_result",
