@@ -41,6 +41,7 @@ import {
   getGeminiFinishReasonError as checkFinishReason,
   messagesToGeminiContents,
   prepareGeminiToolResult,
+  planGeminiFunctionCalls,
   toGeminiStreamChunkUsage as toStreamChunkUsage,
 } from "obsidian-llm-hub-common/core";
 import { createProxyFetch } from "./proxyFetch";
@@ -377,7 +378,8 @@ export class GeminiClient {
           return;
         }
 
-        const remainingBefore = maxFunctionCalls - functionCallCount;
+        const callPlan = planGeminiFunctionCalls(functionCalls, functionCallCount, maxFunctionCalls);
+        const { remainingBefore, callsToExecute, remainingAfter } = callPlan;
         if (remainingBefore <= 0) {
           contents = [...contents, {
             role: "user",
@@ -386,8 +388,6 @@ export class GeminiClient {
           continue;
         }
 
-        const callsToExecute = functionCalls.slice(0, remainingBefore);
-        const remainingAfter = remainingBefore - callsToExecute.length;
         if (!warningEmitted && remainingAfter <= warningThreshold) {
           warningEmitted = true;
           yield { type: "text", content: `\n\n[Note: ${remainingAfter} function calls remaining. Please work efficiently.]` };
@@ -961,7 +961,12 @@ export class GeminiClient {
 
         // Process function calls
         if (functionCallsToProcess.length > 0 && executeToolCall) {
-          const remainingBefore = maxFunctionCalls - functionCallCount;
+          const callPlan = planGeminiFunctionCalls(
+            functionCallsToProcess,
+            functionCallCount,
+            maxFunctionCalls,
+          );
+          const { remainingBefore, callsToExecute, skippedCount, remainingAfter } = callPlan;
 
           if (remainingBefore <= 0) {
             yield {
@@ -1001,10 +1006,6 @@ export class GeminiClient {
             continue;
           }
 
-          const callsToExecute = functionCallsToProcess.slice(0, remainingBefore);
-          const skippedCount = functionCallsToProcess.length - callsToExecute.length;
-
-          const remainingAfter = remainingBefore - callsToExecute.length;
           if (!warningEmitted && remainingAfter <= warningThreshold) {
             warningEmitted = true;
             yield {
