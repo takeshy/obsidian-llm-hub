@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { openaiChatWithToolsStream, verifyApiProvider } from "./openaiProvider";
+import { getOpenCodeSessionId, openaiChatWithToolsStream, verifyApiProvider } from "./openaiProvider";
 import type { StreamChunk, ToolDefinition } from "../types";
 
-const { createProxyFetchMock, createCompletion } = vi.hoisted(() => ({
+const { createProxyFetchMock, createCompletion, openAiConstructor } = vi.hoisted(() => ({
   createProxyFetchMock: vi.fn(),
   createCompletion: vi.fn(),
+  openAiConstructor: vi.fn(),
 }));
 
 vi.mock("./proxyFetch", () => ({
@@ -13,6 +14,7 @@ vi.mock("./proxyFetch", () => ({
 
 vi.mock("openai", () => ({
   default: class {
+    constructor(options: unknown) { openAiConstructor(options); }
     chat = { completions: { create: createCompletion } };
   },
 }));
@@ -50,6 +52,7 @@ async function collect(inlineToolCalls?: boolean): Promise<{ chunks: StreamChunk
 describe("openaiChatWithToolsStream", () => {
   beforeEach(() => {
     createCompletion.mockReset();
+    openAiConstructor.mockReset();
   });
 
   it("runs a tool call a local model wrote as text, and takes the JSON back", async () => {
@@ -108,6 +111,22 @@ describe("openaiChatWithToolsStream", () => {
     expect(calls).toEqual([]);
     expect(chunks.some(c => c.type === "replace_text")).toBe(false);
     expect(chunks.some(c => c.type === "tool_call")).toBe(false);
+  });
+
+  it("identifies OpenCode Go requests with a stable conversation session", async () => {
+    createCompletion.mockResolvedValueOnce(round({ content: "Done." }));
+    const messages = [{ role: "user" as const, content: "hello", timestamp: 1234 }];
+
+    for await (const _ of openaiChatWithToolsStream(
+      "https://opencode.ai/zen/go/", "key", "glm-5.3", messages,
+      [], "system", async () => "",
+    )) { /* drain */ }
+
+    expect(getOpenCodeSessionId(messages)).toBe("obsidian-llm-hub-1234-user");
+    expect(openAiConstructor.mock.calls[0][0].defaultHeaders).toEqual({
+      "User-Agent": "obsidian-llm-hub/1.0",
+      "x-opencode-session": "obsidian-llm-hub-1234-user",
+    });
   });
 });
 

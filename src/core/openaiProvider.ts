@@ -47,6 +47,29 @@ function buildSdkFetch(proxyUrl?: string, proxyBypass?: string): typeof fetch | 
 
 /** DALL-E model name patterns */
 const DALLE_PATTERN = /^dall-e/i;
+const OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go";
+const OPENCODE_USER_AGENT = "obsidian-llm-hub/1.0";
+
+function isOpenCodeGoUrl(baseUrl: string): boolean {
+  return baseUrl.replace(/\/+$/, "").toLowerCase() === OPENCODE_GO_BASE_URL;
+}
+
+/** OpenCode Go requires one stable routing ID for every conversation. */
+export function getOpenCodeSessionId(messages: Message[]): string {
+  const first = messages[0];
+  if (!first) return "obsidian-llm-hub-empty";
+  // The first message timestamp is persisted in chat history and remains stable
+  // when the same conversation is resumed. Include the role to avoid relying on
+  // timestamp precision alone for imported histories.
+  return `obsidian-llm-hub-${first.timestamp}-${first.role}`;
+}
+
+function getOpenCodeHeaders(sessionId: string): Record<string, string> {
+  return {
+    "User-Agent": OPENCODE_USER_AGENT,
+    "x-opencode-session": sessionId,
+  };
+}
 
 /** Check if a model name is a DALL-E image generation model */
 export function isOpenAiImageModel(model: string): boolean {
@@ -79,7 +102,13 @@ export async function verifyOpencodeGo(
   if (!apiKey) {
     return { success: false, error: "API key required" };
   }
-  const discovery = await verifyApiProvider(baseUrl, apiKey, proxyUrl, proxyBypass);
+  const discovery = await verifyApiProvider(
+    baseUrl,
+    apiKey,
+    proxyUrl,
+    proxyBypass,
+    getOpenCodeHeaders("obsidian-llm-hub-verify"),
+  );
   if (!discovery.success) return discovery;
   const models = discovery.models ?? [];
   if (models.length === 0) {
@@ -90,6 +119,7 @@ export async function verifyOpencodeGo(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${apiKey}`,
+    ...getOpenCodeHeaders("obsidian-llm-hub-verify"),
   };
   const body = JSON.stringify({
     model: models[0],
@@ -145,12 +175,14 @@ export async function verifyApiProvider(
   apiKey: string,
   proxyUrl?: string,
   proxyBypass?: string,
+  additionalHeaders?: Record<string, string>,
 ): Promise<{ success: boolean; error?: string; models?: string[] }> {
   try {
     const url = `${baseUrl.replace(/\/+$/, "")}/v1/models`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
+      ...additionalHeaders,
     };
     if (proxyUrl) {
       const proxyFetch = createProxyFetch(proxyUrl, proxyBypass);
@@ -178,12 +210,21 @@ export async function verifyApiProvider(
   }
 }
 
-function createClient(baseUrl: string, apiKey: string, proxyUrl?: string, proxyBypass?: string): OpenAI {
+function createClient(
+  baseUrl: string,
+  apiKey: string,
+  proxyUrl?: string,
+  proxyBypass?: string,
+  sessionId?: string,
+): OpenAI {
   const sdkFetch = buildSdkFetch(proxyUrl, proxyBypass);
   return new OpenAI({
     apiKey,
     baseURL: `${baseUrl.replace(/\/+$/, "")}/v1`,
     dangerouslyAllowBrowser: true,
+    ...(isOpenCodeGoUrl(baseUrl) && sessionId
+      ? { defaultHeaders: getOpenCodeHeaders(sessionId) }
+      : {}),
     ...(sdkFetch ? { fetch: sdkFetch } : {}),
   });
 }
@@ -690,7 +731,13 @@ export async function* openaiChatWithToolsStream(
    */
   inlineToolCalls?: boolean,
 ): AsyncGenerator<StreamChunk> {
-  const client = createClient(baseUrl, apiKey, proxyUrl, proxyBypass);
+  const client = createClient(
+    baseUrl,
+    apiKey,
+    proxyUrl,
+    proxyBypass,
+    isOpenCodeGoUrl(baseUrl) ? getOpenCodeSessionId(messages) : undefined,
+  );
   const selectedEffort = reasoningEffort && reasoningEffort !== "default" ? reasoningEffort : undefined;
   const useReasoning = enableThinking === true || (selectedEffort !== undefined && selectedEffort !== "none");
 
