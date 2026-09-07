@@ -29,9 +29,9 @@ import {
   accumulateGeminiUsage as accumulateUsage,
   buildGeminiThinkingConfig,
   collectGeminiWebSources as collectWebSources,
+  extractGeminiInteractionsUsage as extractInteractionsUsage,
   extractGeminiUsage as extractUsage,
   formatError,
-  GEMINI_MODEL_PRICING as MODEL_PRICING,
   GEMINI_SEARCH_GROUNDING_COST as SEARCH_GROUNDING_COST,
   getGeminiFinishReasonError as checkFinishReason,
   serializeGeminiFunctionResult as serializeFunctionResult,
@@ -195,31 +195,6 @@ export interface ChatWithToolsOptions {
 }
 
 export { buildGeminiThinkingConfig };
-
-// Interactions API usage → TracingUsage converter
-function extractInteractionsUsage(usage: Interactions.Usage | undefined, model?: string): TracingUsage | undefined {
-  if (!usage) return undefined;
-  const inputTokens = usage.total_input_tokens ?? 0;
-  const outputTokens = usage.total_output_tokens ?? 0;
-  const thinkingTokens = usage.total_thought_tokens ?? 0;
-  const toolUseTokens = usage.total_tool_use_tokens ?? 0;
-  const totalTokens = usage.total_tokens ?? (inputTokens + outputTokens);
-  const pricing = model ? MODEL_PRICING[model] : undefined;
-  const inputCost = pricing ? inputTokens * pricing.input : undefined;
-  const outputCost = pricing ? outputTokens * pricing.output : undefined;
-  const totalCost = inputCost !== undefined && outputCost !== undefined ? inputCost + outputCost : undefined;
-
-  return {
-    input: inputTokens || undefined,
-    output: outputTokens || undefined,
-    thinking: thinkingTokens > 0 ? thinkingTokens : undefined,
-    toolUsePromptTokens: toolUseTokens > 0 ? toolUseTokens : undefined,
-    total: totalTokens || undefined,
-    inputCost,
-    outputCost,
-    totalCost,
-  };
-}
 
 /**
  * Patch a GoogleGenAI instance so all SDK HTTP requests go through the proxy.
