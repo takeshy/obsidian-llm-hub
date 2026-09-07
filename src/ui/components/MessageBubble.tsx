@@ -38,6 +38,7 @@ export default function MessageBubble({ localLlmConfigs, ...props }: MessageBubb
   return (
     <MessageBubbleView
       {...props}
+      classPrefix="llm-hub"
       formatModelName={(model) => formatModelName(model, localLlmConfigs)}
       onOpenWorkflow={() => revealWorkflowTab(props.app, "")}
     />
