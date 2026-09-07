@@ -29,6 +29,7 @@ import {
   buildGeminiInteractionInput,
   buildGeminiMessageParts,
   buildGeminiRagRequest,
+  collectGeminiInteractionFileSearchResult,
   buildGeminiThinkingConfig,
   collectGeminiWebSources as collectWebSources,
   extractGeminiInteractionsUsage as extractInteractionsUsage,
@@ -831,10 +832,10 @@ export class GeminiClient {
                   // RAG results come through file_search_result deltas
                   if ("result" in delta && Array.isArray(delta.result)) {
                     for (const r of delta.result) {
-                      const title = (r as { title?: string }).title;
-                      if (title && !accumulatedSources.includes(title)) {
-                        accumulatedSources.push(title);
-                      }
+                      collectGeminiInteractionFileSearchResult({
+                        sources: accumulatedSources,
+                        contexts: [],
+                      }, r);
                     }
                   }
                   break;
