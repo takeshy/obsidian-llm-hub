@@ -27,7 +27,7 @@ import {
   type ReasoningEffort,
 } from "src/types";
 import { tracing, type TracingUsage } from "src/core/tracingHooks";
-import { formatError } from "obsidian-llm-hub-common/core";
+import { buildGeminiThinkingConfig, formatError } from "obsidian-llm-hub-common/core";
 import { Platform, requestUrl } from "obsidian";
 import { createProxyFetch } from "./proxyFetch";
 import { dedupeAttachments, getToolResultAttachments, withoutToolResultAttachments } from "./toolResultAttachments";
@@ -348,29 +348,7 @@ export interface ChatWithToolsOptions {
   previousInteractionId?: string | null;  // For Interactions API conversation chaining
 }
 
-export function buildGeminiThinkingConfig(
-  model: string,
-  enableThinking: boolean,
-  reasoningEffort?: ReasoningEffort,
-): Record<string, unknown> | undefined {
-  const modelLower = model.toLowerCase();
-  if (modelLower.includes("gemma-4")) return undefined;
-
-  const explicitLevel = reasoningEffort && reasoningEffort !== "default" ? reasoningEffort : undefined;
-  if (explicitLevel) {
-    return { includeThoughts: explicitLevel !== "none", thinkingLevel: explicitLevel.toUpperCase() };
-  }
-
-  if (modelLower.includes("gemini-3.8-flash") && enableThinking) {
-    return { includeThoughts: true, thinkingLevel: "HIGH" };
-  }
-  if (modelLower.includes("gemini-3.5-flash-lite")) {
-    if (!enableThinking) return undefined;
-    return { includeThoughts: true, thinkingLevel: "HIGH" };
-  }
-  if (enableThinking) return { includeThoughts: true };
-  return undefined;
-}
+export { buildGeminiThinkingConfig };
 
 // Interactions API usage → TracingUsage converter
 function extractInteractionsUsage(usage: Interactions.Usage | undefined, model?: string): TracingUsage | undefined {
