@@ -97,7 +97,10 @@ import {
 	createConfirmingToolExecutor,
 	createStreamAccumulation,
 	pendingStatusFields,
+	runChatTurn,
 	withRateLimitRetry,
+	type ChatTurnOutcome,
+	type ChatTurnUi,
 } from "obsidian-llm-hub-common/chat";
 import { runSkillWorkflow } from "obsidian-llm-hub-common/workflow";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillScriptRef } from "src/core/skillsLoader";
@@ -1261,180 +1264,562 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	};
 
 	// Send message via CLI provider
+	/**
+	 * The view state every send path hands to the shared turn. A function, not a
+	 * value: `messages` has to be the history as it stands when the send begins.
+	 */
+	const chatTurnUi = (): ChatTurnUi => ({
+		messages, setMessages, setIsLoading, setStreamingContent, setStreamingThinking,
+		abortControllerRef, createStreamSession,
+		describeError: buildErrorMessage,
+	});
+
+	/** What the CLI turn works out before it starts. */
+	interface CliTurnContext {
+		isClaudeCli: boolean;
+		isCodexCli: boolean;
+		effectiveSkillPaths: string[];
+		resolvedContent: string;
+	}
+
+	/** What the Gemini turn works out before it starts. */
+	interface GeminiTurnContext {
+		client: InstanceType<Awaited<typeof import("src/core/gemini")>["GeminiClient"]>;
+		allowedModel: ModelType;
+		resolvedContent: string;
+	}
+
+	/** What the local LLM turn works out before it starts. */
+	interface LocalLlmTurnContext {
+		llmConfig: NonNullable<ReturnType<typeof getLocalLlmConfig>>;
+		effectiveSkillPaths: string[];
+		resolvedContent: string;
+		imageAttachments: Attachment[];
+	}
+
+	/** What the API provider turn works out before it starts. */
+	interface ApiProviderTurnContext {
+		providerConfig: ApiProviderConfig;
+		resolvedModelName: string;
+		resolvedContent: string;
+	}
+
 	const sendMessageViaCli = async (content: string, attachments?: Attachment[], skillPath?: string) => {
-		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
+		await runChatTurn<CliTurnContext>(chatTurnUi(), {
+			prepare: async () => {
 
-		const isClaudeCli = currentModel === "claude-cli";
-		const isCodexCli = currentModel === "codex-cli";
+				const isClaudeCli = currentModel === "claude-cli";
+				const isCodexCli = currentModel === "codex-cli";
 
-		// Activate skill if invoked via slash command
-		const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
-		if (skillPath && !activeSkillPaths.includes(skillPath)) {
-			setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
-		}
+				// Activate skill if invoked via slash command
+				const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
+				if (skillPath && !activeSkillPaths.includes(skillPath)) {
+					setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
+				}
 
-		// Resolve variables in the content
-		const resolvedContent = await resolveMessageVariables(content);
+				// Resolve variables in the content
+				const resolvedContent = await resolveMessageVariables(content);
 
-		// When skill is invoked without message, use skill name as trigger
-		let displayContent = resolvedContent.trim();
-		if (!displayContent && skillPath) {
-			const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
-			displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
-		}
+				// When skill is invoked without message, use skill name as trigger
+				let displayContent = resolvedContent.trim();
+				if (!displayContent && skillPath) {
+					const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
+					displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
+				}
 
-		// Add user message
-		const userMessage: Message = {
-			role: "user",
-			content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
-			timestamp: Date.now(),
-			attachments,
-		};
+				// Add user message
+				const userMessage: Message = {
+					role: "user",
+					content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
+					timestamp: Date.now(),
+					attachments,
+				};
 
-		setMessages((prev) => [...prev, userMessage]);
-		setIsLoading(true);
-		setStreamingContent("");
-		setStreamingThinking("");
+				return {
+					userMessage,
+					trace: {
+						name: "chat-message",
+						sessionId: currentChatId ?? undefined,
+						input: resolvedContent,
+						metadata: {
+							model: currentModel,
+							isCli: true,
+							pluginVersion: plugin.manifest.version,
+						},
+					},
+					context: { isClaudeCli, isCodexCli, effectiveSkillPaths, resolvedContent },
+				};
+			},
 
-		// Create abort controller for this request
-		const abortController = new AbortController();
-		abortControllerRef.current = abortController;
+			run: async (turn, { isClaudeCli, isCodexCli, effectiveSkillPaths, resolvedContent }) => {
+				const { isActive, abortController, userMessage } = turn;
+				let codexMutationTracking: ReturnType<typeof createConfirmingToolExecutor> | null = null;
+				let fullContent = "";
+				let localRagSources: string[] = [];
 
-		const cliTraceId = tracing.traceStart("chat-message", {
-			sessionId: currentChatId ?? undefined,
-			input: resolvedContent,
-			metadata: {
-				model: currentModel,
-				isCli: true,
-				pluginVersion: plugin.manifest.version,
+				try {
+					const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+					let codexMcpUrl: string | undefined;
+
+					// Build system prompt for CLI. Codex's direct filesystem access stays
+					// read-only; Vault writes go through the plugin MCP bridge.
+					const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Antigravity CLI";
+					let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
+					if (isCodexCli) {
+						systemPrompt += "\n\nYou can read Vault files directly, but the filesystem is read-only. Never attempt to modify, delete, rename, or create Vault files directly.";
+						if (vaultToolMode !== "none") {
+							systemPrompt += " The llm_hub_vault MCP also provides Obsidian-aware read tools. When the user refers to the open, active, or current file without naming it, call read_note with activeNote=true (or get_active_note_info when only its metadata is needed).";
+							if (vaultToolMode === "noSearch") {
+								systemPrompt += " Vault search and note-listing tools are disabled for this chat.";
+							}
+							systemPrompt += vaultToolMode === "readOnly"
+								? "\n\nVault tools are read-only. Answer in chat; do not create or change Vault files."
+								: "\n\nFor a new Vault file, use the llm_hub_vault MCP create_note tool; it creates the file immediately, including text-based formats such as .canvas and .base. For changes to existing files, use propose_edit, bulk_propose_edit, propose_delete, bulk_propose_delete, rename_note, or bulk_propose_rename. Existing-file mutations show a diff or confirmation and apply only after approval. Do not claim a change was applied unless the tool result says it was applied.";
+						}
+					} else {
+						systemPrompt += `\n\nNote: You are running in ${cliName} mode with limited capabilities. You can read and search vault files, but cannot modify them.`;
+						systemPrompt += "\n\nIMPORTANT: File writing operations may fail in this environment. Always output results directly to standard output instead of attempting to write to files.";
+					}
+					if (vaultToolMode !== "none" && !isVaultToolRestrictedCliMode) {
+						systemPrompt += FILE_MENTION_TOOL_PROMPT;
+					}
+					systemPrompt += `\n\nVault location: ${(plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || "."}`;
+
+					if (plugin.settings.systemPrompt) {
+						systemPrompt += `\n\nAdditional instructions: ${plugin.settings.systemPrompt}`;
+					}
+
+					// Inject active agent skills into system prompt
+					let cliLoadedSkills: LoadedSkill[] = [];
+					if (effectiveSkillPaths.length > 0) {
+						const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
+						if (activeMetadata.length > 0) {
+							cliLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
+							const skillPrompt = buildSkillSystemPrompt(cliLoadedSkills, { cliMode: !isCodexCli });
+							if (skillPrompt) {
+								systemPrompt += skillPrompt;
+							}
+						}
+					}
+
+					// The bridge is wired before the automatic RAG search runs, so the runner
+					// has to exist by now; its budget is charged when that search completes.
+					let ragSearchRunner: RagSearchRunner | null = null;
+					let ragSearchToolOffered = false;
+					const cliRagSetting = selectedRagSetting ? plugin.getRagSearchSetting(selectedRagSetting) : null;
+					if (selectedRagSetting && cliRagSetting) {
+						ragSearchRunner = createRagSearchRunner(
+							(query, topK) => searchLocalRagResults(
+								selectedRagSetting, query, cliRagSetting, getGeminiApiKey(plugin.settings),
+								plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+							),
+							(filePaths) => { for (const path of filePaths) if (!localRagSources.includes(path)) localRagSources.push(path); },
+						);
+					}
+
+					if (isCodexCli) {
+						const codexTools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS })
+							.filter((tool) => CODEX_VAULT_TOOLS.has(tool.name))
+							.filter((tool) => isVaultToolAllowed(tool.name, vaultToolMode));
+						const skillWorkflowMap = collectSkillWorkflows(cliLoadedSkills);
+						const skillScriptMap = collectSkillScripts(cliLoadedSkills);
+						if (skillWorkflowMap.size > 0) codexTools.push(skillWorkflowTool);
+						if (skillScriptMap.size > 0) codexTools.push(skillScriptTool);
+						// RAG has its own toggle, so it is offered regardless of vaultToolMode.
+						if (ragSearchRunner) {
+							codexTools.push(RAG_SEARCH_TOOL);
+							ragSearchToolOffered = true;
+						}
+
+						const vaultExecutor = createToolExecutor(plugin.app);
+						const codexToolExecutor = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+							if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return ragSearchRunner.run(args);
+							if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
+								return runSkillWorkflow(
+									plugin.app,
+									args.workflowId as string,
+									args.variables as string | undefined,
+									skillWorkflowMap,
+									// A CLI provider already runs with the user's own permissions.
+									{ vaultToolAllowedFolders: undefined },
+								);
+							}
+							if (name === "run_skill_script" && skillScriptMap.size > 0) {
+								return executeSkillScript(
+									plugin,
+									args.scriptId as string,
+									args.args as string | undefined,
+									skillScriptMap,
+								);
+							}
+							return vaultExecutor(name, args);
+						};
+						codexMutationTracking = createConfirmingToolExecutor(
+							codexToolExecutor,
+							plugin.app,
+							autoApplyEdits,
+							() => abortController.abort(),
+						);
+						if (!codexVaultMcpBridgeRef.current) {
+							codexVaultMcpBridgeRef.current = new CodexVaultMcpBridge(
+								codexTools,
+								codexMutationTracking.executeToolCall,
+							);
+						} else {
+							codexVaultMcpBridgeRef.current.setTools(codexTools);
+							codexVaultMcpBridgeRef.current.setExecutor(codexMutationTracking.executeToolCall);
+						}
+						codexMcpUrl = await codexVaultMcpBridgeRef.current.start();
+					}
+
+					systemPrompt = await appendOkfSystemPrompt(systemPrompt);
+
+					// Local RAG: search and inject context into system prompt
+					if (AUTOMATIC_RAG_RETRIEVAL && selectedRagSetting) {
+						const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
+						if (ragSettingObj) {
+							try {
+								const localRag = await searchLocalRag(
+									selectedRagSetting, resolvedContent,
+									ragSettingObj, getGeminiApiKey(plugin.settings),
+									plugin.settings.proxyUrl, plugin.settings.proxyBypass
+								);
+								// A search that threw never reached the index, so it must not consume
+								// the turn budget the model is told it has.
+								if (localRag.sources.length > 0) {
+									systemPrompt += localRag.context;
+									localRagSources = localRag.sources;
+									// Attach multimodal RAG files so the LLM can see actual content
+									if (localRag.mediaReferences.length > 0) {
+										const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
+											.filter(attachment => attachment.type !== "pdf");
+										// A dropped PDF leaves only its label in the indexed chunk text,
+										// so its pages go into the prompt as extracted text instead.
+										systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
+										if (ragAttachments.length > 0) {
+											const existing = userMessage.attachments || [];
+											(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
+										}
+									}
+								}
+							} catch (e) {
+								console.error("Local RAG search failed:", formatError(e));
+							}
+						}
+					}
+
+					if (vaultToolMode === "noSearch") {
+						systemPrompt += buildNoDiscoverySystemPrompt({
+							ragRequested: Boolean(ragSearchRunner),
+							hasRagContext: localRagSources.length > 0,
+						});
+					}
+
+					if (ragSearchToolOffered) {
+						systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
+					}
+
+					let stopped = false;
+					let receivedSessionId: string | null = null;
+
+					// Get vault base path for working directory
+					const vaultBasePath = (plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || ".";
+
+					// Determine current provider name
+					const currentProvider: ChatProvider = isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "antigravity-cli";
+
+					// Get or create persistent CLI session
+					const existingSession = persistentCliRef.current;
+					let session: PersistentCliSession;
+					if (existingSession && existingSession.isAlive && existingSession.provider === currentProvider) {
+						// Reuse existing persistent session
+						session = existingSession;
+					} else {
+						// Terminate old session if provider changed or session died
+						existingSession?.terminate();
+						// Create new persistent session, passing stored session ID for CLI resume.
+						const storedSessionId = cliSession?.provider === currentProvider
+							? cliSession.sessionId
+							: undefined;
+						const customCliPath = currentProvider === "antigravity-cli"
+							? cliConfig.geminiCliPath
+							: currentProvider === "claude-cli"
+								? cliConfig.claudeCliPath
+								: cliConfig.codexCliPath;
+						session = new PersistentCliSession(
+							currentProvider, vaultBasePath,
+							customCliPath, storedSessionId,
+							cliConfig.codexCliModel,
+							codexMcpUrl,
+							cliConfig.codexCliReasoningEffort
+						);
+						session.start();
+						persistentCliRef.current = session;
+					}
+
+					// === Agent loop ===
+					// Each iteration: stream CLI → detect skill markers → execute → feed
+					// results back as a follow-up user message → loop until no markers
+					// or MAX_MARKER_AGENT_ITERATIONS reached. Uses the persistent /
+					// resume session so the CLI preserves context across iterations.
+					let processedContent = "";
+					let conversationHistory: Message[] = allMessages;
+					let iterationUserContent = allMessages[allMessages.length - 1]?.role === "user"
+						? allMessages[allMessages.length - 1].content
+						: "";
+
+					for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration++) {
+						let iterationContent = "";
+						const streamSep = fullContent ? "\n\n" : "";
+
+						for await (const chunk of session.sendMessage(
+							iterationUserContent,
+							conversationHistory,
+							systemPrompt,
+							abortController.signal
+						)) {
+							if (abortController.signal.aborted) {
+								stopped = true;
+								break;
+							}
+
+							switch (chunk.type) {
+								case "text":
+									iterationContent += chunk.content || "";
+									if (isActive()) setStreamingContent(fullContent + streamSep + iterationContent);
+									break;
+
+								case "session_id":
+									if (chunk.sessionId) {
+										receivedSessionId = chunk.sessionId;
+									}
+									break;
+
+								case "error":
+									throw new Error(chunk.error || "Unknown error");
+
+								case "done":
+									break;
+							}
+						}
+
+						if (stopped) break;
+
+						// Execute any skill markers in this iteration's output
+						const markerResult = !isCodexCli && cliLoadedSkills.length > 0
+							? await processSkillMarkers(plugin, iterationContent, cliLoadedSkills, abortController.signal)
+							: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
+
+						// Append this iteration's processed content to accumulated display
+						fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
+						processedContent = fullContent;
+						if (isActive()) setStreamingContent(fullContent);
+
+						// User cancelled mid-marker execution — stop the agent loop.
+						if (markerResult.aborted) { stopped = true; break; }
+
+						// If no markers were executed, the turn is complete
+						if (!markerResult.followUpMessage) break;
+
+						// Feed results back to the CLI on the next iteration
+						conversationHistory = [
+							...conversationHistory,
+								{ role: "assistant", content: iterationContent, timestamp: Date.now() },
+								{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() },
+						];
+						iterationUserContent = markerResult.followUpMessage;
+					}
+
+					if (stopped && fullContent) {
+						fullContent += `\n\n${t("chat.generationStopped")}`;
+						processedContent = fullContent;
+					}
+
+					// Update session state from persistent session
+					const effectiveSessionId = receivedSessionId || session.currentSessionId;
+					const newSession: CliSessionInfo | null = effectiveSessionId
+						? { provider: currentProvider, sessionId: effectiveSessionId }
+						: (cliSession?.provider === currentProvider ? cliSession : null);
+
+					if (isActive() && (effectiveSessionId || cliSession?.provider !== currentProvider)) {
+						setCliSession(newSession);
+					}
+
+					// Add assistant message with CLI model info
+					const assistantMessage: Message = {
+						role: "assistant",
+						content: processedContent,
+						timestamp: Date.now(),
+						model: currentProvider,
+						modelDisplayName: isCodexCli
+							? ["Codex CLI", cliConfig.codexCliModel, cliConfig.codexCliReasoningEffort || "low"].filter(Boolean).join(" · ")
+							: undefined,
+						...pendingStatusFields({
+							edits: codexMutationTracking?.processedEdits ?? [],
+							deletes: codexMutationTracking?.processedDeletes ?? [],
+							renames: codexMutationTracking?.processedRenames ?? [],
+						}),
+						...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
+					};
+
+					return {
+						message: assistantMessage,
+						output: processedContent,
+						cliSession: newSession || undefined,
+						status: {
+							value: stopped ? 0.5 : 1,
+							comment: stopped ? "stopped by user" : "completed",
+						},
+					};
+				} catch (error) {
+					if (abortController.signal.aborted) {
+						const stoppedContent = fullContent
+							? `${fullContent}\n\n${t("chat.generationStopped")}`
+							: "";
+						const assistantMessage: Message = {
+							role: "assistant",
+							content: stoppedContent,
+							timestamp: Date.now(),
+							model: isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "antigravity-cli",
+							...pendingStatusFields({
+								edits: codexMutationTracking?.processedEdits ?? [],
+								deletes: codexMutationTracking?.processedDeletes ?? [],
+								renames: codexMutationTracking?.processedRenames ?? [],
+							}),
+							...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
+						};
+						return {
+							message: assistantMessage,
+							output: stoppedContent,
+							metadata: { status: "aborted" },
+							status: { value: 0.5, comment: "stopped by user" },
+						};
+					}
+					// Anything else is a failure: the envelope words it and saves it.
+					throw error;
+				}
 			},
 		});
-		let codexMutationTracking: ReturnType<typeof createConfirmingToolExecutor> | null = null;
-		let fullContent = "";
-		let localRagSources: string[] = [];
+	};
 
-		try {
-			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
-			let codexMcpUrl: string | undefined;
+	// Send message via Local LLM provider
+	const sendMessageViaLocalLlm = async (content: string, attachments?: Attachment[], skillPath?: string) => {
+		// The confirming tool executor is built once the turn is running; this is
+		// how the feedback it collected gets back out to the finished turn.
+		let takeEditFeedback: (() => { filePath: string; request: string } | null) | null = null;
+		let openCodeMcpToolExecutor: McpToolExecutor | null = null;
 
-			// Build system prompt for CLI. Codex's direct filesystem access stays
-			// read-only; Vault writes go through the plugin MCP bridge.
-			const cliName = isClaudeCli ? "Claude CLI" : isCodexCli ? "Codex CLI" : "Antigravity CLI";
-			let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
-			if (isCodexCli) {
-				systemPrompt += "\n\nYou can read Vault files directly, but the filesystem is read-only. Never attempt to modify, delete, rename, or create Vault files directly.";
-				if (vaultToolMode !== "none") {
-					systemPrompt += " The llm_hub_vault MCP also provides Obsidian-aware read tools. When the user refers to the open, active, or current file without naming it, call read_note with activeNote=true (or get_active_note_info when only its metadata is needed).";
-					if (vaultToolMode === "noSearch") {
-						systemPrompt += " Vault search and note-listing tools are disabled for this chat.";
-					}
-					systemPrompt += vaultToolMode === "readOnly"
-						? "\n\nVault tools are read-only. Answer in chat; do not create or change Vault files."
-						: "\n\nFor a new Vault file, use the llm_hub_vault MCP create_note tool; it creates the file immediately, including text-based formats such as .canvas and .base. For changes to existing files, use propose_edit, bulk_propose_edit, propose_delete, bulk_propose_delete, rename_note, or bulk_propose_rename. Existing-file mutations show a diff or confirmation and apply only after approval. Do not claim a change was applied unless the tool result says it was applied.";
-				}
-			} else {
-				systemPrompt += `\n\nNote: You are running in ${cliName} mode with limited capabilities. You can read and search vault files, but cannot modify them.`;
-				systemPrompt += "\n\nIMPORTANT: File writing operations may fail in this environment. Always output results directly to standard output instead of attempting to write to files.";
-			}
-			if (vaultToolMode !== "none" && !isVaultToolRestrictedCliMode) {
-				systemPrompt += FILE_MENTION_TOOL_PROMPT;
-			}
-			systemPrompt += `\n\nVault location: ${(plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || "."}`;
+		await runChatTurn<LocalLlmTurnContext>(chatTurnUi(), {
+			prepare: async () => {
 
-			if (plugin.settings.systemPrompt) {
-				systemPrompt += `\n\nAdditional instructions: ${plugin.settings.systemPrompt}`;
-			}
-
-			// Inject active agent skills into system prompt
-			let cliLoadedSkills: LoadedSkill[] = [];
-			if (effectiveSkillPaths.length > 0) {
-				const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
-				if (activeMetadata.length > 0) {
-					cliLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
-					const skillPrompt = buildSkillSystemPrompt(cliLoadedSkills, { cliMode: !isCodexCli });
-					if (skillPrompt) {
-						systemPrompt += skillPrompt;
-					}
-				}
-			}
-
-			// The bridge is wired before the automatic RAG search runs, so the runner
-			// has to exist by now; its budget is charged when that search completes.
-			let ragSearchRunner: RagSearchRunner | null = null;
-			let ragSearchToolOffered = false;
-			const cliRagSetting = selectedRagSetting ? plugin.getRagSearchSetting(selectedRagSetting) : null;
-			if (selectedRagSetting && cliRagSetting) {
-				ragSearchRunner = createRagSearchRunner(
-					(query, topK) => searchLocalRagResults(
-						selectedRagSetting, query, cliRagSetting, getGeminiApiKey(plugin.settings),
-						plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
-					),
-					(filePaths) => { for (const path of filePaths) if (!localRagSources.includes(path)) localRagSources.push(path); },
-				);
-			}
-
-			if (isCodexCli) {
-				const codexTools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS })
-					.filter((tool) => CODEX_VAULT_TOOLS.has(tool.name))
-					.filter((tool) => isVaultToolAllowed(tool.name, vaultToolMode));
-				const skillWorkflowMap = collectSkillWorkflows(cliLoadedSkills);
-				const skillScriptMap = collectSkillScripts(cliLoadedSkills);
-				if (skillWorkflowMap.size > 0) codexTools.push(skillWorkflowTool);
-				if (skillScriptMap.size > 0) codexTools.push(skillScriptTool);
-				// RAG has its own toggle, so it is offered regardless of vaultToolMode.
-				if (ragSearchRunner) {
-					codexTools.push(RAG_SEARCH_TOOL);
-					ragSearchToolOffered = true;
+				const llmConfig = getLocalLlmConfig(currentModel, plugin.settings);
+				if (!llmConfig) {
+					new Notice(t("chat.localLlmNotConfigured"));
+					return null;
 				}
 
-				const vaultExecutor = createToolExecutor(plugin.app);
-				const codexToolExecutor = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
-					if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return ragSearchRunner.run(args);
-					if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
-						return runSkillWorkflow(
-							plugin.app,
-							args.workflowId as string,
-							args.variables as string | undefined,
-							skillWorkflowMap,
-							// A CLI provider already runs with the user's own permissions.
-							{ vaultToolAllowedFolders: undefined },
-						);
-					}
-					if (name === "run_skill_script" && skillScriptMap.size > 0) {
-						return executeSkillScript(
-							plugin,
-							args.scriptId as string,
-							args.args as string | undefined,
-							skillScriptMap,
-						);
-					}
-					return vaultExecutor(name, args);
+				// Activate skill if invoked via slash command
+				const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
+				if (skillPath && !activeSkillPaths.includes(skillPath)) {
+					setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
+				}
+
+				// Resolve variables in the content
+				const resolvedContent = await resolveMessageVariables(content);
+				// Separate image attachments (sent as multimodal) from non-image (text fallback)
+				const imageAttachments = attachments?.filter(a => a.type === "image") ?? [];
+				const nonImageAttachments = attachments?.filter(a => a.type !== "image") ?? [];
+				const localLlmContent = `${resolvedContent}${buildLocalLlmAttachmentContext(nonImageAttachments.length > 0 ? nonImageAttachments : undefined)}`.trim();
+
+				// When skill is invoked without message, use skill name as trigger
+				let displayContent = resolvedContent.trim();
+				if (!displayContent && skillPath) {
+					const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
+					displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
+				}
+
+				// Add user message
+				const userMessage: Message = {
+					role: "user",
+					content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
+					llmContent: localLlmContent || undefined,
+					timestamp: Date.now(),
+					attachments,
 				};
-				codexMutationTracking = createConfirmingToolExecutor(
-					codexToolExecutor,
-					plugin.app,
-					autoApplyEdits,
-					() => abortController.abort(),
-				);
-				if (!codexVaultMcpBridgeRef.current) {
-					codexVaultMcpBridgeRef.current = new CodexVaultMcpBridge(
-						codexTools,
-						codexMutationTracking.executeToolCall,
-					);
+
+				return {
+					userMessage,
+					trace: {
+						name: "chat-message",
+						sessionId: currentChatId ?? undefined,
+						input: localLlmContent,
+						metadata: {
+							model: `local-llm:${llmConfig.id}:${llmConfig.model}`,
+							isLocalLlm: true,
+							pluginVersion: plugin.manifest.version,
+						},
+					},
+					context: { llmConfig, effectiveSkillPaths, resolvedContent, imageAttachments },
+				};
+			},
+
+			run: async (turn, { llmConfig, effectiveSkillPaths, resolvedContent, imageAttachments }) => {
+				const { isActive, abortController, traceId: llmTraceId, userMessage } = turn;
+				// Whether to try OpenAI-style function calling for this model. Default
+				// ON for OpenAI-compatible frameworks; auto-disabled once the model has
+				// rejected tools (tracked in toolsUnsupportedModels). Vault tool mode
+				// "none" honors the user's per-chat opt-out.
+				const wantsTools = vaultToolMode !== "none"
+					&& isLocalLlmToolsEnabled(llmConfig, llmConfig.model);
+				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+
+				// Build system prompt for local LLM. Tools-mode and marker-mode
+				// have different framing — tools-mode tells the model to use
+				// function calling; marker-mode tells it to use text markers and
+				// warns it has no direct vault access.
+				let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
+				if (wantsTools) {
+					systemPrompt += `\n\nYou have access to function-calling tools for reading, searching, and editing the user's vault. Prefer calling a tool over describing what you would do.`;
+					systemPrompt += FILE_MENTION_TOOL_PROMPT;
 				} else {
-					codexVaultMcpBridgeRef.current.setTools(codexTools);
-					codexVaultMcpBridgeRef.current.setExecutor(codexMutationTracking.executeToolCall);
+					systemPrompt += `\n\nNote: You are running in Local LLM mode with limited capabilities. You do not have direct vault tool access in this mode.`;
+					systemPrompt += `\n\nUse only information already present in the conversation, text attachments inlined into the prompt, and any local RAG context that may be added below.`;
+					systemPrompt += `\n\nIMPORTANT: Do not claim that you can open, search, or modify vault files unless their contents are already included in the prompt.`;
 				}
-				codexMcpUrl = await codexVaultMcpBridgeRef.current.start();
-			}
+				systemPrompt += `\n\nVault location: ${(plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || "."}`;
 
-			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
+				if (plugin.settings.systemPrompt) {
+					systemPrompt += `\n\nAdditional instructions: ${plugin.settings.systemPrompt}`;
+				}
 
-			// Local RAG: search and inject context into system prompt
-			if (AUTOMATIC_RAG_RETRIEVAL && selectedRagSetting) {
-				const ragSettingObj = plugin.getRagSearchSetting(selectedRagSetting);
-				if (ragSettingObj) {
-					try {
+				// Inject active agent skills into system prompt
+				let llmLoadedSkills: LoadedSkill[] = [];
+				if (effectiveSkillPaths.length > 0) {
+					const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
+					if (activeMetadata.length > 0) {
+						llmLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
+						const skillPrompt = buildSkillSystemPrompt(llmLoadedSkills, { cliMode: true });
+						if (skillPrompt) {
+							systemPrompt += skillPrompt;
+						}
+					}
+				}
+
+				systemPrompt = await appendOkfSystemPrompt(systemPrompt);
+
+				// Local RAG: search and inject context into system prompt
+				let localRagSources: string[] = [];
+				let ragSearchRunner: RagSearchRunner | null = null;
+				const ragSettingObj = selectedRagSetting ? plugin.getRagSearchSetting(selectedRagSetting) : null;
+				if (selectedRagSetting && ragSettingObj) {
+					ragSearchRunner = createRagSearchRunner(
+						(query, topK) => searchLocalRagResults(
+							selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+						),
+						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+					);
+					if (AUTOMATIC_RAG_RETRIEVAL) try {
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
 							ragSettingObj, getGeminiApiKey(plugin.settings),
@@ -1447,11 +1832,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							localRagSources = localRag.sources;
 							// Attach multimodal RAG files so the LLM can see actual content
 							if (localRag.mediaReferences.length > 0) {
+								const pdfMode = resolveLocalLlmPdfInputMode(llmConfig);
 								const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
-									.filter(attachment => attachment.type !== "pdf");
+									.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
 								// A dropped PDF leaves only its label in the indexed chunk text,
 								// so its pages go into the prompt as extracted text instead.
-								systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
+								if (pdfMode !== "native") {
+									systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
+								}
 								if (ragAttachments.length > 0) {
 									const existing = userMessage.attachments || [];
 									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
@@ -1462,545 +1850,646 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						console.error("Local RAG search failed:", formatError(e));
 					}
 				}
-			}
-
-			if (vaultToolMode === "noSearch") {
-				systemPrompt += buildNoDiscoverySystemPrompt({
-					ragRequested: Boolean(ragSearchRunner),
-					hasRagContext: localRagSources.length > 0,
-				});
-			}
-
-			if (ragSearchToolOffered) {
-				systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
-			}
-
-			let stopped = false;
-			let receivedSessionId: string | null = null;
-
-			// Get vault base path for working directory
-			const vaultBasePath = (plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || ".";
-
-			// Determine current provider name
-			const currentProvider: ChatProvider = isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "antigravity-cli";
-
-			// Get or create persistent CLI session
-			const existingSession = persistentCliRef.current;
-			let session: PersistentCliSession;
-			if (existingSession && existingSession.isAlive && existingSession.provider === currentProvider) {
-				// Reuse existing persistent session
-				session = existingSession;
-			} else {
-				// Terminate old session if provider changed or session died
-				existingSession?.terminate();
-				// Create new persistent session, passing stored session ID for CLI resume.
-				const storedSessionId = cliSession?.provider === currentProvider
-					? cliSession.sessionId
-					: undefined;
-				const customCliPath = currentProvider === "antigravity-cli"
-					? cliConfig.geminiCliPath
-					: currentProvider === "claude-cli"
-						? cliConfig.claudeCliPath
-						: cliConfig.codexCliPath;
-				session = new PersistentCliSession(
-					currentProvider, vaultBasePath,
-					customCliPath, storedSessionId,
-					cliConfig.codexCliModel,
-					codexMcpUrl,
-					cliConfig.codexCliReasoningEffort
-				);
-				session.start();
-				persistentCliRef.current = session;
-			}
-
-			// === Agent loop ===
-			// Each iteration: stream CLI → detect skill markers → execute → feed
-			// results back as a follow-up user message → loop until no markers
-			// or MAX_MARKER_AGENT_ITERATIONS reached. Uses the persistent /
-			// resume session so the CLI preserves context across iterations.
-			let processedContent = "";
-			let conversationHistory: Message[] = allMessages;
-			let iterationUserContent = allMessages[allMessages.length - 1]?.role === "user"
-				? allMessages[allMessages.length - 1].content
-				: "";
-
-			for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration++) {
-				let iterationContent = "";
-				const streamSep = fullContent ? "\n\n" : "";
-
-				for await (const chunk of session.sendMessage(
-					iterationUserContent,
-					conversationHistory,
-					systemPrompt,
-					abortController.signal
-				)) {
-					if (abortController.signal.aborted) {
-						stopped = true;
-						break;
-					}
-
-					switch (chunk.type) {
-						case "text":
-							iterationContent += chunk.content || "";
-							if (isActive()) setStreamingContent(fullContent + streamSep + iterationContent);
-							break;
-
-						case "session_id":
-							if (chunk.sessionId) {
-								receivedSessionId = chunk.sessionId;
-							}
-							break;
-
-						case "error":
-							throw new Error(chunk.error || "Unknown error");
-
-						case "done":
-							break;
-					}
+				if (vaultToolMode === "noSearch") {
+					systemPrompt += buildNoDiscoverySystemPrompt({
+						ragRequested: Boolean(ragSearchRunner),
+						hasRagContext: localRagSources.length > 0,
+					});
 				}
 
-				if (stopped) break;
+				let fullContent = "";
+				let fullThinking = "";
+				let stopped = false;
+				const llmMcpApps: McpAppInfo[] = [];
+				let openCodeMcpUrl: string | undefined;
+				let openCodeMutationTracking: ReturnType<typeof createConfirmingToolExecutor> | null = null;
+				const openCodeToolsUsed: string[] = [];
+				const openCodeToolCalls: NonNullable<Message["toolCalls"]> = [];
+				const openCodeToolResults: NonNullable<Message["toolResults"]> = [];
+				let openCodeToolCallSequence = 0;
 
-				// Execute any skill markers in this iteration's output
-				const markerResult = !isCodexCli && cliLoadedSkills.length > 0
-					? await processSkillMarkers(plugin, iterationContent, cliLoadedSkills, abortController.signal)
-					: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
-
-				// Append this iteration's processed content to accumulated display
-				fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
-				processedContent = fullContent;
-				if (isActive()) setStreamingContent(fullContent);
-
-				// User cancelled mid-marker execution — stop the agent loop.
-				if (markerResult.aborted) { stopped = true; break; }
-
-				// If no markers were executed, the turn is complete
-				if (!markerResult.followUpMessage) break;
-
-				// Feed results back to the CLI on the next iteration
-				conversationHistory = [
-					...conversationHistory,
-						{ role: "assistant", content: iterationContent, timestamp: Date.now() },
-						{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() },
-				];
-				iterationUserContent = markerResult.followUpMessage;
-			}
-
-			if (stopped && fullContent) {
-				fullContent += `\n\n${t("chat.generationStopped")}`;
-				processedContent = fullContent;
-			}
-
-			// Update session state from persistent session
-			const effectiveSessionId = receivedSessionId || session.currentSessionId;
-			const newSession: CliSessionInfo | null = effectiveSessionId
-				? { provider: currentProvider, sessionId: effectiveSessionId }
-				: (cliSession?.provider === currentProvider ? cliSession : null);
-
-			if (isActive() && (effectiveSessionId || cliSession?.provider !== currentProvider)) {
-				setCliSession(newSession);
-			}
-
-			// Add assistant message with CLI model info
-			const assistantMessage: Message = {
-				role: "assistant",
-				content: processedContent,
-				timestamp: Date.now(),
-				model: currentProvider,
-				modelDisplayName: isCodexCli
-					? ["Codex CLI", cliConfig.codexCliModel, cliConfig.codexCliReasoningEffort || "low"].filter(Boolean).join(" · ")
-					: undefined,
-				...pendingStatusFields({
-					edits: codexMutationTracking?.processedEdits ?? [],
-					deletes: codexMutationTracking?.processedDeletes ?? [],
-					renames: codexMutationTracking?.processedRenames ?? [],
-				}),
-				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
-			};
-
-			const newMessages = [...messages, userMessage, assistantMessage];
-			await saveResult(newMessages, newSession || undefined);
-
-			tracing.traceEnd(cliTraceId, { output: processedContent });
-			tracing.score(cliTraceId, {
-				name: "status",
-				value: stopped ? 0.5 : 1,
-				comment: stopped ? "stopped by user" : "completed",
-			});
-		} catch (error) {
-			if (abortController.signal.aborted) {
-				const stoppedContent = fullContent
-					? `${fullContent}\n\n${t("chat.generationStopped")}`
-					: "";
-				const assistantMessage: Message = {
-					role: "assistant",
-					content: stoppedContent,
-					timestamp: Date.now(),
-					model: isClaudeCli ? "claude-cli" : isCodexCli ? "codex-cli" : "antigravity-cli",
-					...pendingStatusFields({
-						edits: codexMutationTracking?.processedEdits ?? [],
-						deletes: codexMutationTracking?.processedDeletes ?? [],
-						renames: codexMutationTracking?.processedRenames ?? [],
-					}),
-					...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
-				};
-				await saveResult([...messages, userMessage, assistantMessage]);
-				tracing.traceEnd(cliTraceId, { output: stoppedContent, metadata: { status: "aborted" } });
-				tracing.score(cliTraceId, { name: "status", value: 0.5, comment: "stopped by user" });
-				return;
-			}
-			const errorMessageText = error instanceof Error ? error.message : t("chat.unknownError");
-			const errorMessage: Message = {
-				role: "assistant",
-				content: t("chat.errorOccurred", { message: errorMessageText }),
-				timestamp: Date.now(),
-			};
-			await saveResult([...messages, userMessage, errorMessage]);
-			tracing.traceEnd(cliTraceId, { output: errorMessageText, metadata: { error: true } });
-			tracing.score(cliTraceId, { name: "status", value: 0, comment: errorMessageText });
-		} finally {
-			cleanupStream(abortController);
-		}
-	};
-
-	// Send message via Local LLM provider
-	const sendMessageViaLocalLlm = async (content: string, attachments?: Attachment[], skillPath?: string) => {
-		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
-
-		const llmConfig = getLocalLlmConfig(currentModel, plugin.settings);
-		if (!llmConfig) {
-			new Notice(t("chat.localLlmNotConfigured"));
-			return;
-		}
-
-		// Activate skill if invoked via slash command
-		const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
-		if (skillPath && !activeSkillPaths.includes(skillPath)) {
-			setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
-		}
-
-		// Resolve variables in the content
-		const resolvedContent = await resolveMessageVariables(content);
-		// Separate image attachments (sent as multimodal) from non-image (text fallback)
-		const imageAttachments = attachments?.filter(a => a.type === "image") ?? [];
-		const nonImageAttachments = attachments?.filter(a => a.type !== "image") ?? [];
-		const localLlmContent = `${resolvedContent}${buildLocalLlmAttachmentContext(nonImageAttachments.length > 0 ? nonImageAttachments : undefined)}`.trim();
-
-		// When skill is invoked without message, use skill name as trigger
-		let displayContent = resolvedContent.trim();
-		if (!displayContent && skillPath) {
-			const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
-			displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
-		}
-
-		// Add user message
-		const userMessage: Message = {
-			role: "user",
-			content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
-			llmContent: localLlmContent || undefined,
-			timestamp: Date.now(),
-			attachments,
-		};
-
-		setMessages((prev) => [...prev, userMessage]);
-		setIsLoading(true);
-		setStreamingContent("");
-		setStreamingThinking("");
-
-		// Create abort controller for this request
-		const abortController = new AbortController();
-		abortControllerRef.current = abortController;
-
-		const llmTraceId = tracing.traceStart("chat-message", {
-			sessionId: currentChatId ?? undefined,
-			input: localLlmContent,
-			metadata: {
-				model: `local-llm:${llmConfig.id}:${llmConfig.model}`,
-				isLocalLlm: true,
-				pluginVersion: plugin.manifest.version,
-			},
-		});
-		let openCodeMcpToolExecutor: McpToolExecutor | null = null;
-
-		// Decide whether to try OpenAI-style function calling for this model.
-		// Default ON for OpenAI-compatible frameworks; auto-disabled if the
-		// model previously rejected tools (tracked in toolsUnsupportedModels).
-		// vault tool mode "none" honors the user's per-chat opt-out.
-		const wantsTools = vaultToolMode !== "none"
-			&& isLocalLlmToolsEnabled(llmConfig, llmConfig.model);
-
-		try {
-			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
-
-			// Build system prompt for local LLM. Tools-mode and marker-mode
-			// have different framing — tools-mode tells the model to use
-			// function calling; marker-mode tells it to use text markers and
-			// warns it has no direct vault access.
-			let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
-			if (wantsTools) {
-				systemPrompt += `\n\nYou have access to function-calling tools for reading, searching, and editing the user's vault. Prefer calling a tool over describing what you would do.`;
-				systemPrompt += FILE_MENTION_TOOL_PROMPT;
-			} else {
-				systemPrompt += `\n\nNote: You are running in Local LLM mode with limited capabilities. You do not have direct vault tool access in this mode.`;
-				systemPrompt += `\n\nUse only information already present in the conversation, text attachments inlined into the prompt, and any local RAG context that may be added below.`;
-				systemPrompt += `\n\nIMPORTANT: Do not claim that you can open, search, or modify vault files unless their contents are already included in the prompt.`;
-			}
-			systemPrompt += `\n\nVault location: ${(plugin.app.vault.adapter as unknown as { basePath?: string }).basePath || "."}`;
-
-			if (plugin.settings.systemPrompt) {
-				systemPrompt += `\n\nAdditional instructions: ${plugin.settings.systemPrompt}`;
-			}
-
-			// Inject active agent skills into system prompt
-			let llmLoadedSkills: LoadedSkill[] = [];
-			if (effectiveSkillPaths.length > 0) {
-				const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
-				if (activeMetadata.length > 0) {
-					llmLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
-					const skillPrompt = buildSkillSystemPrompt(llmLoadedSkills, { cliMode: true });
-					if (skillPrompt) {
-						systemPrompt += skillPrompt;
+				// OpenCode uses its own session API, but can consume the same tool
+				// bundle as the other agent paths through a dynamically registered MCP
+				// server hosted by the plugin.
+				if (wantsTools && llmConfig.framework === "opencode") {
+					let openCodeTools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS });
+					if (vaultToolMode === "noSearch") {
+						openCodeTools = openCodeTools.filter(tool => !SEARCH_VAULT_TOOL_NAMES.includes(tool.name));
 					}
-				}
-			}
+					if (ragSearchRunner) openCodeTools.push(RAG_SEARCH_TOOL);
+					openCodeTools.push(EXECUTE_JAVASCRIPT_TOOL, GET_WORKFLOW_SPEC_TOOL);
+					if (activeOkfBundleIds.length > 0) openCodeTools.push(READ_OKF_DOCUMENT_TOOL);
 
-			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
+					const openCodeSkillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
+					const openCodeSkillScriptMap = collectSkillScripts(llmLoadedSkills);
+					if (openCodeSkillWorkflowMap.size > 0) openCodeTools.push(skillWorkflowTool);
+					if (openCodeSkillScriptMap.size > 0) openCodeTools.push(skillScriptTool);
 
-			// Local RAG: search and inject context into system prompt
-			let localRagSources: string[] = [];
-			let ragSearchRunner: RagSearchRunner | null = null;
-			const ragSettingObj = selectedRagSetting ? plugin.getRagSearchSetting(selectedRagSetting) : null;
-			if (selectedRagSetting && ragSettingObj) {
-				ragSearchRunner = createRagSearchRunner(
-					(query, topK) => searchLocalRagResults(
-						selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
-						plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
-					),
-					(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
-				);
-				if (AUTOMATIC_RAG_RETRIEVAL) try {
-					const localRag = await searchLocalRag(
-						selectedRagSetting, resolvedContent,
-						ragSettingObj, getGeminiApiKey(plugin.settings),
-						plugin.settings.proxyUrl, plugin.settings.proxyBypass
-					);
-					// A search that threw never reached the index, so it must not consume
-					// the turn budget the model is told it has.
-					if (localRag.sources.length > 0) {
-						systemPrompt += localRag.context;
-						localRagSources = localRag.sources;
-						// Attach multimodal RAG files so the LLM can see actual content
-						if (localRag.mediaReferences.length > 0) {
-							const pdfMode = resolveLocalLlmPdfInputMode(llmConfig);
-							const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
-								.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
-							// A dropped PDF leaves only its label in the indexed chunk text,
-							// so its pages go into the prompt as extracted text instead.
-							if (pdfMode !== "native") {
-								systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
-							}
-							if (ragAttachments.length > 0) {
-								const existing = userMessage.attachments || [];
-								(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-							}
+					const enabledMcpServers = resolveAgentPluginMcpServers(
+						plugin.settings.mcpServers,
+						effectiveSkillPaths,
+						plugin.settings.agentPlugins,
+					).filter(server => server.enabled);
+					if (enabledMcpServers.length > 0) {
+						try {
+							const mcpTools = await fetchMcpTools(enabledMcpServers);
+							openCodeTools.push(...mcpTools);
+							openCodeMcpToolExecutor = createMcpToolExecutor(mcpTools, llmTraceId);
+						} catch (error) {
+							console.error("Failed to fetch MCP tools for OpenCode:", error);
 						}
 					}
-				} catch (e) {
-					console.error("Local RAG search failed:", formatError(e));
-				}
-			}
-			if (vaultToolMode === "noSearch") {
-				systemPrompt += buildNoDiscoverySystemPrompt({
-					ragRequested: Boolean(ragSearchRunner),
-					hasRagContext: localRagSources.length > 0,
-				});
-			}
 
-			let fullContent = "";
-			let fullThinking = "";
-			let stopped = false;
-			const llmMcpApps: McpAppInfo[] = [];
-			let openCodeMcpUrl: string | undefined;
-			let openCodeMutationTracking: ReturnType<typeof createConfirmingToolExecutor> | null = null;
-			const openCodeToolsUsed: string[] = [];
-			const openCodeToolCalls: NonNullable<Message["toolCalls"]> = [];
-			const openCodeToolResults: NonNullable<Message["toolResults"]> = [];
-			let openCodeToolCallSequence = 0;
-
-			// OpenCode uses its own session API, but can consume the same tool
-			// bundle as the other agent paths through a dynamically registered MCP
-			// server hosted by the plugin.
-			if (wantsTools && llmConfig.framework === "opencode") {
-				let openCodeTools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS });
-				if (vaultToolMode === "noSearch") {
-					openCodeTools = openCodeTools.filter(tool => !SEARCH_VAULT_TOOL_NAMES.includes(tool.name));
-				}
-				if (ragSearchRunner) openCodeTools.push(RAG_SEARCH_TOOL);
-				openCodeTools.push(EXECUTE_JAVASCRIPT_TOOL, GET_WORKFLOW_SPEC_TOOL);
-				if (activeOkfBundleIds.length > 0) openCodeTools.push(READ_OKF_DOCUMENT_TOOL);
-
-				const openCodeSkillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
-				const openCodeSkillScriptMap = collectSkillScripts(llmLoadedSkills);
-				if (openCodeSkillWorkflowMap.size > 0) openCodeTools.push(skillWorkflowTool);
-				if (openCodeSkillScriptMap.size > 0) openCodeTools.push(skillScriptTool);
-
-				const enabledMcpServers = resolveAgentPluginMcpServers(
-					plugin.settings.mcpServers,
-					effectiveSkillPaths,
-					plugin.settings.agentPlugins,
-				).filter(server => server.enabled);
-				if (enabledMcpServers.length > 0) {
-					try {
-						const mcpTools = await fetchMcpTools(enabledMcpServers);
-						openCodeTools.push(...mcpTools);
-						openCodeMcpToolExecutor = createMcpToolExecutor(mcpTools, llmTraceId);
-					} catch (error) {
-						console.error("Failed to fetch MCP tools for OpenCode:", error);
-					}
-				}
-
-				const vaultExecutor = createToolExecutor(plugin.app, {
-					listNotesLimit: plugin.settings.listNotesLimit,
-					maxNoteChars: plugin.settings.maxNoteChars,
-					limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
-					vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
-					pdfInputMode: resolveLocalLlmPdfInputMode(llmConfig),
-				});
-				const executeOpenCodeTool = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
-					if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return ragSearchRunner.run(args);
-					if (name.startsWith("mcp_") && openCodeMcpToolExecutor) {
-						const mcpResult = await openCodeMcpToolExecutor.execute(name, args);
-						if (mcpResult.mcpApp) llmMcpApps.push(mcpResult.mcpApp);
-						if (mcpResult.error) return { error: mcpResult.error };
-						return { result: mcpResult.result };
-					}
-					if (name === "run_skill_workflow" && openCodeSkillWorkflowMap.size > 0) {
-						return runSkillWorkflow(
-							plugin.app,
-							args.workflowId as string,
-							args.variables as string | undefined,
-							openCodeSkillWorkflowMap,
-							{ vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders },
-						);
-					}
-					if (name === "run_skill_script" && openCodeSkillScriptMap.size > 0) {
-						return executeSkillScript(
-							plugin,
-							args.scriptId as string,
-							args.args as string | undefined,
-							openCodeSkillScriptMap,
-						);
-					}
-					if (name === "execute_javascript") return handleExecuteJavascriptTool(args);
-					if (name === GET_WORKFLOW_SPEC_TOOL_NAME) return handleGetWorkflowSpec(args, plugin);
-					if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
-						return executeReadOkfDocumentTool(
-							plugin.app,
-							getOkfRoot(),
-							activeOkfBundleIds,
-							typeof args.bundleId === "string" ? args.bundleId : "",
-							typeof args.path === "string" ? args.path : "",
-						);
-					}
-					return vaultExecutor(name, args);
-				};
-				openCodeMutationTracking = createConfirmingToolExecutor(
-					executeOpenCodeTool,
-					plugin.app,
-					autoApplyEdits,
-					() => abortController.abort(),
-				);
-				if (!openCodeVaultMcpBridgeRef.current) {
-					openCodeVaultMcpBridgeRef.current = new CodexVaultMcpBridge(
-						openCodeTools,
-						openCodeMutationTracking.executeToolCall,
+					const vaultExecutor = createToolExecutor(plugin.app, {
+						listNotesLimit: plugin.settings.listNotesLimit,
+						maxNoteChars: plugin.settings.maxNoteChars,
+						limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
+						vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+						pdfInputMode: resolveLocalLlmPdfInputMode(llmConfig),
+					});
+					const executeOpenCodeTool = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+						if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return ragSearchRunner.run(args);
+						if (name.startsWith("mcp_") && openCodeMcpToolExecutor) {
+							const mcpResult = await openCodeMcpToolExecutor.execute(name, args);
+							if (mcpResult.mcpApp) llmMcpApps.push(mcpResult.mcpApp);
+							if (mcpResult.error) return { error: mcpResult.error };
+							return { result: mcpResult.result };
+						}
+						if (name === "run_skill_workflow" && openCodeSkillWorkflowMap.size > 0) {
+							return runSkillWorkflow(
+								plugin.app,
+								args.workflowId as string,
+								args.variables as string | undefined,
+								openCodeSkillWorkflowMap,
+								{ vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders },
+							);
+						}
+						if (name === "run_skill_script" && openCodeSkillScriptMap.size > 0) {
+							return executeSkillScript(
+								plugin,
+								args.scriptId as string,
+								args.args as string | undefined,
+								openCodeSkillScriptMap,
+							);
+						}
+						if (name === "execute_javascript") return handleExecuteJavascriptTool(args);
+						if (name === GET_WORKFLOW_SPEC_TOOL_NAME) return handleGetWorkflowSpec(args, plugin);
+						if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
+							return executeReadOkfDocumentTool(
+								plugin.app,
+								getOkfRoot(),
+								activeOkfBundleIds,
+								typeof args.bundleId === "string" ? args.bundleId : "",
+								typeof args.path === "string" ? args.path : "",
+							);
+						}
+						return vaultExecutor(name, args);
+					};
+					openCodeMutationTracking = createConfirmingToolExecutor(
+						executeOpenCodeTool,
+						plugin.app,
+						autoApplyEdits,
+						() => abortController.abort(),
 					);
-				} else {
-					openCodeVaultMcpBridgeRef.current.setTools(openCodeTools);
-					openCodeVaultMcpBridgeRef.current.setExecutor(openCodeMutationTracking.executeToolCall);
+					if (!openCodeVaultMcpBridgeRef.current) {
+						openCodeVaultMcpBridgeRef.current = new CodexVaultMcpBridge(
+							openCodeTools,
+							openCodeMutationTracking.executeToolCall,
+						);
+					} else {
+						openCodeVaultMcpBridgeRef.current.setTools(openCodeTools);
+						openCodeVaultMcpBridgeRef.current.setExecutor(openCodeMutationTracking.executeToolCall);
+					}
+					openCodeVaultMcpBridgeRef.current.setToolCallObserver((name, args, result) => {
+						const id = `opencode-mcp-${Date.now()}-${openCodeToolCallSequence++}`;
+						openCodeToolCalls.push({ id, name, args });
+						openCodeToolResults.push({ toolCallId: id, result });
+						if (!openCodeToolsUsed.includes(name)) openCodeToolsUsed.push(name);
+					});
+					openCodeMcpUrl = await openCodeVaultMcpBridgeRef.current.start();
+					systemPrompt += `\n\nThe Obsidian Vault tools are available through the obsidian-llm-hub-vault MCP server. Use them when the request requires vault access.`;
 				}
-				openCodeVaultMcpBridgeRef.current.setToolCallObserver((name, args, result) => {
-					const id = `opencode-mcp-${Date.now()}-${openCodeToolCallSequence++}`;
-					openCodeToolCalls.push({ id, name, args });
-					openCodeToolResults.push({ toolCallId: id, result });
-					if (!openCodeToolsUsed.includes(name)) openCodeToolsUsed.push(name);
-				});
-				openCodeMcpUrl = await openCodeVaultMcpBridgeRef.current.start();
-				systemPrompt += `\n\nThe Obsidian Vault tools are available through the obsidian-llm-hub-vault MCP server. Use them when the request requires vault access.`;
-			}
 
-			// === Tools-enabled flow (OpenAI-compat function calling) ===
-			// Modern Local LLMs (LM Studio / vLLM / AnythingLLM with recent
-			// models) speak the OpenAI tools API. Try that first; on a
-			// tools-related rejection mark the model unsupported, persist,
-			// and fall through to the marker-based flow below for this turn.
-			if (wantsTools && llmConfig.framework !== "opencode") {
+				// === Tools-enabled flow (OpenAI-compat function calling) ===
+				// Modern Local LLMs (LM Studio / vLLM / AnythingLLM with recent
+				// models) speak the OpenAI tools API. Try that first; on a
+				// tools-related rejection mark the model unsupported, persist,
+				// and fall through to the marker-based flow below for this turn.
+				if (wantsTools && llmConfig.framework !== "opencode") {
+					const settings = plugin.settings;
+
+					// Build vault tools (same shape as API provider path: always
+					// include write/delete; vaultToolMode-based name filtering happens
+					// after MCP merge so the modal toggle stays a UI-only affordance
+					// and doesn't accidentally drop propose_edit etc. in noSearch mode).
+					const vaultTools = getEnabledVaultTools({
+						allowWrite: true,
+						allowDelete: true,
+						ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS,
+					});
+					const obsidianToolExecutor = createToolExecutor(plugin.app, {
+						listNotesLimit: settings.listNotesLimit,
+						maxNoteChars: settings.maxNoteChars,
+						limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
+						vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+						pdfInputMode: resolveLocalLlmPdfInputMode(llmConfig),
+					});
+
+					// Fetch MCP tools if any servers are enabled
+					let toolsBundle = [...vaultTools];
+					let mcpToolExecutor: McpToolExecutor | null = null;
+					const enabledMcpServers = resolveAgentPluginMcpServers(settings.mcpServers, effectiveSkillPaths, settings.agentPlugins).filter(s => s.enabled);
+					if (enabledMcpServers.length > 0) {
+						try {
+							const mcpTools = await fetchMcpTools(enabledMcpServers);
+							toolsBundle = [...toolsBundle, ...mcpTools];
+							mcpToolExecutor = createMcpToolExecutor(mcpTools, llmTraceId);
+						} catch (e) {
+							console.error("Failed to fetch MCP tools:", e);
+						}
+					}
+					toolsBundle.push(EXECUTE_JAVASCRIPT_TOOL);
+					toolsBundle.push(GET_WORKFLOW_SPEC_TOOL);
+					if (activeOkfBundleIds.length > 0) toolsBundle.push(READ_OKF_DOCUMENT_TOOL);
+
+					// Skill workflow / script tools
+					const llmSkillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
+					const llmSkillScriptMap = collectSkillScripts(llmLoadedSkills);
+					if (llmLoadedSkills.some(s => s.workflows.length > 0)) toolsBundle.push(skillWorkflowTool);
+					if (llmLoadedSkills.some(s => s.scripts.length > 0)) toolsBundle.push(skillScriptTool);
+
+					// Apply the Vault tool policy; external MCP and skill tools are preserved.
+					toolsBundle = toolsBundle.filter(tool => isVaultToolAllowed(tool.name, vaultToolMode));
+
+					// Let the model search the selected index on demand.
+					// Kept out of `systemPrompt` itself: a tools rejection falls through to
+					// the marker flow below, which has no tool to offer.
+					if (ragSearchRunner) toolsBundle.push(RAG_SEARCH_TOOL);
+					const toolsSystemPrompt = ragSearchRunner ? systemPrompt + RAG_SEARCH_SYSTEM_PROMPT : systemPrompt;
+
+					const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
+						if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
+						if (name.startsWith("mcp_") && mcpToolExecutor) {
+							const mcpResult = await mcpToolExecutor.execute(name, args);
+							if (mcpResult.mcpApp) llmMcpApps.push(mcpResult.mcpApp);
+							if (mcpResult.error) return { error: mcpResult.error };
+							return { result: mcpResult.result };
+						}
+						if (name === "run_skill_workflow" && llmSkillWorkflowMap.size > 0) {
+							return await runSkillWorkflow(plugin.app, args.workflowId as string, args.variables as string | undefined, llmSkillWorkflowMap, {
+								vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+							});
+						}
+						if (name === "run_skill_script" && llmSkillScriptMap.size > 0) {
+							return await executeSkillScript(plugin, args.scriptId as string, args.args as string | undefined, llmSkillScriptMap);
+						}
+						if (name === "execute_javascript") {
+							return await handleExecuteJavascriptTool(args);
+						}
+						if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
+							return handleGetWorkflowSpec(args, plugin);
+						}
+						if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
+							return await executeReadOkfDocumentTool(plugin.app, getOkfRoot(), activeOkfBundleIds,
+								typeof args.bundleId === "string" ? args.bundleId : "",
+								typeof args.path === "string" ? args.path : "");
+						}
+						return await obsidianToolExecutor(name, args);
+					};
+
+					const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
+						createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, autoApplyEdits, () => abortController.abort());
+					takeEditFeedback = () => {
+						const requestInfo = pendingAdditionalRequest.current;
+						pendingAdditionalRequest.current = null;
+						return requestInfo;
+					};
+
+					const stream = createStreamAccumulation();
+					let toolsFlowError: string | null = null;
+					let toolsFlowAborted = false;
+
+					try {
+						for await (const chunk of openaiChatWithToolsStream(
+							llmConfig.baseUrl,
+							llmConfig.apiKey || "no-key",
+							llmConfig.model,
+							allMessages, toolsBundle,
+							toolsSystemPrompt, executeToolCall, abortController.signal,
+							false, // local LLMs: don't request reasoning_effort
+							undefined, undefined, // proxy already handled by createNodeFetch
+							undefined, undefined, // no native web search, no reasoning effort
+							true, // recover tool calls a small local model writes as text
+						)) {
+							if (abortController.signal.aborted) { toolsFlowAborted = true; break; }
+							// An "error" chunk throws out of here into the catch below,
+							// which is where toolsFlowError is set.
+							accumulateStreamChunk(stream, chunk);
+							if (isActive()) {
+								if (chunk.type === "text") setStreamingContent(stream.text);
+								else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
+							}
+						}
+					} catch (err) {
+						toolsFlowError = err instanceof Error ? err.message : String(err);
+					} finally {
+						if (mcpToolExecutor) {
+							try { await mcpToolExecutor.cleanup(); } catch (e) { console.warn("MCP cleanup failed:", e); }
+						}
+					}
+
+					let toolsFullContent = stream.text;
+
+					// User-stop has priority over everything else: don't auto-disable,
+					// don't throw, just finalize whatever buffered content we have.
+					const wasAborted = toolsFlowAborted || abortController.signal.aborted;
+					// Don't fall through to marker mode if the tools attempt already
+					// mutated vault state (edits/deletes/renames committed via user
+					// confirmation). Marker mode would generate a fresh assistant
+					// turn that doesn't reference those mutations, leaving the user
+					// confused about what happened. Surface the error and keep the
+					// pending* badges instead.
+					const hasMutations = processedEdits.length > 0
+						|| processedDeletes.length > 0
+						|| processedRenames.length > 0;
+
+					const shouldAutoDisable = !wasAborted
+						&& !!toolsFlowError
+						&& !toolsFullContent
+						&& !hasMutations
+						&& looksLikeToolsRejection(toolsFlowError)
+						&& !looksLikeAuthError(toolsFlowError);
+
+					if (shouldAutoDisable && toolsFlowError) {
+						const idx = plugin.settings.localLlmConfigs.findIndex(c => c.id === llmConfig.id);
+						if (idx >= 0) {
+							const cfg = plugin.settings.localLlmConfigs[idx];
+							const list = cfg.toolsUnsupportedModels ?? [];
+							if (!list.includes(llmConfig.model)) {
+								plugin.settings.localLlmConfigs[idx] = {
+									...cfg,
+									toolsUnsupportedModels: [...list, llmConfig.model],
+								};
+								await plugin.saveSettings();
+							}
+						}
+						new Notice(`${llmConfig.model}: tools rejected, falling back to marker mode for this and future turns.`);
+						// Reset streaming UI so the marker flow starts clean
+						setStreamingContent("");
+						setStreamingThinking("");
+						// Fall through to marker loop below
+					} else if (!wasAborted && toolsFlowError && !toolsFullContent && !hasMutations) {
+						// Non-tools error with no output and no committed changes →
+						// surface to user via outer catch.
+						throw new Error(toolsFlowError);
+					} else {
+						// Tools flow produced output, OR was aborted by the user, OR
+						// already mutated vault state. Finalize and return without
+						// running marker loop. Append an error notice inline only when
+						// the failure isn't an aborted stop (which has its own marker)
+						// — we don't want to overwrite "stopped" with a confusing
+						// "AbortError" message.
+						if (toolsFlowError && !wasAborted) {
+							toolsFullContent += `\n\n${t("chat.errorOccurred", { message: toolsFlowError })}`;
+						}
+						if (wasAborted && toolsFullContent) toolsFullContent += `\n\n${t("chat.generationStopped")}`;
+
+						const assistantMessage: Message = {
+							role: "assistant",
+							content: toolsFullContent,
+							timestamp: Date.now(),
+							model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
+							toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
+							toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
+							toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
+							thinking: stream.thinking || undefined,
+							...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
+							ragUsed: localRagSources.length > 0,
+							ragSources: localRagSources.length > 0 ? localRagSources : undefined,
+						};
+						return {
+							message: assistantMessage,
+							output: toolsFullContent,
+							cliSession: null,
+							status: {
+								value: wasAborted ? 0.5 : (toolsFlowError ? 0 : 1),
+								comment: wasAborted ? "stopped by user" : (toolsFlowError ?? "completed"),
+							},
+						};
+					}
+				}
+
+				// === Marker-based agent loop (fallback for tools-incompatible models) ===
+				// Local LLMs rely on text markers rather than function calls for skill
+				// workflow/script invocation. Each iteration streams → detects markers
+				// → executes → feeds results back as a follow-up user message. The
+				// local LLM is re-prompted with updated history so it can continue
+				// reasoning on tool outputs. Bounded by MAX_MARKER_AGENT_ITERATIONS.
+				let processedContent = "";
+				let conversationHistory: Message[] = allMessages;
+
+				for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration++) {
+					let iterationContent = "";
+					const streamSep = fullContent ? "\n\n" : "";
+
+					for await (const chunk of localLlmChatStream(
+						llmConfig,
+						conversationHistory,
+						systemPrompt,
+						abortController.signal,
+						imageAttachments.length > 0 ? imageAttachments : undefined,
+						openCodeMcpUrl,
+					)) {
+						if (abortController.signal.aborted) {
+							stopped = true;
+							break;
+						}
+
+						switch (chunk.type) {
+							case "text":
+								iterationContent += chunk.content || "";
+								if (isActive()) setStreamingContent(fullContent + streamSep + iterationContent);
+								break;
+
+							case "thinking":
+								fullThinking += chunk.content || "";
+								if (isActive()) setStreamingThinking(fullThinking);
+								break;
+
+							case "error":
+								throw new Error(chunk.error || "Unknown error");
+
+							case "done":
+								break;
+						}
+					}
+
+					if (stopped) break;
+
+					const markerResult = llmLoadedSkills.length > 0
+						? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills, abortController.signal, {
+							vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+						})
+						: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
+
+					fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
+					processedContent = fullContent;
+					if (isActive()) setStreamingContent(fullContent);
+
+					if (markerResult.aborted) { stopped = true; break; }
+					if (!markerResult.followUpMessage) break;
+
+					conversationHistory = [
+						...conversationHistory,
+							{ role: "assistant", content: iterationContent, timestamp: Date.now() },
+							{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() },
+					];
+				}
+
+				if (stopped && fullContent) {
+					fullContent += `\n\n${t("chat.generationStopped")}`;
+					processedContent = fullContent;
+				}
+
+				// Add assistant message
+				const assistantMessage: Message = {
+					role: "assistant",
+					content: processedContent,
+					timestamp: Date.now(),
+					model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
+					...(fullThinking ? { thinking: fullThinking } : {}),
+					...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
+					...(llmMcpApps.length > 0 ? { mcpApps: llmMcpApps } : {}),
+					...(openCodeToolsUsed.length > 0 ? { toolsUsed: openCodeToolsUsed } : {}),
+					...(openCodeToolCalls.length > 0 ? { toolCalls: openCodeToolCalls } : {}),
+					...(openCodeToolResults.length > 0 ? { toolResults: openCodeToolResults } : {}),
+					...pendingStatusFields({
+						edits: openCodeMutationTracking?.processedEdits ?? [],
+						deletes: openCodeMutationTracking?.processedDeletes ?? [],
+						renames: openCodeMutationTracking?.processedRenames ?? [],
+					}),
+				};
+
+				if (isActive()) setCliSession(null);
+				return {
+					message: assistantMessage,
+					output: processedContent,
+					cliSession: null,
+					status: {
+						value: stopped ? 0.5 : 1,
+						comment: stopped ? "stopped by user" : "completed",
+					},
+				};
+			},
+
+			// "Request changes" in the edit confirmation modal: send the feedback
+			// back to the model now that this turn is saved.
+			onSaved: () => {
+				const requestInfo = takeEditFeedback?.();
+				if (requestInfo) setPendingEditFeedback(requestInfo);
+			},
+
+			onSettled: async () => {
+				if (!openCodeMcpToolExecutor) return;
+				try {
+					await openCodeMcpToolExecutor.cleanup();
+				} catch (error) {
+					console.warn("OpenCode MCP cleanup failed:", error);
+				}
+			},
+		});
+	};
+
+	// Send message via API provider (OpenAI-compatible)
+	const sendMessageViaApiProvider = async (content: string, attachments?: Attachment[], skillPath?: string) => {
+		// The confirming tool executor is built once the turn is running; this is
+		// how the feedback it collected gets back out to the finished turn.
+		let takeEditFeedback: (() => { filePath: string; request: string } | null) | null = null;
+
+		await runChatTurn<ApiProviderTurnContext>(chatTurnUi(), {
+			prepare: async () => {
+
+				const providerConfig = getActiveApiProvider();
+				const resolvedModelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "";
+				if (!providerConfig) {
+					new Notice(t("chat.noApiProvider"));
+					return null;
+				}
+
+				const resolvedContent = await resolveMessageVariables(content);
+
+				let displayContent = resolvedContent.trim();
+				if (!displayContent && skillPath) {
+					const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
+					displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
+				}
+
+				const userMessage: Message = {
+					role: "user",
+					content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
+					timestamp: Date.now(),
+					attachments: attachments && attachments.length > 0 ? attachments : undefined,
+				};
+
+				return {
+					userMessage,
+					trace: {
+						name: "api-provider-chat",
+						input: resolvedContent,
+						metadata: {
+							provider: providerConfig.name,
+							model: resolvedModelName,
+							webSearchEnabled: allowWebSearch && webSearchEnabled,
+						},
+					},
+					context: { providerConfig, resolvedModelName, resolvedContent },
+				};
+			},
+
+			run: async (turn, { providerConfig, resolvedModelName, resolvedContent }) => {
+				const { isActive, abortController, traceId: apiTraceId, userMessage } = turn;
 				const settings = plugin.settings;
+				let systemPrompt = `You are a helpful AI assistant in an Obsidian vault.
+	Always be helpful and provide clear, concise responses. When working with notes, confirm actions and provide relevant feedback.`;
 
-				// Build vault tools (same shape as API provider path: always
-				// include write/delete; vaultToolMode-based name filtering happens
-				// after MCP merge so the modal toggle stays a UI-only affordance
-				// and doesn't accidentally drop propose_edit etc. in noSearch mode).
-				const vaultTools = getEnabledVaultTools({
-					allowWrite: true,
-					allowDelete: true,
-					ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS,
-				});
+				if (vaultToolMode !== "none") {
+					systemPrompt += FILE_MENTION_TOOL_PROMPT;
+				}
+
+				if (settings.systemPrompt) {
+					systemPrompt += `\n\nAdditional instructions: ${settings.systemPrompt}`;
+				}
+
+				systemPrompt = await appendOkfSystemPrompt(systemPrompt);
+
+				// Local RAG: search and inject context into system prompt
+				let localRagSources: string[] = [];
+				let ragSearchRunner: RagSearchRunner | null = null;
+				const ragSettingObj = selectedRagSetting && !isImageGenerationModel(currentModel) ? plugin.getRagSearchSetting(selectedRagSetting) : null;
+				if (selectedRagSetting && ragSettingObj) {
+					ragSearchRunner = createRagSearchRunner(
+						(query, topK) => searchLocalRagResults(
+							selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+						),
+						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+					);
+					if (AUTOMATIC_RAG_RETRIEVAL) try {
+						const localRag = await searchLocalRag(
+							selectedRagSetting, resolvedContent,
+							ragSettingObj, getGeminiApiKey(plugin.settings),
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass
+						);
+						// A search that threw never reached the index, so it must not consume
+						// the turn budget the model is told it has.
+						if (localRag.sources.length > 0) {
+							systemPrompt += localRag.context;
+							localRagSources = localRag.sources;
+							// Attach multimodal RAG files so the LLM can see actual content
+							if (localRag.mediaReferences.length > 0) {
+								const pdfMode = resolveApiProviderPdfInputMode(providerConfig);
+								const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
+									.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
+								// A dropped PDF leaves only its label in the indexed chunk text,
+								// so its pages go into the prompt as extracted text instead.
+								if (pdfMode !== "native") {
+									systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
+								}
+								if (ragAttachments.length > 0) {
+									const existing = userMessage.attachments || [];
+									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
+								}
+							}
+						}
+					} catch (e) {
+						console.error("Local RAG search failed:", formatError(e));
+					}
+				}
+				if (vaultToolMode === "noSearch") {
+					systemPrompt += buildNoDiscoverySystemPrompt({
+						ragRequested: Boolean(ragSearchRunner),
+						hasRagContext: localRagSources.length > 0,
+					});
+				}
+
+				// Build vault tools (same as Gemini path)
+				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+				let tools = filterVaultToolsForMode(
+					getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
+					vaultToolMode,
+				);
 				const obsidianToolExecutor = createToolExecutor(plugin.app, {
 					listNotesLimit: settings.listNotesLimit,
 					maxNoteChars: settings.maxNoteChars,
 					limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
 					vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
-					pdfInputMode: resolveLocalLlmPdfInputMode(llmConfig),
+					pdfInputMode: resolveApiProviderPdfInputMode(providerConfig),
 				});
 
-				// Fetch MCP tools if any servers are enabled
-				let toolsBundle = [...vaultTools];
+				// Fetch MCP tools
 				let mcpToolExecutor: McpToolExecutor | null = null;
-				const enabledMcpServers = resolveAgentPluginMcpServers(settings.mcpServers, effectiveSkillPaths, settings.agentPlugins).filter(s => s.enabled);
+				const enabledMcpServers = resolveAgentPluginMcpServers(settings.mcpServers, getEffectiveSkillPathsForSend(skillPath), settings.agentPlugins).filter(s => s.enabled);
 				if (enabledMcpServers.length > 0) {
 					try {
 						const mcpTools = await fetchMcpTools(enabledMcpServers);
-						toolsBundle = [...toolsBundle, ...mcpTools];
-						mcpToolExecutor = createMcpToolExecutor(mcpTools, llmTraceId);
+						tools = [...tools, ...mcpTools];
+						mcpToolExecutor = createMcpToolExecutor(mcpTools, apiTraceId);
 					} catch (e) {
 						console.error("Failed to fetch MCP tools:", e);
 					}
 				}
-				toolsBundle.push(EXECUTE_JAVASCRIPT_TOOL);
-				toolsBundle.push(GET_WORKFLOW_SPEC_TOOL);
-				if (activeOkfBundleIds.length > 0) toolsBundle.push(READ_OKF_DOCUMENT_TOOL);
 
-				// Skill workflow / script tools
-				const llmSkillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
-				const llmSkillScriptMap = collectSkillScripts(llmLoadedSkills);
-				if (llmLoadedSkills.some(s => s.workflows.length > 0)) toolsBundle.push(skillWorkflowTool);
-				if (llmLoadedSkills.some(s => s.scripts.length > 0)) toolsBundle.push(skillScriptTool);
+				// Add JavaScript sandbox tool
+				tools.push(EXECUTE_JAVASCRIPT_TOOL);
+				tools.push(GET_WORKFLOW_SPEC_TOOL);
+				if (activeOkfBundleIds.length > 0) tools.push(READ_OKF_DOCUMENT_TOOL);
 
-				// Apply the Vault tool policy; external MCP and skill tools are preserved.
-				toolsBundle = toolsBundle.filter(tool => isVaultToolAllowed(tool.name, vaultToolMode));
+				// Load skills for API provider mode
+				let apiLoadedSkills: LoadedSkill[] = [];
+				{
+					const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
+					if (effectiveSkillPaths.length > 0) {
+						const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
+						if (activeMetadata.length > 0) {
+							apiLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
+						}
+					}
+				}
+				if (apiLoadedSkills.length > 0) {
+					systemPrompt += buildSkillSystemPrompt(apiLoadedSkills);
+				}
+				if (apiLoadedSkills.some(s => s.workflows.length > 0)) {
+					tools.push(skillWorkflowTool);
+				}
+				if (apiLoadedSkills.some(s => s.scripts.length > 0)) {
+					tools.push(skillScriptTool);
+				}
 
 				// Let the model search the selected index on demand.
-				// Kept out of `systemPrompt` itself: a tools rejection falls through to
-				// the marker flow below, which has no tool to offer.
-				if (ragSearchRunner) toolsBundle.push(RAG_SEARCH_TOOL);
-				const toolsSystemPrompt = ragSearchRunner ? systemPrompt + RAG_SEARCH_SYSTEM_PROMPT : systemPrompt;
+				if (ragSearchRunner) {
+					tools.push(RAG_SEARCH_TOOL);
+					systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
+				}
+
+				const apiSkillWorkflowMap = collectSkillWorkflows(apiLoadedSkills);
+				const apiSkillScriptMap = collectSkillScripts(apiLoadedSkills);
+				const apiMcpApps: McpAppInfo[] = [];
 
 				const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
 					if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
 					if (name.startsWith("mcp_") && mcpToolExecutor) {
 						const mcpResult = await mcpToolExecutor.execute(name, args);
-						if (mcpResult.mcpApp) llmMcpApps.push(mcpResult.mcpApp);
+						if (mcpResult.mcpApp) apiMcpApps.push(mcpResult.mcpApp);
 						if (mcpResult.error) return { error: mcpResult.error };
 						return { result: mcpResult.result };
 					}
-					if (name === "run_skill_workflow" && llmSkillWorkflowMap.size > 0) {
-						return await runSkillWorkflow(plugin.app, args.workflowId as string, args.variables as string | undefined, llmSkillWorkflowMap, {
+					if (name === "run_skill_workflow" && apiSkillWorkflowMap.size > 0) {
+						return await runSkillWorkflow(plugin.app, args.workflowId as string, args.variables as string | undefined, apiSkillWorkflowMap, {
 							vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
 						});
 					}
-					if (name === "run_skill_script" && llmSkillScriptMap.size > 0) {
-						return await executeSkillScript(plugin, args.scriptId as string, args.args as string | undefined, llmSkillScriptMap);
+					if (name === "run_skill_script" && apiSkillScriptMap.size > 0) {
+						return await executeSkillScript(plugin, args.scriptId as string, args.args as string | undefined, apiSkillScriptMap);
 					}
 					if (name === "execute_javascript") {
 						return await handleExecuteJavascriptTool(args);
@@ -2018,576 +2507,119 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 				const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
 					createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, autoApplyEdits, () => abortController.abort());
+				takeEditFeedback = () => {
+					const requestInfo = pendingAdditionalRequest.current;
+					pendingAdditionalRequest.current = null;
+					return requestInfo;
+				};
 
+				// toolCalls/toolResults drive the tool badges in MessageBubble; toolsUsed
+				// alone only reaches the saved Markdown history.
 				const stream = createStreamAccumulation();
-				let toolsFlowError: string | null = null;
-				let toolsFlowAborted = false;
+				let stopped = false;
+				const startTime = Date.now();
 
-				try {
-					for await (const chunk of openaiChatWithToolsStream(
-						llmConfig.baseUrl,
-						llmConfig.apiKey || "no-key",
-						llmConfig.model,
-						allMessages, toolsBundle,
-						toolsSystemPrompt, executeToolCall, abortController.signal,
-						false, // local LLMs: don't request reasoning_effort
-						undefined, undefined, // proxy already handled by createNodeFetch
-						undefined, undefined, // no native web search, no reasoning effort
-						true, // recover tool calls a small local model writes as text
-					)) {
-						if (abortController.signal.aborted) { toolsFlowAborted = true; break; }
-						// An "error" chunk throws out of here into the catch below,
-						// which is where toolsFlowError is set.
-						accumulateStreamChunk(stream, chunk);
-						if (isActive()) {
-							if (chunk.type === "text") setStreamingContent(stream.text);
-							else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
-						}
-					}
-				} catch (err) {
-					toolsFlowError = err instanceof Error ? err.message : String(err);
-				} finally {
-					if (mcpToolExecutor) {
-						try { await mcpToolExecutor.cleanup(); } catch (e) { console.warn("MCP cleanup failed:", e); }
-					}
-				}
+				// Route to correct provider implementation
+				const apiEnableThinking = getThinkingToggle();
+				const isWebSearch = providerSupportsWebSearch(providerConfig, resolvedModelName)
+					&& webSearchEnabled;
+				const isImageGen = providerConfig.type === "openai" && isOpenAiImageModel(resolvedModelName);
+				const streamFn = isImageGen
+					? openaiGenerateImageStream(
+						providerConfig.baseUrl, providerConfig.apiKey,
+						resolvedModelName, resolvedContent,
+						abortController.signal,
+						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+					)
+					: providerConfig.type === "anthropic"
+						? anthropicChatWithToolsStream(
+							providerConfig.baseUrl, providerConfig.apiKey,
+							resolvedModelName, allMessages, tools,
+							systemPrompt, executeToolCall, abortController.signal,
+							apiEnableThinking,
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+							isWebSearch,
+						)
+						: openaiChatWithToolsStream(
+							providerConfig.baseUrl, providerConfig.apiKey,
+							resolvedModelName, allMessages, tools,
+							systemPrompt, executeToolCall, abortController.signal,
+							apiEnableThinking,
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+							isWebSearch, selectedReasoningEffort,
+						);
 
-				let toolsFullContent = stream.text;
-
-				// User-stop has priority over everything else: don't auto-disable,
-				// don't throw, just finalize whatever buffered content we have.
-				const wasAborted = toolsFlowAborted || abortController.signal.aborted;
-				// Don't fall through to marker mode if the tools attempt already
-				// mutated vault state (edits/deletes/renames committed via user
-				// confirmation). Marker mode would generate a fresh assistant
-				// turn that doesn't reference those mutations, leaving the user
-				// confused about what happened. Surface the error and keep the
-				// pending* badges instead.
-				const hasMutations = processedEdits.length > 0
-					|| processedDeletes.length > 0
-					|| processedRenames.length > 0;
-
-				const shouldAutoDisable = !wasAborted
-					&& !!toolsFlowError
-					&& !toolsFullContent
-					&& !hasMutations
-					&& looksLikeToolsRejection(toolsFlowError)
-					&& !looksLikeAuthError(toolsFlowError);
-
-				if (shouldAutoDisable && toolsFlowError) {
-					const idx = plugin.settings.localLlmConfigs.findIndex(c => c.id === llmConfig.id);
-					if (idx >= 0) {
-						const cfg = plugin.settings.localLlmConfigs[idx];
-						const list = cfg.toolsUnsupportedModels ?? [];
-						if (!list.includes(llmConfig.model)) {
-							plugin.settings.localLlmConfigs[idx] = {
-								...cfg,
-								toolsUnsupportedModels: [...list, llmConfig.model],
-							};
-							await plugin.saveSettings();
-						}
-					}
-					new Notice(`${llmConfig.model}: tools rejected, falling back to marker mode for this and future turns.`);
-					// Reset streaming UI so the marker flow starts clean
-					setStreamingContent("");
-					setStreamingThinking("");
-					// Fall through to marker loop below
-				} else if (!wasAborted && toolsFlowError && !toolsFullContent && !hasMutations) {
-					// Non-tools error with no output and no committed changes →
-					// surface to user via outer catch.
-					throw new Error(toolsFlowError);
-				} else {
-					// Tools flow produced output, OR was aborted by the user, OR
-					// already mutated vault state. Finalize and return without
-					// running marker loop. Append an error notice inline only when
-					// the failure isn't an aborted stop (which has its own marker)
-					// — we don't want to overwrite "stopped" with a confusing
-					// "AbortError" message.
-					if (toolsFlowError && !wasAborted) {
-						toolsFullContent += `\n\n${t("chat.errorOccurred", { message: toolsFlowError })}`;
-					}
-					if (wasAborted && toolsFullContent) toolsFullContent += `\n\n${t("chat.generationStopped")}`;
-
-					const assistantMessage: Message = {
-						role: "assistant",
-						content: toolsFullContent,
-						timestamp: Date.now(),
-						model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
-						toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
-						toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
-						toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
-						thinking: stream.thinking || undefined,
-						...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
-						ragUsed: localRagSources.length > 0,
-						ragSources: localRagSources.length > 0 ? localRagSources : undefined,
-					};
-					const newMessages = [...messages, userMessage, assistantMessage];
-					await saveResult(newMessages, null);
-
-					// "Request changes" in the edit confirmation modal: send the
-					// feedback back to the model now that this turn is finished.
-					if (isActive() && pendingAdditionalRequest.current) {
-						const requestInfo = pendingAdditionalRequest.current;
-						pendingAdditionalRequest.current = null;
-						setPendingEditFeedback(requestInfo);
-					}
-
-					tracing.traceEnd(llmTraceId, { output: toolsFullContent });
-					tracing.score(llmTraceId, {
-						name: "status",
-						value: wasAborted ? 0.5 : (toolsFlowError ? 0 : 1),
-						comment: wasAborted ? "stopped by user" : (toolsFlowError ?? "completed"),
-					});
-					return;
-				}
-			}
-
-			// === Marker-based agent loop (fallback for tools-incompatible models) ===
-			// Local LLMs rely on text markers rather than function calls for skill
-			// workflow/script invocation. Each iteration streams → detects markers
-			// → executes → feeds results back as a follow-up user message. The
-			// local LLM is re-prompted with updated history so it can continue
-			// reasoning on tool outputs. Bounded by MAX_MARKER_AGENT_ITERATIONS.
-			let processedContent = "";
-			let conversationHistory: Message[] = allMessages;
-
-			for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration++) {
-				let iterationContent = "";
-				const streamSep = fullContent ? "\n\n" : "";
-
-				for await (const chunk of localLlmChatStream(
-					llmConfig,
-					conversationHistory,
-					systemPrompt,
-					abortController.signal,
-					imageAttachments.length > 0 ? imageAttachments : undefined,
-					openCodeMcpUrl,
-				)) {
+				for await (const chunk of streamFn) {
 					if (abortController.signal.aborted) {
 						stopped = true;
 						break;
 					}
 
-					switch (chunk.type) {
-						case "text":
-							iterationContent += chunk.content || "";
-							if (isActive()) setStreamingContent(fullContent + streamSep + iterationContent);
-							break;
-
-						case "thinking":
-							fullThinking += chunk.content || "";
-							if (isActive()) setStreamingThinking(fullThinking);
-							break;
-
-						case "error":
-							throw new Error(chunk.error || "Unknown error");
-
-						case "done":
-							break;
+					accumulateStreamChunk(stream, chunk);
+					if (isActive()) {
+						if (chunk.type === "text") setStreamingContent(stream.text);
+						else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
 					}
 				}
 
-				if (stopped) break;
+				let fullContent = stream.text;
+				let webSearchSources: Message["webSearchSources"] =
+					stream.webSearchSources.length > 0 ? stream.webSearchSources : undefined;
 
-				const markerResult = llmLoadedSkills.length > 0
-					? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills, abortController.signal, {
-						vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
-					})
-					: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
-
-				fullContent += (fullContent && markerResult.processedContent ? "\n\n" : "") + markerResult.processedContent;
-				processedContent = fullContent;
-				if (isActive()) setStreamingContent(fullContent);
-
-				if (markerResult.aborted) { stopped = true; break; }
-				if (!markerResult.followUpMessage) break;
-
-				conversationHistory = [
-					...conversationHistory,
-						{ role: "assistant", content: iterationContent, timestamp: Date.now() },
-						{ role: "user", content: markerResult.followUpMessage, timestamp: Date.now() },
-				];
-			}
-
-			if (stopped && fullContent) {
-				fullContent += `\n\n${t("chat.generationStopped")}`;
-				processedContent = fullContent;
-			}
-
-			// Add assistant message
-			const assistantMessage: Message = {
-				role: "assistant",
-				content: processedContent,
-				timestamp: Date.now(),
-				model: `local-llm:${llmConfig.id}:${llmConfig.model}` as ModelType,
-				...(fullThinking ? { thinking: fullThinking } : {}),
-				...(localRagSources.length > 0 ? { ragUsed: true, ragSources: localRagSources } : {}),
-				...(llmMcpApps.length > 0 ? { mcpApps: llmMcpApps } : {}),
-				...(openCodeToolsUsed.length > 0 ? { toolsUsed: openCodeToolsUsed } : {}),
-				...(openCodeToolCalls.length > 0 ? { toolCalls: openCodeToolCalls } : {}),
-				...(openCodeToolResults.length > 0 ? { toolResults: openCodeToolResults } : {}),
-				...pendingStatusFields({
-					edits: openCodeMutationTracking?.processedEdits ?? [],
-					deletes: openCodeMutationTracking?.processedDeletes ?? [],
-					renames: openCodeMutationTracking?.processedRenames ?? [],
-				}),
-			};
-
-			const newMessages = [...messages, userMessage, assistantMessage];
-			if (isActive()) setCliSession(null);
-			await saveResult(newMessages, null);
-
-			tracing.traceEnd(llmTraceId, { output: processedContent });
-			tracing.score(llmTraceId, {
-				name: "status",
-				value: stopped ? 0.5 : 1,
-				comment: stopped ? "stopped by user" : "completed",
-			});
-		} catch (error) {
-			const errorMessageText = error instanceof Error ? error.message : t("chat.unknownError");
-			const errorMessage: Message = {
-				role: "assistant",
-				content: t("chat.errorOccurred", { message: errorMessageText }),
-				timestamp: Date.now(),
-			};
-			await saveResult([...messages, userMessage, errorMessage]);
-			tracing.traceEnd(llmTraceId, { output: errorMessageText, metadata: { error: true } });
-			tracing.score(llmTraceId, { name: "status", value: 0, comment: errorMessageText });
-		} finally {
-			if (openCodeMcpToolExecutor) {
-				try {
-					await openCodeMcpToolExecutor.cleanup();
-				} catch (error) {
-					console.warn("OpenCode MCP cleanup failed:", error);
+				if (stopped && fullContent) {
+					fullContent += `\n\n${t("chat.generationStopped")}`;
+				} else if (!webSearchSources && stream.webSearchCitations.length > 0) {
+					const formatted = formatWebSearchCitations(fullContent, stream.webSearchCitations);
+					fullContent = formatted.content;
+					webSearchSources = formatted.sources;
+					if (isActive()) setStreamingContent(fullContent);
 				}
-			}
-			cleanupStream(abortController);
-		}
-	};
 
-	// Send message via API provider (OpenAI-compatible)
-	const sendMessageViaApiProvider = async (content: string, attachments?: Attachment[], skillPath?: string) => {
-		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
+				// Cleanup MCP
+				if (mcpToolExecutor) {
+					try { await mcpToolExecutor.cleanup(); } catch (e) { console.warn("MCP cleanup failed:", e); }
+				}
 
-		const providerConfig = getActiveApiProvider();
-		const resolvedModelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "";
-		if (!providerConfig) {
-			new Notice(t("chat.noApiProvider"));
-			return;
-		}
-
-		const resolvedContent = await resolveMessageVariables(content);
-
-		let displayContent = resolvedContent.trim();
-		if (!displayContent && skillPath) {
-			const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
-			displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
-		}
-
-		const userMessage: Message = {
-			role: "user",
-			content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
-			timestamp: Date.now(),
-			attachments: attachments && attachments.length > 0 ? attachments : undefined,
-		};
-		setMessages((prev) => [...prev, userMessage]);
-		setIsLoading(true);
-		setStreamingContent("");
-		setStreamingThinking("");
-
-		const abortController = new AbortController();
-		abortControllerRef.current = abortController;
-
-		const apiTraceId = tracing.traceStart("api-provider-chat", {
-			input: resolvedContent,
-			metadata: {
-				provider: providerConfig.name,
-				model: resolvedModelName,
-				webSearchEnabled: allowWebSearch && webSearchEnabled,
+				const elapsedMs = Date.now() - startTime;
+				const assistantMessage: Message = {
+					role: "assistant",
+					content: fullContent,
+					timestamp: Date.now(),
+					model: currentModel,
+					toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
+					toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
+					toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
+					thinking: stream.thinking || undefined,
+					// Processed edit/delete/rename info from the tool executor.
+					...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
+					ragUsed: localRagSources.length > 0,
+					ragSources: localRagSources.length > 0 ? localRagSources : undefined,
+					generatedImages: stream.generatedImages.length > 0 ? stream.generatedImages : undefined,
+					imageGenerationUsed: stream.generatedImages.length > 0 || undefined,
+					webSearchUsed: stream.webSearchUsed || undefined,
+					webSearchSources,
+					providerContinuation: stream.providerContinuation,
+					usage: stream.usage,
+					elapsedMs,
+					mcpApps: apiMcpApps.length > 0 ? apiMcpApps : undefined,
+				};
+				return {
+					message: assistantMessage,
+					output: fullContent,
+					status: {
+						value: stopped ? 0.5 : 1,
+						comment: stopped ? "stopped by user" : "completed",
+					},
+				};
 			},
-		});
-
-		try {
-			const settings = plugin.settings;
-			let systemPrompt = `You are a helpful AI assistant in an Obsidian vault.
-Always be helpful and provide clear, concise responses. When working with notes, confirm actions and provide relevant feedback.`;
-
-			if (vaultToolMode !== "none") {
-				systemPrompt += FILE_MENTION_TOOL_PROMPT;
-			}
-
-			if (settings.systemPrompt) {
-				systemPrompt += `\n\nAdditional instructions: ${settings.systemPrompt}`;
-			}
-
-			systemPrompt = await appendOkfSystemPrompt(systemPrompt);
-
-			// Local RAG: search and inject context into system prompt
-			let localRagSources: string[] = [];
-			let ragSearchRunner: RagSearchRunner | null = null;
-			const ragSettingObj = selectedRagSetting && !isImageGenerationModel(currentModel) ? plugin.getRagSearchSetting(selectedRagSetting) : null;
-			if (selectedRagSetting && ragSettingObj) {
-				ragSearchRunner = createRagSearchRunner(
-					(query, topK) => searchLocalRagResults(
-						selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
-						plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
-					),
-					(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
-				);
-				if (AUTOMATIC_RAG_RETRIEVAL) try {
-					const localRag = await searchLocalRag(
-						selectedRagSetting, resolvedContent,
-						ragSettingObj, getGeminiApiKey(plugin.settings),
-						plugin.settings.proxyUrl, plugin.settings.proxyBypass
-					);
-					// A search that threw never reached the index, so it must not consume
-					// the turn budget the model is told it has.
-					if (localRag.sources.length > 0) {
-						systemPrompt += localRag.context;
-						localRagSources = localRag.sources;
-						// Attach multimodal RAG files so the LLM can see actual content
-						if (localRag.mediaReferences.length > 0) {
-							const pdfMode = resolveApiProviderPdfInputMode(providerConfig);
-							const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
-								.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
-							// A dropped PDF leaves only its label in the indexed chunk text,
-							// so its pages go into the prompt as extracted text instead.
-							if (pdfMode !== "native") {
-								systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
-							}
-							if (ragAttachments.length > 0) {
-								const existing = userMessage.attachments || [];
-								(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-							}
-						}
-					}
-				} catch (e) {
-					console.error("Local RAG search failed:", formatError(e));
-				}
-			}
-			if (vaultToolMode === "noSearch") {
-				systemPrompt += buildNoDiscoverySystemPrompt({
-					ragRequested: Boolean(ragSearchRunner),
-					hasRagContext: localRagSources.length > 0,
-				});
-			}
-
-			// Build vault tools (same as Gemini path)
-			const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
-			let tools = filterVaultToolsForMode(
-				getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
-				vaultToolMode,
-			);
-			const obsidianToolExecutor = createToolExecutor(plugin.app, {
-				listNotesLimit: settings.listNotesLimit,
-				maxNoteChars: settings.maxNoteChars,
-				limitVaultToolScope: shouldLimitLlmVaultTools(currentModel),
-				vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
-				pdfInputMode: resolveApiProviderPdfInputMode(providerConfig),
-			});
-
-			// Fetch MCP tools
-			let mcpToolExecutor: McpToolExecutor | null = null;
-			const enabledMcpServers = resolveAgentPluginMcpServers(settings.mcpServers, getEffectiveSkillPathsForSend(skillPath), settings.agentPlugins).filter(s => s.enabled);
-			if (enabledMcpServers.length > 0) {
-				try {
-					const mcpTools = await fetchMcpTools(enabledMcpServers);
-					tools = [...tools, ...mcpTools];
-					mcpToolExecutor = createMcpToolExecutor(mcpTools, apiTraceId);
-				} catch (e) {
-					console.error("Failed to fetch MCP tools:", e);
-				}
-			}
-
-			// Add JavaScript sandbox tool
-			tools.push(EXECUTE_JAVASCRIPT_TOOL);
-			tools.push(GET_WORKFLOW_SPEC_TOOL);
-			if (activeOkfBundleIds.length > 0) tools.push(READ_OKF_DOCUMENT_TOOL);
-
-			// Load skills for API provider mode
-			let apiLoadedSkills: LoadedSkill[] = [];
-			{
-				const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
-				if (effectiveSkillPaths.length > 0) {
-					const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
-					if (activeMetadata.length > 0) {
-						apiLoadedSkills = activeMetadata.map(m => loadSkill(plugin.app, m));
-					}
-				}
-			}
-			if (apiLoadedSkills.length > 0) {
-				systemPrompt += buildSkillSystemPrompt(apiLoadedSkills);
-			}
-			if (apiLoadedSkills.some(s => s.workflows.length > 0)) {
-				tools.push(skillWorkflowTool);
-			}
-			if (apiLoadedSkills.some(s => s.scripts.length > 0)) {
-				tools.push(skillScriptTool);
-			}
-
-			// Let the model search the selected index on demand.
-			if (ragSearchRunner) {
-				tools.push(RAG_SEARCH_TOOL);
-				systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
-			}
-
-			const apiSkillWorkflowMap = collectSkillWorkflows(apiLoadedSkills);
-			const apiSkillScriptMap = collectSkillScripts(apiLoadedSkills);
-			const apiMcpApps: McpAppInfo[] = [];
-
-			const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
-				if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
-				if (name.startsWith("mcp_") && mcpToolExecutor) {
-					const mcpResult = await mcpToolExecutor.execute(name, args);
-					if (mcpResult.mcpApp) apiMcpApps.push(mcpResult.mcpApp);
-					if (mcpResult.error) return { error: mcpResult.error };
-					return { result: mcpResult.result };
-				}
-				if (name === "run_skill_workflow" && apiSkillWorkflowMap.size > 0) {
-					return await runSkillWorkflow(plugin.app, args.workflowId as string, args.variables as string | undefined, apiSkillWorkflowMap, {
-						vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
-					});
-				}
-				if (name === "run_skill_script" && apiSkillScriptMap.size > 0) {
-					return await executeSkillScript(plugin, args.scriptId as string, args.args as string | undefined, apiSkillScriptMap);
-				}
-				if (name === "execute_javascript") {
-					return await handleExecuteJavascriptTool(args);
-				}
-				if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
-					return handleGetWorkflowSpec(args, plugin);
-				}
-				if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
-					return await executeReadOkfDocumentTool(plugin.app, getOkfRoot(), activeOkfBundleIds,
-						typeof args.bundleId === "string" ? args.bundleId : "",
-						typeof args.path === "string" ? args.path : "");
-				}
-				return await obsidianToolExecutor(name, args);
-			};
-
-			const { executeToolCall, processedEdits, processedDeletes, processedRenames, pendingAdditionalRequest } =
-				createConfirmingToolExecutor(baseExecuteToolCall, plugin.app, autoApplyEdits, () => abortController.abort());
-
-			// toolCalls/toolResults drive the tool badges in MessageBubble; toolsUsed
-			// alone only reaches the saved Markdown history.
-			const stream = createStreamAccumulation();
-			let stopped = false;
-			const startTime = Date.now();
-
-			// Route to correct provider implementation
-			const apiEnableThinking = getThinkingToggle();
-			const isWebSearch = providerSupportsWebSearch(providerConfig, resolvedModelName)
-				&& webSearchEnabled;
-			const isImageGen = providerConfig.type === "openai" && isOpenAiImageModel(resolvedModelName);
-			const streamFn = isImageGen
-				? openaiGenerateImageStream(
-					providerConfig.baseUrl, providerConfig.apiKey,
-					resolvedModelName, resolvedContent,
-					abortController.signal,
-					plugin.settings.proxyUrl, plugin.settings.proxyBypass,
-				)
-				: providerConfig.type === "anthropic"
-					? anthropicChatWithToolsStream(
-						providerConfig.baseUrl, providerConfig.apiKey,
-						resolvedModelName, allMessages, tools,
-						systemPrompt, executeToolCall, abortController.signal,
-						apiEnableThinking,
-						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
-						isWebSearch,
-					)
-					: openaiChatWithToolsStream(
-						providerConfig.baseUrl, providerConfig.apiKey,
-						resolvedModelName, allMessages, tools,
-						systemPrompt, executeToolCall, abortController.signal,
-						apiEnableThinking,
-						plugin.settings.proxyUrl, plugin.settings.proxyBypass,
-						isWebSearch, selectedReasoningEffort,
-					);
-
-			for await (const chunk of streamFn) {
-				if (abortController.signal.aborted) {
-					stopped = true;
-					break;
-				}
-
-				accumulateStreamChunk(stream, chunk);
-				if (isActive()) {
-					if (chunk.type === "text") setStreamingContent(stream.text);
-					else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
-				}
-			}
-
-			let fullContent = stream.text;
-			let webSearchSources: Message["webSearchSources"] =
-				stream.webSearchSources.length > 0 ? stream.webSearchSources : undefined;
-
-			if (stopped && fullContent) {
-				fullContent += `\n\n${t("chat.generationStopped")}`;
-			} else if (!webSearchSources && stream.webSearchCitations.length > 0) {
-				const formatted = formatWebSearchCitations(fullContent, stream.webSearchCitations);
-				fullContent = formatted.content;
-				webSearchSources = formatted.sources;
-				if (isActive()) setStreamingContent(fullContent);
-			}
-
-			// Cleanup MCP
-			if (mcpToolExecutor) {
-				try { await mcpToolExecutor.cleanup(); } catch (e) { console.warn("MCP cleanup failed:", e); }
-			}
-
-			const elapsedMs = Date.now() - startTime;
-			const assistantMessage: Message = {
-				role: "assistant",
-				content: fullContent,
-				timestamp: Date.now(),
-				model: currentModel,
-				toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
-				toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
-				toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
-				thinking: stream.thinking || undefined,
-				// Processed edit/delete/rename info from the tool executor.
-				...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
-				ragUsed: localRagSources.length > 0,
-				ragSources: localRagSources.length > 0 ? localRagSources : undefined,
-				generatedImages: stream.generatedImages.length > 0 ? stream.generatedImages : undefined,
-				imageGenerationUsed: stream.generatedImages.length > 0 || undefined,
-				webSearchUsed: stream.webSearchUsed || undefined,
-				webSearchSources,
-				providerContinuation: stream.providerContinuation,
-				usage: stream.usage,
-				elapsedMs,
-				mcpApps: apiMcpApps.length > 0 ? apiMcpApps : undefined,
-			};
-			const newMessages = [...messages, userMessage, assistantMessage];
-			await saveResult(newMessages);
 
 			// "Request changes" in the edit confirmation modal: send the feedback
-			// back to the model now that this turn is finished.
-			if (isActive() && pendingAdditionalRequest.current) {
-				const requestInfo = pendingAdditionalRequest.current;
-				pendingAdditionalRequest.current = null;
-				setPendingEditFeedback(requestInfo);
-			}
-
-			tracing.traceEnd(apiTraceId, { output: fullContent });
-			tracing.score(apiTraceId, {
-				name: "status",
-				value: stopped ? 0.5 : 1,
-				comment: stopped ? "stopped by user" : "completed",
-			});
-		} catch (error) {
-			const errorMessageText = error instanceof Error ? error.message : t("chat.unknownError");
-			const errorMessage: Message = {
-				role: "assistant",
-				content: t("chat.errorOccurred", { message: errorMessageText }),
-				timestamp: Date.now(),
-			};
-			await saveResult([...messages, userMessage, errorMessage]);
-			tracing.traceEnd(apiTraceId, { output: errorMessageText, metadata: { error: true } });
-			tracing.score(apiTraceId, { name: "status", value: 0, comment: errorMessageText });
-		} finally {
-			cleanupStream(abortController);
-		}
+			// back to the model now that this turn is saved.
+			onSaved: () => {
+				const requestInfo = takeEditFeedback?.();
+				if (requestInfo) setPendingEditFeedback(requestInfo);
+			},
+		});
 	};
 
 	// Send message to Gemini
@@ -2638,533 +2670,527 @@ Always be helpful and provide clear, concise responses. When working with notes,
 
 	// Send message via Gemini provider (uses @google/genai SDK)
 	const sendMessageViaGemini = async (content: string, attachments?: Attachment[], skillPath?: string, providerConfig?: ApiProviderConfig) => {
-		const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
-
-		const apiKey = providerConfig?.apiKey || getGeminiApiKey(plugin.settings);
-		if (!apiKey) {
-			new Notice(t("chat.clientNotInitialized"));
-			return;
-		}
-
-		// Initialize a GeminiClient with this provider's API key
-		const { GeminiClient } = await import("src/core/gemini");
-		const modelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "gemini-3.8-flash";
-		const client = new GeminiClient(apiKey, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
-
-		let allowedModel = modelName as ModelType;
-
-		// Auto-switch to image model when image generation keywords detected
-		if (!isImageGenerationModel(allowedModel) && shouldUseImageModel(content)) {
-			// Check provider's availableModels for an image model
-			const imageModel = providerConfig?.availableModels?.find(m => isImageGenerationModel(m));
-			if (imageModel) {
-				allowedModel = imageModel as ModelType;
-			}
-		}
-
-		client.setModel(allowedModel);
-
-		// Resolve variables in the content ({selection}, {content}, file paths)
-		const resolvedContent = await resolveMessageVariables(content);
-
-		// When skill is invoked without message, use skill name as trigger
-		let displayContent = resolvedContent.trim();
-		if (!displayContent && skillPath) {
-			const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
-			displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
-		}
-
-		// Add user message
-		const userMessage: Message = {
-			role: "user",
-			content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
-			timestamp: Date.now(),
-			attachments,
-		};
-
-		setMessages((prev) => [...prev, userMessage]);
-		setIsLoading(true);
-		setStreamingContent("");
-		setStreamingThinking("");
-
-		// Create abort controller for this request
-		const abortController = new AbortController();
-		abortControllerRef.current = abortController;
-
-		const traceId = tracing.traceStart("chat-message", {
-			sessionId: currentChatId ?? undefined,
-			metadata: {
-				model: allowedModel,
-				ragEnabled: allowRag,
-				webSearchEnabled: allowWebSearch && webSearchEnabled,
-				toolsEnabled: !isImageGenerationModel(allowedModel),
-				isImageGeneration: isImageGenerationModel(allowedModel),
-				pluginVersion: plugin.manifest.version,
-			},
-			input: resolvedContent,
-		});
-
-		// Track MCP executor for background-stream cleanup (hoisted so the
-		// outer finally block can reach it even though it's created inside
-		// runStreamOnce).  Wrapped in an object to avoid TypeScript narrowing
-		// issues with `let` variables reassigned inside nested closures.
+		// The confirming tool executor is built once the turn is running; this is
+		// how the feedback it collected gets back out to the finished turn.
+		let takeEditFeedback: (() => { filePath: string; request: string } | null) | null = null;
+		// Track MCP executor for background-stream cleanup: the turn creates it
+		// inside `run`, and the teardown still has to reach it.
 		const mcpCleanupRef = { executor: null as McpToolExecutor | null };
 
-		try {
-			const runStreamOnce = async () => {
-				const { settings } = plugin;
-				const toolsEnabled = !isImageGenerationModel(allowedModel);
-				const obsidianTools = toolsEnabled ? getEnabledVaultTools({
-					allowWrite: true,
-					allowDelete: true,
-					ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS,
-				}) : [];
+		await runChatTurn<GeminiTurnContext>(chatTurnUi(), {
+			prepare: async () => {
 
-				// Activate skill if invoked via slash command
-				const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
-				if (skillPath && !activeSkillPaths.includes(skillPath)) {
-					setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
+				const apiKey = providerConfig?.apiKey || getGeminiApiKey(plugin.settings);
+				if (!apiKey) {
+					new Notice(t("chat.clientNotInitialized"));
+					return null;
 				}
 
-				// Load active skills (needed for both workflow tools and system prompt)
-				let loadedSkillsList: LoadedSkill[] = [];
-				if (effectiveSkillPaths.length > 0) {
-					const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
-					if (activeMetadata.length > 0) {
-						loadedSkillsList = activeMetadata.map(m => loadSkill(plugin.app, m));
+				// Initialize a GeminiClient with this provider's API key
+				const { GeminiClient } = await import("src/core/gemini");
+				const modelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "gemini-3.8-flash";
+				const client = new GeminiClient(apiKey, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
+
+				let allowedModel = modelName as ModelType;
+
+				// Auto-switch to image model when image generation keywords detected
+				if (!isImageGenerationModel(allowedModel) && shouldUseImageModel(content)) {
+					// Check provider's availableModels for an image model
+					const imageModel = providerConfig?.availableModels?.find(m => isImageGenerationModel(m));
+					if (imageModel) {
+						allowedModel = imageModel as ModelType;
 					}
 				}
 
-				// Fetch MCP tools from enabled servers only
-				const enabledMcpServers = resolveAgentPluginMcpServers(mcpServers, effectiveSkillPaths, settings.agentPlugins).filter(s => s.enabled);
-				const mcpTools: McpToolDefinition[] = toolsEnabled && enabledMcpServers.length > 0
-					? await fetchMcpTools(enabledMcpServers)
-					: [];
+				client.setModel(allowedModel);
 
-				// Cleanup previous MCP executor if exists
-				if (mcpExecutorRef.current) {
-					void mcpExecutorRef.current.cleanup();
-					mcpExecutorRef.current = null;
+				// Resolve variables in the content ({selection}, {content}, file paths)
+				const resolvedContent = await resolveMessageVariables(content);
+
+				// When skill is invoked without message, use skill name as trigger
+				let displayContent = resolvedContent.trim();
+				if (!displayContent && skillPath) {
+					const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
+					displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
 				}
 
-				// Create MCP tool executor
-				const mcpToolExecutor = mcpTools.length > 0
-					? createMcpToolExecutor(mcpTools, traceId)
-					: undefined;
-
-				// Store for session reuse and track for background-stream cleanup
-				mcpExecutorRef.current = mcpToolExecutor ?? null;
-				mcpCleanupRef.executor = mcpToolExecutor ?? null;
-
-				// Merge Obsidian tools and MCP tools
-				const allTools = [...obsidianTools, ...mcpTools];
-
-				// Filter Obsidian tools based on vaultToolMode (MCP tools are not affected).
-				// The names come from the shared definitions: the list kept here had
-				// drifted and let read_timeline, get_active_note_info and the bulk_*
-				// tools through with Vault access switched off.
-				// Vault skills are loaded lazily — their SKILL.md (workflow IDs,
-				// inputVariables, full instructions) is only reachable via read_note.
-				// If any such skill is active we must keep read_note available even
-				// when vaultToolMode would otherwise strip it, or the model gets
-				// neither inline workflow metadata nor the tool to fetch it.
-				const hasActiveVaultSkill = loadedSkillsList.some(s => !isBuiltinSkillPath(s.folderPath));
-				const tools = allTools.filter(tool => {
-					// MCP tools are always included
-					if (isMcpTool(tool)) return true;
-					if (vaultToolMode === "none" && tool.name === "read_note" && hasActiveVaultSkill) return true;
-					return isVaultToolAllowed(tool.name, vaultToolMode);
-				});
-
-				// Add run_skill_workflow tool if any active skill has workflows
-				if (toolsEnabled && loadedSkillsList.some(s => s.workflows.length > 0)) {
-					tools.push(skillWorkflowTool);
-				}
-
-				// Add run_skill_script tool if any active skill has scripts
-				if (toolsEnabled && loadedSkillsList.some(s => s.scripts.length > 0)) {
-					tools.push(skillScriptTool);
-				}
-
-				// Add execute_javascript tool
-				if (toolsEnabled) {
-					tools.push(EXECUTE_JAVASCRIPT_TOOL);
-					tools.push(GET_WORKFLOW_SPEC_TOOL);
-					if (activeOkfBundleIds.length > 0) tools.push(READ_OKF_DOCUMENT_TOOL);
-				}
-
-				// Create context for tools (Obsidian tools only)
-				const obsidianToolExecutor = toolsEnabled
-					? createToolExecutor(plugin.app, {
-						listNotesLimit: settings.listNotesLimit,
-						maxNoteChars: settings.maxNoteChars,
-						limitVaultToolScope: shouldLimitLlmVaultTools(allowedModel),
-						vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
-						pdfInputMode: providerConfig ? resolveApiProviderPdfInputMode(providerConfig) : "native",
-					})
-					: undefined;
-
-				// Filled in by the confirming executor below.
-				// Track MCP Apps with UI for message display
-				const collectedMcpApps: McpAppInfo[] = [];
-
-				// Build skill workflow/script maps for tool execution
-				const skillWorkflowMap = collectSkillWorkflows(loadedSkillsList);
-				const skillScriptMap = collectSkillScripts(loadedSkillsList);
-
-				// Combined tool executor that routes to Obsidian, MCP, or Skill Workflow/Script based on tool name
-				const baseToolExecutor = (obsidianToolExecutor || mcpToolExecutor || skillWorkflowMap.size > 0 || skillScriptMap.size > 0)
-					? async (name: string, args: Record<string, unknown>) => {
-						if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
-						// MCP tools start with "mcp_"
-						if (name.startsWith("mcp_") && mcpToolExecutor) {
-							const mcpResult = await mcpToolExecutor.execute(name, args);
-							// Collect MCP App info if available
-							if (mcpResult.mcpApp) {
-								collectedMcpApps.push(mcpResult.mcpApp);
-							}
-							// Return result in expected format for compatibility
-							if (mcpResult.error) {
-								return { error: mcpResult.error };
-							}
-							return { result: mcpResult.result };
-						}
-						// Skill workflow tool
-						if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
-							return await runSkillWorkflow(
-								plugin.app,
-								args.workflowId as string,
-								args.variables as string | undefined,
-								skillWorkflowMap,
-								{
-									vaultToolAllowedFolders: shouldLimitLlmVaultTools(allowedModel)
-										? settings.cloudVaultToolAllowedFolders
-										: undefined,
-								},
-							);
-						}
-						// Skill script tool
-						if (name === "run_skill_script" && skillScriptMap.size > 0) {
-							return await executeSkillScript(
-								plugin,
-								args.scriptId as string,
-								args.args as string | undefined,
-								skillScriptMap,
-							);
-						}
-						// JavaScript sandbox tool
-						if (name === "execute_javascript") {
-							return await handleExecuteJavascriptTool(args);
-						}
-						if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
-							return handleGetWorkflowSpec(args, plugin);
-						}
-						if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
-							return await executeReadOkfDocumentTool(plugin.app, getOkfRoot(), activeOkfBundleIds,
-								typeof args.bundleId === "string" ? args.bundleId : "",
-								typeof args.path === "string" ? args.path : "");
-						}
-						// Otherwise use Obsidian tool executor
-						if (obsidianToolExecutor) {
-							return await obsidianToolExecutor(name, args);
-						}
-						return { error: `Unknown tool: ${name}` };
-					}
-					: undefined;
-
-				// The propose_* and bulk_* tools need the user's confirmation before
-				// anything is written; the shared wrapper drives it and records what
-				// happened for the badges on the finished message.
-				const confirming = baseToolExecutor
-					? createConfirmingToolExecutor(baseToolExecutor, plugin.app, autoApplyEdits, () => abortController.abort())
-					: null;
-				const toolExecutor = confirming?.executeToolCall;
-				const processedEdits = confirming?.processedEdits ?? [];
-				const processedDeletes = confirming?.processedDeletes ?? [];
-				const processedRenames = confirming?.processedRenames ?? [];
-				const pendingAdditionalRequestRef = confirming?.pendingAdditionalRequest ?? { current: null };
-
-					// Check if Web Search or Image Generation model is selected
-				const isWebSearch = allowWebSearch && webSearchEnabled
-					&& (toolsEnabled || isImageGenerationModel(allowedModel));
-				const isImageGeneration = isImageGenerationModel(allowedModel);
-
-				let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
-
-				if (toolsEnabled) {
-					systemPrompt += FILE_MENTION_TOOL_PROMPT;
-					systemPrompt += `
-
-Available tools allow you to:
-- Read notes from the vault
-- Create new notes
-- Update existing notes
-- Search for notes by name or content
-- List notes and folders
-- Get information about the active note`;
-				}
-
-				systemPrompt += `
-
-Always be helpful and provide clear, concise responses. When working with notes, confirm actions and provide relevant feedback.`;
-
-				if (settings.systemPrompt) {
-					systemPrompt += `\n\nAdditional instructions: ${settings.systemPrompt}`;
-				}
-
-				// Inject active agent skills into system prompt
-				let skillsUsedNames: string[] = [];
-				if (loadedSkillsList.length > 0) {
-					const skillPrompt = buildSkillSystemPrompt(loadedSkillsList);
-					if (skillPrompt) {
-						systemPrompt += skillPrompt;
-						skillsUsedNames = loadedSkillsList.map(s => s.name);
-					}
-				}
-
-				systemPrompt = await appendOkfSystemPrompt(systemPrompt);
-
-				// Local RAG: search and inject context into system prompt
-				let localRagSources: string[] = [];
-				let ragSearchRunner: RagSearchRunner | null = null;
-				const ragSettingObj = selectedRagSetting && !isImageGenerationModel(allowedModel) ? plugin.getRagSearchSetting(selectedRagSetting) : null;
-				if (selectedRagSetting && ragSettingObj) {
-					ragSearchRunner = createRagSearchRunner(
-						(query, topK) => searchLocalRagResults(
-							selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
-						),
-						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
-					);
-					if (AUTOMATIC_RAG_RETRIEVAL) try {
-						const localRag = await searchLocalRag(
-							selectedRagSetting, resolvedContent,
-							ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass
-						);
-						// A search that threw never reached the index, so it must not consume
-						// the turn budget the model is told it has.
-						if (localRag.sources.length > 0) {
-							systemPrompt += localRag.context;
-							localRagSources = localRag.sources;
-							// Attach multimodal RAG files so the LLM can see actual content
-							if (localRag.mediaReferences.length > 0) {
-								const pdfMode = providerConfig ? resolveApiProviderPdfInputMode(providerConfig) : "native";
-								const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
-									.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
-								// A dropped PDF leaves only its label in the indexed chunk text,
-								// so its pages go into the prompt as extracted text instead.
-								if (pdfMode !== "native") {
-									systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
-								}
-								if (ragAttachments.length > 0) {
-									const existing = userMessage.attachments || [];
-									(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
-								}
-							}
-						}
-					} catch (e) {
-						console.error("Local RAG search failed:", formatError(e));
-					}
-				}
-				if (vaultToolMode === "noSearch") {
-					systemPrompt += buildNoDiscoverySystemPrompt({
-						ragRequested: Boolean(ragSearchRunner),
-						hasRagContext: localRagSources.length > 0,
-					});
-				}
-
-				// Let the model search the selected index on demand.
-				if (toolsEnabled && ragSearchRunner) tools.push(RAG_SEARCH_TOOL);
-
-				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
-
-				// Use streaming with tools
-				const stream = createStreamAccumulation();
-				// Local RAG ran before the stream, so its hits belong to this turn
-				// too; rag_search may append more to localRagSources mid-stream,
-				// which is merged in once the stream is done.
-				stream.ragSources.push(...localRagSources);
-				stream.ragUsed = localRagSources.length > 0;
-				const startTime = Date.now();
-
-				// Resolve previous interaction ID for Interactions API conversation chaining.
-				// Only chain when the most recent assistant message (array tail) carries an
-				// interactionId.  If it doesn't (old chat history, image generation response,
-				// CLI response, etc.) we fall back to local history replay in gemini.ts.
-				const previousInteractionId = (() => {
-					// Server-side chaining would bypass the configured local history limit.
-					if (messages.length > maxPreviousMessages) return undefined;
-					for (let i = messages.length - 1; i >= 0; i--) {
-						if (messages[i].role === "assistant") {
-							return messages[i].interactionId;  // undefined if absent → fallback
-						}
-					}
-					return undefined;
-				})();
-
-				let stopped = false;
-
-				// Gemma 4: RAG/Web Search and function calling are mutually exclusive
-				const effectiveTools = isGemma4(allowedModel) && (isWebSearch || localRagSources.length > 0) ? [] : tools;
-				// Gemma 4 drops every tool when RAG or web search is on, so only describe
-				// rag_search when it actually survives into the request.
-				if (effectiveTools.some(tool => tool.name === RAG_SEARCH_TOOL_NAME)) {
-					systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
-				}
-
-				// Use image generation stream or regular chat stream
-				const chunkStream = isImageGeneration
-					? client.generateImageStream(allMessages, allowedModel, systemPrompt, isWebSearch, undefined, traceId)
-					: client.chatWithToolsStream(
-						allMessages,
-						effectiveTools,
-						systemPrompt,
-						toolsEnabled ? toolExecutor : undefined,
-						undefined,
-						isWebSearch,
-						{
-							functionCallLimits: {
-								maxFunctionCalls: settings.maxFunctionCalls,
-								functionCallWarningThreshold: settings.functionCallWarningThreshold,
-							},
-							disableTools: !toolsEnabled,
-							enableThinking: getThinkingToggle(),
-							reasoningEffort: selectedReasoningEffort,
-							traceId,
-							previousInteractionId,
-						}
-					);
-
-				for await (const chunk of chunkStream) {
-					// Check if stopped
-					if (abortController.signal.aborted) {
-						stopped = true;
-						break;
-					}
-
-					accumulateStreamChunk(stream, chunk);
-					if (isActive()) {
-						if (chunk.type === "text") setStreamingContent(stream.text);
-						else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
-					}
-				}
-
-				// rag_search runs as a tool mid-stream and appends its hits here.
-				for (const source of localRagSources) {
-					if (!stream.ragSources.includes(source)) stream.ragSources.push(source);
-				}
-				let fullContent = stream.text;
-
-				// If stopped, add partial message if any content was received
-				if (stopped && fullContent) {
-					fullContent += `\n\n${t("chat.generationStopped")}`;
-				}
-
-				// Add assistant message
-				const assistantMessage: Message = {
-					role: "assistant",
-					content: fullContent,
+				// Add user message
+				const userMessage: Message = {
+					role: "user",
+					content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
 					timestamp: Date.now(),
-					model: allowedModel,
-					toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
-					skillsUsed: skillsUsedNames.length > 0 ? skillsUsedNames : undefined,
-					// Processed edit/delete/rename info from the tool executor
-					// (already confirmed during tool execution).
-					...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
-					toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
-					toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
-					ragUsed: stream.ragUsed || undefined,
-					ragSources: stream.ragSources.length > 0 ? stream.ragSources : undefined,
-					webSearchUsed: stream.webSearchUsed || undefined,
-					webSearchSources: stream.webSearchSources.length > 0 ? stream.webSearchSources : undefined,
-					imageGenerationUsed: stream.imageGenerationUsed || undefined,
-					generatedImages: stream.generatedImages.length > 0 ? stream.generatedImages : undefined,
-					thinking: stream.thinking || undefined,
-					mcpApps: collectedMcpApps.length > 0 ? collectedMcpApps : undefined,
-					usage: stream.usage,
-					interactionId: stream.interactionId,
-					elapsedMs: Date.now() - startTime,
+					attachments,
 				};
 
-				const newMessages = [...messages, userMessage, assistantMessage];
-				await saveResult(newMessages);
+				return {
+					userMessage,
+					trace: {
+						name: "chat-message",
+						sessionId: currentChatId ?? undefined,
+						input: resolvedContent,
+						metadata: {
+							model: allowedModel,
+							ragEnabled: allowRag,
+							webSearchEnabled: allowWebSearch && webSearchEnabled,
+							toolsEnabled: !isImageGenerationModel(allowedModel),
+							isImageGeneration: isImageGenerationModel(allowedModel),
+							pluginVersion: plugin.manifest.version,
+						},
+					},
+					context: { client, allowedModel, resolvedContent },
+				};
+			},
 
-				tracing.traceEnd(traceId, {
-					output: fullContent,
-					metadata: {
+			run: async (turn, { client, allowedModel, resolvedContent }) => {
+				const { isActive, abortController, traceId, userMessage } = turn;
+				let result: ChatTurnOutcome | undefined;
+				const runStreamOnce = async () => {
+					const { settings } = plugin;
+					const toolsEnabled = !isImageGenerationModel(allowedModel);
+					const obsidianTools = toolsEnabled ? getEnabledVaultTools({
+						allowWrite: true,
+						allowDelete: true,
+						ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS,
+					}) : [];
+
+					// Activate skill if invoked via slash command
+					const effectiveSkillPaths = getEffectiveSkillPathsForSend(skillPath);
+					if (skillPath && !activeSkillPaths.includes(skillPath)) {
+						setActiveSkillPaths(prev => prev.includes(skillPath) ? prev : [...prev, skillPath]);
+					}
+
+					// Load active skills (needed for both workflow tools and system prompt)
+					let loadedSkillsList: LoadedSkill[] = [];
+					if (effectiveSkillPaths.length > 0) {
+						const activeMetadata = availableSkills.filter(s => effectiveSkillPaths.includes(s.folderPath));
+						if (activeMetadata.length > 0) {
+							loadedSkillsList = activeMetadata.map(m => loadSkill(plugin.app, m));
+						}
+					}
+
+					// Fetch MCP tools from enabled servers only
+					const enabledMcpServers = resolveAgentPluginMcpServers(mcpServers, effectiveSkillPaths, settings.agentPlugins).filter(s => s.enabled);
+					const mcpTools: McpToolDefinition[] = toolsEnabled && enabledMcpServers.length > 0
+						? await fetchMcpTools(enabledMcpServers)
+						: [];
+
+					// Cleanup previous MCP executor if exists
+					if (mcpExecutorRef.current) {
+						void mcpExecutorRef.current.cleanup();
+						mcpExecutorRef.current = null;
+					}
+
+					// Create MCP tool executor
+					const mcpToolExecutor = mcpTools.length > 0
+						? createMcpToolExecutor(mcpTools, traceId)
+						: undefined;
+
+					// Store for session reuse and track for background-stream cleanup
+					mcpExecutorRef.current = mcpToolExecutor ?? null;
+					mcpCleanupRef.executor = mcpToolExecutor ?? null;
+
+					// Merge Obsidian tools and MCP tools
+					const allTools = [...obsidianTools, ...mcpTools];
+
+					// Filter Obsidian tools based on vaultToolMode (MCP tools are not affected).
+					// The names come from the shared definitions: the list kept here had
+					// drifted and let read_timeline, get_active_note_info and the bulk_*
+					// tools through with Vault access switched off.
+					// Vault skills are loaded lazily — their SKILL.md (workflow IDs,
+					// inputVariables, full instructions) is only reachable via read_note.
+					// If any such skill is active we must keep read_note available even
+					// when vaultToolMode would otherwise strip it, or the model gets
+					// neither inline workflow metadata nor the tool to fetch it.
+					const hasActiveVaultSkill = loadedSkillsList.some(s => !isBuiltinSkillPath(s.folderPath));
+					const tools = allTools.filter(tool => {
+						// MCP tools are always included
+						if (isMcpTool(tool)) return true;
+						if (vaultToolMode === "none" && tool.name === "read_note" && hasActiveVaultSkill) return true;
+						return isVaultToolAllowed(tool.name, vaultToolMode);
+					});
+
+					// Add run_skill_workflow tool if any active skill has workflows
+					if (toolsEnabled && loadedSkillsList.some(s => s.workflows.length > 0)) {
+						tools.push(skillWorkflowTool);
+					}
+
+					// Add run_skill_script tool if any active skill has scripts
+					if (toolsEnabled && loadedSkillsList.some(s => s.scripts.length > 0)) {
+						tools.push(skillScriptTool);
+					}
+
+					// Add execute_javascript tool
+					if (toolsEnabled) {
+						tools.push(EXECUTE_JAVASCRIPT_TOOL);
+						tools.push(GET_WORKFLOW_SPEC_TOOL);
+						if (activeOkfBundleIds.length > 0) tools.push(READ_OKF_DOCUMENT_TOOL);
+					}
+
+					// Create context for tools (Obsidian tools only)
+					const obsidianToolExecutor = toolsEnabled
+						? createToolExecutor(plugin.app, {
+							listNotesLimit: settings.listNotesLimit,
+							maxNoteChars: settings.maxNoteChars,
+							limitVaultToolScope: shouldLimitLlmVaultTools(allowedModel),
+							vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+							pdfInputMode: providerConfig ? resolveApiProviderPdfInputMode(providerConfig) : "native",
+						})
+						: undefined;
+
+					// Filled in by the confirming executor below.
+					// Track MCP Apps with UI for message display
+					const collectedMcpApps: McpAppInfo[] = [];
+
+					// Build skill workflow/script maps for tool execution
+					const skillWorkflowMap = collectSkillWorkflows(loadedSkillsList);
+					const skillScriptMap = collectSkillScripts(loadedSkillsList);
+
+					// Combined tool executor that routes to Obsidian, MCP, or Skill Workflow/Script based on tool name
+					const baseToolExecutor = (obsidianToolExecutor || mcpToolExecutor || skillWorkflowMap.size > 0 || skillScriptMap.size > 0)
+						? async (name: string, args: Record<string, unknown>) => {
+							if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
+							// MCP tools start with "mcp_"
+							if (name.startsWith("mcp_") && mcpToolExecutor) {
+								const mcpResult = await mcpToolExecutor.execute(name, args);
+								// Collect MCP App info if available
+								if (mcpResult.mcpApp) {
+									collectedMcpApps.push(mcpResult.mcpApp);
+								}
+								// Return result in expected format for compatibility
+								if (mcpResult.error) {
+									return { error: mcpResult.error };
+								}
+								return { result: mcpResult.result };
+							}
+							// Skill workflow tool
+							if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
+								return await runSkillWorkflow(
+									plugin.app,
+									args.workflowId as string,
+									args.variables as string | undefined,
+									skillWorkflowMap,
+									{
+										vaultToolAllowedFolders: shouldLimitLlmVaultTools(allowedModel)
+											? settings.cloudVaultToolAllowedFolders
+											: undefined,
+									},
+								);
+							}
+							// Skill script tool
+							if (name === "run_skill_script" && skillScriptMap.size > 0) {
+								return await executeSkillScript(
+									plugin,
+									args.scriptId as string,
+									args.args as string | undefined,
+									skillScriptMap,
+								);
+							}
+							// JavaScript sandbox tool
+							if (name === "execute_javascript") {
+								return await handleExecuteJavascriptTool(args);
+							}
+							if (name === GET_WORKFLOW_SPEC_TOOL_NAME) {
+								return handleGetWorkflowSpec(args, plugin);
+							}
+							if (name === READ_OKF_DOCUMENT_TOOL_NAME) {
+								return await executeReadOkfDocumentTool(plugin.app, getOkfRoot(), activeOkfBundleIds,
+									typeof args.bundleId === "string" ? args.bundleId : "",
+									typeof args.path === "string" ? args.path : "");
+							}
+							// Otherwise use Obsidian tool executor
+							if (obsidianToolExecutor) {
+								return await obsidianToolExecutor(name, args);
+							}
+							return { error: `Unknown tool: ${name}` };
+						}
+						: undefined;
+
+					// The propose_* and bulk_* tools need the user's confirmation before
+					// anything is written; the shared wrapper drives it and records what
+					// happened for the badges on the finished message.
+					const confirming = baseToolExecutor
+						? createConfirmingToolExecutor(baseToolExecutor, plugin.app, autoApplyEdits, () => abortController.abort())
+						: null;
+					const toolExecutor = confirming?.executeToolCall;
+					const processedEdits = confirming?.processedEdits ?? [];
+					const processedDeletes = confirming?.processedDeletes ?? [];
+					const processedRenames = confirming?.processedRenames ?? [];
+					const pendingAdditionalRequestRef = confirming?.pendingAdditionalRequest ?? { current: null };
+					takeEditFeedback = () => {
+						const requestInfo = pendingAdditionalRequestRef.current;
+						pendingAdditionalRequestRef.current = null;
+						return requestInfo;
+					};
+
+						// Check if Web Search or Image Generation model is selected
+					const isWebSearch = allowWebSearch && webSearchEnabled
+						&& (toolsEnabled || isImageGenerationModel(allowedModel));
+					const isImageGeneration = isImageGenerationModel(allowedModel);
+
+					let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
+
+					if (toolsEnabled) {
+						systemPrompt += FILE_MENTION_TOOL_PROMPT;
+						systemPrompt += `
+
+	Available tools allow you to:
+	- Read notes from the vault
+	- Create new notes
+	- Update existing notes
+	- Search for notes by name or content
+	- List notes and folders
+	- Get information about the active note`;
+					}
+
+					systemPrompt += `
+
+	Always be helpful and provide clear, concise responses. When working with notes, confirm actions and provide relevant feedback.`;
+
+					if (settings.systemPrompt) {
+						systemPrompt += `\n\nAdditional instructions: ${settings.systemPrompt}`;
+					}
+
+					// Inject active agent skills into system prompt
+					let skillsUsedNames: string[] = [];
+					if (loadedSkillsList.length > 0) {
+						const skillPrompt = buildSkillSystemPrompt(loadedSkillsList);
+						if (skillPrompt) {
+							systemPrompt += skillPrompt;
+							skillsUsedNames = loadedSkillsList.map(s => s.name);
+						}
+					}
+
+					systemPrompt = await appendOkfSystemPrompt(systemPrompt);
+
+					// Local RAG: search and inject context into system prompt
+					let localRagSources: string[] = [];
+					let ragSearchRunner: RagSearchRunner | null = null;
+					const ragSettingObj = selectedRagSetting && !isImageGenerationModel(allowedModel) ? plugin.getRagSearchSetting(selectedRagSetting) : null;
+					if (selectedRagSetting && ragSettingObj) {
+						ragSearchRunner = createRagSearchRunner(
+							(query, topK) => searchLocalRagResults(
+								selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
+								plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+							),
+							(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+						);
+						if (AUTOMATIC_RAG_RETRIEVAL) try {
+							const localRag = await searchLocalRag(
+								selectedRagSetting, resolvedContent,
+								ragSettingObj, getGeminiApiKey(plugin.settings),
+								plugin.settings.proxyUrl, plugin.settings.proxyBypass
+							);
+							// A search that threw never reached the index, so it must not consume
+							// the turn budget the model is told it has.
+							if (localRag.sources.length > 0) {
+								systemPrompt += localRag.context;
+								localRagSources = localRag.sources;
+								// Attach multimodal RAG files so the LLM can see actual content
+								if (localRag.mediaReferences.length > 0) {
+									const pdfMode = providerConfig ? resolveApiProviderPdfInputMode(providerConfig) : "native";
+									const ragAttachments = (await loadRagMediaAttachments(plugin.app, localRag.mediaReferences))
+										.filter(attachment => attachment.type !== "pdf" || pdfMode === "native");
+									// A dropped PDF leaves only its label in the indexed chunk text,
+									// so its pages go into the prompt as extracted text instead.
+									if (pdfMode !== "native") {
+										systemPrompt += await buildRagPdfTextContext(plugin.app, localRag.mediaReferences);
+									}
+									if (ragAttachments.length > 0) {
+										const existing = userMessage.attachments || [];
+										(userMessage as { attachments?: import("src/types").Attachment[] }).attachments = [...existing, ...ragAttachments];
+									}
+								}
+							}
+						} catch (e) {
+							console.error("Local RAG search failed:", formatError(e));
+						}
+					}
+					if (vaultToolMode === "noSearch") {
+						systemPrompt += buildNoDiscoverySystemPrompt({
+							ragRequested: Boolean(ragSearchRunner),
+							hasRagContext: localRagSources.length > 0,
+						});
+					}
+
+					// Let the model search the selected index on demand.
+					if (toolsEnabled && ragSearchRunner) tools.push(RAG_SEARCH_TOOL);
+
+					const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+
+					// Use streaming with tools
+					const stream = createStreamAccumulation();
+					// Local RAG ran before the stream, so its hits belong to this turn
+					// too; rag_search may append more to localRagSources mid-stream,
+					// which is merged in once the stream is done.
+					stream.ragSources.push(...localRagSources);
+					stream.ragUsed = localRagSources.length > 0;
+					const startTime = Date.now();
+
+					// Resolve previous interaction ID for Interactions API conversation chaining.
+					// Only chain when the most recent assistant message (array tail) carries an
+					// interactionId.  If it doesn't (old chat history, image generation response,
+					// CLI response, etc.) we fall back to local history replay in gemini.ts.
+					const previousInteractionId = (() => {
+						// Server-side chaining would bypass the configured local history limit.
+						if (messages.length > maxPreviousMessages) return undefined;
+						for (let i = messages.length - 1; i >= 0; i--) {
+							if (messages[i].role === "assistant") {
+								return messages[i].interactionId;  // undefined if absent → fallback
+							}
+						}
+						return undefined;
+					})();
+
+					let stopped = false;
+
+					// Gemma 4: RAG/Web Search and function calling are mutually exclusive
+					const effectiveTools = isGemma4(allowedModel) && (isWebSearch || localRagSources.length > 0) ? [] : tools;
+					// Gemma 4 drops every tool when RAG or web search is on, so only describe
+					// rag_search when it actually survives into the request.
+					if (effectiveTools.some(tool => tool.name === RAG_SEARCH_TOOL_NAME)) {
+						systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
+					}
+
+					// Use image generation stream or regular chat stream
+					const chunkStream = isImageGeneration
+						? client.generateImageStream(allMessages, allowedModel, systemPrompt, isWebSearch, undefined, traceId)
+						: client.chatWithToolsStream(
+							allMessages,
+							effectiveTools,
+							systemPrompt,
+							toolsEnabled ? toolExecutor : undefined,
+							undefined,
+							isWebSearch,
+							{
+								functionCallLimits: {
+									maxFunctionCalls: settings.maxFunctionCalls,
+									functionCallWarningThreshold: settings.functionCallWarningThreshold,
+								},
+								disableTools: !toolsEnabled,
+								enableThinking: getThinkingToggle(),
+								reasoningEffort: selectedReasoningEffort,
+								traceId,
+								previousInteractionId,
+							}
+						);
+
+					for await (const chunk of chunkStream) {
+						// Check if stopped
+						if (abortController.signal.aborted) {
+							stopped = true;
+							break;
+						}
+
+						accumulateStreamChunk(stream, chunk);
+						if (isActive()) {
+							if (chunk.type === "text") setStreamingContent(stream.text);
+							else if (chunk.type === "thinking") setStreamingThinking(stream.thinking);
+						}
+					}
+
+					// rag_search runs as a tool mid-stream and appends its hits here.
+					for (const source of localRagSources) {
+						if (!stream.ragSources.includes(source)) stream.ragSources.push(source);
+					}
+					let fullContent = stream.text;
+
+					// If stopped, add partial message if any content was received
+					if (stopped && fullContent) {
+						fullContent += `\n\n${t("chat.generationStopped")}`;
+					}
+
+					// Add assistant message
+					const assistantMessage: Message = {
+						role: "assistant",
+						content: fullContent,
+						timestamp: Date.now(),
+						model: allowedModel,
 						toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
-						ragUsed: stream.ragUsed,
+						skillsUsed: skillsUsedNames.length > 0 ? skillsUsedNames : undefined,
+						// Processed edit/delete/rename info from the tool executor
+						// (already confirmed during tool execution).
+						...pendingStatusFields({ edits: processedEdits, deletes: processedDeletes, renames: processedRenames }),
+						toolCalls: stream.toolCalls.length > 0 ? stream.toolCalls : undefined,
+						toolResults: stream.toolResults.length > 0 ? stream.toolResults : undefined,
+						ragUsed: stream.ragUsed || undefined,
 						ragSources: stream.ragSources.length > 0 ? stream.ragSources : undefined,
-						webSearchUsed: stream.webSearchUsed,
-						imageGenerationUsed: stream.imageGenerationUsed,
-						stopped,
+						webSearchUsed: stream.webSearchUsed || undefined,
+						webSearchSources: stream.webSearchSources.length > 0 ? stream.webSearchSources : undefined,
+						imageGenerationUsed: stream.imageGenerationUsed || undefined,
+						generatedImages: stream.generatedImages.length > 0 ? stream.generatedImages : undefined,
+						thinking: stream.thinking || undefined,
+						mcpApps: collectedMcpApps.length > 0 ? collectedMcpApps : undefined,
+						usage: stream.usage,
+						interactionId: stream.interactionId,
+						elapsedMs: Date.now() - startTime,
+					};
+
+					result = {
+						message: assistantMessage,
+						output: fullContent,
+						metadata: {
+							toolsUsed: stream.toolsUsed.length > 0 ? stream.toolsUsed : undefined,
+							ragUsed: stream.ragUsed,
+							ragSources: stream.ragSources.length > 0 ? stream.ragSources : undefined,
+							webSearchUsed: stream.webSearchUsed,
+							imageGenerationUsed: stream.imageGenerationUsed,
+							stopped,
+						},
+						status: {
+							value: stopped ? 0.5 : 1,
+							comment: stopped ? "stopped by user" : "completed",
+						},
+					};
+				};
+
+				const outcome = await withRateLimitRetry(runStreamOnce, {
+					delays: PAID_RATE_LIMIT_RETRY_DELAYS_MS,
+					isAborted: () => abortController.signal.aborted,
+					onRetry: ({ attempt, total, delayMs }) => {
+						// The failed attempt left partial output on screen.
+						if (isActive()) {
+							setStreamingContent("");
+							setStreamingThinking("");
+						}
+						new Notice(t("chat.rateLimitRetrying", {
+							seconds: String(Math.ceil(delayMs / 1000)),
+							attempt: String(attempt),
+							max: String(total),
+						}));
 					},
 				});
-				tracing.score(traceId, {
-					name: "status",
-					value: stopped ? 0.5 : 1,
-					comment: stopped ? "stopped by user" : "completed",
-				});
-
-				// Check if user requested changes with feedback - use state to trigger send after re-render
-				if (isActive() && pendingAdditionalRequestRef.current) {
-					const requestInfo = pendingAdditionalRequestRef.current;
-					pendingAdditionalRequestRef.current = null;
-					setPendingEditFeedback(requestInfo);
-				}
-			};
-
-			const outcome = await withRateLimitRetry(runStreamOnce, {
-				delays: PAID_RATE_LIMIT_RETRY_DELAYS_MS,
-				isAborted: () => abortController.signal.aborted,
-				onRetry: ({ attempt, total, delayMs }) => {
-					// The failed attempt left partial output on screen.
+				if (outcome === "aborted") {
+					// The abandoned attempt left partial output on screen.
 					if (isActive()) {
 						setStreamingContent("");
 						setStreamingThinking("");
 					}
-					new Notice(t("chat.rateLimitRetrying", {
-						seconds: String(Math.ceil(delayMs / 1000)),
-						attempt: String(attempt),
-						max: String(total),
-					}));
-				},
-			});
-			if (outcome === "aborted") {
-				if (isActive()) {
-					setStreamingContent("");
-					setStreamingThinking("");
+					return {
+						message: null,
+						metadata: { status: "aborted" },
+						status: { value: 0.5, comment: "aborted during retry" },
+					};
 				}
-				tracing.traceEnd(traceId, { metadata: { status: "aborted" } });
-				tracing.score(traceId, { name: "status", value: 0.5, comment: "aborted during retry" });
-				return;
-			}
-		} catch (error) {
-			const errorMessageText = buildErrorMessage(error);
-			const errorMessage: Message = {
-				role: "assistant",
-				content: errorMessageText,
-				timestamp: Date.now(),
-			};
-			await saveResult([...messages, userMessage, errorMessage]);
-			tracing.traceEnd(traceId, {
-				output: errorMessageText,
-				metadata: { error: true },
-			});
-			tracing.score(traceId, {
-				name: "status",
-				value: 0,
-				comment: errorMessageText,
-			});
-		} finally {
-			cleanupStream(abortController);
-			// Stream was backgrounded – clean up our own MCP executor since
-			// the ref was detached when the stream was backgrounded.
-			if (!isActive() && mcpCleanupRef.executor) {
-				try { await mcpCleanupRef.executor.cleanup(); } catch (e) { console.warn("Background MCP cleanup failed:", e); }
-			}
-		}
+				return result ?? { message: null };
+			},
+
+			// "Request changes" in the edit confirmation modal: send the feedback
+			// back to the model now that this turn is saved.
+			onSaved: () => {
+				const requestInfo = takeEditFeedback?.();
+				if (requestInfo) setPendingEditFeedback(requestInfo);
+			},
+
+			onSettled: async (turn) => {
+				// The stream owns the executor once it is backgrounded.
+				if (turn.isActive() || !mcpCleanupRef.executor) return;
+				try {
+					await mcpCleanupRef.executor.cleanup();
+				} catch (e) {
+					console.warn("Background MCP cleanup failed:", e);
+				}
+			},
+		});
 	};
 
 	// Stop message generation
