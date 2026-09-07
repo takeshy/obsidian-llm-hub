@@ -8,7 +8,6 @@ import {
   type SafetySetting,
   type Chat,
   type Interactions,
-  ToolType,
 } from "@google/genai";
 import {
   DEFAULT_SETTINGS,
@@ -43,6 +42,7 @@ import {
   messagesToGeminiContents,
   prepareGeminiToolResult,
   planGeminiFunctionCalls,
+  parseGeminiGenerateContentParts,
   toGeminiStreamChunkUsage as toStreamChunkUsage,
 } from "obsidian-llm-hub-common/core";
 import { createProxyFetch } from "./proxyFetch";
@@ -320,25 +320,25 @@ export class GeminiClient {
           }
 
           const parts = chunk.candidates?.[0]?.content?.parts ?? [];
-          for (const part of parts) {
-            modelParts.push(part);
-            if (part.text) {
-              if (part.thought) {
-                yield { type: "thinking", content: part.text };
-              } else {
-                accumulatedOutput += part.text;
-                yield { type: "text", content: part.text };
-              }
+          modelParts.push(...parts);
+          const parsedParts = parseGeminiGenerateContentParts(parts);
+          functionCalls.push(...parsedParts.functionCalls);
+          for (const segment of parsedParts.textSegments) {
+            if (segment.type === "thinking") {
+              yield { type: "thinking", content: segment.content };
+            } else {
+              accumulatedOutput += segment.content;
+              yield { type: "text", content: segment.content };
             }
-            if (part.functionCall?.name) {
-              functionCalls.push({
-                id: part.functionCall.id,
-                name: part.functionCall.name,
-                args: part.functionCall.args ?? {},
-              });
+          }
+          if (parsedParts.webSearchResponses.length > 0) {
+            webSearchUsedInRound = true;
+            if (!webSearchUsed) {
+              webSearchUsed = true;
+              yield { type: "web_search_used" };
             }
-            if (part.toolResponse?.toolType === ToolType.GOOGLE_SEARCH_WEB) {
-              collectWebSources(part.toolResponse.response, webSearchSources);
+            for (const toolResponse of parsedParts.webSearchResponses) {
+              collectWebSources(toolResponse, webSearchSources);
             }
           }
         }
