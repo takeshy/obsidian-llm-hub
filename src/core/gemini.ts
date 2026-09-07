@@ -41,10 +41,12 @@ import {
   GeminiFunctionCallAccumulator,
   GEMINI_SEARCH_GROUNDING_COST as SEARCH_GROUNDING_COST,
   getGeminiFinishReasonError as checkFinishReason,
+  getGeminiInteractionStatusError,
   messagesToGeminiContents,
   prepareGeminiToolResult,
   planGeminiFunctionCalls,
   parseGeminiGenerateContentParts,
+  parseGeminiFinalInteractionEvent,
   toGeminiStreamChunkUsage as toStreamChunkUsage,
 } from "obsidian-llm-hub-common/core";
 import { createProxyFetch } from "./proxyFetch";
@@ -877,9 +879,8 @@ export class GeminiClient {
                 roundUsage = extractInteractionsUsage(interaction.usage, interactionModel);
               }
               // Check for blocked/failed/incomplete status
-              const status = interaction?.status;
-              if (status && status !== "completed" && status !== "requires_action") {
-                const statusMsg = `Response ${status}${status === "failed" ? " (possibly blocked by safety filters)" : ""}`;
+              const statusMsg = getGeminiInteractionStatusError(interaction?.status);
+              if (statusMsg) {
                 tracing.spanEnd(roundSpanId, { error: statusMsg, metadata: { usage: roundUsage } });
                 streamErrored = true;
                 yield { type: "error", error: statusMsg };
@@ -958,17 +959,13 @@ export class GeminiClient {
             });
             let finalUsage: TracingUsage | undefined;
             for await (const event of finalStream) {
-              if (event.event_type === "step.delta" && event.delta?.type === "text" && "text" in event.delta) {
-                const text = event.delta.text;
-                accumulatedOutput += text;
-                yield { type: "text", content: text };
+              const parsed = parseGeminiFinalInteractionEvent(event);
+              if (parsed.text !== undefined) {
+                accumulatedOutput += parsed.text;
+                yield { type: "text", content: parsed.text };
               }
-              if (event.event_type === "interaction.created" && event.interaction?.id) {
-                currentInteractionId = event.interaction.id;
-              }
-              if (event.event_type === "interaction.completed" && event.interaction?.usage) {
-                finalUsage = extractInteractionsUsage(event.interaction.usage, interactionModel);
-              }
+              if (parsed.interactionId) currentInteractionId = parsed.interactionId;
+              if (parsed.usage) finalUsage = extractInteractionsUsage(parsed.usage as Interactions.Usage, interactionModel);
             }
             if (finalUsage) accumulateUsage(totalUsage, finalUsage);
             continueLoop = false;
@@ -1074,17 +1071,13 @@ export class GeminiClient {
             });
             let finalUsage: TracingUsage | undefined;
             for await (const event of finalStream) {
-              if (event.event_type === "step.delta" && event.delta?.type === "text" && "text" in event.delta) {
-                const text = event.delta.text;
-                accumulatedOutput += text;
-                yield { type: "text", content: text };
+              const parsed = parseGeminiFinalInteractionEvent(event);
+              if (parsed.text !== undefined) {
+                accumulatedOutput += parsed.text;
+                yield { type: "text", content: parsed.text };
               }
-              if (event.event_type === "interaction.created" && event.interaction?.id) {
-                currentInteractionId = event.interaction.id;
-              }
-              if (event.event_type === "interaction.completed" && event.interaction?.usage) {
-                finalUsage = extractInteractionsUsage(event.interaction.usage, interactionModel);
-              }
+              if (parsed.interactionId) currentInteractionId = parsed.interactionId;
+              if (parsed.usage) finalUsage = extractInteractionsUsage(parsed.usage as Interactions.Usage, interactionModel);
             }
             if (finalUsage) accumulateUsage(totalUsage, finalUsage);
             continueLoop = false;
