@@ -37,6 +37,7 @@ import {
   extractGeminiUsage as extractUsage,
   formatError,
   geminiCorsFetch as corsFetch,
+  GeminiFunctionCallAccumulator,
   GEMINI_SEARCH_GROUNDING_COST as SEARCH_GROUNDING_COST,
   getGeminiFinishReasonError as checkFinishReason,
   messagesToGeminiContents,
@@ -774,10 +775,7 @@ export class GeminiClient {
         let roundUsage: TracingUsage | undefined;
         let hasReceivedEvent = false;
 
-        const pendingFunctionCalls = new Map<
-          number,
-          { id: string; name: string; argsBuffer: string; startArgs: Record<string, unknown> }
-        >();
+        const pendingFunctionCalls = new GeminiFunctionCallAccumulator();
 
         // Process SSE events (v2 steps schema)
         for await (const event of stream) {
@@ -792,12 +790,7 @@ export class GeminiClient {
             case "step.start": {
               const step = event.step;
               if (step?.type === "function_call") {
-                pendingFunctionCalls.set(event.index, {
-                  id: step.id,
-                  name: step.name,
-                  argsBuffer: "",
-                  startArgs: step.arguments ?? {},
-                });
+                pendingFunctionCalls.start(event.index, step.id, step.name, step.arguments ?? {});
               }
               break;
             }
@@ -825,9 +818,8 @@ export class GeminiClient {
                   break;
 
                 case "arguments_delta": {
-                  const pending = pendingFunctionCalls.get(event.index);
-                  if (pending && "arguments" in delta && typeof delta.arguments === "string") {
-                    pending.argsBuffer += delta.arguments;
+                  if ("arguments" in delta && typeof delta.arguments === "string") {
+                    pendingFunctionCalls.appendArguments(event.index, delta.arguments);
                   }
                   break;
                 }
@@ -862,23 +854,8 @@ export class GeminiClient {
             }
 
             case "step.stop": {
-              const pending = pendingFunctionCalls.get(event.index);
-              if (pending) {
-                let args = pending.startArgs;
-                if (pending.argsBuffer) {
-                  try {
-                    args = JSON.parse(pending.argsBuffer) as Record<string, unknown>;
-                  } catch {
-                    args = pending.startArgs;
-                  }
-                }
-                functionCallsToProcess.push({
-                  id: pending.id,
-                  name: pending.name,
-                  args,
-                });
-                pendingFunctionCalls.delete(event.index);
-              }
+              const functionCall = pendingFunctionCalls.finish(event.index);
+              if (functionCall) functionCallsToProcess.push(functionCall);
               break;
             }
 
