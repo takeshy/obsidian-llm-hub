@@ -32,7 +32,6 @@ import {
   buildGeminiInteractionTextStep,
   buildGeminiMessageParts,
   buildGeminiRagRequest,
-  collectGeminiInteractionFileSearchResult,
   buildGeminiThinkingConfig,
   collectGeminiWebSources as collectWebSources,
   extractGeminiInteractionsUsage as extractInteractionsUsage,
@@ -41,15 +40,15 @@ import {
   extractGeminiUsage as extractUsage,
   formatError,
   geminiCorsFetch as corsFetch,
-  GeminiFunctionCallAccumulator,
   GEMINI_SEARCH_GROUNDING_COST as SEARCH_GROUNDING_COST,
   getGeminiFinishReasonError as checkFinishReason,
-  getGeminiInteractionStatusError,
   messagesToGeminiContents,
   prepareGeminiToolResult,
   planGeminiFunctionCalls,
   parseGeminiGenerateContentParts,
   parseGeminiFinalInteractionEvent,
+  createGeminiInteractionRound,
+  reduceGeminiInteractionEvent,
   toGeminiStreamChunkUsage as toStreamChunkUsage,
 } from "obsidian-llm-hub-common/core";
 import { createProxyFetch } from "./proxyFetch";
@@ -686,6 +685,7 @@ export class GeminiClient {
     const totalUsage: TracingUsage = { input: 0, output: 0, total: 0 };
     let roundNumber = 0;
     let currentInteractionId: string | undefined;
+    const webSearchSources: WebSearchSource[] = [];
     let streamErrored = false;
 
     // RAG pre-retrieval via generateContent API.
@@ -774,137 +774,27 @@ export class GeminiClient {
           generation_config: generationConfig,
         });
 
-        const functionCallsToProcess: Array<{ id: string; name: string; args: Record<string, unknown> }> = [];
-        const accumulatedSources: string[] = [];
-        let groundingEmitted = false;
-        let webSearchUsedInRound = false;
+        let roundState = createGeminiInteractionRound("pre-retrieved");
         let roundUsage: TracingUsage | undefined;
-        let hasReceivedEvent = false;
-
-        const pendingFunctionCalls = new GeminiFunctionCallAccumulator();
-
-        // Process SSE events (v2 steps schema)
         for await (const event of stream) {
-          hasReceivedEvent = true;
-
-          switch (event.event_type) {
-            case "interaction.created": {
-              currentInteractionId = event.interaction?.id;
-              break;
-            }
-
-            case "step.start": {
-              const step = event.step;
-              if (step?.type === "function_call") {
-                pendingFunctionCalls.start(event.index, step.id, step.name, step.arguments ?? {});
-              }
-              break;
-            }
-
-            case "step.delta": {
-              const delta = event.delta;
-              if (!delta) break;
-
-              switch (delta.type) {
-                case "text":
-                  if ("text" in delta && delta.text) {
-                    accumulatedOutput += delta.text;
-                    yield { type: "text", content: delta.text };
-                  }
-                  break;
-
-                case "thought_summary":
-                  // Thinking content via summary
-                  if ("content" in delta && delta.content) {
-                    const thought = delta.content;
-                    if ("text" in thought && thought.text) {
-                      yield { type: "thinking", content: thought.text };
-                    }
-                  }
-                  break;
-
-                case "arguments_delta": {
-                  if ("arguments" in delta && typeof delta.arguments === "string") {
-                    pendingFunctionCalls.appendArguments(event.index, delta.arguments);
-                  }
-                  break;
-                }
-
-                case "file_search_call":
-                  break;
-
-                case "file_search_result":
-                  // RAG results come through file_search_result deltas
-                  if ("result" in delta && Array.isArray(delta.result)) {
-                    for (const r of delta.result) {
-                      collectGeminiInteractionFileSearchResult({
-                        sources: accumulatedSources,
-                        contexts: [],
-                      }, r);
-                    }
-                  }
-                  break;
-
-                case "google_search_result":
-                  if (!webSearchUsedInRound) {
-                    webSearchUsedInRound = true;
-                    yield { type: "web_search_used" };
-                    groundingEmitted = true;
-                  }
-                  break;
-
-                default:
-                  break;
-              }
-              break;
-            }
-
-            case "step.stop": {
-              const functionCall = pendingFunctionCalls.finish(event.index);
-              if (functionCall) functionCallsToProcess.push(functionCall);
-              break;
-            }
-
-            case "interaction.status_update": {
-              // The API can include usage in status-update metadata, but some
-              // @google/genai releases type this metadata as StreamMetadata
-              // without the runtime `usage` field.
-              const usage = (event.metadata as { usage?: Interactions.Usage } | undefined)?.usage;
-              if (usage) {
-                roundUsage = extractInteractionsUsage(usage, interactionModel);
-              }
-              break;
-            }
-
-            case "interaction.completed": {
-              const interaction = event.interaction;
-              if (interaction?.usage) {
-                roundUsage = extractInteractionsUsage(interaction.usage, interactionModel);
-              }
-              // Check for blocked/failed/incomplete status
-              const statusMsg = getGeminiInteractionStatusError(interaction?.status);
-              if (statusMsg) {
-                tracing.spanEnd(roundSpanId, { error: statusMsg, metadata: { usage: roundUsage } });
-                streamErrored = true;
-                yield { type: "error", error: statusMsg };
-                continueLoop = false;
-              }
-              break;
-            }
-
-            case "error": {
-              const errMsg = (event as { error?: { message?: string } }).error?.message ?? "Unknown interaction error";
-              tracing.spanEnd(roundSpanId, { error: errMsg, metadata: { usage: roundUsage } });
+          const reduced = reduceGeminiInteractionEvent(roundState, event);
+          roundState = reduced.state;
+          if (roundState.interactionId !== undefined) currentInteractionId = roundState.interactionId;
+          roundUsage = extractInteractionsUsage(roundState.usage as Interactions.Usage | undefined, interactionModel);
+          for (const effect of reduced.effects) {
+            if (effect.type === "text") accumulatedOutput += effect.content;
+            if (effect.type === "error") {
+              tracing.spanEnd(roundSpanId, { error: effect.error, metadata: { usage: roundUsage } });
               streamErrored = true;
               continueLoop = false;
-              yield { type: "error", error: errMsg };
-              break;
             }
-
-            default:
-              break;
+            yield effect;
           }
         }
+        const { functionCalls: functionCallsToProcess, sources: accumulatedSources,
+          webSearchUsed: webSearchUsedInRound, hasReceivedEvent } = roundState;
+        let groundingEmitted = webSearchUsedInRound;
+        for (const source of roundState.webSources) collectWebSources(source, webSearchSources);
 
         // Sum round usage into total
         if (roundUsage) accumulateUsage(totalUsage, roundUsage);
@@ -1120,6 +1010,7 @@ export class GeminiClient {
         type: "done",
         usage: toStreamChunkUsage(totalUsage.total ? totalUsage : undefined),
         interactionId: currentInteractionId,
+        webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
       };
     } catch (error) {
       tracing.generationEnd(generationId, {
