@@ -27,6 +27,8 @@ import {
 import { tracing, type TracingUsage } from "src/core/tracingHooks";
 import {
   accumulateGeminiUsage as accumulateUsage,
+  buildGeminiInteractionTools,
+  buildGeminiMessageParts,
   buildGeminiThinkingConfig,
   collectGeminiWebSources as collectWebSources,
   extractGeminiInteractionsUsage as extractInteractionsUsage,
@@ -35,6 +37,7 @@ import {
   geminiCorsFetch as corsFetch,
   GEMINI_SEARCH_GROUNDING_COST as SEARCH_GROUNDING_COST,
   getGeminiFinishReasonError as checkFinishReason,
+  messagesToGeminiContents,
   serializeGeminiFunctionResult as serializeFunctionResult,
   toGeminiStreamChunkUsage as toStreamChunkUsage,
 } from "obsidian-llm-hub-common/core";
@@ -146,60 +149,12 @@ export class GeminiClient {
 
   // Build Gemini Part[] from a Message's attachments and text content
   private static buildMessageParts(msg: Message): Part[] {
-    const parts: Part[] = [];
-    if (msg.attachments && msg.attachments.length > 0) {
-      for (const attachment of msg.attachments) {
-        parts.push({
-          inlineData: {
-            mimeType: attachment.mimeType,
-            data: attachment.data,
-          },
-        });
-      }
-    }
-    if (msg.content) {
-      parts.push({ text: msg.content });
-    }
-    return parts;
+    return buildGeminiMessageParts(msg) as Part[];
   }
 
   // Convert our Message format to Gemini Content format
   private messagesToContents(messages: Message[]): Content[] {
-    return messages.map((msg) => ({
-      role: msg.role === "user" ? "user" : "model",
-      parts: GeminiClient.buildMessageParts(msg),
-    }));
-  }
-
-  // Convert ToolDefinition parameters to a plain JSON Schema object for Interactions API
-  private static toJsonSchema(params: ToolDefinition["parameters"]): unknown {
-    const convertProp = (p: ToolPropertyDefinition): Record<string, unknown> => {
-      const s: Record<string, unknown> = { type: p.type, description: p.description };
-      if (p.enum) s.enum = p.enum;
-      if (p.type === "array" && p.items) {
-        const items = p.items;
-        if (items.type === "object" && items.properties) {
-          const nested: Record<string, unknown> = {};
-          for (const [k, v] of Object.entries(items.properties)) nested[k] = convertProp(v);
-          s.items = { type: "object", properties: nested, required: items.required };
-        } else {
-          s.items = { type: items.type };
-        }
-      }
-      if (p.type === "object" && p.properties) {
-        const nested: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(p.properties)) nested[k] = convertProp(v);
-        s.properties = nested;
-        if (p.required && p.required.length > 0) s.required = p.required;
-      }
-      return s;
-    };
-
-    const properties: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(params.properties)) {
-      properties[key] = convertProp(value);
-    }
-    return { type: "object", properties, required: params.required };
+    return messagesToGeminiContents(messages) as Content[];
   }
 
   // Convert tool definitions to Interactions API format (Tool_2[])
@@ -210,35 +165,11 @@ export class GeminiClient {
     ragTopK?: number,
     webSearchEnabled?: boolean,
   ): Interactions.Tool[] {
-    const result: Interactions.Tool[] = [];
-
-    // Function tools — Interactions API allows function tools + file search together
-    for (const tool of tools) {
-      result.push({
-        type: "function",
-        name: tool.name,
-        description: tool.description,
-        parameters: GeminiClient.toJsonSchema(tool.parameters),
-      });
-    }
-
-    // File Search RAG
-    if (ragStoreIds && ragStoreIds.length > 0) {
-      result.push({
-        type: "file_search",
-        file_search_store_names: ragStoreIds,
-        top_k: ragTopK,
-      });
-    }
-
-    // Google Search
-    if (webSearchEnabled) {
-      result.push({
-        type: "google_search",
-      });
-    }
-
-    return result;
+    return buildGeminiInteractionTools(tools, {
+      ragStoreIds,
+      ragTopK,
+      webSearchEnabled,
+    }) as Interactions.Tool[];
   }
 
   // Retrieve RAG context via the generateContent API (file_search tool).
