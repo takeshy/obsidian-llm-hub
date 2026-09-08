@@ -99,6 +99,8 @@ import {
 	pendingStatusFields,
 	runChatTurn,
 	withRateLimitRetry,
+	useAutoReadAloud,
+	buildReadAloudSystemPrompt,
 	type ChatTurnOutcome,
 	type ChatTurnUi,
 } from "obsidian-llm-hub-common/chat";
@@ -319,6 +321,16 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		},
 	});
 	const inputAreaRef = useRef<InputAreaHandle>(null);
+	const [voiceChatSettings, setVoiceChatSettings] = useState(() => ({ ...plugin.settings.voiceChat }));
+	useAutoReadAloud(messages, isLoading, voiceChatSettings.autoReadAloud);
+	const handleAutoReadAloudChange = useCallback((enabled: boolean) => {
+		setVoiceChatSettings((previous) => {
+			const next = { ...previous, autoReadAloud: enabled };
+			plugin.settings.voiceChat = next;
+			void plugin.saveSettings();
+			return next;
+		});
+	}, [plugin]);
 	const pendingExternalSelectionRef = useRef<{ text: string; sourcePath?: string } | null>(null);
 	const currentSlashCommandRef = useRef<SlashCommand | null>(null);
 	// A slash command with confirmEdits off writes without asking.
@@ -917,6 +929,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			}
 			// Sync MCP servers from settings
 			setMcpServers([...plugin.settings.mcpServers]);
+			setVoiceChatSettings({ ...plugin.settings.voiceChat });
 		};
 		plugin.settingsEmitter.on("settings-updated", handleSettingsUpdated);
 		return () => {
@@ -1514,6 +1527,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							hasRagContext: localRagSources.length > 0,
 						});
 					}
+					if (plugin.settings.voiceChat.autoReadAloud) systemPrompt += buildReadAloudSystemPrompt();
 
 					if (ragSearchToolOffered) {
 						systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
@@ -1856,6 +1870,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						hasRagContext: localRagSources.length > 0,
 					});
 				}
+				if (plugin.settings.voiceChat.autoReadAloud) systemPrompt += buildReadAloudSystemPrompt();
 
 				let fullContent = "";
 				let fullThinking = "";
@@ -2411,6 +2426,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						hasRagContext: localRagSources.length > 0,
 					});
 				}
+				if (plugin.settings.voiceChat.autoReadAloud) systemPrompt += buildReadAloudSystemPrompt();
 
 				// Build vault tools (same as Gemini path)
 				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
@@ -3011,6 +3027,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							hasRagContext: localRagSources.length > 0,
 						});
 					}
+					if (plugin.settings.voiceChat.autoReadAloud) systemPrompt += buildReadAloudSystemPrompt();
 
 					// Let the model search the selected index on demand.
 					if (toolsEnabled && ragSearchRunner) tools.push(RAG_SEARCH_TOOL);
@@ -3537,6 +3554,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 										return next;
 									});
 								}}
+								voiceChatSettings={voiceChatSettings}
+								onAutoReadAloudChange={handleAutoReadAloudChange}
 								mcpServers={mcpServers}
 								onMcpServerToggle={handleMcpServerToggle}
 								slashCommands={plugin.settings.slashCommands}

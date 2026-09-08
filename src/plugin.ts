@@ -829,6 +829,7 @@ export class LlmHubPlugin extends Plugin {
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...loaded,
+      voiceChat: { ...DEFAULT_SETTINGS.voiceChat, ...loaded.voiceChat },
       maxSavedChatHistories: loaded.maxSavedChatHistories
         ?? (isExistingInstall ? 0 : DEFAULT_SETTINGS.maxSavedChatHistories),
       skillsFolder: typeof loaded.skillsFolder === "string"

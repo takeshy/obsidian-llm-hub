@@ -1,4 +1,5 @@
 import type { McpServerConfig } from "obsidian-llm-hub-common/core";
+import { DEFAULT_VOICE_CHAT_SETTINGS, type VoiceChatSettings } from "obsidian-llm-hub-common/core";
 export type { McpServerConfig, McpTransport, McpFraming } from "obsidian-llm-hub-common/core";
 
 export type { Message, ToolCall, ToolResult, Attachment, PendingEditInfo, PendingDeleteInfo, PendingRenameInfo, WebSearchSource, GeneratedImage, ProviderContinuation } from "obsidian-llm-hub-common/chat";
@@ -154,6 +155,7 @@ export interface LlmHubSettings {
   maxSavedChatHistories: number;
   manualChatSaveFolder: string;
   systemPrompt: string;
+  voiceChat: VoiceChatSettings;
 
   // Slash commands
   slashCommands: SlashCommand[];
@@ -798,6 +800,7 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   maxSavedChatHistories: 100,
   manualChatSaveFolder: "",
   systemPrompt: "",
+  voiceChat: { ...DEFAULT_VOICE_CHAT_SETTINGS },
   slashCommands: DEFAULT_SLASH_COMMANDS,
   knowledgeSources: [],
   enabledWorkflowHotkeys: [],

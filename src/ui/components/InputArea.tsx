@@ -4,6 +4,7 @@ import {
   fileToAttachment,
   isAttachmentRejection,
 } from "obsidian-llm-hub-common/chat";
+import type { VoiceChatSettings } from "obsidian-llm-hub-common/chat";
 import { CollapsedInput } from "obsidian-llm-hub-common";
 import { InputArea as SharedInputArea } from "obsidian-llm-hub-common";
 import { Composer, Autocomplete, Attachments, VaultToolControl, EnabledMcpServers, InputButtons, SearchSelector, ModelRow, ModelDropdown } from "obsidian-llm-hub-common";
@@ -59,6 +60,8 @@ interface InputAreaProps {
   onMaxPreviousMessagesChange: (count: number) => void;
   inputHistory: string[];
   onInputHistoryAdd: (prompt: string) => void;
+  voiceChatSettings: VoiceChatSettings;
+  onAutoReadAloudChange: (enabled: boolean) => void;
   mcpServers: McpServerConfig[]; // MCP server configurations
   onMcpServerToggle: (serverName: string, enabled: boolean) => void; // Per-server toggle handler
   slashCommands: SlashCommand[];
@@ -128,6 +131,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   onMaxPreviousMessagesChange,
   inputHistory,
   onInputHistoryAdd,
+  voiceChatSettings,
+  onAutoReadAloudChange,
   mcpServers,
   onMcpServerToggle,
   slashCommands,
@@ -272,6 +277,16 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       setInput("");
       setPendingAttachments([]);
     }
+  };
+
+  const handleVoiceSubmit = (content: string) => {
+    if (!content.trim() || isLoading) return;
+    onInputHistoryAdd(content);
+    void onSend(content, pendingAttachments.length > 0 ? pendingAttachments : undefined);
+    historyIndexRef.current = null;
+    historyDraftRef.current = "";
+    setInput("");
+    setPendingAttachments([]);
   };
 
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -608,6 +623,11 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
               value: maxPreviousMessages,
               onChange: onMaxPreviousMessagesChange,
             }}
+            autoReadAloud={{
+              label: t("input.autoReadAloud"),
+              enabled: voiceChatSettings.autoReadAloud,
+              onChange: onAutoReadAloudChange,
+            }}
           />
         </InputButtons>
 
@@ -620,6 +640,11 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           disabled: isCompacting }}
           isLoading={isLoading} isCompacting={isCompacting} compactingLabel={t("chat.compacting")}
           canSend={!!input.trim() || pendingAttachments.length > 0}
+          voiceSubmit={{
+            enabled: voiceChatSettings.submitOnPaste && !isLoading,
+            phrase: voiceChatSettings.submitPhrase,
+            onSubmit: handleVoiceSubmit,
+          }}
           onSend={handleSubmit} onStop={onStop}
           sendLabel={t("input.send")} stopLabel={t("input.stop")}
           collapse={Platform.isMobile ? { collapsed: isCollapsed, onToggle: () => setIsCollapsed(!isCollapsed), label: isCollapsed ? t("input.expand") : t("input.collapse") } : undefined}
