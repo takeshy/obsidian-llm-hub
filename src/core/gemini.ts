@@ -3,10 +3,10 @@ import {
   HarmCategory,
   HarmBlockThreshold,
   type Content,
-  type Part,
+  type GenerateContentParameters,
+  type CreateChatParameters,
   type Tool,
   type SafetySetting,
-  type Chat,
   type Interactions,
 } from "@google/genai";
 import {
@@ -23,19 +23,18 @@ import {
   buildGeminiHistoryReplayInput,
   buildGeminiInteractionTools,
   buildGeminiInteractionInput,
-  buildGeminiMessageParts,
   buildGeminiRagRequest,
   buildGeminiThinkingConfig,
+  resolveGeminiThinkingLevel,
   extractGeminiRagContexts,
   formatError,
   geminiCorsFetch as corsFetch,
   messagesToGeminiContents,
   runGeminiInteractions,
-  runGeminiChat,
-  runGeminiTextStream,
-  runGeminiDeepResearch,
-  runGeminiImageGeneration,
-  GEMINI_DEEP_RESEARCH_AGENT,
+  GeminiGenerationClient,
+  selectGeminiGenerationTools,
+  selectGeminiInteractionTools,
+  type GeminiToolMode,
   runGeminiGenerateContentTools,
 } from "obsidian-llm-hub-common/core";
 import { createProxyFetch } from "./proxyFetch";
@@ -86,13 +85,22 @@ export function patchGeminiProxy(ai: GoogleGenAI, proxyUrl: string, proxyBypass?
   }
 }
 
-export class GeminiClient {
+export class GeminiClient extends GeminiGenerationClient<ModelType> {
   private ai: GoogleGenAI;
-  private model: ModelType;
 
   constructor(apiKey: string, model: ModelType = "gemini-3.8-flash" as ModelType, proxyUrl?: string, proxyBypass?: string) {
-    this.ai = new GoogleGenAI({ apiKey });
-    this.model = model;
+    const ai = new GoogleGenAI({ apiKey });
+    super(model, {
+      generate: request => ai.models.generateContent(request as GenerateContentParameters),
+      stream: request => ai.models.generateContentStream(request as GenerateContentParameters),
+      chat: request => ai.chats.create(request as CreateChatParameters),
+      createResearch: request => ai.interactions.create(request),
+      getResearch: id => ai.interactions.get(id),
+      delay: milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds)),
+      safetySettings: DEFAULT_SAFETY_SETTINGS,
+      supportsThinking: () => true,
+    });
+    this.ai = ai;
 
     // Proxy: tunnel all SDK requests through HTTP CONNECT proxy
     if (proxyUrl) {
@@ -117,14 +125,6 @@ export class GeminiClient {
     }
   }
 
-  getModel(): ModelType {
-    return this.model;
-  }
-
-  setModel(model: ModelType): void {
-    this.model = model;
-  }
-
   private getInteractionsModel(hasFunctionTools: boolean): ModelType {
     const modelName = this.model as string;
     if (modelName === "gemini-3.1-pro-preview" && hasFunctionTools) {
@@ -138,17 +138,6 @@ export class GeminiClient {
     return buildGeminiThinkingConfig(this.model, enableThinking, reasoningEffort);
   }
 
-  // Check if model supports thinking
-  private supportsThinking(): boolean {
-    return true;
-  }
-
-  // Build Gemini Part[] from a Message's attachments and text content
-  private static buildMessageParts(msg: Message): Part[] {
-    return buildGeminiMessageParts(msg) as Part[];
-  }
-
-  // Convert our Message format to Gemini Content format
   private messagesToContents(messages: Message[]): Content[] {
     return messagesToGeminiContents(messages) as Content[];
   }
@@ -261,50 +250,14 @@ export class GeminiClient {
       contents, model: this.model, traceId, generationId,
       maxFunctionCalls, warningThreshold, limitPolicy: { kind: "fixed" },
       executeToolCall,
-      create: (roundContents, finalRound) => this.ai.models.generateContentStream({
+      create: (roundContents, toolMode) => this.ai.models.generateContentStream({
         model: this.model, contents: roundContents as Content[],
         config: {
           systemInstruction: systemPrompt,
-          tools: finalRound ? undefined : (options?.disableTools ? undefined : generationTools),
-          toolConfig: !finalRound && combinesBuiltInAndFunctionTools ? { includeServerSideToolInvocations: true } : undefined,
+          tools: selectGeminiGenerationTools(options?.disableTools ? undefined : generationTools, toolMode),
+          toolConfig: toolMode === "all" && combinesBuiltInAndFunctionTools ? { includeServerSideToolInvocations: true } : undefined,
           safetySettings: DEFAULT_SAFETY_SETTINGS, thinkingConfig,
         },
-      }),
-    });
-  }
-
-  // Simple chat without streaming
-  async chat(
-    messages: Message[],
-    systemPrompt?: string,
-    traceId?: string | null
-  ): Promise<string> {
-    const contents = this.messagesToContents(messages);
-    const lastMsg = messages[messages.length - 1];
-
-    return runGeminiChat({
-      model: this.model, input: lastMsg?.content, traceId,
-      generate: () => this.ai.models.generateContent({
-        model: this.model, contents,
-        config: { systemInstruction: systemPrompt, safetySettings: DEFAULT_SAFETY_SETTINGS },
-      }),
-    });
-  }
-
-  // Streaming chat
-  async *chatStream(
-    messages: Message[],
-    systemPrompt?: string,
-    traceId?: string | null
-  ): AsyncGenerator<StreamChunk> {
-    const contents = this.messagesToContents(messages);
-    const lastMsg = messages[messages.length - 1];
-
-    yield* runGeminiTextStream({
-      kind: "chatStream", model: this.model, input: lastMsg?.content, traceId,
-      generate: () => this.ai.models.generateContentStream({
-        model: this.model, contents,
-        config: { systemInstruction: systemPrompt, safetySettings: DEFAULT_SAFETY_SETTINGS },
       }),
     });
   }
@@ -377,32 +330,10 @@ export class GeminiClient {
       return;
     }
 
-    const enableThinking = this.supportsThinking() && options?.enableThinking === true;
-
-    // Build generation config for Interactions API
-    const getThinkingLevel = (): "minimal" | "low" | "medium" | "high" | undefined => {
-      if (!this.supportsThinking()) return undefined;
-      const modelLower = this.model.toLowerCase();
-      // Gemma 4: thinking config not supported via Interactions API
-      if (modelLower.includes("gemma-4")) return undefined;
-      const explicitLevel = options?.reasoningEffort;
-      if (explicitLevel && explicitLevel !== "default" && explicitLevel !== "none"
-        && explicitLevel !== "xhigh" && explicitLevel !== "max") {
-        return explicitLevel;
-      }
-      // Preserve support for callers outside Chat that explicitly request high thinking.
-      if (modelLower.includes("gemini-3.8-flash")) {
-        return enableThinking ? "high" : "low";
-      }
-      if (!enableThinking) return undefined;
-      // Gemini 3.5 Flash Lite: "minimal" matches the streaming/SDK path
-      // (buildThinkingConfig), which omits thinkingLevel entirely when
-      // thinking is disabled and relies on "minimal" being the API default.
-      return "high";
-    };
-
-    const thinkingLevel = getThinkingLevel();
-    const generationConfig = thinkingLevel || combinesBuiltInAndFunctionTools
+    const enableThinking = this.supportsThinking() ? options?.enableThinking : false;
+    const reasoningEffort = this.supportsThinking() ? options?.reasoningEffort : undefined;
+    const thinkingLevel = resolveGeminiThinkingLevel(this.model, enableThinking, reasoningEffort);
+    const generationConfig = (toolMode: GeminiToolMode) => thinkingLevel || (toolMode === "all" && combinesBuiltInAndFunctionTools)
       ? {
           ...(thinkingLevel
             ? { thinking_level: thinkingLevel, thinking_summaries: "auto" as const }
@@ -410,7 +341,7 @@ export class GeminiClient {
           // Interactions tool-context circulation uses validated choice. The
           // legacy GenerateContent include_server_side_tool_invocations flag
           // is not part of the Interactions request schema.
-          ...(combinesBuiltInAndFunctionTools ? { tool_choice: "validated" as const } : {}),
+          ...(toolMode === "all" && combinesBuiltInAndFunctionTools ? { tool_choice: "validated" as const } : {}),
         }
       : undefined;
 
@@ -496,109 +427,13 @@ export class GeminiClient {
         input: request.input as string | Interactions.Content[] | Interactions.Step[],
         stream: true, store: true,
         previous_interaction_id: request.previousInteractionId,
-        tools: request.includeTools ? interactionTools : undefined,
-        system_instruction: ragSystemPrompt, generation_config: generationConfig,
+        tools: selectGeminiInteractionTools(interactionTools, request.toolMode),
+        system_instruction: ragSystemPrompt, generation_config: generationConfig(request.toolMode),
       }),
     });
   }
 
-  // Streaming workflow generation with thinking
-  async *generateWorkflowStream(
-    messages: Message[],
-    systemPrompt?: string,
-    traceId?: string | null
-  ): AsyncGenerator<StreamChunk> {
-    // Build history from all messages except the last one
-    const historyMessages = messages.slice(0, -1);
-    const history = this.messagesToContents(historyMessages);
 
-    // Get the last user message.
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.role !== "user") {
-      yield { type: "error", error: "No user message to send" };
-      return;
-    }
-
-    // Workflow generation always enables thinking (unless model doesn't support it)
-    const thinkingConfig = this.buildThinkingConfig(true);
-
-    // Create a chat session with history (no tools for workflow generation)
-    const chat: Chat = this.ai.chats.create({
-      model: this.model,
-      history,
-      config: {
-        systemInstruction: systemPrompt,
-        safetySettings: DEFAULT_SAFETY_SETTINGS,
-        thinkingConfig,
-      },
-    });
-
-    const messageParts = GeminiClient.buildMessageParts(lastMessage);
-
-    yield* runGeminiTextStream({
-      kind: "generateWorkflowStream", model: this.model, input: lastMessage.content, traceId,
-      generate: () => chat.sendMessageStream({ message: messageParts }),
-    });
-  }
-
-  // Deep Research using Interactions API agent
-  async *deepResearchStream(
-    query: string,
-    previousInteractionId?: string | null,
-    traceId?: string | null
-  ): AsyncGenerator<StreamChunk> {
-    yield* runGeminiDeepResearch({
-      query, traceId,
-      create: () => this.ai.interactions.create({
-        agent: GEMINI_DEEP_RESEARCH_AGENT, input: query, background: true,
-        previous_interaction_id: previousInteractionId ?? undefined, store: true,
-      }),
-      get: id => this.ai.interactions.get(id),
-      delay: milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds)),
-    });
-  }
-
-  // Image generation using Gemini
-  async *generateImageStream(
-    messages: Message[],
-    imageModel: ModelType,
-    systemPrompt?: string,
-    webSearchEnabled?: boolean,
-    _ragStoreIds?: string[],  // Reserved for future RAG support in image generation
-    traceId?: string | null
-  ): AsyncGenerator<StreamChunk> {
-    // Build history from all messages except the last one
-    const historyMessages = messages.slice(0, -1);
-    const history = this.messagesToContents(historyMessages);
-
-    // Get the last user message
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.role !== "user") {
-      yield { type: "error", error: "No user message to send" };
-      return;
-    }
-
-    const messageParts = GeminiClient.buildMessageParts(lastMessage);
-
-    // Build tools array
-    // Image models: Web Search only (no RAG)
-    const tools: Tool[] = [];
-
-    if (webSearchEnabled) {
-      tools.push({ googleSearch: {} });
-    }
-
-    yield* runGeminiImageGeneration({
-      model: imageModel, input: lastMessage.content, traceId, webSearchEnabled: !!webSearchEnabled,
-      generate: () => this.ai.models.generateContent({
-        model: imageModel, contents: [...history, { role: "user", parts: messageParts }],
-        config: {
-          systemInstruction: systemPrompt, safetySettings: DEFAULT_SAFETY_SETTINGS,
-          responseModalities: ["TEXT", "IMAGE"], tools: tools.length > 0 ? tools : undefined,
-        },
-      }),
-    });
-  }
 }
 
 /**
