@@ -1,0 +1,3420 @@
+/* LLM Hub Plugin Styles */
+
+/* Workflow Mermaid diagram (code block processor) */
+.llm-hub-workflow-mermaid {
+  overflow: auto;
+  padding: 8px 0;
+}
+
+.llm-hub-workflow-mermaid svg {
+  max-width: none;
+}
+
+/* Wrap long text inside node labels instead of clipping */
+.llm-hub-workflow-mermaid .nodeLabel {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 300px;
+  text-align: left;
+}
+
+/* Hide workspace folder in file explorer.
+   plugin.ts toggles the `llm-hub-hide-workspace-folder` class on document.body.
+   Hardcoded for the default folder name "LLMHub" — the selector covers both
+   the nav-folder itself and a parent nav-folder whose child carries data-path. */
+body.llm-hub-hide-workspace-folder .nav-folder[data-path="LLMHub"],
+body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LLMHub"],
+body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LLMHub"] ~ .nav-folder-children {
+  display: none;
+}
+
+/* Folder icons in file explorer */
+.nav-folder[data-path="skills"] > .nav-folder-title > .nav-folder-title-content::before,
+.nav-folder > .nav-folder-title[data-path="skills"] > .nav-folder-title-content::before {
+  content: "🧩 ";
+}
+.nav-folder[data-path="workflows"] > .nav-folder-title > .nav-folder-title-content::before,
+.nav-folder > .nav-folder-title[data-path="workflows"] > .nav-folder-title-content::before {
+  content: "⚡ ";
+}
+/* Selection Highlight - shows where {selection} text came from */
+.llm-hub-selection-highlight {
+  background-color: rgba(255, 213, 79, 0.4);
+  border-radius: 2px;
+}
+
+/* Dark theme adjustment */
+.theme-dark .llm-hub-selection-highlight {
+  background-color: rgba(255, 193, 7, 0.3);
+}
+
+/* Mobile: remove extra bottom padding */
+.is-mobile .workspace-leaf-content.llm-hub-chat-view {
+  padding-bottom: 0;
+}
+
+/* Mobile: keyboard visible adjustments */
+.is-mobile .llm-hub-chat.keyboard-visible {
+  padding-bottom: 0;
+}
+
+.is-mobile .llm-hub-chat.keyboard-visible .llm-hub-input-container {
+  position: fixed;
+  bottom: 20%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--background-primary);
+}
+
+/* Mobile: hide input container when decrypt form password input is focused */
+.is-mobile .llm-hub-chat.decrypt-input-focused .llm-hub-input-container {
+  display: none;
+}
+
+.is-mobile .llm-hub-chat.decrypt-input-focused .llm-hub-messages {
+  display: none;
+}
+
+.llm-hub-chat-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.llm-hub-clear-btn {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.llm-hub-clear-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.llm-hub-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.2s, color 0.2s;
+}
+
+.llm-hub-icon-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.llm-hub-chevron {
+  margin-left: 2px;
+}
+
+/* Chat History Dropdown */
+.llm-hub-history-dropdown {
+  max-height: 300px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.llm-hub-history-item:last-child {
+  border-bottom: none;
+}
+
+.llm-hub-history-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.llm-hub-empty-state p {
+  margin: 4px 0;
+}
+
+.llm-hub-empty-card {
+  width: min(100%, 420px);
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  text-align: left;
+}
+
+.llm-hub-empty-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.llm-hub-empty-card-description {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.llm-hub-empty-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.llm-hub-empty-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.llm-hub-empty-card-action span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.llm-hub-empty-tip-icon {
+  flex-shrink: 0;
+}
+
+.llm-hub-sync-progress {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: var(--background-secondary);
+  border-radius: 4px;
+}
+
+.llm-hub-progress-bar {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.llm-hub-progress-error {
+  color: var(--text-error);
+}
+
+.llm-hub-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.llm-hub-message-content * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.llm-hub-message-content p {
+  margin: 0 0 8px 0;
+}
+
+/* Tool Calls */
+.llm-hub-tool-calls {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.llm-hub-tool-call {
+  background: var(--background-primary);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.llm-hub-tool-name {
+  font-weight: 600;
+  color: var(--interactive-accent);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.llm-hub-tool-args {
+  font-family: var(--font-monospace);
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  display: block;
+}
+
+/* Collapse button for mobile (same size as send button) */
+.llm-hub-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.llm-hub-collapse-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* Collapsed bar with expand button */
+.llm-hub-collapsed-bar {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+}
+
+.llm-hub-expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--interactive-accent);
+  border: none;
+  border-radius: 4px;
+  color: var(--text-on-accent);
+  cursor: pointer;
+}
+
+.llm-hub-expand-btn:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.llm-hub-input-container.collapsed {
+  border-top: none;
+}
+
+.llm-hub-model-select {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.llm-hub-model-picker-trigger:hover,
+.llm-hub-model-picker-trigger:focus {
+  color: var(--text-normal);
+}
+
+.llm-hub-model-picker-trigger:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.llm-hub-rag-select {
+  flex: 0 0 auto;
+  max-width: 150px;
+}
+
+.llm-hub-search-selector {
+  position: relative;
+  flex: 0 0 auto;
+  max-width: 220px;
+}
+
+.llm-hub-search-selector-button {
+  width: 100%;
+  max-width: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.llm-hub-search-selector-menu {
+  position: absolute;
+  top: auto;
+  bottom: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  min-width: 230px;
+  max-width: min(340px, 90vw);
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.llm-hub-search-selector-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 5px;
+  color: var(--text-normal);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.llm-hub-search-selector-option:hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-search-selector-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.llm-hub-search-selector-option input {
+  margin: 0;
+}
+
+.llm-hub-search-selector-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--background-modifier-border);
+}
+
+.llm-hub-model-select:hover {
+  color: var(--text-normal);
+}
+
+.llm-hub-model-select:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.llm-hub-model-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.llm-hub-input::placeholder {
+  color: var(--text-muted);
+}
+
+.llm-hub-send-btn:hover {
+  opacity: 0.9;
+}
+
+.llm-hub-stop-btn:hover {
+  opacity: 0.9;
+}
+
+/* Markdown Elements in Messages */
+.llm-hub-h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 8px 0 4px 0;
+}
+
+.llm-hub-h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 6px 0 4px 0;
+}
+
+.llm-hub-h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 4px 0;
+}
+
+.llm-hub-list-item {
+  margin-left: 16px;
+  list-style: disc;
+}
+
+.llm-hub-inline-code {
+  background: var(--background-primary);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+}
+
+.llm-hub-paragraph {
+  margin: 0 0 8px 0;
+}
+
+.llm-hub-rag-source-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.llm-hub-rag-source-setting-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.llm-hub-thinking-summary:hover {
+  color: var(--text-normal);
+}
+
+/* Generated Images */
+.llm-hub-generated-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--background-primary);
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.llm-hub-generated-image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 8px;
+  object-fit: contain;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.llm-hub-generated-image:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Mobile styles for generated images */
+.is-mobile .llm-hub-generated-image {
+  max-height: 300px;
+}
+
+/* Generated image container with actions */
+.llm-hub-generated-image-container {
+  position: relative;
+  display: inline-block;
+}
+
+.llm-hub-image-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.llm-hub-generated-image-container:hover .llm-hub-image-actions {
+  opacity: 1;
+}
+
+.llm-hub-image-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-normal);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.llm-hub-image-btn:hover {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.llm-hub-image-btn svg {
+  flex-shrink: 0;
+}
+
+/* Pending Edit Box */
+.llm-hub-pending-edit {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--background-primary);
+  border: 1px solid var(--interactive-accent);
+  border-radius: 8px;
+}
+
+.llm-hub-pending-edit-info {
+  font-size: 12px;
+  margin-bottom: 10px;
+  color: var(--text-normal);
+}
+
+.llm-hub-pending-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.llm-hub-edit-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.llm-hub-edit-apply {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.llm-hub-edit-apply:hover {
+  opacity: 0.9;
+}
+
+.llm-hub-edit-discard {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+.llm-hub-edit-discard:hover {
+  opacity: 0.9;
+}
+
+/* Edit Additional Request */
+.llm-hub-edit-additional {
+  margin-bottom: 10px;
+}
+
+/* Edit Status */
+.llm-hub-edit-status {
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.llm-hub-edit-applied {
+  background: rgba(0, 200, 83, 0.15);
+  color: var(--text-normal);
+}
+
+.llm-hub-edit-discarded {
+  background: rgba(255, 100, 100, 0.15);
+  color: var(--text-muted);
+}
+
+/* Settings Styles */
+
+.llm-hub-settings-wide-input {
+  width: 100%;
+  min-width: 300px;
+}
+
+/* Declarative settings render host: the complete legacy settings layout is
+   rendered inside one custom Setting row, so that host row must not use the
+   default horizontal setting-item layout. */
+.setting-item.llm-hub-settings-render-root {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border-top: 0;
+}
+
+/* Mobile Styles */
+.is-mobile .llm-hub-icon-btn {
+  padding: 10px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.is-mobile .llm-hub-send-btn,
+.is-mobile .llm-hub-stop-btn,
+.is-mobile .llm-hub-attachment-btn {
+  width: 44px;
+  height: 44px;
+}
+
+/* Mobile: give the textarea the full row; buttons move to a second row
+   (attach/vault-tool left, send/collapse right) so typing space isn't
+   squeezed between two 44px button columns. */
+.is-mobile .llm-hub-input-area {
+  flex-wrap: wrap;
+}
+
+.is-mobile .llm-hub-input-buttons {
+  flex-direction: row;
+  align-self: center;
+  gap: 6px;
+}
+
+.is-mobile .llm-hub-input {
+  flex: 1 1 100%;
+  order: -1;
+  min-height: 44px;
+  font-size: 16px; /* Prevent iOS zoom on focus */
+}
+
+.is-mobile .llm-hub-send-buttons {
+  flex-direction: row;
+  align-self: center;
+  margin-left: auto;
+}
+
+.is-mobile .llm-hub-model-selector {
+  flex-wrap: wrap;
+}
+
+.is-mobile .llm-hub-model-select {
+  padding: 8px 12px;
+  font-size: 14px;
+  min-height: 36px;
+}
+
+.is-mobile .llm-hub-rag-select {
+  max-width: none;
+  flex: 1 1 100%;
+}
+
+.is-mobile .llm-hub-search-selector {
+  max-width: none;
+  flex: 1 1 100%;
+}
+
+.is-mobile .llm-hub-history-item {
+  padding: 12px;
+  min-height: 48px;
+}
+
+.is-mobile .llm-hub-history-delete {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  opacity: 1; /* Always visible on mobile */
+}
+
+.is-mobile .llm-hub-edit-btn {
+  padding: 10px 16px;
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.is-mobile .llm-hub-pending-attachment-remove {
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+}
+
+.is-mobile .llm-hub-copy-btn {
+  opacity: 1; /* Always visible on mobile */
+  padding: 6px;
+}
+
+.llm-hub-preview-btn {
+  margin-left: auto;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+  transition: opacity 0.1s, background 0.1s;
+}
+
+.llm-hub-preview-btn:hover {
+  opacity: 1;
+  background: var(--background-modifier-hover);
+}
+
+/* HTML Preview Actions */
+.llm-hub-html-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+}
+
+.llm-hub-html-indicator {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.llm-hub-html-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.llm-hub-html-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.llm-hub-html-btn:hover {
+  opacity: 0.9;
+}
+
+/* HTML Preview Modal */
+.llm-hub-html-preview-modal {
+  width: 90vw;
+  max-width: 1200px;
+  height: 85vh;
+}
+
+.llm-hub-html-preview-modal .modal-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.llm-hub-html-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.llm-hub-html-preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.llm-hub-html-preview-actions button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.llm-hub-html-preview-container {
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+}
+
+.llm-hub-html-preview-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: white;
+}
+
+/* Configuration Required Message */
+.llm-hub-config-required {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.llm-hub-config-message {
+  max-width: 400px;
+  padding: 20px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  text-align: left;
+}
+
+.llm-hub-config-message h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.llm-hub-config-message p {
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.llm-hub-config-message ul {
+  margin: 12px 0;
+  padding-left: 20px;
+}
+
+.llm-hub-config-message li {
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.llm-hub-config-message strong {
+  color: var(--text-normal);
+}
+
+/* Settings Tab - CLI Warning Box */
+.llm-hub-cli-warning {
+  margin-bottom: 1em;
+  padding: 0.5em;
+  background-color: var(--background-modifier-message);
+  border-radius: 4px;
+  border-left: 3px solid var(--text-warning);
+}
+
+.llm-hub-cli-warning p {
+  margin: 0.5em 0 0 0;
+}
+
+/* Settings Tab - CLI Status */
+.llm-hub-cli-status {
+  margin-bottom: 1em;
+  padding: 0.5em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  background-color: var(--background-modifier-message);
+}
+
+.llm-hub-cli-status--success {
+  background-color: var(--background-modifier-success);
+}
+
+.llm-hub-cli-status--error {
+  background-color: var(--background-modifier-error);
+}
+
+/* Settings Tab - CLI Row Status (inline badge) */
+.llm-hub-cli-row-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2em 0.6em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  margin-right: 0.5em;
+  min-width: 70px;
+  justify-content: center;
+}
+
+.llm-hub-cli-row-status:empty {
+  display: none;
+}
+
+.llm-hub-cli-row-status.llm-hub-cli-status--success {
+  background-color: var(--background-modifier-success);
+  color: var(--text-on-accent);
+}
+
+.llm-hub-cli-row-status.llm-hub-cli-status--error {
+  background-color: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+/* Settings Tab - Model Checklist (API Provider modal) */
+.llm-hub-model-setting {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.llm-hub-model-setting .setting-item-info,
+.llm-hub-model-setting .setting-item-control {
+  width: 100%;
+}
+
+.llm-hub-model-setting .setting-item-control {
+  display: block;
+  margin-top: 8px;
+}
+
+.llm-hub-model-filter {
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.llm-hub-model-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.llm-hub-model-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--font-ui-small);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.llm-hub-model-check-item input[type="checkbox"] {
+  margin: 0;
+}
+
+/* Settings Tab - CLI Introduction */
+.llm-hub-cli-intro {
+  margin-bottom: 1em;
+}
+
+/* CLI Path Modal */
+.llm-hub-cli-path-modal .llm-hub-cli-path-input {
+  width: 100%;
+  min-width: 400px;
+}
+
+.llm-hub-cli-path-note {
+  margin-top: 0.5em;
+  padding: 0.5em;
+  background-color: var(--background-modifier-message);
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: var(--text-muted);
+  white-space: pre-line;
+}
+
+/* HTML Preview Modal */
+.llm-hub-html-preview-header h3 {
+  margin: 0;
+}
+
+/* ===============================================
+   Tab Container Styles
+   =============================================== */
+
+.llm-hub-tab-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.llm-hub-tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.llm-hub-tab {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.llm-hub-tab:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-tab.active {
+  color: var(--interactive-accent);
+  border-bottom-color: var(--interactive-accent);
+}
+
+.llm-hub-tab-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.llm-hub-tab-panel {
+  display: none;
+  height: 100%;
+}
+
+.llm-hub-tab-panel.is-active {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.workflow-node-type {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.workflow-node-type-variable,
+.workflow-node-type-set {
+  background-color: var(--color-blue);
+  color: white;
+}
+
+.workflow-node-type-if,
+.workflow-node-type-while {
+  background-color: var(--color-orange);
+  color: white;
+}
+
+.workflow-node-type-command {
+  background-color: var(--color-purple);
+  color: white;
+}
+
+.workflow-node-type-http,
+.workflow-node-type-json {
+  background-color: var(--color-cyan);
+  color: white;
+}
+
+.workflow-node-type-note,
+.workflow-node-type-note-read,
+.workflow-node-type-note-search,
+.workflow-node-type-note-list,
+.workflow-node-type-folder-list {
+  background-color: var(--color-green);
+  color: white;
+}
+
+.workflow-node-type-prompt-file,
+.workflow-node-type-prompt-selection,
+.workflow-node-type-prompt-value,
+.workflow-node-type-file-explorer {
+  background-color: var(--color-pink);
+  color: white;
+}
+
+.workflow-node-type-open {
+  background-color: var(--color-cyan);
+  color: white;
+}
+
+.workflow-node-type-dialog {
+  background-color: var(--color-yellow);
+  color: black;
+}
+
+.workflow-node-type-workflow {
+  background-color: var(--color-purple);
+  color: white;
+}
+
+.workflow-node-type-rag-sync {
+  background-color: var(--color-red);
+  color: white;
+}
+
+.workflow-incoming-badge {
+  font-size: 11px;
+  font-family: monospace;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+}
+
+.workflow-incoming-true {
+  color: var(--color-green);
+  border-left: 3px solid var(--color-green);
+}
+
+.workflow-incoming-false {
+  color: var(--color-red);
+  border-left: 3px solid var(--color-red);
+}
+
+.workflow-incoming-next {
+  color: var(--text-muted);
+  border-left: 3px solid var(--text-muted);
+}
+
+.workflow-status-completed {
+  background-color: var(--color-green);
+}
+
+.workflow-status-error {
+  background-color: var(--color-red);
+}
+
+.workflow-status-running {
+  background-color: var(--color-orange);
+}
+
+.workflow-status-cancelled {
+  background-color: var(--color-yellow);
+}
+
+.workflow-step-status-success {
+  background-color: var(--color-green);
+  color: white;
+}
+
+.workflow-step-status-error {
+  background-color: var(--color-red);
+  color: white;
+}
+
+.workflow-step-status-skipped {
+  background-color: var(--color-yellow);
+  color: black;
+}
+
+.workflow-btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mobile Styles for Workflow */
+.is-mobile .llm-hub-tab {
+  padding: 12px 16px;
+  font-size: 14px;
+}
+
+/* Utility classes */
+.llm-hub-hidden {
+  display: none;
+}
+
+@media (max-width: 720px), (max-height: 620px) {
+  .llm-hub-edit-confirm-modal {
+    width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .llm-hub-edit-confirm-header,
+  .llm-hub-edit-confirm-actions {
+    padding: 12px;
+  }
+
+  .llm-hub-edit-confirm-preview {
+    padding: 12px;
+  }
+
+  .llm-hub-edit-additional-container {
+    padding: 0 12px 10px;
+  }
+}
+
+/* ===============================================
+   Dialog Prompt Modal Styles
+   =============================================== */
+
+.llm-hub-dialog-modal {
+  min-width: 350px;
+  max-width: 500px;
+}
+
+.llm-hub-dialog-header {
+  margin-bottom: 12px;
+}
+
+.llm-hub-dialog-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.llm-hub-dialog-message {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  color: var(--text-normal);
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.llm-hub-dialog-markdown {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.llm-hub-dialog-markdown * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.llm-hub-dialog-markdown p:first-child {
+  margin-top: 0;
+}
+
+.llm-hub-dialog-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.llm-hub-dialog-markdown pre {
+  background: var(--background-primary);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.llm-hub-dialog-markdown code {
+  background: var(--background-primary);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.llm-hub-dialog-markdown ul,
+.llm-hub-dialog-markdown ol {
+  padding-left: 20px;
+}
+
+/* Dialog HTML iframe container */
+.llm-hub-dialog-html-container {
+  width: 100%;
+  min-height: 300px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: white;
+  margin-bottom: 16px;
+}
+
+.llm-hub-dialog-html-iframe {
+  width: 100%;
+  height: 400px;
+  border: none;
+}
+
+.llm-hub-dialog-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.llm-hub-dialog-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.llm-hub-dialog-option:hover {
+  background: var(--background-secondary-alt);
+}
+
+.llm-hub-dialog-option.selected {
+  background: var(--interactive-accent-hover);
+  border-color: var(--interactive-accent);
+}
+
+.llm-hub-dialog-option input[type="checkbox"],
+.llm-hub-dialog-option input[type="radio"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.llm-hub-dialog-option-label {
+  font-size: 14px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.llm-hub-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.llm-hub-dialog-buttons button {
+  padding: 8px 20px;
+  font-size: 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.llm-hub-dialog-buttons button.mod-cta {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+}
+
+.llm-hub-dialog-buttons button.mod-cta:hover {
+  opacity: 0.9;
+}
+
+.llm-hub-dialog-buttons button:not(.mod-cta) {
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.llm-hub-dialog-buttons button:not(.mod-cta):hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-modal-resizable.modal {
+  width: 80vw;
+  max-width: 1200px;
+  height: 80vh;
+  max-height: 90vh;
+  resize: both;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-workflow-comparison {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-workflow-compare-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-workflow-compare-panel h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.ai-workflow-compare-code {
+  flex: 1;
+  margin: 0;
+  padding: 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  font-size: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.is-mobile .ai-workflow-comparison {
+  flex-direction: column;
+  max-height: 60vh;
+}
+
+.is-mobile .ai-workflow-compare-panel {
+  max-height: 200px;
+}
+
+/* ============================================ */
+/* Edit History Modal Styles                    */
+/* ============================================ */
+
+.llm-hub-edit-history-modal {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+.llm-hub-edit-history-modal .modal-drag-handle {
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+.llm-hub-edit-history-modal h2 {
+  margin: 0;
+}
+
+.llm-hub-edit-history-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 8px;
+}
+
+.llm-hub-edit-history-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.llm-hub-edit-history-current,
+.llm-hub-edit-history-original {
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--background-secondary);
+  font-weight: 500;
+}
+
+.llm-hub-edit-history-marker {
+  color: var(--text-accent);
+  margin-right: 4px;
+}
+
+.llm-hub-edit-history-entry {
+  position: relative;
+  padding-left: 20px;
+}
+
+.llm-hub-edit-history-connector {
+  position: absolute;
+  left: 6px;
+  top: -8px;
+  bottom: -8px;
+  width: 2px;
+  background: var(--background-modifier-border);
+}
+
+.llm-hub-edit-history-entry-content {
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+}
+
+.llm-hub-edit-history-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.llm-hub-edit-history-time {
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.llm-hub-edit-history-source {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.llm-hub-edit-history-stats {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.llm-hub-edit-history-additions {
+  color: var(--color-green);
+}
+
+.llm-hub-edit-history-deletions {
+  color: var(--color-red);
+}
+
+.llm-hub-edit-history-model {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.llm-hub-edit-history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.llm-hub-edit-history-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.llm-hub-edit-history-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-edit-history-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.llm-hub-edit-history-btn-reset {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--text-error);
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-error);
+}
+
+.llm-hub-edit-history-btn-reset:hover {
+  background: var(--text-error);
+  color: var(--text-on-accent);
+}
+
+.llm-hub-edit-history-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.llm-hub-edit-history-origin-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  line-height: 1.4;
+}
+
+.llm-hub-edit-history-origin-local {
+  background: rgba(var(--color-yellow-rgb, 224, 186, 55), 0.15);
+  color: var(--color-yellow);
+}
+
+.llm-hub-edit-history-origin-remote {
+  background: rgba(var(--color-blue-rgb, 72, 138, 199), 0.15);
+  color: var(--color-blue);
+}
+
+.llm-hub-edit-history-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.llm-hub-edit-history-show-remote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-blue);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+}
+
+.llm-hub-edit-history-show-remote-btn:hover {
+  text-decoration: underline;
+}
+
+.llm-hub-edit-history-show-remote-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  text-decoration: none;
+}
+
+.llm-hub-diff-stats {
+  margin-bottom: 12px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.llm-hub-diff-additions {
+  color: var(--color-green);
+  font-weight: 500;
+}
+
+.llm-hub-diff-deletions {
+  color: var(--color-red);
+  font-weight: 500;
+}
+
+.llm-hub-diff-pre {
+  margin: 0;
+  padding: 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.llm-hub-diff-hunk {
+  color: var(--text-accent);
+  background: var(--background-modifier-hover);
+  margin: 8px 0;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.llm-hub-diff-add {
+  background: rgba(0, 200, 83, 0.15);
+  color: var(--color-green);
+}
+
+.llm-hub-diff-remove {
+  background: rgba(255, 100, 100, 0.15);
+  color: var(--color-red);
+}
+
+.llm-hub-diff-context {
+  color: var(--text-muted);
+}
+
+.llm-hub-diff-legend {
+  display: flex;
+  gap: 16px;
+  padding: 4px 8px;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.llm-hub-diff-legend-removed {
+  color: var(--color-red);
+}
+
+.llm-hub-diff-legend-added {
+  color: var(--color-green);
+}
+
+.llm-hub-diff-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.llm-hub-diff-actions .setting-item {
+  border: none;
+  padding: 0;
+}
+
+/* Dark theme adjustments for edit history */
+.theme-dark .llm-hub-diff-add {
+  background: rgba(0, 200, 83, 0.12);
+}
+
+.theme-dark .llm-hub-diff-remove {
+  background: rgba(255, 100, 100, 0.12);
+}
+
+/* Settings subheading */
+.llm-hub-settings-subheading {
+  margin-top: 10px;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+/* Settings collapsible details */
+.llm-hub-settings-summary {
+  cursor: pointer;
+  font-size: var(--h3-size, 1.1em);
+  font-weight: var(--h3-weight, 600);
+  color: var(--h3-color, var(--text-normal));
+  padding: 12px 0 4px;
+  list-style: disclosure-closed;
+}
+
+.llm-hub-settings-details[open] > .llm-hub-settings-summary {
+  list-style: disclosure-open;
+}
+
+.llm-hub-vault-tool-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.llm-hub-vault-tool-item.disabled:hover {
+  background: transparent;
+}
+
+.llm-hub-vault-tool-separator {
+  height: 1px;
+  background: var(--background-modifier-border);
+  margin: 4px 0;
+}
+
+.llm-hub-vault-tool-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.llm-hub-vault-tool-checkbox:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* Tool settings modal (for vault + MCP) */
+.llm-hub-vault-tool-checkbox select {
+  width: 4.5em;
+  margin-left: auto;
+}
+
+/* MCP server list in tool settings modal */
+.llm-hub-mcp-server-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.llm-hub-mcp-server-item.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mobile styles for vault tool */
+.is-mobile .llm-hub-vault-tool-btn {
+  width: 44px;
+  height: 44px;
+}
+
+.is-mobile .llm-hub-vault-tool-item {
+  padding: 12px 16px;
+  font-size: 14px;
+}
+
+/* ===============================================
+   Workflow Path Suggestions (@ autocomplete)
+   =============================================== */
+
+.workflow-path-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  margin-top: 4px;
+}
+
+/* ===============================================
+   Encryption UI Styles
+   =============================================== */
+
+/* Lock icon for encrypted chats */
+.llm-hub-lock-icon {
+  flex-shrink: 0;
+  margin-right: 6px;
+  color: var(--text-muted);
+}
+
+/* Encrypted chat item in history */
+.llm-hub-history-item.encrypted {
+  background: var(--background-secondary-alt);
+}
+
+.llm-hub-history-item.encrypted .llm-hub-history-title {
+  display: flex;
+  align-items: center;
+}
+
+/* Decryption form */
+.llm-hub-decrypt-form {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.llm-hub-decrypt-form input[type="password"] {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.llm-hub-decrypt-form input[type="password"]:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+.llm-hub-decrypt-form button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.llm-hub-decrypt-form button:first-of-type {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+}
+
+.llm-hub-decrypt-form button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-decrypt-form button:first-of-type:hover {
+  opacity: 0.9;
+}
+
+.llm-hub-decrypt-cancel {
+  padding: 6px 10px;
+  min-width: auto;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Preview Area */
+.llm-hub-crypt-preview {
+  height: 100%;
+  padding: 1rem;
+  overflow: auto;
+}
+
+/* Password Input */
+.llm-hub-password-input {
+  width: 100%;
+  margin-bottom: 1em;
+}
+
+.llm-hub-backup-token-input {
+  width: 300px;
+}
+
+.llm-hub-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.is-mobile .llm-hub-crypt-preview {
+  padding: 0.5rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.workflow-selector-dropdown-container {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workflow-selector-dropdown-container.is-hidden {
+  display: none;
+}
+
+.workflow-selector-dropdown-container label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.workflow-selector-dropdown {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  font-size: 13px;
+}
+
+/* Workflow Selector - Mobile layout */
+@media (max-width: 600px) {
+  .workflow-selector-modal-container {
+    width: 100vw;
+    height: 90vh;
+    max-width: 100vw;
+    max-height: 90vh;
+  }
+
+  .workflow-selector-main {
+    flex-direction: column;
+  }
+
+  .workflow-selector-left-pane {
+    width: 100%;
+    height: 150px;
+    flex-shrink: 0;
+  }
+
+  .workflow-selector-right-pane {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .workflow-selector-preview {
+    max-height: none;
+  }
+}
+
+/* Thinking content in the generation modal — bounded height so the buttons
+   below stay visible, and overflow-y:auto so users can scroll through the
+   streamed text. Using explicit px max-height + because flex-based
+   sizing failed to produce a scrollbar in practice. */
+.workflow-generation-modal-content .workflow-generation-thinking-details[open] .gemini-helper-thinking-content {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+/* Outside the generating phase, tighten the cap so plan/review stays visible. */
+.workflow-generation-modal-content:not([data-phase="generating"]) .workflow-generation-thinking-details[open] .gemini-helper-thinking-content {
+  max-height: 25vh;
+}
+
+/* For thinking summary: copy button floats right */
+.gemini-helper-thinking-summary .workflow-generation-copy-btn {
+  float: right;
+}
+
+/* Ensure content is selectable */
+.workflow-generation-plan,
+.workflow-generation-review,
+.gemini-helper-thinking-content,
+.workflow-generation-context-content {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+/* Thinking details in generation modal — card style with custom disclosure triangle */
+.workflow-generation-thinking-details {
+  margin-bottom: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.workflow-generation-thinking-details > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-generation-thinking-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.workflow-generation-thinking-details > summary > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.workflow-generation-thinking-details > summary > span:first-child::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 10px;
+  transition: transform 0.15s ease;
+  width: 10px;
+  text-align: center;
+}
+
+.workflow-generation-thinking-details[open] > summary > span:first-child::before {
+  transform: rotate(90deg);
+}
+
+/* Content visible only when open; bordered to separate from summary */
+.workflow-generation-thinking-details[open] > .gemini-helper-thinking-content {
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 10px;
+}
+
+.workflow-generation-plan-feedback {
+  margin-bottom: 8px;
+}
+
+.workflow-generation-plan-feedback.is-hidden {
+  display: none;
+}
+
+.workflow-generation-thinking-separator {
+  margin: 8px 0;
+  padding: 2px 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Emphasize the status bar while a background pass (e.g., refinement) is running
+   so the user can see that work is still in progress. */
+.workflow-generation-status.workflow-generation-status-active {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+  border-left: 3px solid var(--interactive-accent);
+}
+
+@keyframes workflow-dot-pulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Mobile: Full screen modals */
+.is-mobile .workflow-generation-modal,
+.is-mobile .workflow-preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+  transform: none;
+}
+
+.is-mobile .workflow-generation-thinking-details {
+  flex-shrink: 0;
+}
+
+.is-mobile .workflow-preview-modal-content.textarea-focused .workflow-preview-name {
+  padding: 4px 8px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.is-mobile .workflow-preview-modal-content.textarea-focused .workflow-preview-yaml-section {
+  display: none;
+}
+
+.is-mobile .workflow-preview-modal-content.textarea-focused .workflow-preview-additional {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.is-mobile .workflow-preview-modal-content.textarea-focused .workflow-preview-additional label {
+  flex-shrink: 0;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+/* Workflow Preview - Execution History Row */
+.workflow-preview-execution-history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.workflow-preview-execution-history-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.workflow-preview-execution-history-btn:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.workflow-preview-execution-history-info {
+  font-size: 13px;
+  color: var(--text-accent);
+  font-weight: 500;
+}
+
+.workflow-preview-execution-history-info.is-hidden {
+  display: none;
+}
+
+.execution-history-step-status {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--background-modifier-hover);
+}
+
+.execution-history-step-status.status-success {
+  background: var(--color-green);
+  color: white;
+}
+
+.execution-history-step-status.status-error {
+  background: var(--color-red);
+  color: white;
+}
+
+.execution-history-step-status.status-skipped {
+  background: var(--text-muted);
+  color: white;
+}
+
+.workflow-execution-node {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--background-primary);
+  border: 2px solid var(--background-modifier-border);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.workflow-execution-node-pending {
+  opacity: 0.6;
+}
+
+.workflow-execution-node-running {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+  box-shadow: 0 0 8px rgba(var(--interactive-accent-rgb), 0.3);
+}
+
+.workflow-execution-node-completed {
+  border-color: var(--color-green);
+  opacity: 0.8;
+}
+
+.workflow-execution-node-error {
+  border-color: var(--color-red);
+  background: rgba(var(--color-red-rgb), 0.1);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Clickable nodes */
+.workflow-execution-node.clickable {
+  cursor: pointer;
+}
+
+.workflow-execution-node.clickable:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* MCP test connection status */
+.llm-hub-mcp-test-status {
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.llm-hub-mcp-status--success {
+  color: var(--color-green);
+}
+
+.llm-hub-mcp-status--error {
+  color: var(--color-red);
+}
+
+.llm-hub-mcp-tools-count {
+  font-weight: 500;
+}
+
+.llm-hub-mcp-tools-list {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.llm-hub-mcp-test-required {
+  font-size: 12px;
+  color: var(--text-warning);
+  margin-bottom: 12px;
+}
+
+/* Slash Command Modal - MCP Checkbox Styles */
+.llm-hub-mcp-checkboxes {
+  margin-top: 8px;
+}
+
+.llm-hub-mcp-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.llm-hub-mcp-checkbox-label input[type="checkbox"] {
+  margin: 0;
+}
+
+.llm-hub-mcp-server-checkboxes {
+  margin-left: 20px;
+  border-left: 2px solid var(--background-modifier-border);
+  padding-left: 12px;
+  margin-top: 4px;
+}
+
+/* Edit History - Copy Input */
+.llm-hub-copy-input {
+  width: 100%;
+}
+
+/* MCP Apps */
+.llm-hub-mcp-app {
+  margin-top: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--background-primary);
+}
+
+.llm-hub-mcp-app-expanded {
+  position: fixed;
+  top: 10%;
+  left: 10%;
+  right: 10%;
+  bottom: 10%;
+  z-index: 1000;
+  border: 2px solid var(--interactive-accent);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.llm-hub-mcp-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.llm-hub-mcp-app-indicator {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.llm-hub-mcp-app-expand-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.llm-hub-mcp-app-expand-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.llm-hub-mcp-app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.llm-hub-mcp-app-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--background-modifier-border);
+  border-top-color: var(--interactive-accent);
+  border-radius: 50%;
+  animation: llm-hub-spin 0.8s linear infinite;
+}
+
+@keyframes llm-hub-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.llm-hub-spinner {
+  animation: llm-hub-spin 0.8s linear infinite;
+}
+
+.llm-hub-mcp-app-error {
+  padding: 12px;
+  color: var(--text-error);
+  background: var(--background-modifier-error);
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+/* MCP App Modal - uses llm-hub-modal-resizable for drag/resize */
+.llm-hub-mcp-app-modal-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.llm-hub-mcp-app-modal-buttons {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.llm-hub-mcp-app-iframe {
+  flex: 1;
+  width: 100%;
+  height: 400px;
+  min-height: 200px;
+  border: none;
+  border-radius: 4px;
+  background: var(--background-primary);
+}
+
+.llm-hub-mcp-app-iframe-expanded {
+  height: 80vh;
+}
+
+/* RAG Files Modal */
+.llm-hub-rag-files-modal {
+  max-width: 600px;
+}
+
+.llm-hub-rag-files-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.llm-hub-rag-files-search {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 14px;
+}
+
+.llm-hub-rag-files-filter-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.llm-hub-rag-files-filter-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.llm-hub-rag-files-filter-btn.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.llm-hub-rag-files-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.llm-hub-rag-files-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  gap: 8px;
+}
+
+.llm-hub-rag-files-item:last-child {
+  border-bottom: none;
+}
+
+.llm-hub-rag-files-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.llm-hub-rag-files-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.llm-hub-rag-files-item-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.llm-hub-rag-files-status {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.llm-hub-rag-files-status--registered {
+  background: rgba(0, 200, 83, 0.15);
+  color: var(--text-success, #00c853);
+}
+
+.llm-hub-rag-files-status--pending {
+  background: rgba(255, 171, 0, 0.15);
+  color: var(--text-warning, #ffab00);
+}
+
+.llm-hub-rag-files-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.llm-hub-rag-files-count {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* ===== Search Panel ===== */
+
+.llm-hub-search-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.llm-hub-search-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.llm-hub-search-empty-state p {
+  margin: 4px 0;
+}
+
+.llm-hub-search-empty-guide {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.llm-hub-search-input-area {
+  padding: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.llm-hub-search-rag-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.llm-hub-search-rag-selector .llm-hub-rag-select {
+  flex: 1;
+  max-width: none;
+}
+
+/* Text button (sync / config toggle) */
+.llm-hub-rag-text-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: color 0.1s, background 0.1s;
+}
+
+.llm-hub-rag-text-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-rag-text-btn.syncing {
+  color: var(--text-error);
+  border-color: var(--text-error);
+}
+
+.llm-hub-rag-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+}
+
+.llm-hub-rag-icon-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-rag-text-btn.syncing:hover {
+  opacity: 0.9;
+}
+
+/* Sync progress bar */
+.llm-hub-rag-sync-progress-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.llm-hub-rag-sync-progress-bar progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.llm-hub-rag-sync-progress-text {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* RAG config section (collapsible) */
+.llm-hub-rag-config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: var(--background-primary-alt);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+}
+
+.llm-hub-rag-config-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.llm-hub-rag-config-row > label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.llm-hub-rag-config-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--interactive-accent);
+}
+
+.llm-hub-rag-config-input {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.llm-hub-rag-config-textarea {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  resize: vertical;
+  font-family: var(--font-monospace);
+}
+
+.llm-hub-rag-last-sync {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Scroll + grid */
+.llm-hub-db-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  position: relative;
+}
+.is-mobile .llm-hub-db-scroll {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 96px);
+}
+
+.llm-hub-rag-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.llm-hub-db-grid.is-maximized {
+  display: block;
+  height: 100%;
+}
+
+/* Indexed files accordion */
+.llm-hub-rag-indexed-files-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+
+.llm-hub-rag-indexed-files-toggle:hover {
+  color: var(--text-normal);
+}
+
+.llm-hub-rag-indexed-files-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+}
+
+.llm-hub-rag-indexed-files-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.llm-hub-rag-indexed-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.llm-hub-rag-indexed-file-item:last-child {
+  border-bottom: none;
+}
+
+.llm-hub-rag-indexed-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-accent);
+  cursor: pointer;
+}
+
+.llm-hub-rag-indexed-file-path:hover {
+  text-decoration: underline;
+}
+
+.llm-hub-rag-indexed-file-chunks {
+  flex-shrink: 0;
+  margin-left: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.llm-hub-search-params {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.llm-hub-search-param-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.llm-hub-search-param-input {
+  width: 55px;
+  font-size: 12px;
+  padding: 2px 4px;
+  text-align: center;
+}
+.llm-hub-search-param-input[type="text"] {
+  width: 80px;
+  text-align: left;
+}
+
+.llm-hub-search-query-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.llm-hub-search-query-input {
+  flex: 1;
+  resize: none;
+  font-size: 13px;
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: inherit;
+}
+
+.llm-hub-search-query-input:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+.llm-hub-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.llm-hub-search-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.llm-hub-search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.llm-hub-search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.llm-hub-search-no-results {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+  font-size: 13px;
+}
+
+.llm-hub-search-results-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 8px;
+}
+
+.llm-hub-search-keyword-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.llm-hub-search-keyword-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.llm-hub-search-keyword-filter {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 13px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.llm-hub-search-keyword-ai-btn,
+.llm-hub-search-keyword-undo-btn,
+.llm-hub-search-keyword-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.llm-hub-search-keyword-ai-btn:hover:not(:disabled),
+.llm-hub-search-keyword-undo-btn:hover,
+.llm-hub-search-keyword-remove-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.llm-hub-search-keyword-ai-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.llm-hub-search-keyword-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.llm-hub-search-keyword-add-btn:hover {
+  color: var(--text-normal);
+  border-color: var(--text-muted);
+}
+
+.llm-hub-search-results-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.llm-hub-search-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.llm-hub-search-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.llm-hub-search-chat-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.llm-hub-search-chat-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.llm-hub-search-result-item {
+  padding: 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.llm-hub-search-result-item:hover {
+  background: var(--background-secondary);
+}
+
+.llm-hub-search-result-item.selected {
+  border-color: var(--interactive-accent);
+  background: var(--background-secondary);
+}
+
+.llm-hub-search-result-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.llm-hub-search-result-page-label {
+  width: 100%;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: -2px;
+  padding-left: 20px;
+}
+
+.llm-hub-search-result-path {
+  flex: 1;
+  color: var(--text-accent);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.llm-hub-search-result-path:hover {
+  text-decoration: underline;
+}
+
+.llm-hub-search-result-score {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.llm-hub-search-result-item.edited {
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.llm-hub-search-result-edited-badge {
+  font-size: 10px;
+  color: var(--interactive-accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.llm-hub-search-pdf-mode {
+  font-size: 10px;
+  padding: 1px 2px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.llm-hub-search-media-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  min-height: 60px;
+}
+
+.llm-hub-search-pdf-iframe {
+  width: 100%;
+  height: 300px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.llm-hub-search-image-preview {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.llm-hub-search-audio-preview {
+  width: 100%;
+}
+
+.llm-hub-search-video-preview {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 4px;
+}
+
+.llm-hub-search-result-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  max-height: 80px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: pointer;
+}
+
+.llm-hub-search-result-preview.expanded {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.llm-hub-search-result-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.llm-hub-search-result-toggle:hover {
+  color: var(--text-normal);
+}
+
+.llm-hub-chevron-rotated {
+  transform: rotate(180deg);
+}
+
+.llm-hub-search-result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.llm-hub-search-result-edit-btn {
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.llm-hub-search-result-edit-btn:hover {
+  color: var(--interactive-accent);
+}
+
+.llm-hub-search-selected-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ===== RAG Text Modal ===== */
+
+.llm-hub-rag-text-modal.modal {
+  width: 70vw;
+  max-width: 800px;
+  height: 70vh;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.llm-hub-rag-text-modal .modal-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.llm-hub-rag-text-modal-header {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 8px;
+}
+
+.llm-hub-rag-text-modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.llm-hub-rag-text-modal-path {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.llm-hub-rag-text-modal-textarea {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 0;
+}
+
+/* ===== RAG Chunk Edit Modal ===== */
+
+.llm-hub-rag-chunk-edit-modal.modal {
+  width: 70vw;
+  max-width: 800px;
+  height: 70vh;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.llm-hub-rag-chunk-edit-modal .modal-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.llm-hub-rag-chunk-edit-header {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 8px;
+}
+
+.llm-hub-rag-chunk-edit-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-normal);
+}
+
+.llm-hub-rag-chunk-nav {
+  flex-shrink: 0;
+  text-align: center;
+  min-height: 20px;
+}
+
+.llm-hub-rag-chunk-link {
+  font-size: 12px;
+  color: var(--interactive-accent);
+  cursor: pointer;
+  user-select: none;
+}
+
+.llm-hub-rag-chunk-link:hover {
+  text-decoration: underline;
+}
+
+.llm-hub-rag-chunk-edit-textarea {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: var(--font-monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 0;
+}
+
+/* Hide thinking details until content arrives (models with no reasoning output). */
+.workflow-generation-thinking-details.is-hidden {
+  display: none;
+}
+
+/* Indent sub-rows nested under a Local LLM entry (e.g. "Tools auto-disabled"). */
+.llm-hub-sub-setting {
+  padding-left: 32px;
+  border-top: none;
+  opacity: 0.85;
+}
+
+/* CLI terminal view */
+.llm-hub-cli-terminal-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 8px;
+}
+
+.llm-hub-cli-terminal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.llm-hub-cli-terminal-status {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.llm-hub-cli-terminal-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.llm-hub-cli-terminal-model-select {
+  max-width: 240px;
+  min-width: 160px;
+}
+
+.llm-hub-cli-terminal-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #000000;
+  padding: 8px;
+  color: #f2f2f2;
+}
+
+.llm-hub-cli-terminal-host .xterm {
+  height: 100%;
+  width: 100%;
+}
+
+.llm-hub-cli-terminal-host .xterm-viewport {
+  background-color: #000000;
+}
+
+.llm-hub-cli-terminal-host .xterm-screen {
+  user-select: text;
+}
+
+.llm-hub-cli-terminal-fallback {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Keep the shared hidden state authoritative over component layout rules. */
+body .llm-hub-hidden.llm-hub-hidden {
+  display: none;
+}
+
+.llm-hub-mcp-approval-args {
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* @chat-ui-styles */

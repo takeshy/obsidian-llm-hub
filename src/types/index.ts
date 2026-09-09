@@ -1,3 +1,11 @@
+import type { McpServerConfig } from "obsidian-llm-hub-common/core";
+import { DEFAULT_VOICE_CHAT_SETTINGS, type VoiceChatSettings } from "obsidian-llm-hub-common/core";
+export type { McpServerConfig, McpTransport, McpFraming } from "obsidian-llm-hub-common/core";
+
+export type { Message, ToolCall, ToolResult, Attachment, PendingEditInfo, PendingDeleteInfo, PendingRenameInfo, WebSearchSource, GeneratedImage, ProviderContinuation } from "obsidian-llm-hub-common/chat";
+import type { WorkflowEventTrigger } from "obsidian-llm-hub-common/workflow";
+
+export type { ObsidianEventType, WorkflowEventTrigger } from "obsidian-llm-hub-common/workflow";
 import type { Content } from "@google/genai";
 
 /**
@@ -8,8 +16,6 @@ import type { Content } from "@google/genai";
 export type CredentialStorageMode = "plaintext" | "secretStorage";
 
 // MCP transport types
-export type McpTransport = "http" | "stdio";
-export type McpFraming = "content-length" | "newline";
 
 export interface AgentPluginInstall {
   name: string;
@@ -24,27 +30,6 @@ export interface AgentPluginInstall {
 }
 
 // MCP (Model Context Protocol) server configuration
-export interface McpServerConfig {
-  name: string;           // Server display name
-  transport: McpTransport; // "http" (Streamable HTTP) or "stdio" (local process)
-  // HTTP transport fields
-  url: string;            // Streamable HTTP endpoint URL (used for HTTP transport)
-  headers?: Record<string, string>;  // Optional headers for authentication (HTTP only)
-  // Stdio transport fields (desktop only)
-  command?: string;        // Executable command (e.g., "npx", "uvx", "/path/to/server")
-  args?: string[];         // Command arguments (e.g., ["-y", "@mcp/server"])
-  env?: Record<string, string>;  // Environment variables for the child process
-  framing?: McpFraming;    // Framing protocol: "newline" (standard/default) or legacy "content-length"
-  cwd?: string;
-  pluginRoot?: string;
-  pluginData?: string;
-  agentPlugin?: { pluginName: string; serverName: string };
-  // Common
-  enabled: boolean;       // Whether this server is enabled for chat
-  autoApprove?: boolean; // Skip approval for all tools on this server
-  allowedTools?: string[]; // Exact MCP tool names approved by the user
-  toolHints?: string[];   // Tool names from test connection (for display hints)
-}
 
 // MCP tool information (from server)
 export interface McpToolInfo {
@@ -106,35 +91,20 @@ export interface McpAppUiResource {
   };
 }
 
-// Obsidian event types for workflow triggers
-export type ObsidianEventType =
-  | "startup"   // workspace.onLayoutReady() - Workspace ready after startup
-  | "create"    // vault.on("create") - New file created
-  | "modify"    // vault.on("modify") - File modified/saved
-  | "delete"    // vault.on("delete") - File deleted
-  | "rename"    // vault.on("rename") - File renamed
-  | "file-open"; // workspace.on("file-open") - File opened
 
-// Event trigger configuration for workflows
-export interface WorkflowEventTrigger {
-  workflowId: string;        // Vault path to the workflow file (e.g., "folder/file.md"). Each file holds exactly one workflow.
-  events: ObsidianEventType[]; // Which events trigger this workflow
-  filePattern?: string;       // Optional glob pattern to filter files (e.g., "*.md", "folder/**")
-}
-
-// Vault tool mode type
-export type VaultToolMode = "all" | "noSearch" | "readOnly" | "none";
+// Vault tool mode type (shared: the built-in Vault tool policy lives in the library)
+import type { VaultToolMode } from "obsidian-llm-hub-common/core";
+export type { VaultToolMode };
 
 // Reason why vault tools are set to "none"
 // "manual" = user manually turned off (MCP servers remain unchanged)
 // "cli" = CLI mode (MCP servers also disabled)
 export type VaultToolNoneReason = "manual" | "cli";
 
-/** Independent search preferences used by Chat, slash commands, and Discord. */
-export interface SearchSelection {
-  webSearch: boolean;
-  ragSetting: string | null;
-}
+// Independent search preferences used by Chat, slash commands and Discord. The
+// shared search selector reports this shape, so it is defined once in the library.
+import type { SearchSelection } from "obsidian-llm-hub-common/core";
+export type { SearchSelection };
 
 // Slash command definition
 export interface SlashCommand {
@@ -185,6 +155,7 @@ export interface LlmHubSettings {
   maxSavedChatHistories: number;
   manualChatSaveFolder: string;
   systemPrompt: string;
+  voiceChat: VoiceChatSettings;
 
   // Slash commands
   slashCommands: SlashCommand[];
@@ -509,7 +480,6 @@ export interface CliProviderConfig {
   codexCliReasoningEffort?: CodexReasoningEffort; // Reasoning effort override for Codex CLI
 }
 
-export type ReasoningEffort = "default" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type CodexReasoningEffort = Exclude<ReasoningEffort, "default" | "none">;
 
 export const DEFAULT_CLI_CONFIG: CliProviderConfig = {
@@ -736,10 +706,6 @@ export function isImageGenerationModel(modelName: string): boolean {
 
 // Chat message types
 // Generated image from Gemini
-export interface GeneratedImage {
-  mimeType: string;
-  data: string;  // Base64 encoded image data
-}
 
 // MCP App info for rendering in messages
 export interface McpAppInfo {
@@ -750,77 +716,16 @@ export interface McpAppInfo {
   uiResource?: McpAppUiResource | null;
 }
 
-export interface Message {
-  role: "user" | "assistant";
-  content: string;
-  llmContent?: string;          // full content sent to the LLM (hidden from UI)
-  timestamp: number;
-  model?: ModelType;  // モデル名（assistantの場合のみ）
-  modelDisplayName?: string; // Exact runtime model configuration shown in chat/history
-  toolsUsed?: string[];  // 使用したツール名の配列
-  attachments?: Attachment[];  // 添付ファイル
-  pendingEdit?: PendingEditInfo;  // 保留中の編集情報
-  pendingEdits?: PendingEditInfo[];  // 複数の編集結果
-  pendingDelete?: PendingDeleteInfo;  // 保留中の削除情報
-  pendingDeletes?: PendingDeleteInfo[];  // 複数の削除結果
-  pendingRename?: PendingRenameInfo;  // 保留中のリネーム情報
-  pendingRenames?: PendingRenameInfo[];  // 複数のリネーム結果
-  toolCalls?: ToolCall[];
-  toolResults?: ToolResult[];
-  ragUsed?: boolean;  // RAG（File Search）が使用されたか
-  ragSources?: string[];  // RAG検索で見つかったソースファイル
-  webSearchUsed?: boolean;  // Web Searchが使用されたか
-  webSearchSources?: WebSearchSource[];  // Cited web sources in display order
-  providerContinuation?: ProviderContinuation;  // Opaque native context for stateless replay
-  imageGenerationUsed?: boolean;  // Image Generationが使用されたか
-  generatedImages?: GeneratedImage[];  // 生成された画像
-  thinking?: string;  // モデルの思考内容（thinkingモデル用）
-  skillsUsed?: string[];  // Names of active skills used
-  mcpApps?: McpAppInfo[];  // MCP Apps with UI (MCP Apps拡張)
-  usage?: StreamChunkUsage;  // Token usage and cost
-  elapsedMs?: number;        // Response time in milliseconds
-  interactionId?: string;    // Interactions API interaction ID for conversation chaining
-}
 
 // 保留中の編集情報
-export interface PendingEditInfo {
-  originalPath: string;
-  status: "pending" | "applied" | "discarded" | "failed";
-}
 
 // 保留中の削除情報
-export interface PendingDeleteInfo {
-  path: string;
-  status: "pending" | "deleted" | "cancelled" | "failed";
-}
 
 // 保留中のリネーム情報
-export interface PendingRenameInfo {
-  originalPath: string;
-  newPath: string;
-  status: "pending" | "applied" | "discarded" | "failed";
-}
 
 // 添付ファイル
-export interface Attachment {
-  name: string;
-  type: "image" | "pdf" | "text" | "audio" | "video";
-  mimeType: string;
-  data: string;  // Base64エンコードされたデータ
-  sourcePath?: string;  // RAG検索結果のソースファイルパス
-  pageLabel?: string;  // PDFページ範囲（例: "pages 1-6 of 24"）
-}
 
-export interface ToolCall {
-  id: string;
-  name: string;
-  args: Record<string, unknown>;
-}
 
-export interface ToolResult {
-  toolCallId: string;
-  result: unknown;
-}
 
 // Conversation history for Gemini API
 export interface ConversationHistory {
@@ -828,80 +733,19 @@ export interface ConversationHistory {
 }
 
 // Tool definition for Function Calling
-export interface ToolPropertyDefinition {
-  type: string;
-  description: string;
-  enum?: string[];
-  properties?: Record<string, ToolPropertyDefinition>;
-  required?: string[];
-  items?: ToolPropertyDefinition | {
-    type: string;
-    properties?: Record<string, ToolPropertyDefinition>;
-    required?: string[];
-  };
-}
 
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  parameters: {
-    type: "object";
-    properties: Record<string, ToolPropertyDefinition>;
-    required?: string[];
-  };
-}
 
 // Usage info for streaming chunks and messages
-export interface StreamChunkUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  thinkingTokens?: number;
-  totalTokens?: number;
-  totalCost?: number;       // USD
-  webSearchRequests?: number;
-}
 
-export interface WebSearchSource {
-  title: string;
-  url: string;
-}
 
-export interface WebSearchCitation extends WebSearchSource {
-  /** Character offsets in the streamed plain-text response. */
-  startIndex: number;
-  endIndex: number;
-}
 
 /**
  * Provider-native response items that must be replayed verbatim for search,
  * reasoning, and server/client-tool continuity. Kept opaque so shared types do
  * not depend on either provider SDK.
  */
-export interface ProviderContinuation {
-  provider: "openai" | "anthropic" | "xai";
-  baseUrl: string;
-  model: string;
-  items: unknown[];
-  /** Responses API response ID used for provider-native multi-turn chaining. */
-  responseId?: string;
-}
 
 // Streaming chunk types
-export interface StreamChunk {
-  type: "text" | "thinking" | "tool_call" | "tool_result" | "error" | "done" | "rag_used" | "web_search_used" | "image_generated" | "session_id";
-  content?: string;
-  toolCall?: ToolCall;
-  toolResult?: ToolResult;
-  error?: string;
-  ragSources?: string[];  // RAG検索で見つかったソースファイル
-  generatedImage?: GeneratedImage;  // 生成された画像
-  sessionId?: string;  // CLI session ID for resumption
-  usage?: StreamChunkUsage;  // Token usage and cost (populated on "done" chunks)
-  interactionId?: string;  // Interactions API interaction ID (populated on "done" chunks)
-  webSearchSources?: WebSearchSource[];
-  webSearchCitations?: WebSearchCitation[];
-  providerContinuation?: ProviderContinuation;
-}
 
 // Get default model: first enabled+verified API provider (first enabled model), or first verified CLI
 export function getDefaultModel(settings: LlmHubSettings): ModelType {
@@ -956,6 +800,7 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   maxSavedChatHistories: 100,
   manualChatSaveFolder: "",
   systemPrompt: "",
+  voiceChat: { ...DEFAULT_VOICE_CHAT_SETTINGS },
   slashCommands: DEFAULT_SLASH_COMMANDS,
   knowledgeSources: [],
   enabledWorkflowHotkeys: [],
@@ -982,3 +827,16 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   // Discord
   discord: DEFAULT_DISCORD_SETTINGS,
 };
+
+// These provider-facing shapes live in the shared library so every plugin describes tools
+// and streams responses the same way.
+import type { ReasoningEffort } from "obsidian-llm-hub-common/core";
+
+export type {
+  ToolDefinition,
+  ToolPropertyDefinition,
+  StreamChunk,
+  StreamChunkUsage,
+  ReasoningEffort,
+  WebSearchCitation,
+} from "obsidian-llm-hub-common/core";

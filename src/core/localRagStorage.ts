@@ -1,4 +1,5 @@
 import type { App } from "obsidian";
+import { sanitizeRagSettingName as sanitizeSettingName } from "obsidian-llm-hub-common/core";
 
 const INDEX_FILENAME = "index.json";
 const VECTORS_FILENAME = "vectors.bin";
@@ -111,6 +112,45 @@ export async function saveRagVectors(app: App, settingName: string, vectors: Flo
   );
 }
 
+/**
+ * Move a setting's index to the directory its new name owns. Without this a
+ * rename leaves the index behind under the old directory and the setting starts
+ * from an empty index, re-embedding the whole vault.
+ */
+export async function renameRagIndex(
+  app: App,
+  oldSettingName: string,
+  newSettingName: string,
+  workspaceFolder: string,
+): Promise<void> {
+  const oldDir = getSettingDir(workspaceFolder, oldSettingName);
+  const oldIndex = getIndexPath(workspaceFolder, oldSettingName);
+  const oldVectors = getVectorsPath(workspaceFolder, oldSettingName);
+
+  try {
+    if (!(await app.vault.adapter.exists(oldIndex))) return;
+    await ensureDir(app, workspaceFolder, getSettingDir(workspaceFolder, newSettingName));
+
+    await app.vault.adapter.write(
+      getIndexPath(workspaceFolder, newSettingName),
+      await app.vault.adapter.read(oldIndex),
+    );
+    if (await app.vault.adapter.exists(oldVectors)) {
+      await app.vault.adapter.writeBinary(
+        getVectorsPath(workspaceFolder, newSettingName),
+        await app.vault.adapter.readBinary(oldVectors),
+      );
+    }
+
+    await app.vault.adapter.remove(oldIndex);
+    if (await app.vault.adapter.exists(oldVectors)) await app.vault.adapter.remove(oldVectors);
+    if (await app.vault.adapter.exists(oldDir)) await app.vault.adapter.rmdir(oldDir, true);
+  } catch {
+    // Best effort: a failed move leaves the old index in place and the new
+    // setting simply rebuilds, which is what happened before this existed.
+  }
+}
+
 export async function deleteRagIndex(app: App, settingName: string, workspaceFolder: string): Promise<void> {
   const dirPath = getSettingDir(workspaceFolder, settingName);
   const indexPath = getIndexPath(workspaceFolder, settingName);
@@ -165,10 +205,6 @@ export function normalizeExternalRagIndex(raw: unknown): LocalRagIndex {
     pdfChunkPages: Number(index?.pdfChunkPages ?? index?.pdf_chunk_pages ?? 6),
     indexMultimodal: Boolean(index?.indexMultimodal ?? index?.index_multimodal ?? false),
   };
-}
-
-function sanitizeSettingName(settingName: string): string {
-  return settingName.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
 /**

@@ -1,15 +1,18 @@
+import type { CommandNodeResult } from "obsidian-llm-hub-common/workflow";
+import { attachmentsFromVariables, buildRegenerationPrompt } from "obsidian-llm-hub-common/workflow";
 import { App } from "obsidian";
 import type { LlmHubPlugin } from "../../plugin";
 import { GeminiClient, getGeminiClient } from "../../core/gemini";
 import { PersistentCliSession } from "../../core/cliProvider";
 import { isImageGenerationModel, isApiProviderModel, getApiProviderId, getApiProviderModelName, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, normalizeDeprecatedModelIdentifier, type ToolDefinition, type McpAppInfo, type StreamChunkUsage } from "../../types";
-import { isVaultToolAllowed, getEnabledTools } from "../../core/tools";
+import { filterVaultToolsForMode, getEnabledVaultTools, type VaultToolMode } from "obsidian-llm-hub-common/core";
+import { HOST_EXECUTES_RAG_SYNC_STATUS } from "../../vault/toolExecutor";
 import { fetchMcpTools, createMcpToolExecutor, type McpToolDefinition } from "../../core/mcpTools";
 import { createToolExecutor } from "../../vault/toolExecutor";
 import { WorkflowNode, ExecutionContext, PromptCallbacks, FileExplorerData } from "../types";
 import { replaceVariables, setSystemVariable } from "./utils";
 import { tracing } from "../../core/tracingHooks";
-import { formatError } from "../../utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "../../core/sandboxExecutor";
 import { searchLocalRag, loadRagMediaAttachments } from "../../core/localRagStore";
 import { openaiChatWithToolsStream } from "../../core/openaiProvider";
@@ -125,12 +128,6 @@ function wrapToolExecutorWithAutoApply(
 }
 
 // Result type for command node execution
-export interface CommandNodeResult {
-  mcpAppInfo?: McpAppInfo;
-  usedModel: string;
-  usage?: StreamChunkUsage;
-  elapsedMs?: number;
-}
 
 // Handle command node - execute LLM with prompt directly
 export async function handleCommandNode(
@@ -156,15 +153,7 @@ export async function handleCommandNode(
   // Check if this is a regeneration request for this node
   if (context.regenerateInfo?.commandNodeId === node.id) {
     const info = context.regenerateInfo;
-    prompt = `${info.originalPrompt}
-
-[Previous output]
-${info.previousOutput}
-
-[User feedback]
-${info.additionalRequest}
-
-Please revise the output based on the user's feedback above.`;
+    prompt = buildRegenerationPrompt(info);
     // Clear regenerate info after using it
     context.regenerateInfo = undefined;
   }
@@ -400,25 +389,18 @@ Please revise the output based on the user's feedback above.`;
       }
 
       // Build tools
-      const apiVaultToolMode = (node.properties["vaultTools"] || "all") as "all" | "noSearch" | "readOnly" | "none";
-      let apiTools: ToolDefinition[] = [];
-      const searchToolNames = ["search_notes", "list_notes"];
-
-      if (apiVaultToolMode !== "none") {
-        const vaultTools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled: false });
-        apiTools = vaultTools.filter(tool => {
-          if (apiVaultToolMode === "readOnly") return isVaultToolAllowed(tool.name, apiVaultToolMode);
-          if (apiVaultToolMode === "noSearch") return !searchToolNames.includes(tool.name);
-          return true;
-        });
-      }
+      const apiVaultToolMode = (node.properties["vaultTools"] || "all") as VaultToolMode;
+      let apiTools: ToolDefinition[] = filterVaultToolsForMode(
+        getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
+        apiVaultToolMode,
+      );
       apiTools.push(EXECUTE_JAVASCRIPT_TOOL);
 
       const obsidianToolExecutor = createToolExecutor(app, {
         listNotesLimit: plugin.settings.listNotesLimit,
         maxNoteChars: plugin.settings.maxNoteChars,
         limitVaultToolScope: true,
-        cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+        vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
       });
 
       // Fetch MCP tools
@@ -584,43 +566,8 @@ Please revise the output based on the user's feedback above.`;
   }
   client.setModel(model);
 
-  // Parse attachments property (comma-separated variable names containing FileExplorerData)
-  const attachmentsStr = node.properties["attachments"] || "";
-  const attachments: import("../../types").Attachment[] = [];
-
-  if (attachmentsStr) {
-    const varNames = attachmentsStr.split(",").map((s) => s.trim()).filter((s) => s);
-    for (const varName of varNames) {
-      const varValue = context.variables.get(varName);
-      if (varValue && typeof varValue === "string") {
-        try {
-          const fileData = JSON.parse(varValue) as FileExplorerData;
-          if (fileData.contentType === "binary" && fileData.data) {
-            // Determine attachment type from MIME type
-            let attachmentType: "image" | "pdf" | "text" | "audio" | "video" = "text";
-            if (fileData.mimeType.startsWith("image/")) {
-              attachmentType = "image";
-            } else if (fileData.mimeType === "application/pdf") {
-              attachmentType = "pdf";
-            } else if (fileData.mimeType.startsWith("audio/")) {
-              attachmentType = "audio";
-            } else if (fileData.mimeType.startsWith("video/")) {
-              attachmentType = "video";
-            }
-            attachments.push({
-              name: fileData.basename,
-              type: attachmentType,
-              mimeType: fileData.mimeType,
-              data: fileData.data,
-            });
-          }
-          // Text files are already included via variable substitution in the prompt
-        } catch {
-          // Not valid FileExplorerData JSON, skip
-        }
-      }
-    }
-  }
+  // Attachments named by the node's property; text files are already in the prompt.
+  const attachments = attachmentsFromVariables(node.properties["attachments"], context.variables);
 
   // Build messages
   const allAttachments = [...attachments, ...localRagMediaAttachments];
@@ -651,31 +598,17 @@ Please revise the output based on the user's feedback above.`;
   const isImageModel = isImageGenerationModel(model);
 
   if (!isImageModel && vaultToolMode !== "none") {
-    // Get vault tools based on RAG setting
-    const allowRag = ragSettingName !== "__websearch__" && ragSettingName !== "__none__" && ragSettingName !== "";
-    const vaultTools = getEnabledTools({
-      allowWrite: true,
-      allowDelete: true,
-      ragEnabled: allowRag,
-    });
-
-    // Filter vault tools based on mode
-    const searchToolNames = ["search_notes", "list_notes"];
-
-    tools = vaultTools.filter(tool => {
-      if (vaultToolMode === "readOnly") return isVaultToolAllowed(tool.name, vaultToolMode);
-      if (vaultToolMode === "noSearch") {
-        return !searchToolNames.includes(tool.name);
-      }
-      return true; // "all" mode - keep all vault tools
-    });
+    tools = filterVaultToolsForMode(
+      getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
+      vaultToolMode,
+    );
 
     // Create vault tool executor
     const obsidianToolExecutor = createToolExecutor(app, {
       listNotesLimit: plugin.settings.listNotesLimit,
       maxNoteChars: plugin.settings.maxNoteChars,
       limitVaultToolScope: shouldLimitLlmVaultTools,
-      cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+      vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
     });
 
     // Fetch MCP tools from specified servers

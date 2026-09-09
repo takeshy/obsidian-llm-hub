@@ -3,24 +3,17 @@ import { GoogleGenAI, type Part } from "@google/genai";
 import type { RagContentType } from "./localRagStorage";
 import { createProxyFetch } from "./proxyFetch";
 import { patchGeminiProxy } from "./gemini";
+import {
+  authHeaders,
+  fetchEmbeddingModels as fetchEmbeddingModelsShared,
+  isEmbeddingModelName,
+  normalizeServerBaseUrl,
+  parseOpenAiModels,
+} from "obsidian-llm-hub-common/core";
 
 const EMBEDDING_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/embeddings";
 const GEMINI_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/openai/models";
 const BATCH_SIZE = 32;
-
-interface OpenAiModel {
-  id: string;
-  object?: string;
-}
-
-interface OpenAiModelsResponse {
-  data: OpenAiModel[];
-}
-
-const EMBEDDING_NAME_PATTERN = /embed|bge-|e5-|gte-|arctic-embed/i;
-
-/** Ollama model family names that are embedding-only */
-const EMBEDDING_FAMILIES = new Set(["nomic-bert", "bert", "snowflake-arctic-embed"]);
 
 /** Supported multimodal extensions for embedding */
 export const MULTIMODAL_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf", "mp3", "wav", "mp4", "mpeg"]);
@@ -69,11 +62,6 @@ export function extensionToContentType(ext: string): RagContentType {
 }
 
 /**
- * Fetch available embedding models from the server.
- * - When baseUrl is empty: fetches from Gemini API and filters for embedding models.
- * - When baseUrl is set: tries Ollama /api/tags first, then falls back to OpenAI-compatible /v1/models.
- */
-/**
  * Fetch a URL, routing through the proxy when configured.
  * Falls back to Obsidian's requestUrl when no proxy is set.
  */
@@ -88,70 +76,24 @@ async function proxyAwareGet(url: string, headers: Record<string, string>, proxy
   return { json: resp.json };
 }
 
+/**
+ * The embedding models available: Gemini's own listing when no server is
+ * configured, and otherwise whatever that server offers.
+ */
 export async function fetchEmbeddingModels(
   apiKey: string,
   baseUrl?: string,
   proxyUrl?: string,
   proxyBypass?: string,
 ): Promise<string[]> {
+  const get = (url: string, headers: Record<string, string>) =>
+    proxyAwareGet(url, headers, proxyUrl, proxyBypass).then(response => response.json);
+
   if (!baseUrl) {
-    // Gemini API: fetch all models and filter by name
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-    const { json } = await proxyAwareGet(GEMINI_MODELS_URL, headers, proxyUrl, proxyBypass);
-    const data = json as OpenAiModelsResponse;
-    return (data.data || []).map(m => m.id).filter(name => EMBEDDING_NAME_PATTERN.test(name));
+    // Gemini lists every model it has, embedding or not.
+    return parseOpenAiModels(await get(GEMINI_MODELS_URL, authHeaders(apiKey))).filter(isEmbeddingModelName);
   }
-
-  const normalizedBase = normalizeBaseUrl(baseUrl);
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-
-  // Try Ollama /api/tags first (has family info for precise embedding model filtering)
-  try {
-    const { json } = await proxyAwareGet(`${normalizedBase}/api/tags`, {}, proxyUrl, proxyBypass);
-    const ollamaData = json as {
-      models?: { name: string; details?: { families?: string[] } }[];
-    };
-    if (ollamaData.models) {
-      return ollamaData.models
-        .filter(m => isOllamaEmbeddingModel(m.details?.families) || EMBEDDING_NAME_PATTERN.test(m.name))
-        .map(m => m.name);
-    }
-  } catch {
-    // Not Ollama — fall through to OpenAI-compatible
-  }
-
-  // OpenRouter: use dedicated embedding models endpoint
-  if (normalizedBase.includes("openrouter.ai")) {
-    const { json } = await proxyAwareGet(`${normalizedBase}/v1/embeddings/models`, headers, proxyUrl, proxyBypass);
-    const data = json as OpenAiModelsResponse;
-    return (data.data || []).map(m => m.id);
-  }
-
-  // OpenAI-compatible /v1/models (LM Studio, vLLM, etc.)
-  const { json } = await proxyAwareGet(`${normalizedBase}/v1/models`, headers, proxyUrl, proxyBypass);
-  const data = json as OpenAiModelsResponse;
-  return (data.data || []).map(m => m.id).filter(name => EMBEDDING_NAME_PATTERN.test(name));
-}
-
-/**
- * Normalize base URL: strip trailing slashes and `/v1` suffix to prevent
- * path doubling (e.g., `https://openrouter.ai/api/v1` + `/v1/models`).
- * Also auto-append `/api` for OpenRouter bare domain URLs.
- */
-function normalizeBaseUrl(url: string): string {
-  let base = url.replace(/\/+$/, "").replace(/\/v1$/i, "");
-  // https://openrouter.ai → https://openrouter.ai/api
-  if (/^https?:\/\/openrouter\.ai$/i.test(base)) {
-    base += "/api";
-  }
-  return base;
-}
-
-function isOllamaEmbeddingModel(families?: string[]): boolean {
-  if (!families) return false;
-  return families.some(f => EMBEDDING_FAMILIES.has(f));
+  return await fetchEmbeddingModelsShared({ baseUrl, apiKey }, get);
 }
 
 /**
@@ -168,7 +110,7 @@ export async function generateEmbeddings(
 ): Promise<number[][]> {
   const results: number[][] = [];
   const url = baseUrl
-    ? `${normalizeBaseUrl(baseUrl)}/v1/embeddings`
+    ? `${normalizeServerBaseUrl(baseUrl)}/v1/embeddings`
     : EMBEDDING_API_URL;
 
   const proxyFetch = proxyUrl ? createProxyFetch(proxyUrl, proxyBypass) : null;

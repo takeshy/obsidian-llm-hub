@@ -1,314 +1,43 @@
 import {
   GoogleGenAI,
-  Type,
-  FinishReason,
   HarmCategory,
   HarmBlockThreshold,
   type Content,
-  type Part,
+  type GenerateContentParameters,
+  type CreateChatParameters,
   type Tool,
   type SafetySetting,
-  type Schema,
-  type Chat,
   type Interactions,
-  ToolType,
 } from "@google/genai";
 import {
   DEFAULT_SETTINGS,
   type Message,
   type ToolDefinition,
-  type ToolPropertyDefinition,
   type StreamChunk,
-  type StreamChunkUsage,
-  type ToolCall,
   type ModelType,
-  type GeneratedImage,
-  type WebSearchSource,
   type ReasoningEffort,
 } from "src/types";
-import { tracing, type TracingUsage } from "src/core/tracingHooks";
-import { formatError } from "src/utils/error";
-import { Platform, requestUrl } from "obsidian";
+import { tracing } from "src/core/tracingHooks";
+import {
+  buildGeminiGenerateContentTools,
+  buildGeminiHistoryReplayInput,
+  buildGeminiInteractionTools,
+  buildGeminiInteractionInput,
+  buildGeminiRagRequest,
+  buildGeminiThinkingConfig,
+  resolveGeminiThinkingLevel,
+  extractGeminiRagContexts,
+  formatError,
+  geminiCorsFetch as corsFetch,
+  messagesToGeminiContents,
+  runGeminiInteractions,
+  GeminiGenerationClient,
+  selectGeminiGenerationTools,
+  selectGeminiInteractionTools,
+  type GeminiToolMode,
+  runGeminiGenerateContentTools,
+} from "obsidian-llm-hub-common/core";
 import { createProxyFetch } from "./proxyFetch";
-import { dedupeAttachments, getToolResultAttachments, withoutToolResultAttachments } from "./toolResultAttachments";
-
-// ---------------------------------------------------------------------------
-// CORS-free fetch implementations for the Interactions API.
-// The endpoint doesn't return CORS headers, so browser fetch rejects preflight.
-// ---------------------------------------------------------------------------
-
-// Desktop (Electron / Node.js): streaming via https module
-// window.require loads Node.js builtins without triggering the ESM loader (which
-// cannot resolve Node builtins in Electron's renderer process).
-async function nodeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const https = (window as unknown as { require: (id: string) => typeof import("https") }).require("https");
-  const url = typeof input === "string" ? new window.URL(input) : input instanceof window.URL ? input : new window.URL(input.url);
-  const method = init?.method ?? "GET";
-  const headers: Record<string, string> = {};
-  if (init?.headers) {
-    if (init.headers instanceof Headers) {
-      init.headers.forEach((v, k) => { headers[k] = v; });
-    } else if (Array.isArray(init.headers)) {
-      for (const [k, v] of init.headers) headers[k] = v;
-    } else {
-      Object.assign(headers, init.headers);
-    }
-  }
-
-  return new Promise((resolve, reject) => {
-    const req = https.request(url, { method, headers }, (res: import("http").IncomingMessage) => {
-      const responseHeaders = new Headers();
-      for (const [k, v] of Object.entries(res.headers)) {
-        if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(", ") : v);
-      }
-
-      const body = new ReadableStream({
-        start(controller) {
-          res.on("data", (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
-          res.on("end", () => controller.close());
-          res.on("error", (err) => controller.error(err));
-        },
-        cancel() {
-          res.destroy();
-        },
-      });
-
-      resolve(new Response(body, {
-        status: res.statusCode ?? 200,
-        statusText: res.statusMessage ?? "",
-        headers: responseHeaders,
-      }));
-    });
-
-    req.on("error", reject);
-
-    if (init?.signal) {
-      init.signal.addEventListener("abort", () => req.destroy());
-    }
-
-    if (init?.body) {
-      if (typeof init.body === "string") {
-        req.end(init.body);
-      } else if (init.body instanceof ArrayBuffer || ArrayBuffer.isView(init.body)) {
-        req.end(Buffer.from(init.body as ArrayBuffer));
-      } else {
-        const readable = init.body as ReadableStream<Uint8Array>;
-        const reader = readable.getReader();
-        const pump = (): void => {
-          reader.read().then(({ done, value }) => {
-            if (done) { req.end(); return; }
-            req.write(value);
-            pump();
-          }).catch((err: Error) => req.destroy(err));
-        };
-        pump();
-      }
-    } else {
-      req.end();
-    }
-  });
-}
-
-// Mobile: buffered fetch via Obsidian's requestUrl (bypasses CORS, no streaming)
-async function mobileFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const url = typeof input === "string" ? input : input instanceof window.URL ? input.toString() : input.url;
-  const method = init?.method ?? "GET";
-  const headers: Record<string, string> = {};
-  if (init?.headers) {
-    if (init.headers instanceof Headers) {
-      init.headers.forEach((v, k) => { headers[k] = v; });
-    } else if (Array.isArray(init.headers)) {
-      for (const [k, v] of init.headers) headers[k] = v;
-    } else {
-      Object.assign(headers, init.headers);
-    }
-  }
-
-  let body: string | undefined;
-  if (init?.body) {
-    body = typeof init.body === "string" ? init.body : JSON.stringify(init.body);
-  }
-
-  const res = await requestUrl({ url, method, headers, body, throw: false });
-
-  const responseHeaders = new Headers();
-  for (const [k, v] of Object.entries(res.headers)) {
-    if (v) responseHeaders.set(k, v);
-  }
-
-  // Wrap the buffered response as a ReadableStream so the SDK's SSE parser works
-  const encoder = new TextEncoder();
-  const encoded = encoder.encode(res.text);
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(encoded);
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    status: res.status,
-    headers: responseHeaders,
-  });
-}
-
-/**
- * Sanitize tool result for Gemini API: replace empty arrays/objects with
- * descriptive strings and strip undefined/null values so the API does not
- * reject the function_response payload.
- */
-function sanitizeToolResult(value: unknown): unknown {
-  if (value === null || value === undefined) return value;
-  if (Array.isArray(value)) {
-    if (value.length === 0) return null;
-    return value.map(sanitizeToolResult);
-  }
-  if (typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = sanitizeToolResult(v);
-    }
-    return out;
-  }
-  return value;
-}
-
-function serializeFunctionResult(value: unknown): string {
-  const sanitized = sanitizeToolResult(value);
-  if (typeof sanitized === "string") return sanitized || "null";
-  try {
-    return JSON.stringify(sanitized) || "null";
-  } catch {
-    return "null";
-  }
-}
-
-// Pick the right CORS-free fetch for the current platform
-function corsFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  if (Platform.isMobile) {
-    return mobileFetch(input, init);
-  }
-  return nodeFetch(input, init);
-}
-
-function collectWebSources(value: unknown, sources: WebSearchSource[]): void {
-  if (typeof value === "string") {
-    // Server-side Google Search returns search_suggestions as an HTML snippet.
-    // In some tool-combination turns this is the only URL-bearing attribution.
-    const anchorPattern = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    for (const match of value.matchAll(anchorPattern)) {
-      const url = match[1].replace(/&amp;/g, "&");
-      const title = match[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim() || url;
-      if (/^https?:\/\//i.test(url) && !sources.some(source => source.url === url)) {
-        sources.push({ title, url });
-      }
-    }
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) collectWebSources(item, sources);
-    return;
-  }
-  if (!value || typeof value !== "object") return;
-
-  const record = value as Record<string, unknown>;
-  const rawUrl = [record.url, record.uri, record.link].find(candidate => typeof candidate === "string");
-  if (typeof rawUrl === "string" && /^https?:\/\//i.test(rawUrl)) {
-    const rawTitle = [record.title, record.name].find(candidate => typeof candidate === "string");
-    if (!sources.some(source => source.url === rawUrl)) {
-      sources.push({ title: typeof rawTitle === "string" ? rawTitle : rawUrl, url: rawUrl });
-    }
-  }
-
-  for (const nested of Object.values(record)) {
-    if (nested && typeof nested === "object") collectWebSources(nested, sources);
-  }
-}
-
-// Model pricing per token (USD)
-// Source: https://ai.google.dev/pricing
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  // Introductory pricing through December 31, 2026.
-  "gemini-3.8-flash": { input: 0.75 / 1e6, output: 3.75 / 1e6 },
-  "gemini-3.5-flash-lite": { input: 0.30 / 1e6, output: 2.50 / 1e6 },
-  "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
-  "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
-  "gemini-3-pro-image": { input: 2.00 / 1e6, output: 120.00 / 1e6 },
-  "gemini-3.1-flash-image": { input: 0.50 / 1e6, output: 60.00 / 1e6 },
-  "gemini-3.1-flash-lite-image": { input: 0.25 / 1e6, output: 30.00 / 1e6 },
-};
-
-// Grounding with Google Search cost per prompt (USD)
-// Gemini 3 models: $14/1K queries, Gemini 2.x: $35/1K prompts
-// Approximated as per-prompt since exact query count is not exposed by the API
-const SEARCH_GROUNDING_COST: Record<string, number> = {
-  "gemini-3.8-flash": 14 / 1000,
-  "gemini-3.1-pro-preview": 14 / 1000,
-  "gemini-3.1-pro-preview-customtools": 14 / 1000,
-  "gemini-3-pro-image": 14 / 1000,
-  "gemini-3.1-flash-image": 14 / 1000,
-  "gemini-3.5-flash-lite": 14 / 1000,
-};
-
-// Extract usage metadata from Gemini API response and calculate cost
-interface ExtractUsageOptions {
-  model?: string;
-  webSearchUsed?: boolean;
-}
-
-function extractUsage(usageMetadata: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number; thoughtsTokenCount?: number; toolUsePromptTokenCount?: number } | undefined, options?: ExtractUsageOptions): TracingUsage | undefined {
-  if (!usageMetadata) return undefined;
-  const model = options?.model;
-  const inputTokens = usageMetadata.promptTokenCount ?? 0;
-  const outputTokens = usageMetadata.candidatesTokenCount ?? 0;
-  const thinkingTokens = usageMetadata.thoughtsTokenCount ?? 0;
-  const toolUseTokens = usageMetadata.toolUsePromptTokenCount ?? 0;
-  const pricing = model ? MODEL_PRICING[model] : undefined;
-  const inputCost = pricing ? inputTokens * pricing.input : undefined;
-  // candidatesTokenCount already includes thinking tokens in Gemini's accounting
-  const outputCost = pricing ? outputTokens * pricing.output : undefined;
-  let totalCost = inputCost !== undefined && outputCost !== undefined ? inputCost + outputCost : undefined;
-
-  // Add search grounding cost per prompt
-  if (options?.webSearchUsed && model && SEARCH_GROUNDING_COST[model] !== undefined) {
-    totalCost = (totalCost ?? 0) + SEARCH_GROUNDING_COST[model];
-  }
-
-  return {
-    input: usageMetadata.promptTokenCount,
-    output: usageMetadata.candidatesTokenCount,
-    thinking: thinkingTokens > 0 ? thinkingTokens : undefined,
-    toolUsePromptTokens: toolUseTokens > 0 ? toolUseTokens : undefined,
-    total: usageMetadata.totalTokenCount,
-    inputCost,
-    outputCost,
-    totalCost,
-  };
-}
-
-// Accumulate per-round usage into a running total
-function accumulateUsage(total: TracingUsage, round: TracingUsage): void {
-  total.input = (total.input ?? 0) + (round.input ?? 0);
-  total.output = (total.output ?? 0) + (round.output ?? 0);
-  if (round.thinking !== undefined) total.thinking = (total.thinking ?? 0) + round.thinking;
-  if (round.toolUsePromptTokens !== undefined) total.toolUsePromptTokens = (total.toolUsePromptTokens ?? 0) + round.toolUsePromptTokens;
-  total.total = (total.total ?? 0) + (round.total ?? 0);
-  if (round.inputCost !== undefined) total.inputCost = (total.inputCost ?? 0) + round.inputCost;
-  if (round.outputCost !== undefined) total.outputCost = (total.outputCost ?? 0) + round.outputCost;
-  if (round.totalCost !== undefined) total.totalCost = (total.totalCost ?? 0) + round.totalCost;
-}
-
-// Convert TracingUsage to StreamChunkUsage for yielding to the UI
-function toStreamChunkUsage(usage: TracingUsage | undefined): StreamChunkUsage | undefined {
-  if (!usage) return undefined;
-  return {
-    inputTokens: usage.input,
-    outputTokens: usage.output,
-    thinkingTokens: usage.thinking,
-    totalTokens: usage.total,
-    totalCost: usage.totalCost,
-  };
-}
 
 // Default safety settings per Gemini best practices
 // Using BLOCK_MEDIUM_AND_ABOVE as a balanced default
@@ -318,19 +47,6 @@ const DEFAULT_SAFETY_SETTINGS: SafetySetting[] = [
   { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 ];
-
-// Check finishReason for blocked/filtered responses (best practice: always inspect why generation stopped)
-function checkFinishReason(candidates: Array<{ finishReason?: string }> | undefined): string | null {
-  if (!candidates || candidates.length === 0) return null;
-  const reason = candidates[0].finishReason;
-  if (reason === FinishReason.SAFETY) {
-    return "Response blocked by safety filters. Please rephrase your message.";
-  }
-  if (reason === FinishReason.RECITATION) {
-    return "Response blocked due to potential recitation of copyrighted content.";
-  }
-  return null;
-}
 
 // Function call limit options
 export interface FunctionCallLimitOptions {
@@ -348,54 +64,7 @@ export interface ChatWithToolsOptions {
   previousInteractionId?: string | null;  // For Interactions API conversation chaining
 }
 
-export function buildGeminiThinkingConfig(
-  model: string,
-  enableThinking: boolean,
-  reasoningEffort?: ReasoningEffort,
-): Record<string, unknown> | undefined {
-  const modelLower = model.toLowerCase();
-  if (modelLower.includes("gemma-4")) return undefined;
-
-  const explicitLevel = reasoningEffort && reasoningEffort !== "default" ? reasoningEffort : undefined;
-  if (explicitLevel) {
-    return { includeThoughts: explicitLevel !== "none", thinkingLevel: explicitLevel.toUpperCase() };
-  }
-
-  if (modelLower.includes("gemini-3.8-flash") && enableThinking) {
-    return { includeThoughts: true, thinkingLevel: "HIGH" };
-  }
-  if (modelLower.includes("gemini-3.5-flash-lite")) {
-    if (!enableThinking) return undefined;
-    return { includeThoughts: true, thinkingLevel: "HIGH" };
-  }
-  if (enableThinking) return { includeThoughts: true };
-  return undefined;
-}
-
-// Interactions API usage → TracingUsage converter
-function extractInteractionsUsage(usage: Interactions.Usage | undefined, model?: string): TracingUsage | undefined {
-  if (!usage) return undefined;
-  const inputTokens = usage.total_input_tokens ?? 0;
-  const outputTokens = usage.total_output_tokens ?? 0;
-  const thinkingTokens = usage.total_thought_tokens ?? 0;
-  const toolUseTokens = usage.total_tool_use_tokens ?? 0;
-  const totalTokens = usage.total_tokens ?? (inputTokens + outputTokens);
-  const pricing = model ? MODEL_PRICING[model] : undefined;
-  const inputCost = pricing ? inputTokens * pricing.input : undefined;
-  const outputCost = pricing ? outputTokens * pricing.output : undefined;
-  const totalCost = inputCost !== undefined && outputCost !== undefined ? inputCost + outputCost : undefined;
-
-  return {
-    input: inputTokens || undefined,
-    output: outputTokens || undefined,
-    thinking: thinkingTokens > 0 ? thinkingTokens : undefined,
-    toolUsePromptTokens: toolUseTokens > 0 ? toolUseTokens : undefined,
-    total: totalTokens || undefined,
-    inputCost,
-    outputCost,
-    totalCost,
-  };
-}
+export { buildGeminiThinkingConfig };
 
 /**
  * Patch a GoogleGenAI instance so all SDK HTTP requests go through the proxy.
@@ -416,13 +85,22 @@ export function patchGeminiProxy(ai: GoogleGenAI, proxyUrl: string, proxyBypass?
   }
 }
 
-export class GeminiClient {
+export class GeminiClient extends GeminiGenerationClient<ModelType> {
   private ai: GoogleGenAI;
-  private model: ModelType;
 
   constructor(apiKey: string, model: ModelType = "gemini-3.8-flash" as ModelType, proxyUrl?: string, proxyBypass?: string) {
-    this.ai = new GoogleGenAI({ apiKey });
-    this.model = model;
+    const ai = new GoogleGenAI({ apiKey });
+    super(model, {
+      generate: request => ai.models.generateContent(request as GenerateContentParameters),
+      stream: request => ai.models.generateContentStream(request as GenerateContentParameters),
+      chat: request => ai.chats.create(request as CreateChatParameters),
+      createResearch: request => ai.interactions.create(request),
+      getResearch: id => ai.interactions.get(id),
+      delay: milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds)),
+      safetySettings: DEFAULT_SAFETY_SETTINGS,
+      supportsThinking: () => true,
+    });
+    this.ai = ai;
 
     // Proxy: tunnel all SDK requests through HTTP CONNECT proxy
     if (proxyUrl) {
@@ -447,14 +125,6 @@ export class GeminiClient {
     }
   }
 
-  getModel(): ModelType {
-    return this.model;
-  }
-
-  setModel(model: ModelType): void {
-    this.model = model;
-  }
-
   private getInteractionsModel(hasFunctionTools: boolean): ModelType {
     const modelName = this.model as string;
     if (modelName === "gemini-3.1-pro-preview" && hasFunctionTools) {
@@ -464,71 +134,12 @@ export class GeminiClient {
   }
 
   // Build thinking config based on model capabilities (shared across streaming methods)
-  private buildThinkingConfig(enableThinking: boolean, reasoningEffort?: ReasoningEffort): Record<string, unknown> | undefined {
+  private buildThinkingConfig(enableThinking?: boolean, reasoningEffort?: ReasoningEffort): Record<string, unknown> | undefined {
     return buildGeminiThinkingConfig(this.model, enableThinking, reasoningEffort);
   }
 
-  // Check if model supports thinking
-  private supportsThinking(): boolean {
-    return true;
-  }
-
-  // Build Gemini Part[] from a Message's attachments and text content
-  private static buildMessageParts(msg: Message): Part[] {
-    const parts: Part[] = [];
-    if (msg.attachments && msg.attachments.length > 0) {
-      for (const attachment of msg.attachments) {
-        parts.push({
-          inlineData: {
-            mimeType: attachment.mimeType,
-            data: attachment.data,
-          },
-        });
-      }
-    }
-    if (msg.content) {
-      parts.push({ text: msg.content });
-    }
-    return parts;
-  }
-
-  // Convert our Message format to Gemini Content format
   private messagesToContents(messages: Message[]): Content[] {
-    return messages.map((msg) => ({
-      role: msg.role === "user" ? "user" : "model",
-      parts: GeminiClient.buildMessageParts(msg),
-    }));
-  }
-
-  // Convert ToolDefinition parameters to a plain JSON Schema object for Interactions API
-  private static toJsonSchema(params: ToolDefinition["parameters"]): unknown {
-    const convertProp = (p: ToolPropertyDefinition): Record<string, unknown> => {
-      const s: Record<string, unknown> = { type: p.type, description: p.description };
-      if (p.enum) s.enum = p.enum;
-      if (p.type === "array" && p.items) {
-        const items = p.items;
-        if (items.type === "object" && items.properties) {
-          const nested: Record<string, unknown> = {};
-          for (const [k, v] of Object.entries(items.properties)) nested[k] = convertProp(v);
-          s.items = { type: "object", properties: nested, required: items.required };
-        } else {
-          s.items = { type: items.type };
-        }
-      }
-      if (p.type === "object" && p.properties) {
-        const nested: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(p.properties)) nested[k] = convertProp(v);
-        s.properties = nested;
-        if (p.required && p.required.length > 0) s.required = p.required;
-      }
-      return s;
-    };
-
-    const properties: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(params.properties)) {
-      properties[key] = convertProp(value);
-    }
-    return { type: "object", properties, required: params.required };
+    return messagesToGeminiContents(messages) as Content[];
   }
 
   // Convert tool definitions to Interactions API format (Tool_2[])
@@ -539,35 +150,11 @@ export class GeminiClient {
     ragTopK?: number,
     webSearchEnabled?: boolean,
   ): Interactions.Tool[] {
-    const result: Interactions.Tool[] = [];
-
-    // Function tools — Interactions API allows function tools + file search together
-    for (const tool of tools) {
-      result.push({
-        type: "function",
-        name: tool.name,
-        description: tool.description,
-        parameters: GeminiClient.toJsonSchema(tool.parameters),
-      });
-    }
-
-    // File Search RAG
-    if (ragStoreIds && ragStoreIds.length > 0) {
-      result.push({
-        type: "file_search",
-        file_search_store_names: ragStoreIds,
-        top_k: ragTopK,
-      });
-    }
-
-    // Google Search
-    if (webSearchEnabled) {
-      result.push({
-        type: "google_search",
-      });
-    }
-
-    return result;
+    return buildGeminiInteractionTools(tools, {
+      ragStoreIds,
+      ragTopK,
+      webSearchEnabled,
+    }) as Interactions.Tool[];
   }
 
   // Retrieve RAG context via the generateContent API (file_search tool).
@@ -582,29 +169,7 @@ export class GeminiClient {
     topK: number,
     attachments?: Message["attachments"],
   ): Promise<{ sources: string[]; contexts: Array<{ source: string; text: string }> }> {
-    const parts: Part[] = [];
-    if (attachments && attachments.length > 0) {
-      for (const attachment of attachments) {
-        parts.push({
-          inlineData: {
-            mimeType: attachment.mimeType,
-            data: attachment.data,
-          },
-        });
-      }
-      if (userMessage) {
-        parts.push({ text: userMessage });
-      }
-    } else {
-      parts.push({ text: userMessage });
-    }
-
-    const tools: Tool[] = [{
-      fileSearch: {
-        fileSearchStoreNames: ragStoreIds,
-        topK,
-      },
-    }];
+    const { parts, tools } = buildGeminiRagRequest(userMessage, ragStoreIds, topK, undefined, attachments);
 
     const response = await this.ai.models.generateContent({
       model: this.model,
@@ -615,92 +180,12 @@ export class GeminiClient {
       },
     });
 
-    const groundingMetadata = (response.candidates?.[0] as {
-      groundingMetadata?: {
-        groundingChunks?: Array<{
-          retrievedContext?: {
-            title?: string;
-            text?: string;
-            uri?: string;
-          };
-        }>;
-      };
-    })?.groundingMetadata;
-
-    const chunks = groundingMetadata?.groundingChunks ?? [];
-    const sources: string[] = [];
-    const contexts: Array<{ source: string; text: string }> = [];
-
-    for (const chunk of chunks) {
-      const ctx = chunk.retrievedContext;
-      if (!ctx) continue;
-      const title = String(ctx.title ?? ctx.uri ?? "").trim();
-      if (!title) continue;
-      if (!sources.includes(title)) {
-        sources.push(title);
-      }
-      const text = String(ctx.text ?? "").replace(/\s+/g, " ").trim();
-      if (text) {
-        const excerpt = text.length > 500 ? text.slice(0, 500) + "..." : text;
-        if (!contexts.some(c => c.source === title && c.text === excerpt)) {
-          contexts.push({ source: title, text: excerpt });
-        }
-      }
-    }
-
-    return { sources, contexts };
+    return extractGeminiRagContexts(response);
   }
 
   // Build Interactions API input from a Message (supports text + attachments)
   private static buildInteractionInput(msg: Message): string | Interactions.Content[] {
-    // Simple text-only message
-    if (!msg.attachments || msg.attachments.length === 0) {
-      return msg.content || "";
-    }
-
-    // Multimodal: build Content_2 array
-    const contents: Interactions.Content[] = [];
-    for (const attachment of msg.attachments) {
-      if (attachment.type === "image") {
-        contents.push({
-          type: "image",
-          data: attachment.data,
-          mime_type: attachment.mimeType,
-        });
-      } else if (attachment.type === "audio") {
-        contents.push({
-          type: "audio",
-          data: attachment.data,
-          mime_type: attachment.mimeType,
-        });
-      } else if (attachment.type === "video") {
-        contents.push({
-          type: "video",
-          data: attachment.data,
-          mime_type: attachment.mimeType,
-        });
-      } else if (attachment.type === "pdf") {
-        contents.push({
-          type: "document",
-          data: attachment.data,
-          mime_type: attachment.mimeType,
-        });
-      } else {
-        // Text files — include as text
-        if (attachment.data) {
-          try {
-            const decoded = atob(attachment.data);
-            contents.push({ type: "text", text: `[File: ${attachment.name}]\n${decoded}` });
-          } catch {
-            contents.push({ type: "text", text: `[File: ${attachment.name}]` });
-          }
-        }
-      }
-    }
-    if (msg.content) {
-      contents.push({ type: "text", text: msg.content });
-    }
-    return contents;
+    return buildGeminiInteractionInput(msg) as string | Interactions.Content[];
   }
 
   // Build Interactions API input with local history replay.
@@ -710,106 +195,7 @@ export class GeminiClient {
   private static buildHistoryReplayInput(
     messages: Message[],
   ): string | Interactions.Content[] {
-    const historyMessages = messages.slice(0, -1);
-    const lastMessage = messages[messages.length - 1];
-
-    // No history to replay — just send the last message directly
-    if (historyMessages.length === 0) {
-      return GeminiClient.buildInteractionInput(lastMessage);
-    }
-
-    // Build a conversation transcript from history
-    const lines: string[] = [];
-    for (const msg of historyMessages) {
-      const role = msg.role === "user" ? "User" : "Assistant";
-      if (msg.content) {
-        lines.push(`${role}: ${msg.content}`);
-      }
-    }
-    const historyText = "[Previous conversation]\n" + lines.join("\n\n") + "\n\n[Current message]\n";
-
-    // Simple text-only last message — merge into a single string
-    if (!lastMessage.attachments || lastMessage.attachments.length === 0) {
-      return historyText + (lastMessage.content || "");
-    }
-
-    // Multimodal: history as text prefix, then attachments + text from the last message
-    const contents: Interactions.Content[] = [
-      { type: "text", text: historyText },
-    ];
-    const lastParts = GeminiClient.buildInteractionInput(lastMessage);
-    if (Array.isArray(lastParts)) {
-      contents.push(...lastParts);
-    } else {
-      contents.push({ type: "text", text: lastParts });
-    }
-    return contents;
-  }
-
-  // Convert tool definitions to Gemini format
-  private toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
-    const convertProperty = (value: ToolPropertyDefinition): Schema => {
-      const schema: Schema = {
-        type: value.type.toUpperCase() as Type,
-        description: value.description,
-        enum: value.enum,
-      };
-
-      // Handle array items
-      if (value.type === "array" && value.items) {
-        const items = value.items;
-
-        if (items.type === "object" && items.properties) {
-          // Nested object in array
-          const nestedProperties: Record<string, Schema> = {};
-          for (const [propKey, propValue] of Object.entries(items.properties)) {
-            nestedProperties[propKey] = convertProperty(propValue);
-          }
-          schema.items = {
-            type: Type.OBJECT,
-            properties: nestedProperties,
-            required: items.required,
-          };
-        } else {
-          // Simple type in array (e.g., string[])
-          schema.items = {
-            type: items.type.toUpperCase() as Type,
-          };
-        }
-      }
-
-      if (value.type === "object" && value.properties) {
-        const nestedProperties: Record<string, Schema> = {};
-        for (const [propKey, propValue] of Object.entries(value.properties)) {
-          nestedProperties[propKey] = convertProperty(propValue);
-        }
-        schema.properties = nestedProperties;
-        if (value.required && value.required.length > 0) {
-          schema.required = value.required;
-        }
-      }
-
-      return schema;
-    };
-
-    const functionDeclarations = tools.map((tool) => {
-      const properties: Record<string, Schema> = {};
-      for (const [key, value] of Object.entries(tool.parameters.properties)) {
-        properties[key] = convertProperty(value);
-      }
-
-      return {
-        name: tool.name,
-        description: tool.description,
-        parameters: {
-          type: Type.OBJECT,
-          properties,
-          required: tool.parameters.required,
-        },
-      };
-    });
-
-    return [{ functionDeclarations }];
+    return buildGeminiHistoryReplayInput(messages) as string | Interactions.Content[];
   }
 
   private shouldUseGenerateContentToolsApi(
@@ -832,11 +218,7 @@ export class GeminiClient {
   }
 
   private buildGenerateContentTools(tools: ToolDefinition[], webSearchEnabled?: boolean): Tool[] | undefined {
-    const geminiTools = tools.length > 0 ? this.toolsToGeminiFormat(tools) : [];
-    if (webSearchEnabled) {
-      geminiTools.push({ googleSearch: {} });
-    }
-    return geminiTools.length > 0 ? geminiTools : undefined;
+    return buildGeminiGenerateContentTools(tools, webSearchEnabled) as Tool[] | undefined;
   }
 
   private async *chatWithToolsStreamGenerateContent(
@@ -852,8 +234,6 @@ export class GeminiClient {
       options?.functionCallLimits?.functionCallWarningThreshold ?? DEFAULT_SETTINGS.functionCallWarningThreshold,
       maxFunctionCalls,
     );
-    let functionCallCount = 0;
-    let warningEmitted = false;
     const traceId = options?.traceId ?? null;
     const lastMsg = messages[messages.length - 1];
     const generationId = tracing.generationStart(traceId, "chatWithToolsStreamGenerateContent", {
@@ -861,304 +241,26 @@ export class GeminiClient {
       input: lastMsg?.content,
       metadata: { useGenerateContentApi: true, toolCount: tools.length, webSearchEnabled: !!webSearchEnabled },
     });
-    const totalUsage: TracingUsage = { input: 0, output: 0, total: 0 };
-    let accumulatedOutput = "";
-    let roundNumber = 0;
-    let toolCallTraceCount = 0;
-    let webSearchUsed = false;
-    const webSearchSources: WebSearchSource[] = [];
-
-    let contents = this.messagesToContents(messages);
+    const contents = this.messagesToContents(messages);
     const generationTools = this.buildGenerateContentTools(tools, webSearchEnabled);
-    const thinkingConfig = this.buildThinkingConfig(options?.enableThinking === true, options?.reasoningEffort);
+    const thinkingConfig = this.buildThinkingConfig(options?.enableThinking, options?.reasoningEffort);
     const combinesBuiltInAndFunctionTools = !!webSearchEnabled && tools.length > 0;
 
-    try {
-      while (true) {
-        roundNumber++;
-        const response = await this.ai.models.generateContentStream({
-          model: this.model,
-          contents,
-          config: {
-            systemInstruction: systemPrompt,
-            tools: options?.disableTools ? undefined : generationTools,
-            toolConfig: combinesBuiltInAndFunctionTools
-              ? { includeServerSideToolInvocations: true }
-              : undefined,
-            safetySettings: DEFAULT_SAFETY_SETTINGS,
-            thinkingConfig,
-          },
-        });
-
-        const modelParts: Part[] = [];
-        const functionCalls: Array<{ id?: string; name: string; args: Record<string, unknown> }> = [];
-        let roundUsage: TracingUsage | undefined;
-        let hasReceivedChunk = false;
-        let webSearchUsedInRound = false;
-
-        for await (const chunk of response) {
-          hasReceivedChunk = true;
-          const groundingMetadata = chunk.candidates?.[0]?.groundingMetadata;
-          const groundedWebSources = (groundingMetadata?.groundingChunks ?? [])
-            .map(groundingChunk => groundingChunk.web)
-            .filter((web): web is NonNullable<typeof web> => !!web?.uri);
-          const searchWasUsed = (groundingMetadata?.webSearchQueries?.length ?? 0) > 0
-            || groundedWebSources.length > 0;
-          if (searchWasUsed) {
-            webSearchUsedInRound = true;
-            if (!webSearchUsed) {
-              webSearchUsed = true;
-              yield { type: "web_search_used" };
-            }
-            for (const source of groundedWebSources) {
-              const url = source.uri!;
-              if (!webSearchSources.some(existing => existing.url === url)) {
-                webSearchSources.push({ title: source.title || url, url });
-              }
-            }
-          }
-          if (chunk.usageMetadata) {
-            roundUsage = extractUsage(chunk.usageMetadata, { model: this.model, webSearchUsed: webSearchUsedInRound });
-          }
-
-          const blockReason = checkFinishReason(chunk.candidates);
-          if (blockReason) {
-            tracing.generationEnd(generationId, { error: blockReason, usage: roundUsage });
-            yield { type: "error", error: blockReason };
-            return;
-          }
-
-          const parts = chunk.candidates?.[0]?.content?.parts ?? [];
-          for (const part of parts) {
-            modelParts.push(part);
-            if (part.text) {
-              if (part.thought) {
-                yield { type: "thinking", content: part.text };
-              } else {
-                accumulatedOutput += part.text;
-                yield { type: "text", content: part.text };
-              }
-            }
-            if (part.functionCall?.name) {
-              functionCalls.push({
-                id: part.functionCall.id,
-                name: part.functionCall.name,
-                args: part.functionCall.args ?? {},
-              });
-            }
-            if (part.toolResponse?.toolType === ToolType.GOOGLE_SEARCH_WEB) {
-              collectWebSources(part.toolResponse.response, webSearchSources);
-            }
-          }
-        }
-
-        if (roundUsage) accumulateUsage(totalUsage, roundUsage);
-
-        if (!hasReceivedChunk) {
-          tracing.generationEnd(generationId, { error: "No response received from API" });
-          yield { type: "error", error: "No response received from API (possible server error)" };
-          return;
-        }
-
-        if (modelParts.length > 0) {
-          contents = [...contents, { role: "model", parts: modelParts }];
-        }
-
-        if (functionCalls.length === 0 || !executeToolCall) {
-          tracing.generationEnd(generationId, {
-            output: accumulatedOutput,
-            usage: totalUsage.total ? totalUsage : undefined,
-            metadata: { toolCallCount: toolCallTraceCount, roundCount: roundNumber, useGenerateContentApi: true },
-          });
-          yield {
-            type: "done",
-            usage: toStreamChunkUsage(totalUsage.total ? totalUsage : undefined),
-            webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
-          };
-          return;
-        }
-
-        const remainingBefore = maxFunctionCalls - functionCallCount;
-        if (remainingBefore <= 0) {
-          contents = [...contents, {
-            role: "user",
-            parts: [{ text: "Function call limit reached. Please provide a final answer based on the information gathered so far." }],
-          }];
-          continue;
-        }
-
-        const callsToExecute = functionCalls.slice(0, remainingBefore);
-        const remainingAfter = remainingBefore - callsToExecute.length;
-        if (!warningEmitted && remainingAfter <= warningThreshold) {
-          warningEmitted = true;
-          yield { type: "text", content: `\n\n[Note: ${remainingAfter} function calls remaining. Please work efficiently.]` };
-        }
-
-        const functionResponseParts: Part[] = [];
-        const roundAttachments: import("src/types").Attachment[] = [];
-        for (const fc of callsToExecute) {
-          const toolCall: ToolCall = { id: fc.id ?? fc.name, name: fc.name, args: fc.args };
-          yield { type: "tool_call", toolCall };
-
-          toolCallTraceCount++;
-          const toolSpanId = tracing.spanStart(traceId, `tool:${fc.name}`, {
-            parentId: generationId ?? undefined,
-            input: fc.args,
-            metadata: { toolName: fc.name },
-          });
-
-          const result = await executeToolCall(fc.name, fc.args);
-          tracing.spanEnd(toolSpanId, { output: result });
-
-          const cleanResult = withoutToolResultAttachments(result);
-          const serializedResult = serializeFunctionResult(cleanResult);
-          accumulatedOutput += `\n[tool_call: ${fc.name}(${JSON.stringify(fc.args)})]\n`;
-          accumulatedOutput += `[tool_result: ${serializedResult.length > 500 ? serializedResult.slice(0, 500) + "..." : serializedResult}]\n`;
-
-          yield { type: "tool_result", toolResult: { toolCallId: toolCall.id, result: cleanResult } };
-
-          functionResponseParts.push({
-            functionResponse: {
-              id: fc.id,
-              name: fc.name,
-              response: { output: serializedResult },
-            },
-          });
-          roundAttachments.push(...getToolResultAttachments(result));
-        }
-        // Keep every functionResponse ahead of the media it produced.
-        functionResponseParts.push(...dedupeAttachments(roundAttachments).map(attachment => ({
-          inlineData: { mimeType: attachment.mimeType, data: attachment.data },
-        })));
-        functionCallCount += callsToExecute.length;
-
-        if (functionCalls.length > callsToExecute.length || functionCallCount >= maxFunctionCalls) {
-          functionResponseParts.push({
-            text: "Function call limit reached. Please provide a final answer based on the information gathered so far.",
-          });
-        }
-
-        contents = [...contents, { role: "user", parts: functionResponseParts }];
-      }
-    } catch (error) {
-      tracing.generationEnd(generationId, {
-        error: formatError(error),
-        usage: totalUsage.total ? totalUsage : undefined,
-        metadata: { toolCallCount: toolCallTraceCount, roundCount: roundNumber, useGenerateContentApi: true },
-      });
-      yield { type: "error", error: formatError(error) };
-    }
-  }
-
-  // Simple chat without streaming
-  async chat(
-    messages: Message[],
-    systemPrompt?: string,
-    traceId?: string | null
-  ): Promise<string> {
-    const contents = this.messagesToContents(messages);
-    const lastMsg = messages[messages.length - 1];
-
-    const genId = tracing.generationStart(traceId ?? null, "chat", {
-      model: this.model,
-      input: lastMsg?.content,
-    });
-
-    try {
-      const response = await this.ai.models.generateContent({
-        model: this.model,
-        contents,
+    yield* runGeminiGenerateContentTools({
+      contents, model: this.model, traceId, generationId,
+      maxFunctionCalls, warningThreshold, limitPolicy: { kind: "fixed" },
+      executeToolCall,
+      create: (roundContents, toolMode) => this.ai.models.generateContentStream({
+        model: this.model, contents: roundContents as Content[],
         config: {
           systemInstruction: systemPrompt,
-          safetySettings: DEFAULT_SAFETY_SETTINGS,
+          tools: selectGeminiGenerationTools(options?.disableTools ? undefined : generationTools, toolMode),
+          toolConfig: toolMode === "all" && combinesBuiltInAndFunctionTools ? { includeServerSideToolInvocations: true } : undefined,
+          safetySettings: DEFAULT_SAFETY_SETTINGS, thinkingConfig,
         },
-      });
-
-      // Check for blocked responses (best practice: always check finishReason)
-      const blockReason = checkFinishReason(response.candidates);
-      if (blockReason) throw new Error(blockReason);
-
-      const text = response.text ?? "";
-      tracing.generationEnd(genId, {
-        output: text,
-        usage: extractUsage(response.usageMetadata, { model: this.model }),
-      });
-      return text;
-    } catch (error) {
-      tracing.generationEnd(genId, {
-        error: formatError(error),
-      });
-      throw error;
-    }
-  }
-
-  // Streaming chat
-  async *chatStream(
-    messages: Message[],
-    systemPrompt?: string,
-    traceId?: string | null
-  ): AsyncGenerator<StreamChunk> {
-    const contents = this.messagesToContents(messages);
-    const lastMsg = messages[messages.length - 1];
-
-    const genId = tracing.generationStart(traceId ?? null, "chatStream", {
-      model: this.model,
-      input: lastMsg?.content,
+      }),
     });
-
-    try {
-      const response = await this.ai.models.generateContentStream({
-        model: this.model,
-        contents,
-        config: {
-          systemInstruction: systemPrompt,
-          safetySettings: DEFAULT_SAFETY_SETTINGS,
-        },
-      });
-
-      let hasReceivedChunk = false;
-      let accumulatedText = "";
-      let lastUsage: TracingUsage | undefined;
-      for await (const chunk of response) {
-        hasReceivedChunk = true;
-        if (chunk.usageMetadata) lastUsage = extractUsage(chunk.usageMetadata, { model: this.model });
-        const chunkWithCandidates = chunk as {
-          candidates?: Array<{
-            finishReason?: string;
-          }>;
-        };
-        const blockReason = checkFinishReason(chunkWithCandidates.candidates);
-        if (blockReason) {
-          tracing.generationEnd(genId, { error: blockReason, usage: lastUsage });
-          yield { type: "error", error: blockReason };
-          return;
-        }
-        const text = chunk.text;
-        if (text) {
-          accumulatedText += text;
-          yield { type: "text", content: text };
-        }
-      }
-
-      if (!hasReceivedChunk) {
-        tracing.generationEnd(genId, { error: "No response received from API" });
-        yield { type: "error", error: "No response received from API (possible server error)" };
-        return;
-      }
-
-      tracing.generationEnd(genId, { output: accumulatedText, usage: lastUsage });
-      yield { type: "done", usage: toStreamChunkUsage(lastUsage) };
-    } catch (error) {
-      tracing.generationEnd(genId, {
-        error: formatError(error),
-      });
-      yield {
-        type: "error",
-        error: formatError(error),
-      };
-    }
   }
-
 
   // Streaming chat with Function Calling using Interactions API (SSE-based streaming)
   // Supports: function calling + RAG + Google Search simultaneously, server-side conversation state
@@ -1193,8 +295,6 @@ export class GeminiClient {
     const clampedTopK = Number.isFinite(rawTopK)
       ? Math.min(20, Math.max(1, rawTopK))
       : 5;
-    let functionCallCount = 0;
-    let warningEmitted = false;
 
     const ragEnabled = ragStoreIds && ragStoreIds.length > 0;
 
@@ -1230,32 +330,10 @@ export class GeminiClient {
       return;
     }
 
-    const enableThinking = this.supportsThinking() && options?.enableThinking === true;
-
-    // Build generation config for Interactions API
-    const getThinkingLevel = (): "minimal" | "low" | "medium" | "high" | undefined => {
-      if (!this.supportsThinking()) return undefined;
-      const modelLower = this.model.toLowerCase();
-      // Gemma 4: thinking config not supported via Interactions API
-      if (modelLower.includes("gemma-4")) return undefined;
-      const explicitLevel = options?.reasoningEffort;
-      if (explicitLevel && explicitLevel !== "default" && explicitLevel !== "none"
-        && explicitLevel !== "xhigh" && explicitLevel !== "max") {
-        return explicitLevel;
-      }
-      // Preserve support for callers outside Chat that explicitly request high thinking.
-      if (modelLower.includes("gemini-3.8-flash")) {
-        return enableThinking ? "high" : "low";
-      }
-      if (!enableThinking) return undefined;
-      // Gemini 3.5 Flash Lite: "minimal" matches the streaming/SDK path
-      // (buildThinkingConfig), which omits thinkingLevel entirely when
-      // thinking is disabled and relies on "minimal" being the API default.
-      return "high";
-    };
-
-    const thinkingLevel = getThinkingLevel();
-    const generationConfig = thinkingLevel || combinesBuiltInAndFunctionTools
+    const enableThinking = this.supportsThinking() ? options?.enableThinking : false;
+    const reasoningEffort = this.supportsThinking() ? options?.reasoningEffort : undefined;
+    const thinkingLevel = resolveGeminiThinkingLevel(this.model, enableThinking, reasoningEffort);
+    const generationConfig = (toolMode: GeminiToolMode) => thinkingLevel || (toolMode === "all" && combinesBuiltInAndFunctionTools)
       ? {
           ...(thinkingLevel
             ? { thinking_level: thinkingLevel, thinking_summaries: "auto" as const }
@@ -1263,7 +341,7 @@ export class GeminiClient {
           // Interactions tool-context circulation uses validated choice. The
           // legacy GenerateContent include_server_side_tool_invocations flag
           // is not part of the Interactions request schema.
-          ...(combinesBuiltInAndFunctionTools ? { tool_choice: "validated" as const } : {}),
+          ...(toolMode === "all" && combinesBuiltInAndFunctionTools ? { tool_choice: "validated" as const } : {}),
         }
       : undefined;
 
@@ -1285,13 +363,6 @@ export class GeminiClient {
         hasPreviousInteractionId: !!previousInteractionId,
       },
     });
-    let toolCallTraceCount = 0;
-    let accumulatedOutput = "";
-    const totalUsage: TracingUsage = { input: 0, output: 0, total: 0 };
-    let roundNumber = 0;
-    let currentInteractionId: string | undefined;
-    let streamErrored = false;
-
     // RAG pre-retrieval via generateContent API.
     // The Interactions API does not support the file_search tool (501
     // not_implemented), so we retrieve relevant contexts beforehand using
@@ -1346,727 +417,23 @@ export class GeminiClient {
       ? GeminiClient.buildInteractionInput(lastMessage)
       : GeminiClient.buildHistoryReplayInput(messages);
 
-    try {
-      let continueLoop = true;
-      // v2 input accepts string | Content[] | Step[] (the Interactions API input
-      // field is polymorphic). Content[] is used for the initial user turn; Step[]
-      // is used when sending function_result + user_input steps back to the model.
-      let nextInput: string | Interactions.Content[] | Interactions.Step[] = input;
-
-      while (continueLoop) {
-        roundNumber++;
-        const roundSpanId = tracing.spanStart(traceId, `round-${roundNumber}`, {
-          parentId: generationId ?? undefined,
-          metadata: { roundNumber },
-        });
-        const roundPreviousInteractionId = roundNumber === 1 ? previousInteractionId : currentInteractionId;
-
-        // Create streaming interaction.
-        // Tools, system_instruction, and generation_config are passed on every
-        // round (including follow-up interactions chained via
-        // previous_interaction_id) because the Interactions API does not
-        // reliably retain tool declarations across interactions for non-Pro
-        // models.  Pro models use the generateContent path instead.
-        const stream = await this.ai.interactions.create({
-          model: interactionModel,
-          input: nextInput,
-          stream: true,
-          previous_interaction_id: roundPreviousInteractionId,
-          store: true,
-          tools: interactionTools,
-          system_instruction: ragSystemPrompt,
-          generation_config: generationConfig,
-        });
-
-        const functionCallsToProcess: Array<{ id: string; name: string; args: Record<string, unknown> }> = [];
-        const accumulatedSources: string[] = [];
-        let groundingEmitted = false;
-        let webSearchUsedInRound = false;
-        let roundUsage: TracingUsage | undefined;
-        let hasReceivedEvent = false;
-
-        const pendingFunctionCalls = new Map<
-          number,
-          { id: string; name: string; argsBuffer: string; startArgs: Record<string, unknown> }
-        >();
-
-        // Process SSE events (v2 steps schema)
-        for await (const event of stream) {
-          hasReceivedEvent = true;
-
-          switch (event.event_type) {
-            case "interaction.created": {
-              currentInteractionId = event.interaction?.id;
-              break;
-            }
-
-            case "step.start": {
-              const step = event.step;
-              if (step?.type === "function_call") {
-                pendingFunctionCalls.set(event.index, {
-                  id: step.id,
-                  name: step.name,
-                  argsBuffer: "",
-                  startArgs: step.arguments ?? {},
-                });
-              }
-              break;
-            }
-
-            case "step.delta": {
-              const delta = event.delta;
-              if (!delta) break;
-
-              switch (delta.type) {
-                case "text":
-                  if ("text" in delta && delta.text) {
-                    accumulatedOutput += delta.text;
-                    yield { type: "text", content: delta.text };
-                  }
-                  break;
-
-                case "thought_summary":
-                  // Thinking content via summary
-                  if ("content" in delta && delta.content) {
-                    const thought = delta.content;
-                    if ("text" in thought && thought.text) {
-                      yield { type: "thinking", content: thought.text };
-                    }
-                  }
-                  break;
-
-                case "arguments_delta": {
-                  const pending = pendingFunctionCalls.get(event.index);
-                  if (pending && "arguments" in delta && typeof delta.arguments === "string") {
-                    pending.argsBuffer += delta.arguments;
-                  }
-                  break;
-                }
-
-                case "file_search_call":
-                  break;
-
-                case "file_search_result":
-                  // RAG results come through file_search_result deltas
-                  if ("result" in delta && Array.isArray(delta.result)) {
-                    for (const r of delta.result) {
-                      const title = (r as { title?: string }).title;
-                      if (title && !accumulatedSources.includes(title)) {
-                        accumulatedSources.push(title);
-                      }
-                    }
-                  }
-                  break;
-
-                case "google_search_result":
-                  if (!webSearchUsedInRound) {
-                    webSearchUsedInRound = true;
-                    yield { type: "web_search_used" };
-                    groundingEmitted = true;
-                  }
-                  break;
-
-                default:
-                  break;
-              }
-              break;
-            }
-
-            case "step.stop": {
-              const pending = pendingFunctionCalls.get(event.index);
-              if (pending) {
-                let args = pending.startArgs;
-                if (pending.argsBuffer) {
-                  try {
-                    args = JSON.parse(pending.argsBuffer) as Record<string, unknown>;
-                  } catch {
-                    args = pending.startArgs;
-                  }
-                }
-                functionCallsToProcess.push({
-                  id: pending.id,
-                  name: pending.name,
-                  args,
-                });
-                pendingFunctionCalls.delete(event.index);
-              }
-              break;
-            }
-
-            case "interaction.status_update": {
-              // The API can include usage in status-update metadata, but some
-              // @google/genai releases type this metadata as StreamMetadata
-              // without the runtime `usage` field.
-              const usage = (event.metadata as { usage?: Interactions.Usage } | undefined)?.usage;
-              if (usage) {
-                roundUsage = extractInteractionsUsage(usage, interactionModel);
-              }
-              break;
-            }
-
-            case "interaction.completed": {
-              const interaction = event.interaction;
-              if (interaction?.usage) {
-                roundUsage = extractInteractionsUsage(interaction.usage, interactionModel);
-              }
-              // Check for blocked/failed/incomplete status
-              const status = interaction?.status;
-              if (status && status !== "completed" && status !== "requires_action") {
-                const statusMsg = `Response ${status}${status === "failed" ? " (possibly blocked by safety filters)" : ""}`;
-                tracing.spanEnd(roundSpanId, { error: statusMsg, metadata: { usage: roundUsage } });
-                streamErrored = true;
-                yield { type: "error", error: statusMsg };
-                continueLoop = false;
-              }
-              break;
-            }
-
-            case "error": {
-              const errMsg = (event as { error?: { message?: string } }).error?.message ?? "Unknown interaction error";
-              tracing.spanEnd(roundSpanId, { error: errMsg, metadata: { usage: roundUsage } });
-              streamErrored = true;
-              continueLoop = false;
-              yield { type: "error", error: errMsg };
-              break;
-            }
-
-            default:
-              break;
-          }
-        }
-
-        // Sum round usage into total
-        if (roundUsage) accumulateUsage(totalUsage, roundUsage);
-
-        // Add search grounding cost
-        if (webSearchUsedInRound && this.model && SEARCH_GROUNDING_COST[this.model] !== undefined) {
-          totalUsage.totalCost = (totalUsage.totalCost ?? 0) + SEARCH_GROUNDING_COST[this.model];
-        }
-
-        // RAG sources were already emitted before the loop (pre-retrieved via
-        // generateContent API since Interactions API doesn't support file_search).
-        // Web search grounding is still detected within the loop below.
-        if (accumulatedSources.length > 0 && !groundingEmitted && !ragEmitted) {
-          yield { type: "rag_used", ragSources: accumulatedSources };
-          groundingEmitted = true;
-        }
-
-        if (!hasReceivedEvent && functionCallsToProcess.length === 0) {
-          tracing.spanEnd(roundSpanId, { error: "No response received from API" });
-          yield { type: "error", error: "No response received from API (possible server error)" };
-          return;
-        }
-
-        if (streamErrored) {
-          break;
-        }
-
-        // Process function calls
-        if (functionCallsToProcess.length > 0 && executeToolCall) {
-          const remainingBefore = maxFunctionCalls - functionCallCount;
-
-          if (remainingBefore <= 0) {
-            yield {
-              type: "text",
-              content: "\n\n[Function call limit reached. Summarizing with available information...]",
-            };
-            // Request final answer
-            nextInput = "You have reached the function call limit. Please provide a final answer based on the information gathered so far.";
-            tracing.spanEnd(roundSpanId, { metadata: { reason: "function_call_limit", usage: roundUsage } });
-            // One more round to get the final answer, then stop
-            roundNumber++;
-            const finalStream = await this.ai.interactions.create({
-              model: interactionModel,
-              input: nextInput,
-              stream: true,
-              system_instruction: ragSystemPrompt,
-              previous_interaction_id: currentInteractionId,
-              store: true,
-              generation_config: generationConfig,
-            });
-            let finalUsage: TracingUsage | undefined;
-            for await (const event of finalStream) {
-              if (event.event_type === "step.delta" && event.delta?.type === "text" && "text" in event.delta) {
-                const text = event.delta.text;
-                accumulatedOutput += text;
-                yield { type: "text", content: text };
-              }
-              if (event.event_type === "interaction.created" && event.interaction?.id) {
-                currentInteractionId = event.interaction.id;
-              }
-              if (event.event_type === "interaction.completed" && event.interaction?.usage) {
-                finalUsage = extractInteractionsUsage(event.interaction.usage, interactionModel);
-              }
-            }
-            if (finalUsage) accumulateUsage(totalUsage, finalUsage);
-            continueLoop = false;
-            continue;
-          }
-
-          const callsToExecute = functionCallsToProcess.slice(0, remainingBefore);
-          const skippedCount = functionCallsToProcess.length - callsToExecute.length;
-
-          const remainingAfter = remainingBefore - callsToExecute.length;
-          if (!warningEmitted && remainingAfter <= warningThreshold) {
-            warningEmitted = true;
-            yield {
-              type: "text",
-              content: `\n\n[Note: ${remainingAfter} function calls remaining. Please work efficiently.]`,
-            };
-          }
-
-          // Execute function calls and build FunctionResultStep inputs for v2.
-          const functionResults: Interactions.Step[] = [];
-          const roundAttachments: import("src/types").Attachment[] = [];
-
-          for (const fc of callsToExecute) {
-            const toolCall: ToolCall = {
-              id: fc.id,
-              name: fc.name,
-              args: fc.args,
-            };
-
-            yield { type: "tool_call", toolCall };
-
-            toolCallTraceCount++;
-            const toolSpanId = tracing.spanStart(traceId, `tool:${fc.name}`, {
-              parentId: generationId ?? undefined,
-              input: fc.args,
-              metadata: { toolName: fc.name },
-            });
-
-            const result = await executeToolCall(fc.name, fc.args);
-
-            tracing.spanEnd(toolSpanId, { output: result });
-
-            const cleanResult = withoutToolResultAttachments(result);
-            const serializedResult = serializeFunctionResult(cleanResult);
-            const truncatedResult = serializedResult.length > 500 ? serializedResult.substring(0, 500) + "..." : serializedResult;
-            accumulatedOutput += `\n[tool_call: ${fc.name}(${JSON.stringify(fc.args)})]\n`;
-            accumulatedOutput += `[tool_result: ${truncatedResult}]\n`;
-
-            yield {
-              type: "tool_result",
-              toolResult: { toolCallId: toolCall.id, result: cleanResult },
-            };
-
-            // Build FunctionResultStep for the v2 Interactions API.
-            // Use a JSON string result, matching the SDK README examples and
-            // avoiding stricter model-side validation of arbitrary objects.
-            functionResults.push({
-              type: "function_result",
-              call_id: fc.id,
-              name: fc.name,
-              result: serializedResult,
-            });
-            roundAttachments.push(...getToolResultAttachments(result));
-          }
-
-          // Keep every function_result ahead of the media it produced.
-          const roundFiles = dedupeAttachments(roundAttachments);
-          if (roundFiles.length > 0) {
-            functionResults.push({
-              type: "user_input",
-              content: roundFiles.map(attachment => ({
-                type: "document" as const,
-                data: attachment.data,
-                mime_type: attachment.mimeType,
-              })),
-            });
-          }
-
-          functionCallCount += callsToExecute.length;
-
-          if (skippedCount > 0 || functionCallCount >= maxFunctionCalls) {
-            const skippedMsg = skippedCount > 0
-              ? ` (${skippedCount} additional calls were skipped)`
-              : "";
-            yield {
-              type: "text",
-              content: `\n\n[Function call limit reached${skippedMsg}. Summarizing with available information...]`,
-            };
-
-            // Send results + limit message
-            functionResults.push({
-              type: "user_input",
-              content: [{ type: "text", text: "[System: Function call limit reached. Please provide a final answer based on the information gathered so far.]" }],
-            });
-            nextInput = functionResults;
-            tracing.spanEnd(roundSpanId, { metadata: { reason: "function_call_limit_with_skipped", usage: roundUsage } });
-
-            // Final round
-            roundNumber++;
-            const finalStream = await this.ai.interactions.create({
-              model: interactionModel,
-              input: nextInput,
-              stream: true,
-              tools: interactionTools,
-              system_instruction: ragSystemPrompt,
-              previous_interaction_id: currentInteractionId,
-              store: true,
-              generation_config: generationConfig,
-            });
-            let finalUsage: TracingUsage | undefined;
-            for await (const event of finalStream) {
-              if (event.event_type === "step.delta" && event.delta?.type === "text" && "text" in event.delta) {
-                const text = event.delta.text;
-                accumulatedOutput += text;
-                yield { type: "text", content: text };
-              }
-              if (event.event_type === "interaction.created" && event.interaction?.id) {
-                currentInteractionId = event.interaction.id;
-              }
-              if (event.event_type === "interaction.completed" && event.interaction?.usage) {
-                finalUsage = extractInteractionsUsage(event.interaction.usage, interactionModel);
-              }
-            }
-            if (finalUsage) accumulateUsage(totalUsage, finalUsage);
-            continueLoop = false;
-            continue;
-          }
-
-          // Add warning if approaching limit
-          if (warningEmitted && remainingAfter <= warningThreshold) {
-            functionResults.push({
-              type: "user_input",
-              content: [{ type: "text", text: `[System: You have ${remainingAfter} function calls remaining. Please complete your task efficiently or provide a summary.]` }],
-            });
-          }
-
-          // Send function results back — next iteration creates a new interaction chained via previous_interaction_id
-          nextInput = functionResults;
-          tracing.spanEnd(roundSpanId, { metadata: { toolCalls: callsToExecute.map(c => c.name), usage: roundUsage } });
-        } else {
-          tracing.spanEnd(roundSpanId, { metadata: { final: true, usage: roundUsage } });
-          continueLoop = false;
-        }
-      }
-
-      if (streamErrored) {
-        tracing.generationEnd(generationId, {
-          error: "Interaction stream failed",
-          usage: totalUsage.total ? totalUsage : undefined,
-          metadata: { toolCallCount: toolCallTraceCount, roundCount: roundNumber },
-        });
-        return;
-      }
-
-
-      const generationMetadata: Record<string, unknown> = { toolCallCount: toolCallTraceCount, roundCount: roundNumber };
-      if (totalUsage.toolUsePromptTokens) {
-        generationMetadata.toolUsePromptTokens = totalUsage.toolUsePromptTokens;
-        if (totalUsage.total) {
-          generationMetadata.ragTokenRatio = totalUsage.toolUsePromptTokens / totalUsage.total;
-        }
-      }
-      tracing.generationEnd(generationId, {
-        output: accumulatedOutput,
-        usage: totalUsage.total ? totalUsage : undefined,
-        metadata: generationMetadata,
-      });
-
-      yield {
-        type: "done",
-        usage: toStreamChunkUsage(totalUsage.total ? totalUsage : undefined),
-        interactionId: currentInteractionId,
-      };
-    } catch (error) {
-      tracing.generationEnd(generationId, {
-        error: formatError(error),
-        usage: totalUsage.total ? totalUsage : undefined,
-        metadata: { toolCallCount: toolCallTraceCount, roundCount: roundNumber },
-      });
-
-      yield {
-        type: "error",
-        error: formatError(error),
-      };
-    }
+    yield* runGeminiInteractions({
+      input, previousInteractionId, model: interactionModel, traceId, generationId,
+      searchPolicy: "pre-retrieved", ragAlreadyEmitted: ragEmitted,
+      maxFunctionCalls, warningThreshold, limitPolicy: { kind: "fixed" },
+      executeToolCall,
+      create: request => this.ai.interactions.create({
+        model: interactionModel,
+        input: request.input as string | Interactions.Content[] | Interactions.Step[],
+        stream: true, store: true,
+        previous_interaction_id: request.previousInteractionId,
+        tools: selectGeminiInteractionTools(interactionTools, request.toolMode),
+        system_instruction: ragSystemPrompt, generation_config: generationConfig(request.toolMode),
+      }),
+    });
   }
 
-  // Streaming workflow generation with thinking
-  async *generateWorkflowStream(
-    messages: Message[],
-    systemPrompt?: string,
-    traceId?: string | null
-  ): AsyncGenerator<StreamChunk> {
-    // Build history from all messages except the last one
-    const historyMessages = messages.slice(0, -1);
-    const history = this.messagesToContents(historyMessages);
 
-    // Get the last user message.
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.role !== "user") {
-      yield { type: "error", error: "No user message to send" };
-      return;
-    }
-
-    // Workflow generation always enables thinking (unless model doesn't support it)
-    const thinkingConfig = this.buildThinkingConfig(true);
-
-    // Create a chat session with history (no tools for workflow generation)
-    const chat: Chat = this.ai.chats.create({
-      model: this.model,
-      history,
-      config: {
-        systemInstruction: systemPrompt,
-        safetySettings: DEFAULT_SAFETY_SETTINGS,
-        thinkingConfig,
-      },
-    });
-
-    const messageParts = GeminiClient.buildMessageParts(lastMessage);
-
-    const genId = tracing.generationStart(traceId ?? null, "generateWorkflowStream", {
-      model: this.model,
-      input: lastMessage.content,
-      metadata: { enableThinking: this.supportsThinking() },
-    });
-
-    try {
-      const response = await chat.sendMessageStream({ message: messageParts });
-      let accumulatedText = "";
-      let lastUsage: TracingUsage | undefined;
-
-      for await (const chunk of response) {
-        if (chunk.usageMetadata) lastUsage = extractUsage(chunk.usageMetadata, { model: this.model });
-        // Access candidates via type assertion for thought parts and finishReason
-        const chunkWithCandidates = chunk as {
-          candidates?: Array<{
-            finishReason?: string;
-            content?: {
-              parts?: Array<{
-                text?: string;
-                thought?: boolean;
-              }>;
-            };
-          }>;
-        };
-        const candidates = chunkWithCandidates.candidates;
-
-        // Check finishReason for blocked responses (best practice)
-        const blockReason = checkFinishReason(candidates);
-        if (blockReason) {
-          tracing.generationEnd(genId, { error: blockReason, usage: lastUsage });
-          yield { type: "error", error: blockReason };
-          return;
-        }
-
-        // Extract and yield thinking parts
-        if (candidates && candidates.length > 0) {
-          const parts = candidates[0]?.content?.parts;
-          if (parts) {
-            for (const part of parts) {
-              if (part.thought && part.text) {
-                yield { type: "thinking", content: part.text };
-              }
-            }
-          }
-        }
-
-        // Yield text chunks
-        const text = chunk.text;
-        if (text) {
-          accumulatedText += text;
-          yield { type: "text", content: text };
-        }
-      }
-
-      tracing.generationEnd(genId, { output: accumulatedText, usage: lastUsage });
-      yield { type: "done", usage: toStreamChunkUsage(lastUsage) };
-    } catch (error) {
-      tracing.generationEnd(genId, {
-        error: formatError(error),
-      });
-      yield {
-        type: "error",
-        error: formatError(error),
-      };
-    }
-  }
-
-  // Deep Research using Interactions API agent
-  async *deepResearchStream(
-    query: string,
-    previousInteractionId?: string | null,
-    traceId?: string | null
-  ): AsyncGenerator<StreamChunk> {
-    const genId = tracing.generationStart(traceId ?? null, "deepResearch", {
-      model: "deep-research-pro-preview-12-2025",
-      input: query,
-    });
-
-    try {
-      // Create a background interaction with the Deep Research agent
-      const interaction = await this.ai.interactions.create({
-        agent: "deep-research-pro-preview-12-2025",
-        input: query,
-        background: true,
-        previous_interaction_id: previousInteractionId ?? undefined,
-        store: true,
-      });
-
-      const interactionId = interaction.id;
-      yield { type: "text", content: "Deep Research started. Polling for results...\n\n" };
-
-      // Poll for completion
-      const maxPolls = 180;  // 30 min max (10s intervals)
-      for (let i = 0; i < maxPolls; i++) {
-        await new Promise(resolve => window.setTimeout(resolve, 10000));
-
-        const result = await this.ai.interactions.get(interactionId);
-
-        if (result.status === "completed") {
-          let fullText = result.output_text ?? "";
-          if (!fullText && Array.isArray(result.steps)) {
-            for (const step of result.steps) {
-              if (step?.type === "model_output" && Array.isArray(step.content)) {
-                for (const content of step.content as Array<{ type?: string; text?: string }>) {
-                  if (content?.type === "text" && content.text) {
-                    fullText += content.text;
-                  }
-                }
-              }
-            }
-          }
-
-          if (fullText) {
-            yield { type: "text", content: fullText };
-          }
-
-          const usage = extractInteractionsUsage(result.usage, "deep-research-pro-preview-12-2025");
-          tracing.generationEnd(genId, { output: fullText, usage });
-          yield {
-            type: "done",
-            usage: toStreamChunkUsage(usage),
-            interactionId,
-          };
-          return;
-        }
-
-        if (result.status === "failed" || result.status === "cancelled") {
-          const errMsg = `Deep Research ${result.status}`;
-          tracing.generationEnd(genId, { error: errMsg });
-          yield { type: "error", error: errMsg };
-          return;
-        }
-
-        // Still in progress
-        if (i % 3 === 0 && i > 0) {
-          yield { type: "text", content: "." };
-        }
-      }
-
-      tracing.generationEnd(genId, { error: "Deep Research timed out" });
-      yield { type: "error", error: "Deep Research timed out after 30 minutes" };
-    } catch (error) {
-      tracing.generationEnd(genId, { error: formatError(error) });
-      yield { type: "error", error: formatError(error) };
-    }
-  }
-
-  // Image generation using Gemini
-  async *generateImageStream(
-    messages: Message[],
-    imageModel: ModelType,
-    systemPrompt?: string,
-    webSearchEnabled?: boolean,
-    _ragStoreIds?: string[],  // Reserved for future RAG support in image generation
-    traceId?: string | null
-  ): AsyncGenerator<StreamChunk> {
-    // Build history from all messages except the last one
-    const historyMessages = messages.slice(0, -1);
-    const history = this.messagesToContents(historyMessages);
-
-    // Get the last user message
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.role !== "user") {
-      yield { type: "error", error: "No user message to send" };
-      return;
-    }
-
-    const messageParts = GeminiClient.buildMessageParts(lastMessage);
-
-    // Build tools array
-    // Image models: Web Search only (no RAG)
-    const tools: Tool[] = [];
-
-    if (webSearchEnabled) {
-      tools.push({ googleSearch: {} });
-    }
-
-    const genId = tracing.generationStart(traceId ?? null, "generateImageStream", {
-      model: imageModel,
-      input: lastMessage.content,
-      metadata: { webSearchEnabled: !!webSearchEnabled },
-    });
-
-    try {
-      const response = await this.ai.models.generateContent({
-        model: imageModel,
-        contents: [...history, { role: "user", parts: messageParts }],
-        config: {
-          systemInstruction: systemPrompt,
-          safetySettings: DEFAULT_SAFETY_SETTINGS,
-          responseModalities: ["TEXT", "IMAGE"],
-          tools: tools.length > 0 ? tools : undefined,
-        },
-      });
-
-      // Check for blocked responses (best practice: always check finishReason)
-      const blockReason = checkFinishReason(response.candidates);
-      if (blockReason) {
-        tracing.generationEnd(genId, { error: blockReason });
-        yield { type: "error", error: blockReason };
-        return;
-      }
-
-      // Emit web search used if enabled
-      if (webSearchEnabled) {
-        yield { type: "web_search_used" };
-      }
-
-      // Process response parts
-      if (response.candidates && response.candidates.length > 0) {
-        const candidate = response.candidates[0];
-        if (candidate.content?.parts) {
-          for (const part of candidate.content.parts) {
-            // Handle text parts
-            if ("text" in part && part.text) {
-              yield { type: "text", content: part.text };
-            }
-            // Handle image parts
-            if ("inlineData" in part && part.inlineData) {
-              const imageData = part.inlineData as { mimeType?: string; data?: string };
-              if (imageData.mimeType && imageData.data) {
-                const generatedImage: GeneratedImage = {
-                  mimeType: imageData.mimeType,
-                  data: imageData.data,
-                };
-                yield { type: "image_generated", generatedImage };
-              }
-            }
-          }
-        }
-      }
-
-      const imageWebSearchUsed = !!webSearchEnabled;
-      const imageUsage = extractUsage(response.usageMetadata, { model: imageModel, webSearchUsed: imageWebSearchUsed });
-      tracing.generationEnd(genId, {
-        output: "[image generation completed]",
-        usage: imageUsage,
-      });
-      yield { type: "done", usage: toStreamChunkUsage(imageUsage) };
-    } catch (error) {
-      tracing.generationEnd(genId, {
-        error: formatError(error),
-      });
-      yield {
-        type: "error",
-        error: formatError(error),
-      };
-    }
-  }
 }
 
 /**

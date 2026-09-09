@@ -2,7 +2,7 @@ import { Setting, Notice } from "obsidian";
 import { t } from "src/i18n";
 import { DEFAULT_DISCORD_SETTINGS } from "src/types";
 import { getDiscordService, initDiscordService, resetDiscordService } from "src/core/discordService";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { credentialSlot } from "src/core/credentialBundle";
 import { getAvailableModels } from "src/core/availableModels";
 import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";

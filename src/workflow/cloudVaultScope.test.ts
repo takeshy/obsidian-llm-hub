@@ -51,7 +51,7 @@ function makeContext(allowedFolders?: string[]): ExecutionContext {
   return {
     variables: new Map(),
     logs: [],
-    cloudVaultToolAllowedFolders: allowedFolders,
+    vaultToolAllowedFolders: allowedFolders,
   };
 }
 

@@ -22,7 +22,8 @@ import {
   loadExternalRagVectors,
 } from "./localRagStorage";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type RagSetting } from "../types";
-import { extractPdfPageText, loadPdfDocument } from "./pdfJs";
+// PDF text extraction and page-label mapping are shared.
+import { extractPdfTextWithOffsets, computePdfPageLabel } from "obsidian-llm-hub-common/vault";
 
 const MAX_CHANGED_FILES_PER_SYNC = 50;
 const SCAN_YIELD_INTERVAL = 25;
@@ -425,7 +426,7 @@ class LocalRagStore {
             }
           } else {
             // Non-Gemini: extract text from PDF and embed as text chunks
-            const pdfResult = await extractPdfTextWithOffsets(app, file);
+            const pdfResult = await extractPdfTextWithOffsets(app, file.path);
             if (!pdfResult) {
               failedFiles.push(file.path);
               embeddedChecksums[file.path] = currentChecksums[file.path];
@@ -449,7 +450,7 @@ class LocalRagStore {
 
             for (let i = 0; i < chunks.length; i++) {
               if (embeddings[i] && embeddings[i].length > 0) {
-                const pageLabel = computePageLabel(
+                const pageLabel = computePdfPageLabel(
                   chunks[i].startOffset, chunks[i].startOffset + chunks[i].text.length,
                   pdfResult.pageOffsets, pdfResult.numPages,
                 );
@@ -869,53 +870,6 @@ function chunkText(text: string, chunkSize: number, chunkOverlap: number): strin
   return chunkTextWithOffsets(text, chunkSize, chunkOverlap).map(c => c.text);
 }
 
-interface PdfExtractResult {
-  text: string;
-  numPages: number;
-  /** Character offset where each page starts. */
-  pageOffsets: number[];
-}
-
-/** Extract text from a PDF with page offset tracking for page label computation. */
-async function extractPdfTextWithOffsets(app: App, file: TFile): Promise<PdfExtractResult | null> {
-  const buffer = await app.vault.readBinary(file);
-  const pdf = await loadPdfDocument(buffer);
-  const pageTexts: string[] = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const text = await extractPdfPageText(pdf, i);
-    pageTexts.push(text.trim() ? text : "");
-  }
-  // Join non-empty page texts with "\n" and track the offset of each page
-  // in the joined string. Empty pages get the same offset as the next non-empty page.
-  const parts: string[] = [];
-  const pageOffsets: number[] = [];
-  let offset = 0;
-  for (let i = 0; i < pageTexts.length; i++) {
-    if (pageTexts[i]) {
-      if (parts.length > 0) offset++; // "\n" separator
-      pageOffsets.push(offset);
-      parts.push(pageTexts[i]);
-      offset += pageTexts[i].length;
-    } else {
-      // Empty page: point to current end position (will map to the next non-empty page's content)
-      pageOffsets.push(offset);
-    }
-  }
-  if (parts.length === 0) return null;
-  return { text: parts.join("\n"), numPages: pdf.numPages, pageOffsets };
-}
-
-/** Compute a page label (e.g. "pages 2-5 of 24") for a chunk based on its character offsets. */
-function computePageLabel(startOffset: number, endOffset: number, pageOffsets: number[], numPages: number): string {
-  let startPage = 1;
-  let endPage = 1;
-  for (let i = 0; i < pageOffsets.length; i++) {
-    if (pageOffsets[i] <= startOffset) startPage = i + 1;
-    if (pageOffsets[i] <= endOffset) endPage = i + 1;
-  }
-  return `pages ${startPage}-${endPage} of ${numPages}`;
-}
-
 // Simple string checksum using hash
 function simpleChecksum(content: string): string {
   let hash = 0;
@@ -1134,7 +1088,7 @@ export async function buildRagPdfTextContext(
   );
   if (pdfReferences.length === 0) return "";
 
-  const { extractPdfText } = await import("../vault/search");
+  const { extractPdfText } = await import("obsidian-llm-hub-common/vault");
   let context = "";
 
   type PageRange = { startPage?: number; endPage?: number };

@@ -2,7 +2,7 @@ import { Modal, Notice, Platform, Setting } from "obsidian";
 import { createMcpClient } from "src/core/mcpClient";
 import type { AgentPluginPreview } from "src/core/agentPlugins";
 import type { McpServerConfig } from "src/types";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 
 export class AgentPluginInstallModal extends Modal {
   private installed = false;

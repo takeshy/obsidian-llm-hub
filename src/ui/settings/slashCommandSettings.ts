@@ -1,14 +1,12 @@
 import { Setting, Notice } from "obsidian";
 import { t } from "src/i18n";
-import type { ModelType } from "src/types";
-import { SlashCommandModal } from "./SlashCommandModal";
+import type { ModelType, SlashCommand } from "src/types";
+import { SlashCommandModal, type SlashCommandModalOptions } from "obsidian-llm-hub-common/modals";
 import type { SettingsContext } from "./settingsContext";
 
 export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
   const { plugin, display } = ctx;
   const app = plugin.app;
-  const allowRag = true;
-  const allowWebSearch = true;
   const enabledProviders = plugin.settings.apiProviders.filter(p => p.enabled && p.verified);
   const availableModels = enabledProviders.flatMap(p =>
     p.enabledModels.map(m => ({
@@ -17,7 +15,12 @@ export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: Setti
       description: `${p.type} API provider`,
     }))
   );
-  const ragSettingNames = plugin.getRagSettingNames();
+  const modalOptions: SlashCommandModalOptions = {
+    models: availableModels,
+    search: { webSearch: true, ragSettings: plugin.getRagSettingNames(), combinable: true },
+    mcpServers: plugin.settings.mcpServers,
+    editConfirmation: true,
+  };
 
   new Setting(containerEl).setName(t("settings.slashCommands")).setHeading();
 
@@ -32,12 +35,8 @@ export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: Setti
           new SlashCommandModal(
             app,
             null,
-            allowRag,
-            allowRag ? ragSettingNames : [],
-            availableModels,
-            allowWebSearch,
-            plugin.settings.mcpServers,
-            async (command) => {
+            modalOptions,
+            async (command: SlashCommand) => {
               plugin.settings.slashCommands.push(command);
               await plugin.saveSettings();
               display();
@@ -67,12 +66,8 @@ export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: Setti
             new SlashCommandModal(
               app,
               command,
-              allowRag,
-              allowRag ? ragSettingNames : [],
-              availableModels,
-              allowWebSearch,
-              plugin.settings.mcpServers,
-              async (updated) => {
+              modalOptions,
+              async (updated: SlashCommand) => {
                 const index = plugin.settings.slashCommands.findIndex(
                   (c) => c.id === command.id
                 );

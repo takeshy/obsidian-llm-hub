@@ -6,7 +6,7 @@ import {
   SETTINGS_CREDENTIAL_SECRET_ID,
 } from "src/core/credentialBundle";
 import { clearSecret, isSecretStorageAvailable } from "src/core/secretStorage";
-import { formatError } from "src/utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import type { LlmHubPlugin } from "src/plugin";
 import type { SettingsContext } from "./settingsContext";
 

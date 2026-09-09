@@ -1,18 +1,23 @@
+import {
+  acceptedAttachmentTypes,
+  detectComposerTrigger,
+  fileToAttachment,
+  isAttachmentRejection,
+} from "obsidian-llm-hub-common/chat";
+import type { VoiceChatSettings, VoiceConversationSession } from "obsidian-llm-hub-common/chat";
+import { clampReadAloudRate, MAX_READ_ALOUD_RATE, MIN_READ_ALOUD_RATE } from "obsidian-llm-hub-common/chat";
+import { CollapsedInput } from "obsidian-llm-hub-common";
+import { InputArea as SharedInputArea } from "obsidian-llm-hub-common";
+import { Composer, Autocomplete, Attachments, VaultToolControl, EnabledMcpServers, ChipRow, ReadAloudChip, VoiceConversationChip, InputButtons, SearchSelector, ModelRow, ModelDropdown } from "obsidian-llm-hub-common";
 import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from "react";
-import Send from "lucide-react/dist/esm/icons/send";
-import Paperclip from "lucide-react/dist/esm/icons/paperclip";
-import StopCircle from "lucide-react/dist/esm/icons/stop-circle";
-import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+
+
 import Eye from "lucide-react/dist/esm/icons/eye";
-import Database from "lucide-react/dist/esm/icons/database";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import Wrench from "lucide-react/dist/esm/icons/wrench";
-import X from "lucide-react/dist/esm/icons/x";
+
 import { Notice, Platform, type App } from "obsidian";
 import { isImageGenerationModel, type ModelInfo, type ModelType, type Attachment, type SlashCommand, type McpServerConfig, type SearchSelection, type VaultToolMode, type CodexReasoningEffort, type ReasoningEffort } from "src/types";
 import type { CodexModelOption } from "src/core/cliProvider";
-import { RagSourceModal } from "./RagSourceModal";
+
 import type { SkillMetadata } from "src/core/skillsLoader";
 import type { OkfBundle } from "src/core/okfLoader";
 import SkillSelector from "./SkillSelector";
@@ -56,6 +61,10 @@ interface InputAreaProps {
   onMaxPreviousMessagesChange: (count: number) => void;
   inputHistory: string[];
   onInputHistoryAdd: (prompt: string) => void;
+  voiceChatSettings: VoiceChatSettings;
+  voiceConversation: VoiceConversationSession;
+  onAutoReadAloudChange: (enabled: boolean) => void;
+  onReadAloudRateChange: (rate: number) => void;
   mcpServers: McpServerConfig[]; // MCP server configurations
   onMcpServerToggle: (serverName: string, enabled: boolean) => void; // Per-server toggle handler
   slashCommands: SlashCommand[];
@@ -89,16 +98,14 @@ interface MentionItem {
 }
 
 // 対応ファイル形式
-const SUPPORTED_TYPES = {
-  image: ["image/png", "image/jpeg", "image/gif", "image/webp"],
-  pdf: ["application/pdf"],
-  text: ["text/plain", "text/markdown", "text/csv", "application/json"],
-  audio: ["audio/mpeg", "audio/wav", "audio/flac", "audio/aac", "audio/mp4", "audio/opus", "audio/ogg"],
-  video: ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo", "video/x-matroska"],
-};
 
-const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
-const HISTORY_LIMIT_OPTIONS = Array.from({ length: 100 }, (_, index) => index);
+/** Least restricted first: the Vault tool button reads as inactive only on the first. */
+const VAULT_TOOL_MODES = [
+  { id: "all" as VaultToolMode, label: t("input.vaultToolAll"), description: t("input.vaultToolAllDesc") },
+  { id: "noSearch" as VaultToolMode, label: t("input.vaultToolNoSearch"), description: t("input.vaultToolNoSearchDesc") },
+  { id: "readOnly" as VaultToolMode, label: t("input.vaultToolReadOnly"), description: t("input.vaultToolReadOnlyDesc") },
+  { id: "none" as VaultToolMode, label: t("input.vaultToolNone"), description: t("input.vaultToolNoneDesc") },
+];
 
 const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea({
   onSend,
@@ -127,6 +134,10 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   onMaxPreviousMessagesChange,
   inputHistory,
   onInputHistoryAdd,
+  voiceChatSettings,
+  voiceConversation,
+  onAutoReadAloudChange,
+  onReadAloudRateChange,
   mcpServers,
   onMcpServerToggle,
   slashCommands,
@@ -156,13 +167,10 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   const [filteredMentions, setFilteredMentions] = useState<MentionItem[]>([]);
   const [mentionStartPos, setMentionStartPos] = useState(0);
   const [showVaultToolMenu, setShowVaultToolMenu] = useState(false);
-  const [showSearchMenu, setShowSearchMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mentionAutocompleteRef = useRef<HTMLDivElement>(null);
   const vaultToolMenuRef = useRef<HTMLDivElement>(null);
-  const searchMenuRef = useRef<HTMLDivElement>(null);
-  const searchButtonRef = useRef<HTMLButtonElement>(null);
   const historyIndexRef = useRef<number | null>(null);
   const historyDraftRef = useRef("");
 
@@ -185,31 +193,9 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
         setShowVaultToolMenu(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    activeDocument.addEventListener("mousedown", handleClickOutside);
+    return () => activeDocument.removeEventListener("mousedown", handleClickOutside);
   }, [showVaultToolMenu]);
-
-  useEffect(() => {
-    if (!showSearchMenu) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchMenuRef.current && !searchMenuRef.current.contains(event.target as Node)) {
-        setShowSearchMenu(false);
-      }
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowSearchMenu(false);
-        searchButtonRef.current?.focus();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    window.setTimeout(() => searchMenuRef.current?.querySelector<HTMLInputElement>("input:not(:disabled)")?.focus(), 0);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [showSearchMenu]);
 
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
@@ -298,6 +284,33 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     }
   };
 
+  // Text from a popup opened for a conversation that has since ended, or one
+  // that answered while a turn was still running: keep the words at the caret
+  // instead of sending them.
+  const insertDictation = (text: string) => {
+    const caret = textareaRef.current?.selectionStart ?? input.length;
+    const end = textareaRef.current?.selectionEnd ?? caret;
+    const before = input.slice(0, caret);
+    const separator = before && !/\s$/.test(before) ? " " : "";
+    const next = before + separator + text + input.slice(end);
+    setInput(next);
+    const position = before.length + separator.length + text.length;
+    window.setTimeout(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(position, position);
+    }, 0);
+  };
+
+  const handleVoiceSubmit = (content: string) => {
+    if (!content.trim() || isLoading) return;
+    onInputHistoryAdd(content);
+    void onSend(content, pendingAttachments.length > 0 ? pendingAttachments : undefined);
+    historyIndexRef.current = null;
+    historyDraftRef.current = "";
+    setInput("");
+    setPendingAttachments([]);
+  };
+
   const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     const cursorPos = e.target.selectionStart;
@@ -347,33 +360,20 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       setShowAutocomplete(false);
     }
 
-    // Check for [[ wikilink trigger
-    const textBeforeCursor = value.substring(0, cursorPos);
-    const wikiMatch = textBeforeCursor.match(/\[\[([^\]\n]*)$/);
-    if (wikiMatch) {
-      const query = wikiMatch[1];
-      const startPos = cursorPos - wikiMatch[0].length;
-      const mentions = buildWikilinkCandidates(query);
+    // Which menu the text calls for is decided in the shared library, so the
+    // three plugins cannot disagree about when one opens.
+    const trigger = detectComposerTrigger(value, cursorPos);
+    if (trigger && trigger.kind !== "command") {
+      const mentions = trigger.kind === "wikilink"
+        ? buildWikilinkCandidates(trigger.query)
+        : buildMentionCandidates(trigger.query);
       setFilteredMentions(mentions);
-      setMentionStartPos(startPos);
+      setMentionStartPos(trigger.startPos);
       setShowMentionAutocomplete(mentions.length > 0);
       setMentionIndex(0);
       return;
     }
-
-    // Check for @ mention trigger
-    const atMatch = textBeforeCursor.match(/@([^\s@]*)$/);
-    if (atMatch) {
-      const query = atMatch[1];
-      const startPos = cursorPos - atMatch[0].length;
-      const mentions = buildMentionCandidates(query);
-      setFilteredMentions(mentions);
-      setMentionStartPos(startPos);
-      setShowMentionAutocomplete(mentions.length > 0);
-      setMentionIndex(0);
-    } else {
-      setShowMentionAutocomplete(false);
-    }
+    setShowMentionAutocomplete(false);
   };
 
   const selectCommand = (command: SlashCommand | BuiltInCommand) => {
@@ -534,60 +534,12 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   };
 
   const processFile = async (file: File): Promise<Attachment | null> => {
-    const mimeType = file.type;
-
-    // ファイルサイズチェック（20MB制限）
-    if (file.size > MAX_ATTACHMENT_SIZE) {
-      new Notice(t("input.fileTooLarge", { name: file.name }));
+    const result = await fileToAttachment(file);
+    if (isAttachmentRejection(result)) {
+      if (result.reason === "too-large") new Notice(t("input.fileTooLarge", { name: file.name }));
       return null;
     }
-
-    // 画像
-    if (SUPPORTED_TYPES.image.includes(mimeType)) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "image", mimeType, data };
-    }
-
-    // PDF
-    if (SUPPORTED_TYPES.pdf.includes(mimeType)) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "pdf", mimeType, data };
-    }
-
-    // テキスト
-    if (SUPPORTED_TYPES.text.includes(mimeType) || file.name.endsWith(".md") || file.name.endsWith(".txt")) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "text", mimeType: mimeType || "text/plain", data };
-    }
-
-    // 音声
-    if (SUPPORTED_TYPES.audio.includes(mimeType)) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "audio", mimeType, data };
-    }
-
-    // 動画
-    if (SUPPORTED_TYPES.video.includes(mimeType)) {
-      const data = await fileToBase64(file);
-      return { name: file.name, type: "video", mimeType, data };
-    }
-
-    // Unsupported file type
-    return null;
-  };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove data URL prefix (e.g., "data:image/png;base64,")
-        const base64 = result.split(",")[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    return result;
   };
 
   const removeAttachment = (index: number) => {
@@ -595,121 +547,62 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   };
 
   const getAllAcceptedTypes = () => {
-    return [...SUPPORTED_TYPES.image, ...SUPPORTED_TYPES.pdf, ...SUPPORTED_TYPES.text, ...SUPPORTED_TYPES.audio, ...SUPPORTED_TYPES.video, ".md", ".txt"].join(",");
+    return acceptedAttachmentTypes();
   };
 
   return (
-    <div className={`llm-hub-input-container ${isCollapsed ? "collapsed" : ""}`}>
-      {/* MCP servers enabled for this chat */}
-      {!isCollapsed && mcpServers.some((server) => server.enabled) && (
-        <div className="llm-hub-enabled-mcp-servers">
-          {mcpServers.filter((server) => server.enabled).map((server) => (
-            <span
-              key={server.name}
-              className="llm-hub-enabled-mcp-server"
-              title={t("input.mcpServerEnabled", { name: server.name })}
-            >
-              <Wrench size={12} aria-hidden="true" />
-              <span className="llm-hub-enabled-mcp-server-name">{server.name}</span>
-              <button
-                type="button"
-                className="llm-hub-enabled-mcp-server-remove"
-                onClick={() => onMcpServerToggle(server.name, false)}
-                disabled={isLoading || vaultToolModeOnlyNone}
-                title={t("input.mcpServerDisable", { name: server.name })}
-                aria-label={t("input.mcpServerDisable", { name: server.name })}
-              >
-                <X size={10} aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+    <SharedInputArea classPrefix="llm-hub" modifiers={[isCollapsed && "collapsed"]} collapsed={isCollapsed}
+      beforeInput={<>
+      <ChipRow classPrefix="llm-hub">
+        {/* Reading aloud stays visible outside the transcript while it is on */}
+        {!isCollapsed && voiceChatSettings.autoReadAloud && <ReadAloudChip
+          classPrefix="llm-hub"
+          label={t("input.readAloudChip")}
+          removeTitle={t("input.readAloudChipOff")}
+          onDisable={() => onAutoReadAloudChange(false)}
+        />}
+
+        {!isCollapsed && voiceConversation.active && <VoiceConversationChip
+          classPrefix="llm-hub"
+          label={t("input.voiceConversationChip")}
+          removeTitle={t("input.voiceConversationEnd")}
+          onEnd={voiceConversation.end}
+        />}
+
+        {/* MCP servers enabled for this chat */}
+        {!isCollapsed && (
+          <EnabledMcpServers
+            classPrefix="llm-hub"
+            disabled={isLoading || vaultToolModeOnlyNone}
+            onDisable={(id) => onMcpServerToggle(id, false)}
+            servers={mcpServers.filter((server) => server.enabled).map((server) => ({
+              id: server.name,
+              name: server.name,
+              title: t("input.mcpServerEnabled", { name: server.name }),
+              removeTitle: t("input.mcpServerDisable", { name: server.name }),
+            }))}
+          />
+        )}
+      </ChipRow>
 
       {/* Pending attachments display */}
       {!isCollapsed && pendingAttachments.length > 0 && (
-        <div className="llm-hub-pending-attachments">
-          {pendingAttachments.map((attachment, index) => (
-            <span
-              key={index}
-              className={`llm-hub-pending-attachment${attachment.sourcePath ? " llm-hub-clickable" : ""}`}
-              onClick={() => {
-                if (!attachment.sourcePath) return;
-                new RagSourceModal(app, attachment, (result) => {
-                  setPendingAttachments(prev => {
-                    const next = [...prev];
-                    next[index] = result.attachment;
-                    return next;
-                  });
-                }).open();
-              }}
-              title={attachment.sourcePath ? t("ragSource.clickToView") : undefined}
-            >
-              {attachment.type === "image" && "🖼️"}
-              {attachment.type === "pdf" && "📄"}
-              {attachment.type === "text" && "📃"}
-              {attachment.type === "audio" && "🎵"}
-              {attachment.type === "video" && "🎬"}
-              {" "}{attachment.name}
-              <button
-                className="llm-hub-pending-attachment-remove"
-                onClick={(e) => { e.stopPropagation(); removeAttachment(index); }}
-                title={t("input.removeAttachment")}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
+        <Attachments classPrefix="llm-hub" attachments={pendingAttachments} pending onRemove={removeAttachment} removeLabel={t("input.removeAttachment")} />
       )}
 
-      {!isCollapsed && (
-        <div className="llm-hub-input-area">
+      </>}
+      accessories={<>
           {/* Slash command autocomplete */}
           {showAutocomplete && (
-          <div className="llm-hub-autocomplete">
-            {filteredCommands.map((cmd, index) => (
-              <div
-                key={cmd.id}
-                className={`llm-hub-autocomplete-item ${
-                  index === autocompleteIndex ? "active" : ""
-                }`}
-                onClick={() => selectCommand(cmd)}
-                onMouseEnter={() => setAutocompleteIndex(index)}
-              >
-                <span className="llm-hub-autocomplete-name">
-                  {"id" in cmd && (cmd as BuiltInCommand).id?.startsWith("__skill__") ? `✨ /${cmd.name}` : `/${cmd.name}`}
-                </span>
-                {("description" in cmd) && cmd.description && (
-                  <span className="llm-hub-autocomplete-desc">
-                    {cmd.description}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+          <Autocomplete classPrefix="llm-hub"
+            items={filteredCommands.map(cmd => ({ id: cmd.id, label: "id" in cmd && (cmd as BuiltInCommand).id?.startsWith("__skill__") ? `✨ /${cmd.name}` : `/${cmd.name}`, description: "description" in cmd ? cmd.description : undefined }))}
+            activeIndex={autocompleteIndex} onSelect={index => selectCommand(filteredCommands[index])} onHover={setAutocompleteIndex} />
         )}
 
         {/* Mention autocomplete */}
         {showMentionAutocomplete && (
-          <div className="llm-hub-autocomplete" ref={mentionAutocompleteRef}>
-            {filteredMentions.map((mention, index) => (
-              <div
-                key={mention.value}
-                className={`llm-hub-autocomplete-item ${
-                  index === mentionIndex ? "active" : ""
-                }`}
-                onClick={() => selectMention(mention)}
-                onMouseEnter={() => setMentionIndex(index)}
-              >
-                <span className="llm-hub-autocomplete-name">
-                  {mention.kind === "wikilink" ? `[[${mention.value}]]` : mention.value}
-                </span>
-                <span className="llm-hub-autocomplete-desc">
-                  {mention.description}
-                </span>
-                {mention.kind !== "variable" && (
-                  <button
+          <Autocomplete classPrefix="llm-hub" containerRef={mentionAutocompleteRef}
+            items={filteredMentions.map(mention => ({ id: mention.value, label: mention.kind === "wikilink" ? `[[${mention.value}]]` : mention.value, description: mention.description, action: mention.kind !== "variable" ? (<button
                     className="llm-hub-preview-btn"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -719,214 +612,108 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
                     title={t("input.openFile")}
                   >
                     <Eye size={12} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+                  </button>) : undefined }))}
+            activeIndex={mentionIndex} onSelect={index => selectMention(filteredMentions[index])} onHover={setMentionIndex} />
         )}
 
-        {/* Hidden file input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={getAllAcceptedTypes()}
-          onChange={(event) => {
-            void handleFileSelect(event);
+        <InputButtons
+          classPrefix="llm-hub"
+          attach={{
+            title: t("input.attach"),
+            accept: getAllAcceptedTypes(),
+            inputRef: fileInputRef,
+            disabled: isLoading,
+            onOpenPicker: () => fileInputRef.current?.click(),
+            onSelect: (event) => {
+              void handleFileSelect(event);
+            },
           }}
-          className="llm-hub-hidden-input"
-        />
+        >
 
-        {/* Left button column */}
-        <div className="llm-hub-input-buttons">
-          {/* Attachment button */}
-          <button
-            className="llm-hub-attachment-btn"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading}
-            title={t("input.attach")}
-          >
-            <Paperclip size={18} />
-          </button>
+          <VaultToolControl<VaultToolMode>
+            classPrefix="llm-hub"
+            containerRef={vaultToolMenuRef}
+            title={t("input.vaultToolTitle")}
+            open={showVaultToolMenu}
+            onToggle={setShowVaultToolMenu}
+            disabled={isLoading || isImageGenerationModel(model)}
+            modes={VAULT_TOOL_MODES}
+            mode={vaultToolMode}
+            onModeChange={onVaultToolModeChange}
+            lockedTo={vaultToolModeOnlyNone ? "none" : undefined}
+            mcp={{
+              label: t("input.mcpServersLabel"),
+              onToggle: onMcpServerToggle,
+              servers: mcpServers.map((server) => {
+                const toolCount = server.toolHints?.length || 0;
+                return {
+                  id: server.name,
+                  name: server.name,
+                  enabled: server.enabled,
+                  hint: toolCount > 0
+                    ? t("input.mcpToolHint", { count: String(toolCount), tools: server.toolHints?.slice(0, 3).join(", ") + (toolCount > 3 ? ", ..." : "") })
+                    : "",
+                  toolsTitle: server.toolHints?.join(", ") || "",
+                };
+              }),
+            }}
+            historyLimit={{
+              label: t("input.historyLimit"),
+              value: maxPreviousMessages,
+              onChange: onMaxPreviousMessagesChange,
+            }}
+            autoReadAloud={{
+              label: t("input.autoReadAloud"),
+              enabled: voiceChatSettings.autoReadAloud,
+              onChange: onAutoReadAloudChange,
+              rate: {
+                label: t("input.readAloudRate"),
+                value: clampReadAloudRate(voiceChatSettings.readAloudRate),
+                min: MIN_READ_ALOUD_RATE,
+                max: MAX_READ_ALOUD_RATE,
+                step: 0.1,
+                onChange: onReadAloudRateChange,
+              },
+            }}
+          />
+        </InputButtons>
 
-          {/* Vault tool mode button */}
-          <div className="llm-hub-vault-tool-container" ref={vaultToolMenuRef}>
-            <button
-              className={`llm-hub-vault-tool-btn ${vaultToolMode !== "all" ? "active" : ""}`}
-              onClick={() => setShowVaultToolMenu(!showVaultToolMenu)}
-              disabled={isLoading || isImageGenerationModel(model)}
-              title={t("input.vaultToolTitle")}
-            >
-              <Database size={18} />
-            </button>
-            {showVaultToolMenu && mcpServers.length === 0 && (
-              <div className="llm-hub-vault-tool-menu">
-                <div
-                  className={`llm-hub-vault-tool-item ${vaultToolMode === "all" ? "selected" : ""} ${vaultToolModeOnlyNone ? "disabled" : ""}`}
-                  onClick={() => { if (!vaultToolModeOnlyNone) { onVaultToolModeChange("all"); setShowVaultToolMenu(false); } }}
-                >
-                  <div>{t("input.vaultToolAll")}</div>
-                  <div className="llm-hub-vault-tool-item-desc">{t("input.vaultToolAllDesc")}</div>
-                </div>
-                <div
-                  className={`llm-hub-vault-tool-item ${vaultToolMode === "noSearch" ? "selected" : ""} ${vaultToolModeOnlyNone ? "disabled" : ""}`}
-                  onClick={() => { if (!vaultToolModeOnlyNone) { onVaultToolModeChange("noSearch"); setShowVaultToolMenu(false); } }}
-                >
-                  <div>{t("input.vaultToolNoSearch")}</div>
-                  <div className="llm-hub-vault-tool-item-desc">{t("input.vaultToolNoSearchDesc")}</div>
-                </div>
-                <div
-                  className={`llm-hub-vault-tool-item ${vaultToolMode === "readOnly" ? "selected" : ""} ${vaultToolModeOnlyNone ? "disabled" : ""}`}
-                  onClick={() => { if (!vaultToolModeOnlyNone) { onVaultToolModeChange("readOnly"); setShowVaultToolMenu(false); } }}
-                >
-                  {t("input.vaultToolReadOnly")}
-                </div>
-                <div
-                  className={`llm-hub-vault-tool-item ${vaultToolMode === "none" ? "selected" : ""}`}
-                  onClick={() => { onVaultToolModeChange("none"); setShowVaultToolMenu(false); }}
-                >
-                  <div>{t("input.vaultToolNone")}</div>
-                  <div className="llm-hub-vault-tool-item-desc">{t("input.vaultToolNoneDesc")}</div>
-                </div>
-                <div className="llm-hub-vault-tool-separator" />
-                <label className="llm-hub-vault-tool-checkbox">
-                  <span>{t("input.historyLimit")}</span>
-                  <select value={maxPreviousMessages}
-                    onChange={(e) => onMaxPreviousMessagesChange(Number(e.target.value))}>
-                    {HISTORY_LIMIT_OPTIONS.map(count => <option key={count} value={count}>{count}</option>)}
-                  </select>
-                </label>
-              </div>
-            )}
-            {/* Modal for vault tool + MCP settings when MCP servers are configured */}
-            {showVaultToolMenu && mcpServers.length > 0 && (
-              <div className="llm-hub-tool-settings-modal">
-                <div className="llm-hub-tool-settings-content">
-                  <div className="llm-hub-tool-settings-row">
-                    <label>{t("input.vaultToolLabel")}</label>
-                    <select
-                      value={vaultToolMode}
-                      onChange={(e) => onVaultToolModeChange(e.target.value as VaultToolMode)}
-                      disabled={vaultToolModeOnlyNone}
-                    >
-                      <option value="all" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolAll")}</option>
-                      <option value="noSearch" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolNoSearch")}</option>
-                      <option value="readOnly" disabled={vaultToolModeOnlyNone}>{t("input.vaultToolReadOnly")}</option>
-                      <option value="none">{t("input.vaultToolNone")}</option>
-                    </select>
-                  </div>
-                  <div className="llm-hub-tool-settings-row">
-                    <label>{t("input.historyLimit")}</label>
-                    <select value={maxPreviousMessages}
-                      onChange={(e) => onMaxPreviousMessagesChange(Number(e.target.value))}>
-                      {HISTORY_LIMIT_OPTIONS.map(count => <option key={count} value={count}>{count}</option>)}
-                    </select>
-                  </div>
-                  <div className="llm-hub-tool-settings-row">
-                    <label>{t("input.mcpServersLabel")}</label>
-                    <div className="llm-hub-mcp-server-list">
-                      {mcpServers.map((server) => {
-                        const toolCount = server.toolHints?.length || 0;
-                        const toolHint = toolCount > 0
-                          ? t("input.mcpToolHint", { count: String(toolCount), tools: server.toolHints?.slice(0, 3).join(", ") + (toolCount > 3 ? ", ..." : "") })
-                          : "";
-                        return (
-                          <label
-                            key={server.name}
-                            className={`llm-hub-mcp-server-item${vaultToolModeOnlyNone ? " is-disabled" : ""}`}
-                            title={server.toolHints?.join(", ") || ""}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={!vaultToolModeOnlyNone && server.enabled}
-                              onChange={(e) => onMcpServerToggle(server.name, e.target.checked)}
-                              disabled={vaultToolModeOnlyNone}
-                            />
-                            <span className="llm-hub-mcp-server-name">{server.name}</span>
-                            {toolHint && <span className="llm-hub-mcp-tool-hint">{toolHint}</span>}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <button
-                    className="llm-hub-tool-settings-close"
-                    onClick={() => setShowVaultToolMenu(false)}
-                  >
-                    {t("input.close")}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <textarea
-          ref={textareaRef}
-          className="llm-hub-input"
-          value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder={isCompacting ? t("chat.compacting") : (Platform.isMobile ? t("input.placeholderMobile") : t("input.placeholder"))}
-          disabled={isCompacting}
-          rows={3}
-        />
-        <div className="llm-hub-send-buttons">
-          {isCompacting ? (
-            <button
-              className="llm-hub-send-btn"
-              disabled={true}
-              title={t("chat.compacting")}
-            >
-              <Loader2 size={18} className="llm-hub-spinner" />
-            </button>
-          ) : isLoading ? (
-            <button
-              className="llm-hub-stop-btn"
-              onClick={onStop}
-              title={t("input.stop")}
-            >
-              <StopCircle size={18} />
-            </button>
-          ) : (
-            <button
-              className="llm-hub-send-btn"
-              onClick={handleSubmit}
-              disabled={!input.trim() && pendingAttachments.length === 0}
-              title={t("input.send")}
-            >
-              <Send size={18} />
-            </button>
-          )}
-          {Platform.isMobile && (
-            <button
-              className="llm-hub-collapse-btn"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              title={isCollapsed ? t("input.expand") : t("input.collapse")}
-            >
-              {isCollapsed ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-          )}
-        </div>
-      </div>
-      )}
+        </>}
+      composer={<Composer classPrefix="llm-hub" textareaRef={textareaRef}
+          textarea={{ value: input,
+          onChange: handleInputChange,
+          onKeyDown: handleKeyDown,
+          placeholder: isCompacting ? t("chat.compacting") : (Platform.isMobile ? t("input.placeholderMobile") : t("input.placeholder")),
+          disabled: isCompacting }}
+          isLoading={isLoading} isCompacting={isCompacting} compactingLabel={t("chat.compacting")}
+          canSend={!!input.trim() || pendingAttachments.length > 0}
+          voiceConversation={{
+            available: voiceConversation.available,
+            active: voiceConversation.active,
+            label: t("input.voiceConversation"),
+            onOpen: voiceConversation.open,
+            onSubmit: handleVoiceSubmit,
+            onEnd: voiceConversation.end,
+            onInsert: insertDictation,
+          }}
+          voiceSubmit={{
+            enabled: voiceChatSettings.submitOnPaste && !isLoading,
+            phrase: voiceChatSettings.submitPhrase,
+            onSubmit: handleVoiceSubmit,
+          }}
+          onSend={handleSubmit} onStop={onStop}
+          sendLabel={t("input.send")} stopLabel={t("input.stop")}
+          collapse={Platform.isMobile ? { collapsed: isCollapsed, onToggle: () => setIsCollapsed(!isCollapsed), label: isCollapsed ? t("input.expand") : t("input.collapse") } : undefined}
+        />}
+      footer={<>
 
       {/* Collapsed state: show only expand button */}
       {isCollapsed && Platform.isMobile && (
-        <div className="llm-hub-collapsed-bar">
-          <button
-            className="llm-hub-expand-btn"
-            onClick={() => setIsCollapsed(false)}
-            title={t("input.expand")}
-          >
-            <ChevronUp size={18} />
-          </button>
-        </div>
+        <CollapsedInput classPrefix="llm-hub" label={t("input.expand")} onExpand={() => setIsCollapsed(false)} />
       )}
 
       {!isCollapsed && (
-        <div className="llm-hub-model-selector">
+        <ModelRow classPrefix="llm-hub">
           <ModelSelector
             models={availableModels}
             value={model}
@@ -935,110 +722,62 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           />
           {model === "codex-cli" && (
             <>
-              <select
-                className="llm-hub-model-select"
+              <ModelDropdown
+                classPrefix="llm-hub"
                 value={codexModel || ""}
-                onChange={(e) => onCodexConfigChange(e.target.value || undefined, codexReasoningEffort)}
+                onChange={(value) => onCodexConfigChange(value || undefined, codexReasoningEffort)}
                 disabled={isLoading}
                 title={t("settings.codexCliModel")}
-              >
-                <option value="">{t("settings.codexCliModel.default")}</option>
-                {codexModels.map((option) => (
-                  <option key={option.slug} value={option.slug}>
-                    {option.displayName} ({option.slug})
-                  </option>
-                ))}
-                {codexModel && !codexModels.some((option) => option.slug === codexModel) && (
-                  <option value={codexModel}>{codexModel}</option>
-                )}
-              </select>
-              <select
-                className="llm-hub-model-select"
+                options={[
+                  { value: "", label: t("settings.codexCliModel.default") },
+                  ...codexModels.map((option) => ({ value: option.slug, label: `${option.displayName} (${option.slug})` })),
+                  // Keep a configured model selectable even when it is missing from the list.
+                  ...(codexModel && !codexModels.some((option) => option.slug === codexModel) ? [{ value: codexModel, label: codexModel }] : []),
+                ]}
+              />
+              <ModelDropdown
+                classPrefix="llm-hub"
                 value={codexReasoningEffort}
-                onChange={(e) => onCodexConfigChange(codexModel, e.target.value as CodexReasoningEffort)}
+                onChange={(value) => onCodexConfigChange(codexModel, value as CodexReasoningEffort)}
                 disabled={isLoading}
                 title={t("settings.codexCliReasoningEffort")}
-              >
-                {(["minimal", "low", "medium", "high", "xhigh", "max"] as CodexReasoningEffort[]).map((effort) => (
-                  <option key={effort} value={effort}>{effort}</option>
-                ))}
-              </select>
+                options={(["minimal", "low", "medium", "high", "xhigh", "max"] as CodexReasoningEffort[]).map((effort) => ({ value: effort, label: effort }))}
+              />
             </>
           )}
           {reasoningEffortOptions.length > 0 && (
-            <select
-              className="llm-hub-model-select"
+            <ModelDropdown
+              classPrefix="llm-hub"
               value={reasoningEffort}
-              onChange={(e) => onReasoningEffortChange(e.target.value as ReasoningEffort)}
+              onChange={(value) => onReasoningEffortChange(value as ReasoningEffort)}
               disabled={isLoading}
-              title="Reasoning effort"
-              aria-label="Reasoning effort"
-            >
-              {reasoningEffortOptions.map((effort) => (
-                <option key={effort} value={effort}>{effort}</option>
-              ))}
-            </select>
+              title={t("input.reasoningEffort")}
+              options={reasoningEffortOptions.map((effort) => ({ value: effort, label: effort }))}
+            />
           )}
-          <div className="llm-hub-search-selector" ref={searchMenuRef}>
-            <button
-              ref={searchButtonRef}
-              type="button"
-              className="llm-hub-model-select llm-hub-rag-select llm-hub-search-selector-button"
-              onClick={() => setShowSearchMenu(open => !open)}
-              disabled={isLoading}
-              aria-haspopup="menu"
-              aria-expanded={showSearchMenu}
-            >
-              {webSearchEnabled && selectedRagSetting
-                ? `${t("input.webSearch")} + ${selectedRagSetting}`
-                : webSearchEnabled
-                  ? t("input.webSearch")
-                  : selectedRagSetting
-                    ? t("input.rag", { name: selectedRagSetting })
-                    : t("input.searchNone")}
-              <ChevronDown size={13} aria-hidden="true" />
-            </button>
-            {showSearchMenu && (
-              <div className="llm-hub-search-selector-menu" role="menu">
-                <label className={`llm-hub-search-selector-option ${!allowWebSearch ? "disabled" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={webSearchEnabled}
-                    disabled={!allowWebSearch}
-                    onChange={(event) => onSearchSelectionChange({
-                      webSearch: event.target.checked,
-                      ragSetting: selectedRagSetting,
-                    })}
-                  />
-                  <span>{t("input.webSearch")}</span>
-                </label>
-                <div className="llm-hub-search-selector-separator" />
-                <label className={`llm-hub-search-selector-option ${!ragEnabled || isImageGenerationModel(model) ? "disabled" : ""}`}>
-                  <input
-                    type="radio"
-                    name="llm-hub-rag-setting"
-                    checked={selectedRagSetting === null}
-                    disabled={!ragEnabled || isImageGenerationModel(model)}
-                    onChange={() => onSearchSelectionChange({ webSearch: webSearchEnabled, ragSetting: null })}
-                  />
-                  <span>{t("input.rag", { name: t("common.none") })}</span>
-                </label>
-                {ragSettings.map((name) => (
-                  <label key={name} className={`llm-hub-search-selector-option ${!ragEnabled || isImageGenerationModel(model) ? "disabled" : ""}`}>
-                    <input
-                      type="radio"
-                      name="llm-hub-rag-setting"
-                      checked={selectedRagSetting === name}
-                      disabled={!ragEnabled || isImageGenerationModel(model)}
-                      onChange={() => onSearchSelectionChange({ webSearch: webSearchEnabled, ragSetting: name })}
-                    />
-                    <span>{t("input.rag", { name })}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+          <SearchSelector
+            classPrefix="llm-hub"
+            ownerDocument={activeDocument}
+            disabled={isLoading}
+            labels={{
+              webSearch: t("input.webSearch"),
+              rag: (name) => t("input.rag", { name }),
+              ragNone: t("input.rag", { name: t("common.none") }),
+              none: t("input.searchNone"),
+            }}
+            webSearch={{
+              checked: webSearchEnabled,
+              disabled: !allowWebSearch,
+              combinable: true,
+            }}
+            rag={{
+              settings: ragSettings,
+              selected: selectedRagSetting,
+              disabled: !ragEnabled || isImageGenerationModel(model),
+            }}
+            onChange={onSearchSelectionChange}
+          />
+        </ModelRow>
       )}
       {!isCollapsed && availableSkills.length > 0 && (
         <SkillSelector
@@ -1057,7 +796,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           disabled={isLoading}
         />
       )}
-    </div>
+    </>}
+    />
   );
 });
 

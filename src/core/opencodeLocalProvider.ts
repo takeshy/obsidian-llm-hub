@@ -375,7 +375,7 @@ export async function* opencodeLocalChatStream(
   // 2) Open SSE connection before posting the message so we don't miss any
   //    events emitted during generation.
   const eventUrl = new URL(`${base}/global/event`);
-  const httpModule = getHttpModule(eventUrl.protocol);
+  const httpModule = getHttpModule<typeof import("http")>(eventUrl.protocol);
 
   const chunks: StreamChunk[] = [];
   const signal$ = new StreamSignal();

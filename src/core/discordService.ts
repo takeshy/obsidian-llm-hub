@@ -12,7 +12,9 @@ import { App, Notice, requestUrl } from "obsidian";
 import type { LlmHubPlugin } from "../plugin";
 import type { DiscordSettings, Message, ToolDefinition, ModelType, SlashCommand, ProviderContinuation, WebSearchCitation, WebSearchSource } from "../types";
 import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, localLlmDisplayName, SKILLS_FOLDER } from "../types";
-import { getEnabledTools, skillScriptTool, skillWorkflowTool } from "./tools";
+import { getEnabledVaultTools } from "obsidian-llm-hub-common/core";
+import { HOST_EXECUTES_RAG_SYNC_STATUS } from "src/vault/toolExecutor";
+import { skillScriptTool, skillWorkflowTool } from "./skillTools";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "../workflow/workflowSpec";
 import { createToolExecutor } from "../vault/toolExecutor";
 import { discoverSkills, loadSkill, buildSkillSystemPrompt, collectSkillScripts, collectSkillWorkflows, type LoadedSkill, type SkillScriptRef, type SkillWorkflowRef } from "./skillsLoader";
@@ -28,7 +30,7 @@ import { GeminiClient, getGeminiClient } from "./gemini";
 import { localLlmChatStream } from "./localLlmProvider";
 import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "./cliProvider";
 import { searchLocalRag } from "./localRagStore";
-import { formatError } from "../utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import { formatWebSearchCitations, modelSupportsWebSearch } from "./webSearch";
 import {
 	getPendingEdit,
@@ -985,7 +987,6 @@ export class DiscordService {
 
     // RAG context injection
     const ragSettingName = conversation.ragSetting;
-    const ragEnabled = !!ragSettingName;
     if (ragSettingName) {
       const ragSetting = this.plugin.getRagSearchSetting(ragSettingName);
       if (ragSetting) {
@@ -1029,7 +1030,7 @@ export class DiscordService {
     }
 
     // Build vault tools
-    const tools = getEnabledTools({ allowWrite: true, allowDelete: true, ragEnabled });
+    const tools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS });
 
     // Add skill tools if any active skill has scripts/workflows
     const scriptMap = collectSkillScripts(loadedSkills);
@@ -1046,7 +1047,7 @@ export class DiscordService {
       listNotesLimit: settings.listNotesLimit,
       maxNoteChars: settings.maxNoteChars,
       limitVaultToolScope: !isCliModel,
-      cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
+      vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders,
     });
 
     const vaultBasePath = (this.app.vault.adapter as { basePath?: string }).basePath || ".";
@@ -1061,7 +1062,7 @@ export class DiscordService {
         return await this.executeSkillWorkflow(
           args.workflowId as string, args.variables as string | undefined, workflowMap,
           !isCliModel
-            ? { cloudVaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
+            ? { vaultToolAllowedFolders: settings.cloudVaultToolAllowedFolders }
             : undefined,
         );
       }
@@ -1349,7 +1350,7 @@ export class DiscordService {
 
     // Process text markers from response
     fullResponse = await this.processTextMarkers(fullResponse, scriptMap, workflowMap, vaultBasePath, {
-      cloudVaultToolAllowedFolders: this.plugin.settings.cloudVaultToolAllowedFolders,
+      vaultToolAllowedFolders: this.plugin.settings.cloudVaultToolAllowedFolders,
     });
 
     return fullResponse;
@@ -1405,7 +1406,7 @@ export class DiscordService {
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
     vaultBasePath: string,
     options?: {
-      cloudVaultToolAllowedFolders?: string[];
+      vaultToolAllowedFolders?: string[];
     },
   ): Promise<string> {
     let result = content;
@@ -1497,7 +1498,7 @@ export class DiscordService {
     variablesJson: string | undefined,
     workflowMap: Map<string, { skill: LoadedSkill; workflowRef: SkillWorkflowRef; vaultPath: string }>,
     options?: {
-      cloudVaultToolAllowedFolders?: string[];
+      vaultToolAllowedFolders?: string[];
     },
   ): Promise<Record<string, unknown>> {
     const entry = workflowMap.get(workflowId);
@@ -1537,11 +1538,11 @@ export class DiscordService {
       promptForFile: () => Promise.resolve(null),
       promptForSelection: () => Promise.resolve(null),
       promptForValue: (_prompt: string, defaultValue?: string) => Promise.resolve(defaultValue || null),
-      promptForConfirmation: () => Promise.resolve({ confirmed: true } as EditConfirmationResult),
+      promptForConfirmation: () => Promise.resolve({ action: "save" } as EditConfirmationResult),
       promptForDialog: () => Promise.resolve(null),
     };
 
-    const executor = new WorkflowExecutor(this.app, this.plugin);
+    const executor = new WorkflowExecutor(this.app);
     try {
       const result = await executor.execute(
         workflow,
@@ -1549,7 +1550,7 @@ export class DiscordService {
         undefined,
         {
           workflowName: entry.vaultPath.substring(entry.vaultPath.lastIndexOf("/") + 1).replace(/\.md$/, "") || workflowId,
-          cloudVaultToolAllowedFolders: options?.cloudVaultToolAllowedFolders,
+          vaultToolAllowedFolders: options?.vaultToolAllowedFolders,
         },
         callbacks,
       );

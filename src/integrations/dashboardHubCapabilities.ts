@@ -6,7 +6,7 @@ import { openaiChatWithToolsStream } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "src/core/cliProvider";
-import { getEnabledTools } from "src/core/tools";
+import { getEnabledVaultTools } from "obsidian-llm-hub-common/core";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import { loadBuiltinSkill, builtinFolderPath } from "src/core/builtinSkills";
 import { WORKFLOW_SPECIFICATION } from "src/workflow/workflowSpec";
@@ -47,7 +47,7 @@ export function listDashboardModels(plugin: LlmHubPlugin): DashboardAiModel[] {
 function headlessCallbacks(): PromptCallbacks {
   return { promptForFile: () => Promise.resolve(null), promptForAnyFile: () => Promise.resolve(null), promptForNewFilePath: () => Promise.resolve(null),
     promptForSelection: () => Promise.resolve(null), promptForValue: () => Promise.resolve(null),
-    promptForConfirmation: () => Promise.resolve({ confirmed: false }), promptForDialog: () => Promise.resolve(null), promptForPassword: () => Promise.resolve(null) };
+    promptForConfirmation: () => Promise.resolve({ action: "cancel" as const }), promptForDialog: () => Promise.resolve(null), promptForPassword: () => Promise.resolve(null) };
 }
 
 function extractString(values: Map<string, string | number>, name?: string): string | null {
@@ -64,7 +64,7 @@ export async function runDashboardWorkflow(plugin: LlmHubPlugin, request: Dashbo
   if (!(file instanceof TFile)) throw new Error(`Workflow not found: ${request.workflowPath}`);
   const workflow = parseWorkflowFromMarkdown(await plugin.app.vault.read(file));
   const input: WorkflowInput = { variables: new Map() };
-  const execution = await new WorkflowExecutor(plugin.app, plugin).execute(workflow, input, undefined, {
+  const execution = await new WorkflowExecutor(plugin.app).execute(workflow, input, undefined, {
     workflowPath: file.path, workflowName: file.basename, recordHistory: false,
     abortSignal: request.abortSignal ?? new AbortController().signal,
   }, headlessCallbacks());
@@ -74,9 +74,9 @@ export async function runDashboardWorkflow(plugin: LlmHubPlugin, request: Dashbo
 }
 
 function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[], systemPrompt: string, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
-  const tools = getEnabledTools({ allowWrite: false, allowDelete: false, ragEnabled: false });
+  const tools = getEnabledVaultTools({ allowWrite: false, allowDelete: false, ragSyncStatus: false });
   const execute = createToolExecutor(plugin.app, { listNotesLimit: plugin.settings.listNotesLimit, maxNoteChars: plugin.settings.maxNoteChars,
-    limitVaultToolScope: true, cloudVaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders });
+    limitVaultToolScope: true, vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders });
   if (isApiProviderModel(model)) {
     const provider = plugin.settings.apiProviders.find((entry) => entry.id === getApiProviderId(model) && entry.enabled && entry.verified);
     if (!provider) throw new Error(`Provider not found for model: ${model}`);

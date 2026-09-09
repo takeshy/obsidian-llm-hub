@@ -20,7 +20,7 @@ import type { Attachment, ModelType, ModelInfo, Message } from "src/types";
 import { getGeminiApiKey, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, localLlmDisplayName } from "src/types";
 import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
-import { extractPdfText } from "src/vault/search";
+import { extractPdfText } from "obsidian-llm-hub-common/vault";
 import { getPdfResultModePreference, setPdfResultModePreference, type PdfResultMode } from "./pdfResultModePreference";
 import { extensionToMimeType } from "src/core/embeddingProvider";
 import { streamChatForModel } from "src/core/modelStreaming";

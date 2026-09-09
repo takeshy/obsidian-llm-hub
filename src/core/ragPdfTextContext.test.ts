@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
-import { extractPdfText } from "../vault/search";
+import { extractPdfText } from "obsidian-llm-hub-common/vault";
 import { buildRagPdfTextContext, type RagMediaReference } from "./localRagStore";
 
-vi.mock("../vault/search", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../vault/search")>()),
+vi.mock("obsidian-llm-hub-common/vault", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("obsidian-llm-hub-common/vault")>()),
   extractPdfText: vi.fn(),
 }));
 

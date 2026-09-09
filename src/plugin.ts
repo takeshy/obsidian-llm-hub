@@ -1,6 +1,12 @@
+import { configureMcpClientInfo, configureMcpStdioClient } from "obsidian-llm-hub-common/mcp";
+import { configureAgentPluginBase } from "obsidian-llm-hub-common/skills";
+import { handleCommandNode } from "src/workflow/handlers/command";
+import { handleMcpNode } from "src/workflow/handlers/mcp";
+import { handleRagSyncNode } from "src/workflow/handlers/ragSync";
+import { handleShellNode } from "src/workflow/handlers/shell";
 import { setMcpApprovalHandler, sameMcpConnection } from "./core/mcpApproval";
 import { McpApprovalModal } from "./ui/components/McpApprovalModal";
-import { Plugin, WorkspaceLeaf, Notice, MarkdownView, TFile, Modal, type EventRef } from "obsidian";
+import { Plugin, WorkspaceLeaf, Notice, MarkdownView, TFile, Modal, type EventRef, Platform } from "obsidian";
 import { EventEmitter } from "src/utils/EventEmitter";
 import type { SelectionLocationInfo } from "src/ui/selectionHighlight";
 import { SelectionManager } from "src/plugin/selectionManager";
@@ -11,7 +17,17 @@ import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
 import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
 import { SettingsTab } from "src/ui/SettingsTab";
+import { configureWorkflowHost, type WorkflowModelOption } from "obsidian-llm-hub-common/workflow";
+import { configureMcpAppViewer, configureStoragePrefix } from "obsidian-llm-hub-common/modals";
+import { showMcpApp } from "src/ui/components/workflow/McpAppModal";
+import type { McpAppInfo } from "src/types";
+import { streamWorkflowChat } from "src/core/workflowChat";
+import { tracing } from "src/core/tracingHooks";
+import { getWorkflowSpecification, buildWorkflowSpecContext } from "src/workflow/workflowSpec";
 import {
+  CLI_MODEL,
+  CODEX_CLI_MODEL,
+  SKILLS_FOLDER,
   type LlmHubSettings,
   type WorkspaceState,
   type RagSetting,
@@ -41,7 +57,7 @@ import {
   getEditHistoryManager,
 } from "src/core/editHistory";
 import { EditHistoryModal } from "src/ui/components/EditHistoryModal";
-import { formatError } from "src/utils/error";
+import { formatError, configureClassPrefix } from "obsidian-llm-hub-common/core";
 import { DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETTINGS, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_LANGFUSE_SETTINGS, DEFAULT_WORKSPACE_FOLDER, hasVerifiedCli } from "src/types";
 import { initLocale, t } from "src/i18n";
 import { registerWorkflowCodeBlockProcessor } from "src/ui/workflowCodeBlock";
@@ -285,6 +301,71 @@ export class LlmHubPlugin extends Plugin {
   private onloadImpl(): void {
     // Initialize i18n locale
     initLocale();
+    configureClassPrefix("llm-hub");
+    configureStoragePrefix("llm-hub");
+    configureAgentPluginBase(".llm-hub");
+    configureMcpClientInfo({ name: "obsidian-llm-hub", version: this.manifest.version });
+    // Desktop-only: registering it here keeps Node's child_process off the mobile startup path.
+    if (!Platform.isMobile) {
+      configureMcpStdioClient((config) => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- Load the stdio transport only where it can run.
+        const { McpStdioClient } = require("src/core/mcpStdioClient") as typeof import("src/core/mcpStdioClient");
+        return new McpStdioClient(config);
+      });
+    }
+    configureWorkflowHost({
+      getModelOptions: () => {
+        const options: WorkflowModelOption[] = [];
+        for (const provider of this.settings.apiProviders.filter(p => p.enabled && p.verified)) {
+          for (const model of provider.enabledModels) {
+            options.push({ value: `api:${provider.id}:${model}`, label: `${provider.name} (${model})` });
+          }
+        }
+        if (this.settings.cliConfig?.cliVerified) options.push({ value: CLI_MODEL.name, label: CLI_MODEL.displayName });
+        if (this.settings.cliConfig?.codexCliVerified) options.push({ value: CODEX_CLI_MODEL.name, label: CODEX_CLI_MODEL.displayName });
+        return options;
+      },
+      getCurrentModel: () => this.getSelectedModel(),
+      getLastWorkflowModel: () => this.settings.lastAIWorkflowModel,
+      setLastWorkflowModel: (model) => {
+        this.settings.lastAIWorkflowModel = model as ModelType;
+        void this.saveSettings();
+      },
+      getRagSettingNames: () => Object.keys(this.workspaceState.ragSettings || {}),
+      getMcpServerNames: () => (this.settings.mcpServers || []).map(server => server.name),
+      getWorkflowSpecification: () => getWorkflowSpecification(buildWorkflowSpecContext(this)),
+      getWorkspaceFolder: () => this.settings.workspaceFolder,
+      getSkillsFolder: () => this.settings.skillsFolder || SKILLS_FOLDER,
+      notifySkillsChanged: () => this.settingsEmitter.emit("skills-changed"),
+      getHistoryEncryption: () => this.settings.encryption,
+      getPluginVersion: () => this.manifest.version,
+      getWorkflowHotkeys: () => this.settings.enabledWorkflowHotkeys,
+      setWorkflowHotkeys: (paths) => {
+        this.settings.enabledWorkflowHotkeys = paths;
+        void this.saveSettings();
+      },
+      getWorkflowEventTriggers: () => this.settings.enabledWorkflowEventTriggers,
+      setWorkflowEventTriggers: (triggers) => {
+        this.settings.enabledWorkflowEventTriggers = triggers;
+        void this.saveSettings();
+      },
+      runWorkflowFromHotkey: (path) => {
+        void this.executeWorkflowFromHotkey(path);
+      },
+      getLastSelectedWorkflow: () => this.settings.lastSelectedWorkflowPath,
+      setLastSelectedWorkflow: (path) => {
+        this.settings.lastSelectedWorkflowPath = path;
+        void this.saveSettings();
+      },
+      streamChat: (request) => streamWorkflowChat(this, request),
+      runCommandNode: ({ node, context, app, callbacks, traceId, abortSignal }) =>
+        handleCommandNode(node, context, app, this, callbacks, traceId, abortSignal),
+      runMcpNode: ({ node, context, app }) => handleMcpNode(node, context, app, this),
+      runShellNode: ({ node, context, app }) => handleShellNode(node, context, app),
+      runRagSyncNode: ({ node, context, app }) => handleRagSyncNode(node, context, app, this),
+      tracing,
+    });
+    configureMcpAppViewer((app, mcpApp) => showMcpApp(app, mcpApp as McpAppInfo));
 
     let approvalModal: McpApprovalModal | undefined;
     setMcpApprovalHandler({
@@ -321,7 +402,7 @@ export class LlmHubPlugin extends Plugin {
     this.encryptionManager = new EncryptionManager(this);
 
     // Initialize workflow manager
-    this.workflowMgr = new WorkflowManager(this);
+    this.workflowMgr = new WorkflowManager(this, this.selectionManager);
 
     // Workflow code block: render as Mermaid diagram (Reading mode + Live Preview)
     registerWorkflowCodeBlockProcessor(this);
@@ -599,7 +680,7 @@ export class LlmHubPlugin extends Plugin {
       id: "run-workflow",
       name: t("command.runWorkflow"),
       callback: () => {
-        new WorkflowSelectorModal(this.app, this, (filePath) => {
+        new WorkflowSelectorModal(this.app, (filePath) => {
           void this.executeWorkflowFromHotkey(filePath);
         }).open();
       },
@@ -748,6 +829,7 @@ export class LlmHubPlugin extends Plugin {
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...loaded,
+      voiceChat: { ...DEFAULT_SETTINGS.voiceChat, ...loaded.voiceChat },
       maxSavedChatHistories: loaded.maxSavedChatHistories
         ?? (isExistingInstall ? 0 : DEFAULT_SETTINGS.maxSavedChatHistories),
       skillsFolder: typeof loaded.skillsFolder === "string"

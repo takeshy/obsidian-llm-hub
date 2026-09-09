@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "../types";
-import { formatError } from "../utils/error";
+import { formatError } from "obsidian-llm-hub-common/core";
 import type { LocalRagSearchResult } from "./localRagStore";
 
 export const RAG_SEARCH_TOOL_NAME = "rag_search";
