@@ -89,6 +89,8 @@ The AI Chat feature provides an interactive conversation interface with your cho
 - Finishing leaves the popup open. What it pastes afterwards keeps its words and loses the marker: the text lands in the composer without being sent, which is how you dictate a long message in several parts and send it yourself.
 - If Obsidian's PATH does not find the app, set the full path in Settings → Chat → *speech-popup command*. Failures are reported with the command and its own error.
 
+[Watch the voice conversation demo on YouTube](https://www.youtube.com/watch?v=w8uyateB-0s)
+
 ## Web Search
 
 Choose a supported API model, then open the search menu beside the model picker and check **Web search**. You may also select one Semantic Search setting in the same menu; when both are active, matching vault context is injected before the provider receives the prompt with its native web-search tool enabled. Prompt wording alone does not turn search on. Search remains model-controlled: enabling the tool allows the model to search, but does not force a search for every prompt.
