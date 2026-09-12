@@ -3,6 +3,7 @@ import { t } from "src/i18n";
 import type { ModelType, SlashCommand } from "src/types";
 import { SlashCommandModal, type SlashCommandModalOptions } from "obsidian-llm-hub-common/modals";
 import type { SettingsContext } from "./settingsContext";
+import { discoverSkills } from "src/core/skillsLoader";
 
 export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: SettingsContext): void {
   const { plugin, display } = ctx;
@@ -21,6 +22,13 @@ export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: Setti
     mcpServers: plugin.settings.mcpServers,
     editConfirmation: true,
   };
+  const openCommandModal = async (
+    command: SlashCommand | null,
+    onSubmit: (command: SlashCommand) => void | Promise<void>,
+  ): Promise<void> => {
+    const skills = await discoverSkills(app, plugin.settings.skillsFolder);
+    new SlashCommandModal(app, command, { ...modalOptions, skills }, onSubmit).open();
+  };
 
   new Setting(containerEl).setName(t("settings.slashCommands")).setHeading();
 
@@ -32,17 +40,15 @@ export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: Setti
         .setButtonText(t("settings.addCommand"))
         .setCta()
         .onClick(() => {
-          new SlashCommandModal(
-            app,
+          void openCommandModal(
             null,
-            modalOptions,
             async (command: SlashCommand) => {
               plugin.settings.slashCommands.push(command);
               await plugin.saveSettings();
               display();
               new Notice(t("settings.commandCreated", { name: command.name }));
             }
-          ).open();
+          );
         })
     );
 
@@ -63,10 +69,8 @@ export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: Setti
           .setIcon("pencil")
           .setTooltip(t("settings.editCommand"))
           .onClick(() => {
-            new SlashCommandModal(
-              app,
+            void openCommandModal(
               command,
-              modalOptions,
               async (updated: SlashCommand) => {
                 const index = plugin.settings.slashCommands.findIndex(
                   (c) => c.id === command.id
@@ -78,7 +82,7 @@ export function displaySlashCommandSettings(containerEl: HTMLElement, ctx: Setti
                   new Notice(t("settings.commandUpdated", { name: updated.name }));
                 }
               }
-            ).open();
+            );
           });
       });
 

@@ -1216,6 +1216,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			setVaultToolNoneReason(command.vaultToolMode === "none" ? "manual" : null);
 		}
 
+		// A command may add one skill to the current chat selection.
+		if (command.skillPath) {
+			setActiveSkillPaths(paths => paths.includes(command.skillPath!) ? paths : [...paths, command.skillPath!]);
+		}
+
 		// Optionally change MCP server enabled state (null = keep current)
 		if (command.enabledMcpServers !== null && command.enabledMcpServers !== undefined) {
 			const enabledSet = new Set(command.enabledMcpServers);
