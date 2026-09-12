@@ -2,6 +2,8 @@ import type { SharedTranslationKey } from "obsidian-llm-hub-common/i18n";
 
 // English translations (base language)
 export const en = {
+  "input.hideContext": "Hide model and skill controls",
+  "input.showContext": "Show model and skill controls",
   // Settings - Credential storage
   "settings.credentialStorage": "Credential storage",
   "settings.credentialStorage.mode": "Store API keys in",

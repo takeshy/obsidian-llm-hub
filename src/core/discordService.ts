@@ -14,7 +14,7 @@ import type { DiscordSettings, Message, ToolDefinition, ModelType, SlashCommand,
 import { isApiProviderModel, getApiProviderId, getApiProviderModelName, getDefaultModel, getGeminiApiKey, isLocalLlmModel, getLocalLlmConfig, localLlmDisplayName, SKILLS_FOLDER } from "../types";
 import { getEnabledVaultTools } from "obsidian-llm-hub-common/core";
 import { HOST_EXECUTES_RAG_SYNC_STATUS } from "src/vault/toolExecutor";
-import { skillScriptTool, skillWorkflowTool } from "./skillTools";
+import { readSkillTool, skillScriptTool, skillWorkflowTool, executeReadSkillTool, READ_SKILL_TOOL_NAME } from "./skillTools";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "../workflow/workflowSpec";
 import { createToolExecutor } from "../vault/toolExecutor";
 import { discoverSkills, loadSkill, buildSkillSystemPrompt, collectSkillScripts, collectSkillWorkflows, type LoadedSkill, type SkillScriptRef, type SkillWorkflowRef } from "./skillsLoader";
@@ -1035,6 +1035,9 @@ export class DiscordService {
     // Add skill tools if any active skill has scripts/workflows
     const scriptMap = collectSkillScripts(loadedSkills);
     const workflowMap = collectSkillWorkflows(loadedSkills);
+    if (loadedSkills.some(skill => !skill.instructions)) {
+      tools.push(readSkillTool);
+    }
     if (scriptMap.size > 0) {
       tools.push(skillScriptTool);
     }
@@ -1053,6 +1056,9 @@ export class DiscordService {
     const vaultBasePath = (this.app.vault.adapter as { basePath?: string }).basePath || ".";
 
     const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
+      if (name === READ_SKILL_TOOL_NAME) {
+        return await executeReadSkillTool(this.app, loadedSkills, args.skillName as string);
+      }
       if (name === "run_skill_script" && scriptMap.size > 0) {
         return await this.executeSkillScript(
           args.scriptId as string, args.args as string | undefined, scriptMap, vaultBasePath,

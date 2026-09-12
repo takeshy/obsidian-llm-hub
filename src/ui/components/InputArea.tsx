@@ -158,6 +158,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   const [input, setInput] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isContextHidden, setIsContextHidden] = useState(false);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
   const [filteredCommands, setFilteredCommands] = useState<(SlashCommand | BuiltInCommand)[]>([]);
@@ -555,14 +556,14 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       beforeInput={<>
       <ChipRow classPrefix="llm-hub">
         {/* Reading aloud stays visible outside the transcript while it is on */}
-        {!isCollapsed && voiceChatSettings.autoReadAloud && <ReadAloudChip
+        {!isCollapsed && !isContextHidden && voiceChatSettings.autoReadAloud && <ReadAloudChip
           classPrefix="llm-hub"
           label={t("input.readAloudChip")}
           removeTitle={t("input.readAloudChipOff")}
           onDisable={() => onAutoReadAloudChange(false)}
         />}
 
-        {!isCollapsed && voiceConversation.active && <VoiceConversationChip
+        {!isCollapsed && !isContextHidden && voiceConversation.active && <VoiceConversationChip
           classPrefix="llm-hub"
           label={t("input.voiceConversationChip")}
           removeTitle={t("input.voiceConversationEnd")}
@@ -570,7 +571,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
         />}
 
         {/* MCP servers enabled for this chat */}
-        {!isCollapsed && (
+        {!isCollapsed && !isContextHidden && (
           <EnabledMcpServers
             classPrefix="llm-hub"
             disabled={isLoading || vaultToolModeOnlyNone}
@@ -703,6 +704,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           }}
           onSend={handleSubmit} onStop={onStop}
           sendLabel={t("input.send")} stopLabel={t("input.stop")}
+          contextToggle={Platform.isMobile ? { hidden: isContextHidden, onToggle: () => setIsContextHidden(hidden => !hidden), label: isContextHidden ? t("input.showContext") : t("input.hideContext") } : undefined}
           collapse={Platform.isMobile ? { collapsed: isCollapsed, onToggle: () => setIsCollapsed(!isCollapsed), label: isCollapsed ? t("input.expand") : t("input.collapse") } : undefined}
         />}
       footer={<>
@@ -712,7 +714,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
         <CollapsedInput classPrefix="llm-hub" label={t("input.expand")} onExpand={() => setIsCollapsed(false)} />
       )}
 
-      {!isCollapsed && (
+      {!isCollapsed && !isContextHidden && (
         <ModelRow classPrefix="llm-hub">
           <ModelSelector
             models={availableModels}
@@ -779,7 +781,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           />
         </ModelRow>
       )}
-      {!isCollapsed && availableSkills.length > 0 && (
+      {!isCollapsed && !isContextHidden && availableSkills.length > 0 && (
         <SkillSelector
           skills={availableSkills}
           activeSkillPaths={activeSkillPaths}
@@ -788,7 +790,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
           app={app}
         />
       )}
-      {!isCollapsed && okfBundles.length > 0 && (
+      {!isCollapsed && !isContextHidden && okfBundles.length > 0 && (
         <OkfSelector
           bundles={okfBundles}
           activeBundleIds={activeOkfBundleIds}

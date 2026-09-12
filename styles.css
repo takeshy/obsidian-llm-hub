@@ -256,8 +256,9 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   display: block;
 }
 
-/* Collapse button for mobile (same size as send button) */
-.llm-hub-collapse-btn {
+/* Mobile composer toggles (same size as send button) */
+.llm-hub-collapse-btn,
+.llm-hub-context-toggle-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -271,7 +272,8 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   cursor: pointer;
 }
 
-.llm-hub-collapse-btn:hover {
+.llm-hub-collapse-btn:hover,
+.llm-hub-context-toggle-btn:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
@@ -653,6 +655,7 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 .is-mobile .llm-hub-send-btn,
 .is-mobile .llm-hub-stop-btn,
+.is-mobile .llm-hub-context-toggle-btn,
 .is-mobile .llm-hub-attachment-btn {
   width: 44px;
   height: 44px;

@@ -63,7 +63,7 @@ import {
 	isVaultToolAllowed,
 } from "obsidian-llm-hub-common/core";
 import { HOST_EXECUTES_RAG_SYNC_STATUS } from "src/vault/toolExecutor";
-import { skillWorkflowTool, skillScriptTool } from "src/core/skillTools";
+import { readSkillTool, skillWorkflowTool, skillScriptTool, executeReadSkillTool, READ_SKILL_TOOL_NAME } from "src/core/skillTools";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "src/core/sandboxExecutor";
 import { GET_WORKFLOW_SPEC_TOOL, GET_WORKFLOW_SPEC_TOOL_NAME, handleGetWorkflowSpec } from "src/workflow/workflowSpec";
 import { fetchMcpTools, createMcpToolExecutor, isMcpTool, type McpToolDefinition, type McpToolExecutor } from "src/core/mcpTools";
@@ -1472,6 +1472,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							.filter((tool) => isVaultToolAllowed(tool.name, vaultToolMode));
 						const skillWorkflowMap = collectSkillWorkflows(cliLoadedSkills);
 						const skillScriptMap = collectSkillScripts(cliLoadedSkills);
+						if (cliLoadedSkills.some(s => !s.instructions)) codexTools.push(readSkillTool);
+						if (activeOkfBundleIds.length > 0) codexTools.push(READ_OKF_DOCUMENT_TOOL);
 						if (skillWorkflowMap.size > 0) codexTools.push(skillWorkflowTool);
 						if (skillScriptMap.size > 0) codexTools.push(skillScriptTool);
 						// RAG has its own toggle, so it is offered regardless of vaultToolMode.
@@ -1483,6 +1485,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						const vaultExecutor = createToolExecutor(plugin.app);
 						const codexToolExecutor = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
 							if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return ragSearchRunner.run(args);
+							if (name === READ_SKILL_TOOL_NAME) return executeReadSkillTool(plugin.app, cliLoadedSkills, args.skillName as string);
+							if (name === READ_OKF_DOCUMENT_TOOL_NAME) return executeReadOkfDocumentTool(plugin.app, getOkfRoot(), activeOkfBundleIds, args.bundleId as string, args.path as string, args.startLine as number | undefined, args.endLine as number | undefined);
 							if (name === "run_skill_workflow" && skillWorkflowMap.size > 0) {
 								return runSkillWorkflow(
 									plugin.app,
@@ -1819,7 +1823,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				// ON for OpenAI-compatible frameworks; auto-disabled once the model has
 				// rejected tools (tracked in toolsUnsupportedModels). Vault tool mode
 				// "none" honors the user's per-chat opt-out.
-				const wantsTools = vaultToolMode !== "none"
+				const hasSelectedSkillOrOkf = effectiveSkillPaths.length > 0 || activeOkfBundleIds.length > 0;
+				const wantsTools = (vaultToolMode !== "none" || hasSelectedSkillOrOkf)
 					&& isLocalLlmToolsEnabled(llmConfig, llmConfig.model);
 				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
 
@@ -1829,8 +1834,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				// warns it has no direct vault access.
 				let systemPrompt = "You are a helpful AI assistant integrated with Obsidian.";
 				if (wantsTools) {
-					systemPrompt += `\n\nYou have access to function-calling tools for reading, searching, and editing the user's vault. Prefer calling a tool over describing what you would do.`;
-					systemPrompt += FILE_MENTION_TOOL_PROMPT;
+					systemPrompt += `\n\nYou have access to the function-calling tools listed for this chat. Prefer calling an available tool over describing what you would do.`;
+					if (vaultToolMode !== "none") systemPrompt += FILE_MENTION_TOOL_PROMPT;
 				} else {
 					systemPrompt += `\n\nNote: You are running in Local LLM mode with limited capabilities. You do not have direct vault tool access in this mode.`;
 					systemPrompt += `\n\nUse only information already present in the conversation, text attachments inlined into the prompt, and any local RAG context that may be added below.`;
@@ -1923,16 +1928,17 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				// bundle as the other agent paths through a dynamically registered MCP
 				// server hosted by the plugin.
 				if (wantsTools && llmConfig.framework === "opencode") {
-					let openCodeTools = getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS });
-					if (vaultToolMode === "noSearch") {
-						openCodeTools = openCodeTools.filter(tool => !SEARCH_VAULT_TOOL_NAMES.includes(tool.name));
-					}
+					let openCodeTools = filterVaultToolsForMode(
+						getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
+						vaultToolMode,
+					);
 					if (ragSearchRunner) openCodeTools.push(RAG_SEARCH_TOOL);
 					openCodeTools.push(EXECUTE_JAVASCRIPT_TOOL, GET_WORKFLOW_SPEC_TOOL);
 					if (activeOkfBundleIds.length > 0) openCodeTools.push(READ_OKF_DOCUMENT_TOOL);
 
 					const openCodeSkillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
 					const openCodeSkillScriptMap = collectSkillScripts(llmLoadedSkills);
+					if (llmLoadedSkills.some(s => !s.instructions)) openCodeTools.push(readSkillTool);
 					if (openCodeSkillWorkflowMap.size > 0) openCodeTools.push(skillWorkflowTool);
 					if (openCodeSkillScriptMap.size > 0) openCodeTools.push(skillScriptTool);
 
@@ -1994,6 +2000,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 								typeof args.path === "string" ? args.path : "",
 							);
 						}
+						if (name === READ_SKILL_TOOL_NAME) return executeReadSkillTool(plugin.app, llmLoadedSkills, args.skillName as string);
 						return vaultExecutor(name, args);
 					};
 					openCodeMutationTracking = createConfirmingToolExecutor(
@@ -2066,6 +2073,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					// Skill workflow / script tools
 					const llmSkillWorkflowMap = collectSkillWorkflows(llmLoadedSkills);
 					const llmSkillScriptMap = collectSkillScripts(llmLoadedSkills);
+					if (llmLoadedSkills.some(s => !s.instructions)) toolsBundle.push(readSkillTool);
 					if (llmLoadedSkills.some(s => s.workflows.length > 0)) toolsBundle.push(skillWorkflowTool);
 					if (llmLoadedSkills.some(s => s.scripts.length > 0)) toolsBundle.push(skillScriptTool);
 
@@ -2080,6 +2088,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 					const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
 						if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
+						if (name === READ_SKILL_TOOL_NAME) return await executeReadSkillTool(plugin.app, llmLoadedSkills, args.skillName as string);
 						if (name.startsWith("mcp_") && mcpToolExecutor) {
 							const mcpResult = await mcpToolExecutor.execute(name, args);
 							if (mcpResult.mcpApp) llmMcpApps.push(mcpResult.mcpApp);
@@ -2510,6 +2519,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				if (apiLoadedSkills.length > 0) {
 					systemPrompt += buildSkillSystemPrompt(apiLoadedSkills);
 				}
+				if (apiLoadedSkills.some(s => !s.instructions)) tools.push(readSkillTool);
 				if (apiLoadedSkills.some(s => s.workflows.length > 0)) {
 					tools.push(skillWorkflowTool);
 				}
@@ -2529,6 +2539,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 				const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
 					if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
+					if (name === READ_SKILL_TOOL_NAME) return await executeReadSkillTool(plugin.app, apiLoadedSkills, args.skillName as string);
 					if (name.startsWith("mcp_") && mcpToolExecutor) {
 						const mcpResult = await mcpToolExecutor.execute(name, args);
 						if (mcpResult.mcpApp) apiMcpApps.push(mcpResult.mcpApp);
@@ -2848,18 +2859,15 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					// The names come from the shared definitions: the list kept here had
 					// drifted and let read_timeline, get_active_note_info and the bulk_*
 					// tools through with Vault access switched off.
-					// Vault skills are loaded lazily — their SKILL.md (workflow IDs,
-					// inputVariables, full instructions) is only reachable via read_note.
-					// If any such skill is active we must keep read_note available even
-					// when vaultToolMode would otherwise strip it, or the model gets
-					// neither inline workflow metadata nor the tool to fetch it.
-					const hasActiveVaultSkill = loadedSkillsList.some(s => !isBuiltinSkillPath(s.folderPath));
+					// Vault skills use a dedicated active-skill reader, so Vault: none can
+					// remove every general Vault tool without making the skill unreachable.
+					const hasActiveVaultSkill = loadedSkillsList.some(s => !s.instructions);
 					const tools = allTools.filter(tool => {
 						// MCP tools are always included
 						if (isMcpTool(tool)) return true;
-						if (vaultToolMode === "none" && tool.name === "read_note" && hasActiveVaultSkill) return true;
 						return isVaultToolAllowed(tool.name, vaultToolMode);
 					});
+					if (toolsEnabled && hasActiveVaultSkill) tools.push(readSkillTool);
 
 					// Add run_skill_workflow tool if any active skill has workflows
 					if (toolsEnabled && loadedSkillsList.some(s => s.workflows.length > 0)) {
@@ -2901,6 +2909,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					const baseToolExecutor = (obsidianToolExecutor || mcpToolExecutor || skillWorkflowMap.size > 0 || skillScriptMap.size > 0)
 						? async (name: string, args: Record<string, unknown>) => {
 							if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
+							if (name === READ_SKILL_TOOL_NAME) return await executeReadSkillTool(plugin.app, loadedSkillsList, args.skillName as string);
 							// MCP tools start with "mcp_"
 							if (name.startsWith("mcp_") && mcpToolExecutor) {
 								const mcpResult = await mcpToolExecutor.execute(name, args);

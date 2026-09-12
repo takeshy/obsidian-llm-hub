@@ -1,5 +1,7 @@
 // Japanese translations
 export const ja: Record<string, string> = {
+  "input.hideContext": "モデル・スキル表示を隠す",
+  "input.showContext": "モデル・スキル表示を戻す",
   // Settings - Credential storage
   "settings.credentialStorage": "認証情報の保存先",
   "settings.credentialStorage.mode": "APIキーの保存先",
