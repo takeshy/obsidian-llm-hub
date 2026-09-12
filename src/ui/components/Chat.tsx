@@ -57,7 +57,6 @@ import {
 import { getGeminiClient } from "src/core/gemini";
 import { tracing } from "src/core/tracingHooks";
 import {
-	SEARCH_VAULT_TOOL_NAMES,
 	filterVaultToolsForMode,
 	getEnabledVaultTools,
 	isVaultToolAllowed,
@@ -109,7 +108,7 @@ import {
 } from "obsidian-llm-hub-common/chat";
 import { runSkillWorkflow } from "obsidian-llm-hub-common/workflow";
 import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillScriptRef } from "src/core/skillsLoader";
-import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, restoredSkillPaths, prunedSkillPaths, getBuiltinSkillMetadata, isBuiltinSkillPath } from "src/core/builtinSkills";
+import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, restoredSkillPaths, prunedSkillPaths, getBuiltinSkillMetadata } from "src/core/builtinSkills";
 import { runtimeSkillPath } from "src/core/runtimeSkills";
 import { buildBuiltinOkfSystemPrompt, buildOkfSystemPrompt, discoverOkfBundles, getBuiltinOkfBundle, isBuiltinOkfBundleId, type OkfBundle } from "src/core/okfLoader";
 import { executeReadOkfDocumentTool, READ_OKF_DOCUMENT_TOOL, READ_OKF_DOCUMENT_TOOL_NAME } from "src/core/okfDocumentTool";
@@ -1933,7 +1932,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				// bundle as the other agent paths through a dynamically registered MCP
 				// server hosted by the plugin.
 				if (wantsTools && llmConfig.framework === "opencode") {
-					let openCodeTools = filterVaultToolsForMode(
+					const openCodeTools = filterVaultToolsForMode(
 						getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
 						vaultToolMode,
 					);
