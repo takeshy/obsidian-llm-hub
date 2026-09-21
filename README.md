@@ -938,6 +938,25 @@ Use a pre-built index instead of syncing from the vault:
 
 **How it works:** When RAG is active, each chat message triggers a local vector search. Relevant chunks are injected into the system prompt as context. Sources are shown in the chat UI — click to open the referenced note.
 
+#### Filtering RAG results with Jev
+
+Vector search returns semantically similar chunks, so its results can include text that shares related wording without actually matching the question. Enable **Jev → Keep only matching RAG results** in Settings to have Jev compare every retrieved chunk with the query and retain only matching results. This global setting applies not only to RAG Search, but also whenever RAG is used from Chat, Workflows, or Discord.
+
+Jev can be configured in either of these ways:
+
+- Enter a Jev API key obtained from [jevtypesafeai.com](https://jevtypesafeai.com/dashboard)
+- If an OpenRouter key is already configured under API providers, enable **Use the OpenRouter key**; no separate Jev API key is required
+
+![Jev RAG filtering settings](docs/images/jev_setting.png)
+
+Without Jev, all five results from vector similarity search are displayed for this query.
+
+![RAG search results without Jev](docs/images/rag_search_without_jev.png)
+
+With Jev enabled, only the two results judged to match the query remain.
+
+![RAG search results filtered by Jev](docs/images/rag_search_with_jev.png)
+
 ### RAG Search Tab
 
 The **RAG Search** tab provides a dedicated interface for searching, filtering, editing, and sending RAG results to Chat or Discussion.

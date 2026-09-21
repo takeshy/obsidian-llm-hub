@@ -114,7 +114,7 @@ export default tseslint.config(
       }],
       'obsidianmd/ui/sentence-case-locale-module': ['error', {
         brands: BRANDS,
-        ignoreWords: ['RAG', 'OKF', 'OR', 'AND', 'VOTE', 'Base', 'View'],
+        ignoreWords: ['RAG', 'OKF', 'OR', 'AND', 'VOTE', 'Base', 'View', 'Jev'],
         ignoreRegex: SENTENCE_CASE_IGNORES,
         allowAutoFix: true,
       }],

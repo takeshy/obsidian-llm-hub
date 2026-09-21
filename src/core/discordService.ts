@@ -996,7 +996,7 @@ export class DiscordService {
             const ragResult = await searchLocalRag(
               ragSettingName, lastUserMsg.content,
               ragSetting, getGeminiApiKey(settings),
-              this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass
+              this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass, this.plugin.settings
             );
             if (ragResult.sources.length > 0) {
               systemPrompt += ragResult.context;

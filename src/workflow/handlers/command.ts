@@ -374,7 +374,7 @@ export async function handleCommandNode(
             const localRag = await searchLocalRag(
               effectiveApiRagName, prompt,
               resolvedRagSetting, getGeminiApiKey(plugin.settings),
-              plugin.settings.proxyUrl, plugin.settings.proxyBypass
+              plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings
             );
             if (localRag.sources.length > 0) {
               apiSystemPrompt = localRag.context;
@@ -537,7 +537,7 @@ export async function handleCommandNode(
           const localRag = await searchLocalRag(
             effectiveRagSettingName, prompt,
             resolvedRagSetting, getGeminiApiKey(plugin.settings),
-            plugin.settings.proxyUrl, plugin.settings.proxyBypass
+            plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings
           );
           if (localRag.sources.length > 0) {
             localRagSystemPrompt = localRag.context;

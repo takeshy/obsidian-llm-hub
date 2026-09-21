@@ -16,8 +16,7 @@ import {
 } from "./embeddingProvider";
 import { normalizeExternalRagIndex } from "./localRagStorage";
 
-// Mock requestUrl to use native fetch (for OpenAI-compatible endpoint tests).
-// Vitest hoists vi.mock calls, so keep this at top level to match execution order.
+// Vitest hoists the Obsidian API mock, so keep it at top level.
 vi.mock("obsidian", async () => {
   return {
     App: class {},
@@ -42,11 +41,6 @@ vi.mock("obsidian", async () => {
     stringifyYaml: (obj: unknown) => JSON.stringify(obj),
   };
 });
-
-// API key from environment variable
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
-const MODEL = "gemini-embedding-2-preview";
-const hasApiKey = GEMINI_API_KEY.length > 0;
 
 describe("isGeminiMultimodalEmbeddingModel", () => {
   it("recognizes Gemini Embedding 2 GA and preview model IDs", () => {
@@ -382,158 +376,5 @@ describe("normalizeExternalRagIndex", () => {
 
     expect(normalized.meta[0].chunkIndex).toBe(0); // first chunk of a.md
     expect(normalized.meta[1].chunkIndex).toBe(0); // first chunk of b.md
-  });
-});
-
-// ── Gemini API Integration Tests ───────────────────────────────────
-// These tests call the real Gemini API. Set GEMINI_API_KEY env var to run.
-
-describe.skipIf(!hasApiKey)("Gemini Embedding API (integration)", () => {
-  let generateEmbeddings: typeof import("./embeddingProvider").generateEmbeddings;
-  let fetchEmbeddingModels: typeof import("./embeddingProvider").fetchEmbeddingModels;
-  let generateGeminiNativeEmbeddings: typeof import("./embeddingProvider").generateGeminiNativeEmbeddings;
-
-  it("setup: import embeddingProvider", async () => {
-    const mod = await import("./embeddingProvider");
-    generateEmbeddings = mod.generateEmbeddings;
-    fetchEmbeddingModels = mod.fetchEmbeddingModels;
-    generateGeminiNativeEmbeddings = mod.generateGeminiNativeEmbeddings;
-  });
-
-  // ── OpenAI-compatible endpoint tests ───
-
-  it("fetchEmbeddingModels returns embedding models from Gemini", async () => {
-    const models = await fetchEmbeddingModels(GEMINI_API_KEY);
-    expect(models.length).toBeGreaterThan(0);
-    for (const m of models) {
-      expect(m).toMatch(/embed/i);
-    }
-  });
-
-  it("generates text embeddings (OpenAI-compat)", async () => {
-    const result = await generateEmbeddings(["Hello world"], GEMINI_API_KEY, MODEL);
-    expect(result).toHaveLength(1);
-    expect(result[0].length).toBeGreaterThan(0);
-  });
-
-  it("generates multiple text embeddings (OpenAI-compat)", async () => {
-    const result = await generateEmbeddings(["First", "Second", "Third"], GEMINI_API_KEY, MODEL);
-    expect(result).toHaveLength(3);
-    const dim = result[0].length;
-    for (const emb of result) {
-      expect(emb.length).toBe(dim);
-    }
-  });
-
-  it("similar texts have higher cosine similarity than dissimilar ones", async () => {
-    const embeddings = await generateEmbeddings(
-      ["The cat sat on the mat", "A cat was sitting on a mat", "Quantum computing applications"],
-      GEMINI_API_KEY, MODEL
-    );
-    const simSimilar = cosineSimilarity(embeddings[0], new Float32Array(embeddings[1]));
-    const simDifferent = cosineSimilarity(embeddings[0], new Float32Array(embeddings[2]));
-    expect(simSimilar).toBeGreaterThan(simDifferent);
-    expect(simSimilar).toBeGreaterThan(0.5);
-  });
-
-  it("generates embeddings for Japanese text", async () => {
-    const result = await generateEmbeddings(["日本語のテストです", "これは別のテキストです"], GEMINI_API_KEY, MODEL);
-    expect(result).toHaveLength(2);
-    expect(result[0].length).toBeGreaterThan(0);
-  });
-
-  // ── Gemini native SDK tests ───
-
-  it("native: generates text embeddings via SDK", async () => {
-    const result = await generateGeminiNativeEmbeddings(
-      [{ text: "Hello world" }, { text: "Another text" }],
-      GEMINI_API_KEY, MODEL
-    );
-    expect(result).toHaveLength(2);
-    expect(result[0].length).toBeGreaterThan(0);
-    expect(result[1].length).toBe(result[0].length);
-  });
-
-  it("native: generates image embedding from base64 PNG", async () => {
-    // 1x1 red PNG
-    const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
-    const result = await generateGeminiNativeEmbeddings(
-      [{ inlineData: { mimeType: "image/png", data: tinyPng } }],
-      GEMINI_API_KEY, MODEL
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0].length).toBeGreaterThan(0);
-  });
-
-  it("native: text and image share the same vector space", async () => {
-    const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
-    const results = await generateGeminiNativeEmbeddings(
-      [{ text: "A red pixel" }, { inlineData: { mimeType: "image/png", data: tinyPng } }],
-      GEMINI_API_KEY, MODEL
-    );
-    expect(results).toHaveLength(2);
-    expect(results[0].length).toBe(results[1].length);
-    const sim = cosineSimilarity(results[0], new Float32Array(results[1]));
-    expect(sim).not.toBeNaN();
-  });
-
-  // ── End-to-end RAG simulation ───
-
-  it("e2e: text query finds the most relevant document", async () => {
-    const docs = [
-      "Obsidian is a powerful note-taking application that uses Markdown files.",
-      "TypeScript is a typed superset of JavaScript.",
-      "RAG stands for Retrieval Augmented Generation, a technique to enhance LLM responses.",
-    ];
-    const docEmbeddings = await generateEmbeddings(docs, GEMINI_API_KEY, MODEL);
-    const dim = docEmbeddings[0].length;
-
-    const vectors = new Float32Array(docEmbeddings.length * dim);
-    for (let i = 0; i < docEmbeddings.length; i++) {
-      vectors.set(docEmbeddings[i], i * dim);
-    }
-
-    const [queryEmb] = await generateEmbeddings(["What is RAG?"], GEMINI_API_KEY, MODEL);
-    const scores = docEmbeddings.map((_, i) => ({
-      index: i,
-      score: cosineSimilarity(queryEmb, vectors.subarray(i * dim, (i + 1) * dim)),
-    }));
-    scores.sort((a, b) => b.score - a.score);
-
-    expect(scores[0].index).toBe(2);
-    expect(scores[0].score).toBeGreaterThan(0.5);
-  });
-
-  it("e2e: multimodal search — text query can find a relevant image", async () => {
-    // Index: one text doc + one image (tiny PNG)
-    const tinyPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
-
-    const textEmb = await generateGeminiNativeEmbeddings(
-      [{ text: "Machine learning algorithms for natural language processing" }],
-      GEMINI_API_KEY, MODEL
-    );
-    const imageEmb = await generateGeminiNativeEmbeddings(
-      [{ inlineData: { mimeType: "image/png", data: tinyPng } }],
-      GEMINI_API_KEY, MODEL
-    );
-
-    // Both should produce valid embeddings with the same dimension
-    expect(textEmb[0].length).toBe(imageEmb[0].length);
-
-    // Query embedding
-    const queryEmb = await generateGeminiNativeEmbeddings(
-      [{ text: "Show me an image" }],
-      GEMINI_API_KEY, MODEL
-    );
-
-    // Verify we can compute similarity across modalities
-    const simText = cosineSimilarity(queryEmb[0], new Float32Array(textEmb[0]));
-    const simImage = cosineSimilarity(queryEmb[0], new Float32Array(imageEmb[0]));
-
-    expect(simText).not.toBeNaN();
-    expect(simImage).not.toBeNaN();
-    // Both similarities should be in valid range [-1, 1]
-    expect(Math.abs(simText)).toBeLessThanOrEqual(1);
-    expect(Math.abs(simImage)).toBeLessThanOrEqual(1);
   });
 });

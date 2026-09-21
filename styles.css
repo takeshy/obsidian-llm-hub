@@ -3420,6 +3420,10 @@ body .llm-hub-hidden.llm-hub-hidden {
   user-select: text;
 }
 
+.llm-hub-jev-child-setting {
+  margin-left: 24px;
+}
+
 /* Canonical chat UI: obsidian-local-llm-hub. */
 
 

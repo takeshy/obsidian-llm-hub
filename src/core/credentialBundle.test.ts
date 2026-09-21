@@ -34,6 +34,7 @@ function fixtures(): { settings: LlmHubSettings; workspace: WorkspaceState } {
   }];
   settings.langfuse = { ...settings.langfuse, secretKey: "langfuse-secret" };
   settings.discord = { ...settings.discord, botToken: "discord-token" };
+  settings.jevApiKey = "jev-key";
 
   const workspace = structuredClone(DEFAULT_WORKSPACE_STATE);
   workspace.ragSettings = {
@@ -55,10 +56,11 @@ describe("credential bundle", () => {
     const persistedSettings = stripSettingsCredentials(settings);
     const persistedWorkspace = stripWorkspaceCredentials(workspace);
 
-    for (const secret of ["provider-key", "local-key", "local-password", "Bearer token", "langfuse-secret", "discord-token"]) {
+    for (const secret of ["provider-key", "local-key", "local-password", "Bearer token", "langfuse-secret", "discord-token", "jev-key"]) {
       expect(JSON.stringify(persistedSettings)).not.toContain(secret);
     }
     expect(JSON.stringify(persistedWorkspace)).not.toContain("embedding-key");
+    expect(JSON.stringify(persistedSettings)).not.toContain("jev-key");
 
     applySettingsCredentials(persistedSettings, bundle);
     applyRagCredentials(persistedWorkspace, ragBundle);
@@ -79,6 +81,7 @@ describe("credential bundle", () => {
     expect(settings.mcpServers[0].headers).toEqual({ Authorization: "Bearer token" });
     expect(settings.langfuse.secretKey).toBe("langfuse-secret");
     expect(workspace.ragSettings.Research.embeddingApiKey).toBe("embedding-key");
+    expect(settings.jevApiKey).toBe("jev-key");
   });
 
   it("drops the configured marker once keys are back in the workspace file", () => {

@@ -180,6 +180,11 @@ export interface LlmHubSettings {
   // API providers (OpenAI-compatible)
   apiProviders: ApiProviderConfig[];
 
+  // Global Jev filtering for every RAG search
+  jevRagFilterEnabled: boolean;
+  jevApiKey: string;
+  jevUseOpenRouter: boolean;
+
   // MCP servers
   mcpServers: McpServerConfig[];  // External MCP server configurations
   agentPlugins: AgentPluginInstall[];
@@ -814,6 +819,9 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   enabledWorkflowHotkeys: [],
   enabledWorkflowEventTriggers: [],
   apiProviders: [],
+  jevRagFilterEnabled: false,
+  jevApiKey: "",
+  jevUseOpenRouter: false,
   mcpServers: [],
   agentPlugins: [],
   // Function call limits

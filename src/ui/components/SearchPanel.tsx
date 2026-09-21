@@ -17,9 +17,9 @@ import { Modal, Notice, Platform } from "obsidian";
 import { RagChunkEditModal } from "./RagChunkEditModal";
 import type { LlmHubPlugin } from "src/plugin";
 import type { Attachment, ModelType, ModelInfo, Message } from "src/types";
-import { getGeminiApiKey, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, localLlmDisplayName } from "src/types";
+import { getGeminiApiKey, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, localLlmDisplayName } from "src/types";
 import { TFile } from "obsidian";
-import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
+import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, searchLocalRagResults, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
 import { extractPdfText } from "obsidian-llm-hub-common/vault";
 import { getPdfResultModePreference, setPdfResultModePreference, type PdfResultMode } from "./pdfResultModePreference";
 import { extensionToMimeType } from "src/core/embeddingProvider";
@@ -408,16 +408,20 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
     pdfOriginalTexts.current = new Map();
 
     try {
-      const apiKey = ragSetting.embeddingApiKey || getGeminiApiKey(plugin.settings);
-      const searchResults = await store.search(
+      const searchResults = await searchLocalRagResults(
         selectedRagSetting,
         query.trim(),
-        apiKey,
-        ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),
+        {
+          ...ragSetting,
+          topK,
+          scoreThreshold,
+          searchFileExtensions: searchFileExtensions.split(",").map(s => s.trim()).filter(s => s.length > 0),
+        },
+        getGeminiApiKey(plugin.settings),
+        plugin.settings.proxyUrl,
+        plugin.settings.proxyBypass,
         topK,
-        ragSetting.embeddingBaseUrl || undefined,
-        scoreThreshold,
-        searchFileExtensions.split(",").map(s => s.trim()).filter(s => s.length > 0)
+        plugin.settings,
       );
       setResults(searchResults);
     } catch (err) {

@@ -176,6 +176,15 @@ export const ja: Record<string, string> = {
   // Settings - RAG
   "settings.scoreThreshold": "スコア閾値",
   "settings.scoreThreshold.desc": "結果に含める最低類似度スコア (0.0-1.0)。0 = フィルタなし",
+  "settings.jevRagFilter": "JevでRAG結果を絞り込む",
+  "settings.jevRagFilter.desc": "Jevを使い、クエリに一致する結果だけを残します。ChatでRAGを使う場合にも適用されます。",
+  "settings.jevRagFilter.requiresKey": "Jev APIキーを入力するか、OpenRouterを使うを選んでOpenRouterのAPIキーを設定してください。",
+  "settings.jevApiKey": "Jev APIキー",
+  "settings.jevApiKey.desc": "jevtypesafeai.comで取得したAPIキーです。OpenRouterを使う場合は空欄のままで構いません。",
+  "settings.jevUseOpenRouter": "OpenRouterのキーを使う",
+  "settings.jevUseOpenRouter.desc": "APIプロバイダーに設定済みのOpenRouter APIキーを使います。Jev APIキーは未入力でも利用できます。",
+  "settings.jevUseOpenRouter.requiresKey": "このオプションを使うには、APIプロバイダーでOpenRouterのAPIキーを設定してください。",
+  "settings.jev": "Jev",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "埋め込みモデル",

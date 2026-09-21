@@ -17,6 +17,7 @@ import { displaySkillsSettings } from "src/ui/settings/skillsSettings";
 import { displayRagSettings } from "src/ui/settings/ragSettings";
 import { displayMcpServersSettings } from "src/ui/settings/mcpServersSettings";
 import { displayApiProviderSettings } from "src/ui/settings/apiProviderSettings";
+import { displayJevSettings } from "src/ui/settings/jevSettings";
 import { displayProxySettings } from "src/ui/settings/proxySettings";
 import { displayDiscordSettings } from "src/ui/settings/discordSettings";
 import { displayAgentPluginSettings } from "src/ui/settings/agentPluginSettings";
@@ -54,6 +55,7 @@ export class SettingsTab extends PluginSettingTab {
         displayCliSettings(containerEl, ctx);
         displayLocalLlmSettings(containerEl, ctx);
         displayApiProviderSettings(containerEl, ctx);
+        displayJevSettings(containerEl, ctx);
         displayProxySettings(containerEl, ctx);
         displayWorkspaceSettings(containerEl, ctx);
         displayChatSettings(containerEl, ctx);

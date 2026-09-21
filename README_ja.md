@@ -935,6 +935,25 @@ Vault からの同期の代わりに、事前構築済みのインデックス�
 
 **仕組み：** RAG が有効な場合、チャットメッセージごとにローカルベクトル検索が実行されます。関連するチャンクがコンテキストとしてシステムプロンプトに注入されます。ソースはチャット UI に表示され、クリックすると参照先のノートが開きます。
 
+#### JevによるRAG結果の絞り込み
+
+ベクトル検索は意味的に近いチャンクを返すため、語句は似ていても質問には一致しない結果が含まれることがあります。設定の **Jev → JevでRAG結果を絞り込む** を有効にすると、取得した各チャンクをJevがクエリと照合し、一致する結果だけを残します。この全体設定はRAG Searchだけでなく、Chat、Workflow、DiscordでRAGを使う場合にも適用されます。
+
+Jevは次のいずれかで利用できます。
+
+- [jevtypesafeai.com](https://jevtypesafeai.com/dashboard) で取得したJev APIキーを入力
+- APIプロバイダーにOpenRouterのキーが設定済みの場合は、**OpenRouterのキーを使う** を有効化（Jev APIキーは不要）
+
+![JevのRAG絞り込み設定](docs/images/jev_setting.png)
+
+同じクエリでも、Jevを使わない場合はベクトル類似度による5件がそのまま表示されます。
+
+![Jevを使わないRAG検索結果](docs/images/rag_search_without_jev.png)
+
+Jevを有効にすると、クエリに一致すると判定された2件だけが残ります。
+
+![Jevで絞り込んだRAG検索結果](docs/images/rag_search_with_jev.png)
+
 ### RAG Search タブ
 
 **RAG Search** タブは、RAG 結果の検索、フィルタリング、編集、および Chat や Discussion への送信のための専用インターフェースを提供します。

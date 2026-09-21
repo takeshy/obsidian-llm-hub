@@ -1464,7 +1464,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						ragSearchRunner = createRagSearchRunner(
 							(query, topK) => searchLocalRagResults(
 								selectedRagSetting, query, cliRagSetting, getGeminiApiKey(plugin.settings),
-								plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+								plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK, plugin.settings,
 							),
 							(filePaths) => { for (const path of filePaths) if (!localRagSources.includes(path)) localRagSources.push(path); },
 						);
@@ -1539,7 +1539,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 								const localRag = await searchLocalRag(
 									selectedRagSetting, resolvedContent,
 									ragSettingObj, getGeminiApiKey(plugin.settings),
-									plugin.settings.proxyUrl, plugin.settings.proxyBypass
+									plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings
 								);
 								// A search that threw never reached the index, so it must not consume
 								// the turn budget the model is told it has.
@@ -1874,7 +1874,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					ragSearchRunner = createRagSearchRunner(
 						(query, topK) => searchLocalRagResults(
 							selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK, plugin.settings,
 						),
 						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
 					);
@@ -1882,7 +1882,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
 							ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings
 						);
 						// A search that threw never reached the index, so it must not consume
 						// the turn budget the model is told it has.
@@ -2434,7 +2434,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					ragSearchRunner = createRagSearchRunner(
 						(query, topK) => searchLocalRagResults(
 							selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK, plugin.settings,
 						),
 						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
 					);
@@ -2442,7 +2442,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
 							ragSettingObj, getGeminiApiKey(plugin.settings),
-							plugin.settings.proxyUrl, plugin.settings.proxyBypass
+							plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings
 						);
 						// A search that threw never reached the index, so it must not consume
 						// the turn budget the model is told it has.
@@ -3035,7 +3035,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						ragSearchRunner = createRagSearchRunner(
 							(query, topK) => searchLocalRagResults(
 								selectedRagSetting, query, ragSettingObj, getGeminiApiKey(plugin.settings),
-								plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK,
+								plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK, plugin.settings,
 							),
 							(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
 						);
@@ -3043,7 +3043,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							const localRag = await searchLocalRag(
 								selectedRagSetting, resolvedContent,
 								ragSettingObj, getGeminiApiKey(plugin.settings),
-								plugin.settings.proxyUrl, plugin.settings.proxyBypass
+								plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings
 							);
 							// A search that threw never reached the index, so it must not consume
 							// the turn budget the model is told it has.

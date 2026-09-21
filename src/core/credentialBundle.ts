@@ -30,6 +30,7 @@ export function ragCredentialSecretId(workspaceFolder: string): string {
 
 export interface SettingsCredentialBundle {
   apiProviderKeys: Record<string, string>;
+  jevApiKey: string;
   localLlmCredentials: Record<string, { apiKey?: string; password?: string }>;
   mcpCredentials: Record<string, { headers?: Record<string, string>; env?: Record<string, string> }>;
   langfuseSecretKey: string;
@@ -56,6 +57,7 @@ export const credentialSlot = {
   localLlmPassword: (id: string) => `localLlm:${id}:password`,
   mcpHeaders: (server: McpServerConfig) => `mcp:${mcpCredentialKey(server)}:headers`,
   mcpEnv: (server: McpServerConfig) => `mcp:${mcpCredentialKey(server)}:env`,
+  jev: "jev",
   langfuse: "langfuse",
   discord: "discord",
 } as const;
@@ -65,6 +67,7 @@ export function collectSettingsCredentials(settings: LlmHubSettings): SettingsCr
     apiProviderKeys: Object.fromEntries(
       settings.apiProviders.filter(provider => provider.apiKey).map(provider => [provider.id, provider.apiKey])
     ),
+    jevApiKey: settings.jevApiKey,
     localLlmCredentials: Object.fromEntries(
       settings.localLlmConfigs
         .filter(config => config.apiKey || config.password)
@@ -91,6 +94,7 @@ export function applySettingsCredentials(
   for (const provider of settings.apiProviders) {
     provider.apiKey = provider.apiKey || bundle.apiProviderKeys?.[provider.id] || "";
   }
+  settings.jevApiKey = settings.jevApiKey || bundle.jevApiKey || "";
   for (const config of settings.localLlmConfigs) {
     const stored = bundle.localLlmCredentials?.[config.id];
     config.apiKey = config.apiKey || stored?.apiKey || undefined;
@@ -110,6 +114,7 @@ export function stripSettingsCredentials(settings: LlmHubSettings): LlmHubSettin
   return {
     ...settings,
     apiProviders: settings.apiProviders.map(provider => ({ ...provider, apiKey: "" })),
+    jevApiKey: "",
     localLlmConfigs: settings.localLlmConfigs.map(config => ({ ...config, apiKey: undefined, password: undefined })),
     mcpServers: settings.mcpServers.map(server => ({ ...server, headers: undefined, env: undefined })),
     langfuse: { ...settings.langfuse, secretKey: "" },
@@ -123,6 +128,7 @@ function slotsWithValue(settings: LlmHubSettings): string[] {
   for (const provider of settings.apiProviders) {
     if (provider.apiKey) slots.push(credentialSlot.apiProvider(provider.id));
   }
+  if (settings.jevApiKey) slots.push(credentialSlot.jev);
   for (const config of settings.localLlmConfigs) {
     if (config.apiKey) slots.push(credentialSlot.localLlmApiKey(config.id));
     if (config.password) slots.push(credentialSlot.localLlmPassword(config.id));
@@ -138,7 +144,7 @@ function slotsWithValue(settings: LlmHubSettings): string[] {
 
 /** Every slot that still has an owner in the settings, whether filled or not. */
 function existingSlots(settings: LlmHubSettings): Set<string> {
-  const slots = new Set<string>([credentialSlot.langfuse, credentialSlot.discord]);
+  const slots = new Set<string>([credentialSlot.langfuse, credentialSlot.discord, credentialSlot.jev]);
   for (const provider of settings.apiProviders) slots.add(credentialSlot.apiProvider(provider.id));
   for (const config of settings.localLlmConfigs) {
     slots.add(credentialSlot.localLlmApiKey(config.id));
