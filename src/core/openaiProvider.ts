@@ -54,6 +54,15 @@ function isOpenCodeGoUrl(baseUrl: string): boolean {
   return baseUrl.replace(/\/+$/, "").toLowerCase() === OPENCODE_GO_BASE_URL;
 }
 
+function supportsReasoningContentReplay(baseUrl: string): boolean {
+  try {
+    // Groq emits reasoning for display but rejects reasoning_content in input.
+    return new URL(baseUrl).hostname !== "api.groq.com";
+  } catch {
+    return true;
+  }
+}
+
 /** OpenCode Go requires one stable routing ID for every conversation. */
 export function getOpenCodeSessionId(messages: Message[]): string {
   const first = messages[0];
@@ -967,8 +976,8 @@ export async function* openaiChatWithToolsStream(
 
     // Echo reasoning_content back when the model emitted any. Required by
     // Moonshot/Kimi K2.x via OpenCode Zen Go (which validates that thinking
-    // models include reasoning_content on every assistant tool-call turn);
-    // ignored by OpenAI/OpenRouter/etc. that don't read the field.
+    // models include reasoning_content on every assistant tool-call turn).
+    // Groq rejects this field, so keep its reasoning in the UI only.
     const assistantMsg: Record<string, unknown> = {
       role: "assistant",
       content: textContent || null,
@@ -978,7 +987,7 @@ export async function* openaiChatWithToolsStream(
         function: { name: tc.name, arguments: normalizeToolArguments(tc.arguments) },
       })),
     };
-    if (reasoningContent) {
+    if (reasoningContent && supportsReasoningContentReplay(baseUrl)) {
       assistantMsg.reasoning_content = reasoningContent;
     }
     conversationMessages.push(assistantMsg as unknown as OpenAI.ChatCompletionMessageParam);
