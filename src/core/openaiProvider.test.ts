@@ -113,6 +113,41 @@ describe("openaiChatWithToolsStream", () => {
     expect(chunks.some(c => c.type === "tool_call")).toBe(false);
   });
 
+  it.each([
+    ["https://api.groq.com/openai/v1", "openai/gpt-oss-20b", "reasoning", false],
+    ["https://api.groq.com/openai/v1/", "openai/gpt-oss-120b", "reasoning_content", false],
+    ["https://opencode.ai/zen/go", "kimi-k2.5", "reasoning_content", true],
+  ])("handles reasoning during tool continuation for %s (%s)", async (baseUrl, model, field, replay) => {
+    createCompletion.mockResolvedValueOnce(round(
+      { [field]: "I should read the note." },
+      { tool_calls: [{ index: 0, id: "call_read", type: "function", function: { name: "read_note", arguments: '{"path":"a.md"}' } }] },
+    )).mockImplementationOnce(async (request) => {
+      const assistant = request.messages.find((message: { role: string }) => message.role === "assistant");
+      if (replay) {
+        expect(assistant.reasoning_content).toBe("I should read the note.");
+      } else {
+        expect(assistant).not.toHaveProperty("reasoning_content");
+        expect(assistant).not.toHaveProperty("reasoning");
+      }
+      expect(assistant.tool_calls[0].id).toBe("call_read");
+      expect(request.messages.at(-1)).toEqual({ role: "tool", content: "note body", tool_call_id: "call_read" });
+      return round({ content: "Here are the employers." });
+    });
+    const executeTool = vi.fn().mockResolvedValue("note body");
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of openaiChatWithToolsStream(
+      baseUrl, "key", model,
+      [{ role: "user", content: "read a.md", timestamp: 0 }],
+      [readNote], "system", executeTool,
+    )) chunks.push(chunk);
+
+    expect(executeTool).toHaveBeenCalledWith("read_note", { path: "a.md" });
+    expect(createCompletion).toHaveBeenCalledTimes(2);
+    expect(chunks).toContainEqual({ type: "thinking", content: "I should read the note." });
+    expect(chunks.some(chunk => chunk.type === "error")).toBe(false);
+    expect(chunks.at(-1)?.type).toBe("done");
+  });
+
   it("identifies OpenCode Go requests with a stable conversation session", async () => {
     createCompletion.mockResolvedValueOnce(round({ content: "Done." }));
     const messages = [{ role: "user" as const, content: "hello", timestamp: 1234 }];
