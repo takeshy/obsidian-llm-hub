@@ -223,6 +223,8 @@ export interface LlmHubSettings {
   // One-time migration notices
   dashboardHubMigrationNoticeShown: boolean;
 
+  kakeratta?: { enabled: boolean; serverId: string; model: string };
+
   // Discord integration
   discord: DiscordSettings;
 
