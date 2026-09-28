@@ -17,7 +17,7 @@
 - **編集履歴** - AI による変更を差分表示で追跡・復元
 - **Web 検索** - Gemini、OpenAI 公式 API、Anthropic 公式 API、xAI 公式 API から引用付きの最新情報を取得
 - **画像生成** - Gemini または DALL-E で画像を作成
-- **Discord 連携** - LLM を Discord の chat bot として接続し、チャンネルごとにモデル/RAG を切り替え可能
+- **LLM Connect Hub 連携** - Discord と [Kakeratta](https://kakeratta.net/lp/) に接続し、LLM Hub のモデルや RAG を利用可能
 - **暗号化** - チャット履歴とワークフロー実行ログをパスワード保護
 
 
@@ -355,11 +355,9 @@ Obsidian Vault の LLM を Discord の chat bot として接続できます。�
 
 ### 3. Obsidian で設定
 
-1. プラグイン設定 → **Discord** セクションを開く
-2. **Discord Bot** を有効化
-3. bot token を貼り付け
-4. **Connect** をクリック（接続前にトークンが検証されます）
-5. ステータスインジケーターで bot の接続状態を確認
+1. **LLM Connect Hub** の設定 → **Discord** を開く
+2. bot token を貼り付け、**トークンを確認**を押す
+3. **有効**を ON にして**保存して再接続**を押す
 
 ## 設定オプション
 
@@ -512,6 +510,16 @@ Obsidian のイベントでワークフローを自動実行：
 | `_eventOldPath`     | 変更前パス（rename イベント時のみ）                               |
 
 > **Note:** `prompt-file` と `prompt-selection` ノードはイベント実行時に自動的にイベントファイルを使用します。`prompt-selection` はファイル全体を選択として扱います。
+
+---
+
+# LLM Connect Hub（Discord・Kakeratta）
+
+Discord 連携は LLM Hub 本体から分離され、別プラグインの [LLM Connect Hub（Obsidian プラグイン）](https://community.obsidian.md/plugins/llm-connect-hub) が担当します。LLM Connect Hub は [Discord](https://discord.com/) と [Kakeratta](https://kakeratta.net/lp/) に接続でき、LLM Hub が公開するモデル・RAG・Skill・Vault ツールを利用して回答します。利用には両プラグインを有効にしてください。
+
+旧 LLM Hub で Discord や Kakeratta を設定済みの場合、LLM Connect Hub の初回接続時に設定と認証情報をコピーしてから旧接続を停止します。新プラグインの設定画面で内容を確認できます。
+
+Kakeratta では担当 ID ごとに回答モデル、参照する Vault フォルダー、RAG 設定、フォルダー Skill を選べます。Vault ツールの参照範囲は指定フォルダー内に制限され、空欄では無効です。担当別の Vault 調査は API モデルで利用できます。RAG は選択したインデックス全体を検索する独立した設定です。Skill のスクリプト・ワークフロー実行は Kakeratta では無効です。詳しい設定手順は [LLM Connect Hub の説明](https://github.com/takeshy/obsidian-llm-connect-hub/blob/main/README_ja.md)を参照してください。
 
 ---
 

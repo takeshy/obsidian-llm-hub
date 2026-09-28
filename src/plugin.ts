@@ -61,7 +61,6 @@ import { formatError, configureClassPrefix } from "obsidian-llm-hub-common/core"
 import { DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETTINGS, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_LANGFUSE_SETTINGS, DEFAULT_WORKSPACE_FOLDER, hasVerifiedCli } from "src/types";
 import { initLocale, t } from "src/i18n";
 import { registerWorkflowCodeBlockProcessor } from "src/ui/workflowCodeBlock";
-import { initDiscordService, resetDiscordService } from "src/core/discordService";
 import { getSlashCommandSearchSelection } from "src/core/webSearch";
 import {
   generateDashboardBase,
@@ -77,6 +76,7 @@ import {
   registerRuntimeSkill,
   unregisterRuntimeSkill,
 } from "src/core/runtimeSkills";
+import { registerConnectHubIntegration } from "src/integrations/connectHubCapabilities";
 import { registerDiscussionHubIntegration } from "src/integrations/discussionHubCapabilities";
 import {
   applySettingsCredentials,
@@ -475,6 +475,7 @@ export class LlmHubPlugin extends Plugin {
       // ChatView renders before loadSettings() completes, e.g. after BRAT hot-reload)
       this.settingsEmitter.emit("settings-updated", this.settings);
       this.notifyDashboardHubMigration();
+      registerConnectHubIntegration(this);
     }).catch((e) => {
       console.error("LLM Hub: Failed to load settings:", formatError(e));
     });
@@ -811,7 +812,6 @@ export class LlmHubPlugin extends Plugin {
     resetGeminiClient();
     resetLocalRagStore();
     resetEditHistoryManager();
-    resetDiscordService();
 
     // Restore workspace folder visibility on unload
     document.body.classList.remove("llm-hub-hide-workspace-folder");
@@ -1143,16 +1143,6 @@ export class LlmHubPlugin extends Plugin {
       this.workspaceState.ragSettings
     );
 
-    // Start Discord bot if enabled
-    const discordConfig = this.settings.discord;
-    if (discordConfig?.enabled && discordConfig.botToken) {
-      try {
-        const discordService = initDiscordService(this.app, this);
-        discordService.start();
-      } catch (e) {
-        console.error("LLM Hub: Failed to start Discord bot:", formatError(e));
-      }
-    }
 
   }
 

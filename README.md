@@ -17,7 +17,7 @@
 - **Edit History** - Track and restore AI-made changes with diff view
 - **Web Search** - Access up-to-date information with cited sources via Gemini and the official OpenAI, Anthropic, or xAI APIs
 - **Image Generation** - Create images with Gemini or DALL-E
-- **Discord Integration** - Connect your LLM to Discord as a chat bot with per-channel model/RAG switching
+- **LLM Connect Hub Integration** - Connect to Discord and [Kakeratta](https://kakeratta.net/lp/) and use LLM Hub models and RAG
 - **Encryption** - Password-protect chat history and workflow execution logs
 
 
@@ -353,11 +353,9 @@ Connect your Obsidian vault's LLM to Discord as a chat bot. Users can chat with 
 
 ### 3. Configure in Obsidian
 
-1. Open plugin settings → **Discord** section
-2. Enable **Discord Bot**
-3. Paste the bot token
-4. Click **Connect** (the plugin verifies the token before connecting)
-5. The status indicator shows whether the bot is connected
+1. Open **LLM Connect Hub** settings → **Discord**
+2. Paste the bot token and click **Verify token**
+3. Enable the connection and click **Save and reconnect**
 
 ## Configuration Options
 
@@ -524,6 +522,16 @@ Use a `rag-sync` node with a Startup event trigger to refresh a Local RAG index 
 ![Startup event trigger for Local RAG sync](docs/images/rag_event.png)
 
 ![Local RAG sync execution result](docs/images/rag_workflow_execution_log.png)
+
+---
+
+# LLM Connect Hub (Discord and Kakeratta)
+
+Discord integration has been separated from LLM Hub into the [LLM Connect Hub Obsidian plugin](https://community.obsidian.md/plugins/llm-connect-hub). LLM Connect Hub connects to [Discord](https://discord.com/) and [Kakeratta](https://kakeratta.net/lp/), using the models, RAG, skills, and Vault tools exposed by LLM Hub. Enable both plugins.
+
+On first connection, LLM Connect Hub copies any legacy Discord and Kakeratta settings and credentials, saves them, then stops the old connections. Review the migrated values in LLM Connect Hub settings.
+
+For Kakeratta, each persona ID can select an answer model, Vault folders to read, a RAG setting, and folder skills. Vault tools are limited to the selected folders and disabled when the list is empty. Scoped Vault research requires an API model. RAG searches the selected index independently of the Vault folder list. Skill scripts and workflows are disabled for Kakeratta. See the [LLM Connect Hub setup guide](https://github.com/takeshy/obsidian-llm-connect-hub/blob/main/README.md).
 
 ---
 

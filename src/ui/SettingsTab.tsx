@@ -19,7 +19,6 @@ import { displayMcpServersSettings } from "src/ui/settings/mcpServersSettings";
 import { displayApiProviderSettings } from "src/ui/settings/apiProviderSettings";
 import { displayJevSettings } from "src/ui/settings/jevSettings";
 import { displayProxySettings } from "src/ui/settings/proxySettings";
-import { displayDiscordSettings } from "src/ui/settings/discordSettings";
 import { displayAgentPluginSettings } from "src/ui/settings/agentPluginSettings";
 
 export class SettingsTab extends PluginSettingTab {
@@ -38,7 +37,7 @@ export class SettingsTab extends PluginSettingTab {
       aliases: [
         "credentials", "CLI", "local LLM", "API provider", "proxy", "workspace",
         "knowledge", "edit history", "encryption", "Langfuse", "slash commands",
-        "skills", "agent plugins", "RAG", "MCP servers", "Discord",
+        "skills", "agent plugins", "RAG", "MCP servers",
       ],
       render: (setting) => {
         const containerEl = setting.settingEl;
@@ -69,7 +68,6 @@ export class SettingsTab extends PluginSettingTab {
         displayAgentPluginSettings(containerEl, ctx);
         displayRagSettings(containerEl, ctx);
         displayMcpServersSettings(containerEl, ctx);
-        displayDiscordSettings(containerEl, ctx);
 
         if (this.settingsListener) {
           this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
