@@ -17,7 +17,7 @@
 - **Edit History** - Track and restore AI-made changes with diff view
 - **Web Search** - Access up-to-date information with cited sources via Gemini and the official OpenAI, Anthropic, or xAI APIs
 - **Image Generation** - Create images with Gemini or DALL-E
-- **LLM Connect Hub Discord integration** - Connect your LLM to Discord as a chat bot with per-channel model/RAG switching
+- **LLM Connect Hub Integration** - Connect to Discord and [Kakeratta](https://kakeratta.net/lp/) and use LLM Hub models and RAG
 - **Encryption** - Password-protect chat history and workflow execution logs
 
 
@@ -527,7 +527,7 @@ Use a `rag-sync` node with a Startup event trigger to refresh a Local RAG index 
 
 # LLM Connect Hub (Discord and Kakeratta)
 
-The separate [LLM Connect Hub plugin](https://github.com/takeshy/obsidian-llm-connect-hub) owns Discord and Kakeratta connections. LLM Hub exposes models, RAG, skills, and Vault tools through a versioned API. Enable both plugins.
+Discord integration has been separated from LLM Hub into the [LLM Connect Hub Obsidian plugin](https://community.obsidian.md/plugins/llm-connect-hub). LLM Connect Hub connects to [Discord](https://discord.com/) and [Kakeratta](https://kakeratta.net/lp/), using the models, RAG, skills, and Vault tools exposed by LLM Hub. Enable both plugins.
 
 On first connection, LLM Connect Hub copies any legacy Discord and Kakeratta settings and credentials, saves them, then stops the old connections. Review the migrated values in LLM Connect Hub settings.
 

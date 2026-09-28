@@ -17,7 +17,7 @@
 - **編集履歴** - AI による変更を差分表示で追跡・復元
 - **Web 検索** - Gemini、OpenAI 公式 API、Anthropic 公式 API、xAI 公式 API から引用付きの最新情報を取得
 - **画像生成** - Gemini または DALL-E で画像を作成
-- **LLM Connect Hub の Discord 連携** - LLM を Discord の chat bot として接続し、チャンネルごとにモデル/RAG を切り替え可能
+- **LLM Connect Hub 連携** - Discord と [Kakeratta](https://kakeratta.net/lp/) に接続し、LLM Hub のモデルや RAG を利用可能
 - **暗号化** - チャット履歴とワークフロー実行ログをパスワード保護
 
 
@@ -515,7 +515,7 @@ Obsidian のイベントでワークフローを自動実行：
 
 # LLM Connect Hub（Discord・Kakeratta）
 
-Discord と Kakeratta の外部連携は、別プラグインの [LLM Connect Hub](https://github.com/takeshy/obsidian-llm-connect-hub) が担当します。LLM Hub はモデル・RAG・Skill・Vault ツールを公開し、LLM Connect Hub が接続と回答送信を行います。両プラグインを有効にしてください。
+Discord 連携は LLM Hub 本体から分離され、別プラグインの [LLM Connect Hub（Obsidian プラグイン）](https://community.obsidian.md/plugins/llm-connect-hub) が担当します。LLM Connect Hub は [Discord](https://discord.com/) と [Kakeratta](https://kakeratta.net/lp/) に接続でき、LLM Hub が公開するモデル・RAG・Skill・Vault ツールを利用して回答します。利用には両プラグインを有効にしてください。
 
 旧 LLM Hub で Discord や Kakeratta を設定済みの場合、LLM Connect Hub の初回接続時に設定と認証情報をコピーしてから旧接続を停止します。新プラグインの設定画面で内容を確認できます。
 
