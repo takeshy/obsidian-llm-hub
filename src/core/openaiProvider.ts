@@ -790,7 +790,13 @@ export async function* openaiChatWithToolsStream(
   const openaiTools = tools.length > 0 ? toOpenAiTools(tools) : undefined;
   // The shared builder speaks the OpenAI wire format, which is what the SDK
   // parameter type describes; the tool loop below appends to the same array.
-  const conversationMessages = buildOpenAiMessages(messages, systemPrompt) as unknown as OpenAI.ChatCompletionMessageParam[];
+  const wireMessages = buildOpenAiMessages(messages, systemPrompt);
+  if (!supportsReasoningContentReplay(baseUrl)) {
+    // Saved thinking is replayed by the shared builder, including on old tool
+    // turns. Groq rejects it just as it rejects reasoning from the current turn.
+    for (const message of wireMessages) delete message.reasoning_content;
+  }
+  const conversationMessages = wireMessages as unknown as OpenAI.ChatCompletionMessageParam[];
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;

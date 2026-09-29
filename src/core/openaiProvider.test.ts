@@ -100,6 +100,48 @@ describe("openaiChatWithToolsStream", () => {
     expect(sent[3]).toEqual({ role: "tool", content: "hello", tool_call_id: "call_1" });
   });
 
+  it.each([
+    ["https://api.groq.com/openai/", false],
+    ["https://api.groq.com/openai", false],
+    ["https://opencode.ai/zen/go", true],
+  ])("handles saved reasoning when continuing at %s", async (baseUrl, replay) => {
+    createCompletion.mockImplementationOnce(async (request) => {
+      const assistants = request.messages.filter((message: { role: string }) => message.role === "assistant");
+      expect(assistants).toHaveLength(3);
+      if (replay) {
+        expect(assistants[0].reasoning_content).toBe("I should read the note.");
+        expect(assistants[2].reasoning_content).toBe("I should continue later.");
+      } else {
+        for (const message of request.messages) expect(message).not.toHaveProperty("reasoning_content");
+      }
+      expect(assistants[0].tool_calls[0].function).toEqual({ name: "read_note", arguments: '{"path":"a.md"}' });
+      expect(assistants[1].content).toBe("Here are the employers.");
+      expect(request.messages.find((message: { role: string }) => message.role === "tool"))
+        .toEqual({ role: "tool", content: "note body", tool_call_id: "call_read" });
+      return round({ content: "Continuing." });
+    });
+    const messages = [
+      { role: "user" as const, content: "read a.md", timestamp: 0 },
+      {
+        role: "assistant" as const, content: "Here are the employers.", timestamp: 1,
+        thinking: "I should read the note.",
+        toolCalls: [{ id: "call_read", name: "read_note", args: { path: "a.md" } }],
+        toolResults: [{ toolCallId: "call_read", result: "note body" }],
+      },
+      { role: "assistant" as const, content: "Paused.", thinking: "I should continue later.", timestamp: 2 },
+      { role: "user" as const, content: "continue", timestamp: 3 },
+    ];
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of openaiChatWithToolsStream(
+      baseUrl, "key", "openai/gpt-oss-120b", messages,
+      [readNote], "system", async () => "", undefined, false,
+    )) chunks.push(chunk);
+    expect(chunks.filter(chunk => chunk.type === "error")).toEqual([]);
+    expect(chunks.some(chunk => chunk.type === "done")).toBe(true);
+    expect(messages[1].thinking).toBe("I should read the note.");
+    expect(messages[2].thinking).toBe("I should continue later.");
+  });
+
   it("leaves the text alone for a hosted model", async () => {
     // A hosted model asked to describe a tool call must be quoted, not obeyed.
     createCompletion.mockResolvedValueOnce(
