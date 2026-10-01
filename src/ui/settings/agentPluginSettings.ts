@@ -4,6 +4,7 @@ import { agentPluginAbsolutePaths, installAgentPlugin, parseAgentPluginMcp, prev
 import type { AgentPluginInstall, McpServerConfig } from "src/types";
 import type { SettingsContext } from "./settingsContext";
 import { AgentPluginInstallModal } from "./AgentPluginInstallModal";
+import { ConfirmModal } from "src/ui/components/ConfirmModal";
 
 function mergeServer(next: McpServerConfig, previous?: McpServerConfig): McpServerConfig {
   if (!previous) return next;
@@ -51,7 +52,25 @@ export function displayAgentPluginSettings(containerEl: HTMLElement, ctx: Settin
       try { const next = await previewAgentPlugin(item.repo); if (next.commitSha === item.commitSha) new Notice(`${item.name} is up to date.`); else new Notice(`Update available for ${item.name}: ${next.version}. Use Preview and install above to review it.`); } catch (error) { new Notice(String(error)); }
     })(); }));
     setting.addExtraButton(button => button.setIcon("trash").setTooltip("Uninstall").onClick(() => { void (async () => {
-      if (!window.confirm(`Uninstall ${item.name}?`)) return; await uninstallAgentPlugin(plugin.app, item.name); plugin.settings.agentPlugins = plugin.settings.agentPlugins.filter((v: AgentPluginInstall) => v.name !== item.name); plugin.settings.mcpServers = plugin.settings.mcpServers.filter(v => v.agentPlugin?.pluginName !== item.name); await plugin.saveSettings(); clearMcpToolsCache(); plugin.settingsEmitter.emit("skills-changed"); new Notice(`Uninstalled ${item.name}. Plugin data was preserved.`); display();
+      const confirmed = await new ConfirmModal(
+        plugin.app,
+        `Uninstall ${item.name}?`,
+        "Uninstall",
+        "Cancel",
+      ).openAndWait();
+      if (!confirmed) return;
+      try {
+        await uninstallAgentPlugin(plugin.app, item.name);
+        plugin.settings.agentPlugins = plugin.settings.agentPlugins.filter((v: AgentPluginInstall) => v.name !== item.name);
+        plugin.settings.mcpServers = plugin.settings.mcpServers.filter(v => v.agentPlugin?.pluginName !== item.name);
+        await plugin.saveSettings();
+        clearMcpToolsCache();
+        plugin.settingsEmitter.emit("skills-changed");
+        new Notice(`Uninstalled ${item.name}. Plugin data was preserved.`);
+        display();
+      } catch (error) {
+        new Notice(error instanceof Error ? error.message : String(error));
+      }
     })(); }));
   }
 }

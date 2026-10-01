@@ -121,6 +121,7 @@ export default tseslint.config(
 
       // Additional strict rules
       'no-case-declarations': 'error',
+      'no-alert': 'error',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-useless-escape': 'error',
     },
