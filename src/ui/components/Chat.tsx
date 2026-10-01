@@ -1,4 +1,5 @@
 import { Trash2 } from "lucide-react";
+import type { MouseEvent } from "react";
 import {
 	resolveMessageVariables as resolveMessageVariablesShared,
 	useChatHistories,
@@ -1305,7 +1306,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	};
 
 	// Delete a chat from history
-	const deleteChat = async (chatId: string, e: React.MouseEvent) => {
+	const deleteChat = async (chatId: string, e: MouseEvent) => {
 		e.stopPropagation();
 
 		await deleteChatFromHistory(chatId);

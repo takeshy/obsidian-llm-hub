@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import type { KeyboardEvent } from "react";
 import Search from "lucide-react/dist/esm/icons/search";
 import MessageSquare from "lucide-react/dist/esm/icons/message-square";
 import MessagesSquare from "lucide-react/dist/esm/icons/messages-square";
@@ -720,7 +721,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
     });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (!isSearching) void handleSearch();

@@ -53,8 +53,9 @@ export default tseslint.config(
   {
     ignores: ['main.js', 'node_modules/**', 'pdfjs/**', 'scripts/*.mjs', 'test/**', '*.js', '*.mjs', 'vitest.config.ts', 'src/**/*.test.ts'],
   },
-  ...tseslint.configs.recommendedTypeChecked,
+  ...obsidianmd.configs.recommended,
   {
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: {
         project: true,
