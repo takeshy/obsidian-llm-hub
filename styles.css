@@ -978,6 +978,7 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 .llm-hub-model-check-item {
   display: flex;
+  flex-shrink: 0;
   align-items: flex-start;
   gap: 6px;
   font-size: var(--font-ui-small);
@@ -986,7 +987,17 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 }
 
 .llm-hub-model-check-item input[type="checkbox"] {
+  flex: 0 0 var(--checkbox-size, 16px);
+  width: var(--checkbox-size, 16px);
+  height: var(--checkbox-size, 16px);
   margin: 0;
+}
+
+.llm-hub-model-check-item span {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-normal);
+  white-space: normal;
 }
 
 /* Settings Tab - CLI Introduction */

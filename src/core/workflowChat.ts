@@ -2,6 +2,8 @@ import { AntigravityCliProvider, CodexCliProvider } from "src/core/cliProvider";
 import { GeminiClient } from "src/core/gemini";
 import { openaiChatWithToolsStream } from "src/core/openaiProvider";
 import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
+import { localLlmChatStream } from "src/core/localLlmProvider";
+import { getLocalLlmConfig, isLocalLlmModel } from "src/types";
 import { DEFAULT_CLI_CONFIG, getGeminiApiKey, isApiProviderModel, getApiProviderId, getApiProviderModelName, type ModelType, type Attachment } from "src/types";
 import type { LlmHubPlugin } from "src/plugin";
 import { t } from "src/i18n";
@@ -38,6 +40,15 @@ async function* streamProviderChat(
       timestamp: Date.now(),
       attachments,
     }];
+
+    if (isLocalLlmModel(selectedModel)) {
+      const config = getLocalLlmConfig(selectedModel, plugin.settings);
+      if (!config) {
+        throw new Error("Local LLM is not available. Please verify it and enable the model in settings.");
+      }
+      yield* localLlmChatStream(config, userMessages, systemPrompt, request.abortSignal);
+      return;
+    }
 
     if (isCliModel) {
       const cliConfig = plugin.settings.cliConfig || DEFAULT_CLI_CONFIG;
