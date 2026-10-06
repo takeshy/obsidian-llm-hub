@@ -12,7 +12,7 @@ Agent Skills extend chat with reusable instructions, reference files, executable
 
 Built-in skills are available without vault setup. They teach the AI about Obsidian-specific formats:
 
-- `obsidian-markdown` covers Obsidian Markdown extensions such as wikilinks, embeds, callouts, properties, tags, highlights, comments, math, and footnotes. It is auto-activated by default in new chats.
+- `obsidian-markdown` covers Obsidian Markdown extensions such as wikilinks, embeds, callouts, properties, tags, highlights, comments, math, and footnotes. No skill is switched on by default; when a Markdown, Canvas, Base, or Dashboard file is open, the empty chat offers the matching skill.
 - `json-canvas` covers `.canvas` JSON Canvas files.
 - `base` covers `.base` files and includes the Bases authoring reference.
 - When the separate Dashboard Hub plugin is enabled, it contributes a `dashboard` skill at runtime for authoring `.dashboard` files and backing `.base` files.
