@@ -108,11 +108,11 @@ import {
 	type ChatTurnUi,
 } from "obsidian-llm-hub-common/chat";
 import { runSkillWorkflow } from "obsidian-llm-hub-common/workflow";
-import { discoverSkills, loadSkill, readSkillBody, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill, type SkillScriptRef } from "src/core/skillsLoader";
+import { MAX_MARKER_AGENT_ITERATIONS, executeSkillScript, runSkillMarkers } from "src/core/skillScripts";
+import { discoverSkills, loadSkill, buildSkillSystemPrompt, collectSkillWorkflows, collectSkillScripts, type SkillMetadata, type LoadedSkill } from "src/core/skillsLoader";
 import { DEFAULT_BUILTIN_SKILL_IDS, builtinFolderPath, restoredSkillPaths, prunedSkillPaths, getBuiltinSkillMetadata, fileSkillFor, type FileSkill } from "src/core/builtinSkills";
 import { buildBuiltinOkfSystemPrompt, buildOkfSystemPrompt, discoverOkfBundles, getBuiltinOkfBundle, isBuiltinOkfBundleId, type OkfBundle } from "src/core/okfLoader";
 import { executeReadOkfDocumentTool, READ_OKF_DOCUMENT_TOOL, READ_OKF_DOCUMENT_TOOL_NAME } from "src/core/okfDocumentTool";
-import { getInterpreter, runScript } from "src/core/scriptRunner";
 import { promptForValue } from "./workflow/ValuePromptModal";
 import { t } from "src/i18n";
 import {
@@ -1657,7 +1657,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 						// Execute any skill markers in this iteration's output
 						const markerResult = !isCodexCli && cliLoadedSkills.length > 0
-							? await processSkillMarkers(plugin, iterationContent, cliLoadedSkills, abortController.signal)
+							? await runSkillMarkers(plugin, iterationContent, cliLoadedSkills, abortController.signal)
 							: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
 
 						// Append this iteration's processed content to accumulated display
@@ -2283,7 +2283,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					if (stopped) break;
 
 					const markerResult = llmLoadedSkills.length > 0
-						? await processSkillMarkers(plugin, iterationContent, llmLoadedSkills, abortController.signal, {
+						? await runSkillMarkers(plugin, iterationContent, llmLoadedSkills, abortController.signal, {
 							vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
 						})
 						: { processedContent: iterationContent, followUpMessage: undefined, aborted: false };
@@ -3644,180 +3644,5 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 });
 
 Chat.displayName = "Chat";
-
-/**
- * Maximum number of marker-driven agent iterations for CLI / Local-LLM paths.
- * Protects against infinite loops where the model keeps emitting markers.
- */
-const MAX_MARKER_AGENT_ITERATIONS = 5;
-
-/**
- * Detect [RUN_WORKFLOW] / [RUN_SCRIPT] markers in an LLM response, execute
- * each matched workflow/script, and return both:
- *   - processedContent: the response with markers replaced by result blocks
- *     (for display in the assistant message), and
- *   - followUpMessage: a user-style message containing the results that can
- *     be fed back to the LLM so it can continue based on tool outputs.
- *     Undefined when no markers were matched — the agent loop should then
- *     terminate.
- */
-async function processSkillMarkers(
-	plugin: LlmHubPlugin,
-	content: string,
-	skills: LoadedSkill[],
-	signal?: AbortSignal,
-	options?: {
-		vaultToolAllowedFolders?: string[];
-	},
-): Promise<{ processedContent: string; followUpMessage?: string; aborted?: boolean }> {
-	if (skills.length === 0) return { processedContent: content };
-
-	let processedContent = content;
-	const resultSections: string[] = [];
-
-	const readSkillMarkerRegex = /\[READ_SKILL:\s*(.+?)\]/g;
-	const readSkillMatches: RegExpExecArray[] = [];
-	let rsm: RegExpExecArray | null;
-	while ((rsm = readSkillMarkerRegex.exec(content)) !== null) {
-		readSkillMatches.push(rsm);
-	}
-	for (const match of readSkillMatches) {
-		if (signal?.aborted) return { processedContent, aborted: true };
-		const skillName = match[1].trim();
-		const skill = skills.find(s => s.name === skillName);
-		if (!skill) {
-			const available = skills.map(s => s.name).join(", ");
-			const errMsg = `Unknown skill: ${skillName}. Available: ${available}`;
-			processedContent = processedContent.replace(match[0], `**Skill read failed: ${skillName}** — ${errMsg}`);
-			resultSections.push(`Skill "${skillName}" read error:\n${errMsg}`);
-			continue;
-		}
-		const loaded = await readSkillBody(plugin.app, skill);
-		const body = loaded.instructions
-			+ (loaded.references.length > 0 ? `\n\n### References\n\n${loaded.references.join("\n\n")}` : "");
-		processedContent = processedContent.replace(match[0], `**Skill loaded: ${skillName}**`);
-		resultSections.push(`Skill "${skillName}" SKILL.md:\n${body}`);
-	}
-
-	const workflowMarkerRegex = /\[RUN_WORKFLOW:\s*(.+?)\](?:\((\{[\s\S]*?\})\))?/g;
-	const skillWorkflowMap = collectSkillWorkflows(skills);
-	const workflowMatches: RegExpExecArray[] = [];
-	let wm: RegExpExecArray | null;
-	while ((wm = workflowMarkerRegex.exec(content)) !== null) {
-		workflowMatches.push(wm);
-	}
-	for (const match of workflowMatches) {
-		if (signal?.aborted) return { processedContent, aborted: true };
-		const workflowId = match[1].trim();
-		const variablesJson = match[2] || undefined;
-		const result = await runSkillWorkflow(plugin.app, workflowId, variablesJson, skillWorkflowMap,
-			{ vaultToolAllowedFolders: options?.vaultToolAllowedFolders });
-		const resultText = JSON.stringify(result, null, 2);
-		processedContent = processedContent.replace(match[0],
-			`**Workflow executed: ${workflowId}**\n\`\`\`json\n${resultText}\n\`\`\``
-		);
-		resultSections.push(`Workflow "${workflowId}" result:\n\`\`\`json\n${resultText}\n\`\`\``);
-	}
-
-	const scriptMarkerRegex = /\[RUN_SCRIPT:\s*(.+?)\](?:\(([\s\S]*?)\))?/g;
-	const skillScriptMap = collectSkillScripts(skills);
-	const scriptMatches: RegExpExecArray[] = [];
-	let sm: RegExpExecArray | null;
-	while ((sm = scriptMarkerRegex.exec(content)) !== null) {
-		scriptMatches.push(sm);
-	}
-	for (const match of scriptMatches) {
-		if (signal?.aborted) return { processedContent, aborted: true };
-		const scriptId = match[1].trim();
-		const argsJson = match[2] || undefined;
-		const result = await executeSkillScript(plugin, scriptId, argsJson, skillScriptMap);
-		const resultText = JSON.stringify(result, null, 2);
-		processedContent = processedContent.replace(match[0],
-			`**Script executed: ${scriptId}**\n\`\`\`json\n${resultText}\n\`\`\``
-		);
-		resultSections.push(`Script "${scriptId}" result:\n\`\`\`json\n${resultText}\n\`\`\``);
-	}
-
-	if (resultSections.length === 0) return { processedContent };
-
-	const followUpMessage = `Tool execution results:\n\n${resultSections.join("\n\n")}\n\nPlease continue based on these results. You may call more tools if needed, or give the user your final answer.`;
-	return { processedContent, followUpMessage };
-}
-
-/**
- * Execute a skill script via child_process.spawn and return results.
- * Desktop only — returns error on mobile.
- */
-async function executeSkillScript(
-	plugin: LlmHubPlugin,
-	scriptId: string,
-	argsJson: string | undefined,
-	skillScriptMap: Map<string, {
-		skill: LoadedSkill;
-		scriptRef: SkillScriptRef;
-		vaultPath: string;
-	}>,
-): Promise<Record<string, unknown>> {
-	const entry = skillScriptMap.get(scriptId);
-	if (!entry) {
-		const available = [...skillScriptMap.keys()].join(", ");
-		return { error: `Unknown script ID: ${scriptId}. Available: ${available}` };
-	}
-
-	// Restrict execution to files under the skill's scripts/ directory
-	if (
-		!entry.scriptRef.path.startsWith("scripts/") ||
-		entry.scriptRef.path.startsWith("/") ||
-		entry.scriptRef.path.includes("\\") ||
-		entry.scriptRef.path.split("/").includes("..")
-	) {
-		return { error: "Skill scripts must be located under the scripts/ directory" };
-	}
-
-	// Parse args
-	let scriptArgs: string[] = [];
-	if (argsJson) {
-		try {
-			const parsed = JSON.parse(argsJson) as unknown;
-			if (Array.isArray(parsed)) {
-				scriptArgs = parsed.map(String);
-			}
-		} catch {
-			return { error: `Invalid args JSON: ${argsJson}` };
-		}
-	}
-
-	// Resolve absolute paths
-	const vaultBasePath = (plugin.app.vault.adapter as { basePath?: string }).basePath || ".";
-	const absoluteScriptPath = `${vaultBasePath}/${entry.vaultPath}`;
-	const skillDir = `${vaultBasePath}/${entry.skill.folderPath}`;
-	const scriptFile = plugin.app.vault.getAbstractFileByPath(entry.vaultPath);
-	if (!(scriptFile instanceof TFile)) {
-		return { error: `Script file not found: ${entry.vaultPath}` };
-	}
-
-	// Determine interpreter from file extension
-	const interpreter = getInterpreter(absoluteScriptPath);
-	let command: string;
-	let commandArgs: string[];
-	if (interpreter) {
-		command = interpreter.command;
-		commandArgs = [...interpreter.args, ...scriptArgs];
-	} else {
-		command = absoluteScriptPath;
-		commandArgs = scriptArgs;
-	}
-
-	const result = await runScript({
-		command,
-		args: commandArgs,
-		cwd: skillDir,
-		env: {
-			SKILL_DIR: skillDir,
-			VAULT_PATH: vaultBasePath,
-		},
-	});
-	return { ...result };
-}
 
 export default Chat;

@@ -61,13 +61,7 @@ import { DEFAULT_CLI_CONFIG, DEFAULT_DISCORD_SETTINGS, DEFAULT_EDIT_HISTORY_SETT
 import { initLocale, t } from "src/i18n";
 import { registerWorkflowCodeBlockProcessor } from "src/ui/workflowCodeBlock";
 import { getSlashCommandSearchSelection } from "src/core/webSearch";
-import {
-  generateDashboardBase,
-  generateDashboardWorkflow,
-  listDashboardModels,
-  rewriteDashboardText,
-  runDashboardWorkflow,
-} from "src/integrations/dashboardHubCapabilities";
+import { generateDashboardBase, generateDashboardWorkflow, listDashboardModels, rewriteDashboardText, runDashboardWorkflow, answerDashboardTimeline, getDashboardTimelineOptions, type DashboardTimelineAnswerOptions, type DashboardTimelineAnswerRequest } from "src/integrations/dashboardHubCapabilities";
 import {
   REGISTER_RUNTIME_SKILL_EVENT,
   REQUEST_RUNTIME_SKILLS_EVENT,
@@ -98,6 +92,8 @@ interface DashboardHubIntegration {
   runWorkflow?: (request: { workflowPath: string; outputVariable?: string; abortSignal?: AbortSignal }) => Promise<string>;
   generateBase?: (request: Parameters<typeof generateDashboardBase>[1]) => Promise<string>;
   rewriteText?: (request: Parameters<typeof rewriteDashboardText>[1]) => Promise<string>;
+  answerTimeline?: (request: DashboardTimelineAnswerRequest) => Promise<string>;
+  getTimelineAnswerOptions?: (modelId: string) => Promise<DashboardTimelineAnswerOptions>;
   generateWorkflow?: (request: Parameters<typeof generateDashboardWorkflow>[1]) => Promise<string>;
 }
 
@@ -1221,6 +1217,8 @@ export class LlmHubPlugin extends Plugin {
       runWorkflow: (request) => runDashboardWorkflow(this, request),
       generateBase: (request) => generateDashboardBase(this, request),
       rewriteText: (request) => rewriteDashboardText(this, request),
+      answerTimeline: (request) => answerDashboardTimeline(this, request),
+      getTimelineAnswerOptions: (modelId) => getDashboardTimelineOptions(this, modelId),
       generateWorkflow: (request) => generateDashboardWorkflow(this, request),
     };
     const workspace = this.app.workspace as unknown as DashboardWorkspaceEvents;

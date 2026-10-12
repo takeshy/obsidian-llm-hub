@@ -1,4 +1,5 @@
-import { Platform, TFile } from "obsidian";
+import { Platform } from "obsidian";
+import { buildSkillSystemPrompt, collectSkillScripts, type LoadedSkill } from "src/core/skillsLoader";
 import type { LlmHubPlugin } from "src/plugin";
 import { streamChatForModel } from "src/core/modelStreaming";
 import { GeminiClient } from "src/core/gemini";
@@ -7,23 +8,33 @@ import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { localLlmChatStream } from "src/core/localLlmProvider";
 import { AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider } from "src/core/cliProvider";
 import { getEnabledVaultTools } from "obsidian-llm-hub-common/core";
+import { createMcpToolset } from "obsidian-llm-hub-common/mcp";
+import { createSkillToolset } from "obsidian-llm-hub-common/workflow";
+import {
+  assertTimelineAnswerSupported, dashboardBasePrompt, dashboardRewritePrompt, dashboardWorkflowPrompt,
+  listDashboardSkills, loadDashboardSkills, runDashboardWorkflow as runWorkflow, stripYamlFence,
+  timelineAnswerMessages, timelineAnswerSystemPrompt,
+  type DashboardAiModel, type DashboardBaseRequest, type DashboardRewriteRequest, type DashboardTimelineAnswerOptions,
+  type DashboardTimelineAnswerRequest, type DashboardWorkflowGenerationRequest, type DashboardWorkflowRequest,
+} from "obsidian-llm-hub-common/dashboard";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import { loadBuiltinSkill, builtinFolderPath } from "src/core/builtinSkills";
 import { WORKFLOW_SPECIFICATION } from "src/workflow/workflowSpec";
+import { modelSupportsWebSearch } from "src/core/webSearch";
+import { searchLocalRag } from "src/core/localRagStore";
+import { MAX_MARKER_AGENT_ITERATIONS, executeSkillScript, runSkillMarkers } from "src/core/skillScripts";
 import {
   getApiProviderId, getApiProviderModelName, getGeminiApiKey, getLocalLlmConfig,
   isApiProviderModel, isImageGenerationModel, isLocalLlmModel,
-  type Message, type ModelType, type StreamChunk,
+  type Message, type ModelType, type StreamChunk, type ToolDefinition,
 } from "src/types";
-import { parseWorkflowFromMarkdown } from "src/workflow/parser";
-import { WorkflowExecutor } from "src/workflow/executor";
-import type { PromptCallbacks, WorkflowInput } from "src/workflow/types";
 
-export interface DashboardAiModel { id: string; name: string; capabilities: { text: boolean; vaultRead: boolean; tools: boolean } }
-export interface DashboardWorkflowRequest { workflowPath: string; outputVariable?: string; abortSignal?: AbortSignal }
-export interface DashboardBaseRequest { modelId: string; instruction: string; currentYaml?: string; basePath?: string; allowVaultRead: boolean; previousResult?: string; abortSignal?: AbortSignal }
-export interface DashboardRewriteRequest { modelId: string; content: string; instruction: string; previousResult?: string; context: "timeline" | "memo"; abortSignal?: AbortSignal }
-export interface DashboardWorkflowGenerationRequest { modelId: string; mode: "create" | "modify"; instruction: string; currentMarkdown?: string; previousResult?: string; outputContract: { outputVariable: string; format: "markdown" | "html" }; allowVaultRead: boolean; abortSignal?: AbortSignal }
+export type {
+  DashboardAiModel, DashboardBaseRequest, DashboardRewriteRequest, DashboardTimelineAnswerOptions,
+  DashboardTimelineAnswerRequest, DashboardWorkflowGenerationRequest, DashboardWorkflowRequest,
+};
+/** Tools beyond the Vault ones, with the executor that answers them. */
+interface ExtraTools { tools: ToolDefinition[]; execute: (name: string, args: Record<string, unknown>) => Promise<unknown> }
 
 export function listDashboardModels(plugin: LlmHubPlugin): DashboardAiModel[] {
   const models: DashboardAiModel[] = [];
@@ -44,39 +55,20 @@ export function listDashboardModels(plugin: LlmHubPlugin): DashboardAiModel[] {
   return models;
 }
 
-function headlessCallbacks(): PromptCallbacks {
-  return { promptForFile: () => Promise.resolve(null), promptForAnyFile: () => Promise.resolve(null), promptForNewFilePath: () => Promise.resolve(null),
-    promptForSelection: () => Promise.resolve(null), promptForValue: () => Promise.resolve(null),
-    promptForConfirmation: () => Promise.resolve({ action: "cancel" as const }), promptForDialog: () => Promise.resolve(null), promptForPassword: () => Promise.resolve(null) };
+export function runDashboardWorkflow(plugin: LlmHubPlugin, request: DashboardWorkflowRequest): Promise<string> {
+  return runWorkflow(plugin.app, request);
 }
 
-function extractString(values: Map<string, string | number>, name?: string): string | null {
-  const str = (value: unknown) => typeof value === "string" ? value : typeof value === "number" ? String(value) : null;
-  if (name) return str(values.get(name));
-  const result = str(values.get("result"));
-  if (result != null) return result;
-  for (const [key, value] of values) { const text = str(value); if (!key.startsWith("_") && text) return text; }
-  return null;
-}
-
-export async function runDashboardWorkflow(plugin: LlmHubPlugin, request: DashboardWorkflowRequest): Promise<string> {
-  const file = plugin.app.vault.getAbstractFileByPath(request.workflowPath);
-  if (!(file instanceof TFile)) throw new Error(`Workflow not found: ${request.workflowPath}`);
-  const workflow = parseWorkflowFromMarkdown(await plugin.app.vault.read(file));
-  const input: WorkflowInput = { variables: new Map() };
-  const execution = await new WorkflowExecutor(plugin.app).execute(workflow, input, undefined, {
-    workflowPath: file.path, workflowName: file.basename, recordHistory: false,
-    abortSignal: request.abortSignal ?? new AbortController().signal,
-  }, headlessCallbacks());
-  const text = extractString(execution.context.variables, request.outputVariable);
-  if (text == null) throw new Error("Workflow output is not a string. Store it in `result`, or set Output variable.");
-  return text;
-}
-
-function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[], systemPrompt: string, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
-  const tools = getEnabledVaultTools({ allowWrite: false, allowDelete: false, ragSyncStatus: false });
-  const execute = createToolExecutor(plugin.app, { listNotesLimit: plugin.settings.listNotesLimit, maxNoteChars: plugin.settings.maxNoteChars,
+function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[], systemPrompt: string, signal?: AbortSignal, vaultRead = true, webSearch = false, extra?: ExtraTools): AsyncGenerator<StreamChunk> {
+  const vaultTools = vaultRead ? getEnabledVaultTools({ allowWrite: false, allowDelete: false, ragSyncStatus: false }) : [];
+  const vaultExecute = createToolExecutor(plugin.app, { listNotesLimit: plugin.settings.listNotesLimit, maxNoteChars: plugin.settings.maxNoteChars,
     limitVaultToolScope: true, vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders });
+  const extraNames = new Set(extra?.tools.map((tool) => tool.name));
+  const tools = [...vaultTools, ...(extra?.tools ?? [])];
+  const execute = async (name: string, args: Record<string, unknown>) => {
+    if (extra && extraNames.has(name)) return extra.execute(name, args);
+    return vaultExecute(name, args);
+  };
   if (isApiProviderModel(model)) {
     const provider = plugin.settings.apiProviders.find((entry) => entry.id === getApiProviderId(model) && entry.enabled && entry.verified);
     if (!provider) throw new Error(`Provider not found for model: ${model}`);
@@ -85,10 +77,10 @@ function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[],
       const key = provider.apiKey || getGeminiApiKey(plugin.settings);
       if (!key) throw new Error("Gemini API key is not configured.");
       return new GeminiClient(key, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass)
-        .chatWithToolsStream(messages, tools, systemPrompt, execute, undefined, false, { functionCallLimits: { maxFunctionCalls: 12 }, enableThinking: true, traceId: null });
+        .chatWithToolsStream(messages, tools, systemPrompt, execute, undefined, webSearch, { functionCallLimits: { maxFunctionCalls: 12 }, enableThinking: true, traceId: null });
     }
-    if (provider.type === "anthropic") return anthropicChatWithToolsStream(provider.baseUrl, provider.apiKey, modelName, messages, tools, systemPrompt, execute, signal, true, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
-    return openaiChatWithToolsStream(provider.baseUrl, provider.apiKey, modelName, messages, tools, systemPrompt, execute, signal, true, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
+    if (provider.type === "anthropic") return anthropicChatWithToolsStream(provider.baseUrl, provider.apiKey, modelName, messages, tools, systemPrompt, execute, signal, true, plugin.settings.proxyUrl, plugin.settings.proxyBypass, webSearch);
+    return openaiChatWithToolsStream(provider.baseUrl, provider.apiKey, modelName, messages, tools, systemPrompt, execute, signal, true, plugin.settings.proxyUrl, plugin.settings.proxyBypass, webSearch);
   }
   if (isLocalLlmModel(model)) {
     const config = getLocalLlmConfig(model, plugin.settings);
@@ -101,11 +93,13 @@ function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[],
   return new AntigravityCliProvider(plugin.settings.cliConfig.geminiCliPath).chatStream(messages, systemPrompt, basePath, signal);
 }
 
-async function generate(plugin: LlmHubPlugin, modelId: string, prompt: string, systemPrompt: string, signal?: AbortSignal, vaultRead = false): Promise<string> {
+async function generate(plugin: LlmHubPlugin, modelId: string, prompt: string | Message[], systemPrompt: string, signal?: AbortSignal, vaultRead = false, webSearch = false, extra?: ExtraTools): Promise<string> {
   const model = modelId as ModelType;
   if (isImageGenerationModel(model)) throw new Error("Select a text model first.");
-  const messages: Message[] = [{ role: "user", content: prompt, timestamp: Date.now() }];
-  const stream = vaultRead ? toolStream(plugin, model, messages, systemPrompt, signal) : streamChatForModel(model, messages, systemPrompt, plugin.settings, signal);
+  const messages: Message[] = typeof prompt === "string" ? [{ role: "user", content: prompt, timestamp: Date.now() }] : prompt;
+  const stream = vaultRead || webSearch || extra?.tools.length
+    ? toolStream(plugin, model, messages, systemPrompt, signal, vaultRead, webSearch, extra)
+    : streamChatForModel(model, messages, systemPrompt, plugin.settings, signal);
   let output = "";
   for await (const chunk of stream) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -117,29 +111,94 @@ async function generate(plugin: LlmHubPlugin, modelId: string, prompt: string, s
   return output.trim();
 }
 
-function stripFence(text: string): string { return text.replace(/^\s*```(?:ya?ml)?\s*/i, "").replace(/\s*```\s*$/, "").trim(); }
-function baseSystemPrompt(): string {
-  const skill = loadBuiltinSkill(builtinFolderPath("base"));
-  const reference = skill ? `${skill.instructions}\n\n${skill.references.join("\n\n")}` : "";
-  return `You author valid Obsidian Bases .base YAML. Return only YAML without fences. Use read-only Vault tools when available to verify real property names.\n\n${reference}`;
-}
-
 export async function generateDashboardBase(plugin: LlmHubPlugin, request: DashboardBaseRequest): Promise<string> {
-  const source = request.previousResult || request.currentYaml;
-  const prompt = source ? `Revise this Base according to the instruction.\nInstruction: ${request.instruction}\n\nCurrent YAML:\n${source}` : `Create an Obsidian Base.\nInstruction: ${request.instruction}`;
-  return stripFence(await generate(plugin, request.modelId, prompt, baseSystemPrompt(), request.abortSignal, request.allowVaultRead));
+  const { prompt, systemPrompt } = dashboardBasePrompt(request, loadBuiltinSkill(builtinFolderPath("base")));
+  return stripYamlFence(await generate(plugin, request.modelId, prompt, systemPrompt, request.abortSignal, request.allowVaultRead));
 }
 
 export function rewriteDashboardText(plugin: LlmHubPlugin, request: DashboardRewriteRequest): Promise<string> {
-  const source = request.previousResult || request.content;
-  return generate(plugin, request.modelId, `Instruction: ${request.instruction}\n\nText to rewrite:\n${source}`,
-    `Rewrite the ${request.context} text. Return only the rewritten text without explanation or fences.`, request.abortSignal, false);
+  const { prompt, systemPrompt } = dashboardRewritePrompt(request);
+  return generate(plugin, request.modelId, prompt, systemPrompt, request.abortSignal, false);
 }
 
 export function generateDashboardWorkflow(plugin: LlmHubPlugin, request: DashboardWorkflowGenerationRequest): Promise<string> {
-  const source = request.previousResult || request.currentMarkdown;
-  const prompt = `${request.mode === "modify" ? "Revise" : "Create"} an unattended Obsidian Workflow.\nInstruction: ${request.instruction}\nOutput must be ${request.outputContract.format} in variable ${request.outputContract.outputVariable}.${source ? `\n\nCurrent workflow:\n${source}` : ""}`;
-  return generate(plugin, request.modelId, prompt,
-    `Return only a complete Markdown workflow document with a workflow YAML code block. Do not use interactive nodes.\n\n${WORKFLOW_SPECIFICATION}`,
-    request.abortSignal, request.allowVaultRead);
+  const { prompt, systemPrompt } = dashboardWorkflowPrompt(request, WORKFLOW_SPECIFICATION);
+  return generate(plugin, request.modelId, prompt, systemPrompt, request.abortSignal, request.allowVaultRead);
+}
+
+export async function getDashboardTimelineOptions(plugin: LlmHubPlugin, modelId: string): Promise<DashboardTimelineAnswerOptions> {
+  const model = modelId as ModelType;
+  return {
+    // Read-only Vault tools are wired only for API provider models; local and CLI models answer without them.
+    vaultRead: isApiProviderModel(model),
+    webSearch: modelSupportsWebSearch(model, plugin.settings.apiProviders),
+    ragSettings: plugin.getRagSettingNames().filter((name) => plugin.getRagSearchSetting(name) !== null),
+    // MCP tools need the same tool-calling path as the Vault tools.
+    mcpServers: isApiProviderModel(model) ? (plugin.settings.mcpServers ?? []).map((server) => server.name) : [],
+    skills: await listDashboardSkills(plugin.app, plugin.settings.skillsFolder),
+  };
+}
+
+export async function answerDashboardTimeline(plugin: LlmHubPlugin, request: DashboardTimelineAnswerRequest): Promise<string> {
+  const options = await getDashboardTimelineOptions(plugin, request.modelId);
+  assertTimelineAnswerSupported(request, options);
+  const vaultRead = request.allowVaultRead === true && options.vaultRead;
+  let ragContext: string | undefined;
+  if (request.ragSetting) {
+    const setting = plugin.getRagSearchSetting(request.ragSetting);
+    if (!setting) throw new Error(`RAG setting "${request.ragSetting}" was not found.`);
+    // Retrieval runs up front so it works for every model, including ones without tool calling.
+    ragContext = (await searchLocalRag(request.ragSetting, request.question, setting, getGeminiApiKey(plugin.settings),
+      plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings)).context;
+  }
+  // MCP calls go through the shared executor, which asks for approval like Chat does.
+  const mcp = await createMcpToolset(options.mcpServers.length > 0
+    ? (plugin.settings.mcpServers ?? []).filter((server) => request.mcpServers?.includes(server.name))
+    : []);
+  // Skills work as in Chat: API models get the skill tools, while CLI and local
+  // models are told to emit [READ_SKILL] / [RUN_WORKFLOW] / [RUN_SCRIPT] markers.
+  const skills = await loadDashboardSkills(plugin.app, plugin.settings.skillsFolder, request.skills);
+  const markerMode = !isApiProviderModel(request.modelId as ModelType);
+  const systemPrompt = timelineAnswerSystemPrompt({
+    vaultRead, ragContext, mcp: mcp !== null,
+    skillPrompt: buildSkillSystemPrompt(skills, { cliMode: markerMode }), additionalInstructions: plugin.settings.systemPrompt,
+  });
+  const messages = timelineAnswerMessages(request);
+  if (markerMode) return answerWithSkillMarkers(plugin, request.modelId, messages, systemPrompt, skills, request.abortSignal);
+
+  const scripts = collectSkillScripts(skills);
+  const skillTools = createSkillToolset(plugin.app, skills, {
+    vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
+    readSkillMarker: true,
+    runScript: (scriptId, argsJson) => executeSkillScript(plugin, scriptId, argsJson, scripts),
+  });
+  const extra: ExtraTools = {
+    tools: [...(mcp?.tools ?? []), ...skillTools.tools],
+    execute: async (name, args) => {
+      if (skillTools.has(name)) return skillTools.execute(name, args);
+      if (mcp?.has(name)) return mcp.execute(name, args);
+      return { error: `Unknown tool: ${name}` };
+    },
+  };
+  try {
+    return await generate(plugin, request.modelId, messages, systemPrompt, request.abortSignal, vaultRead, request.webSearch === true, extra);
+  } finally {
+    await mcp?.cleanup();
+  }
+}
+
+/** Chat's CLI / Local-LLM agent loop: run the markers a reply emits and feed the results back. */
+async function answerWithSkillMarkers(plugin: LlmHubPlugin, modelId: string, messages: Message[], systemPrompt: string, skills: LoadedSkill[], signal?: AbortSignal): Promise<string> {
+  let history = messages;
+  let answer = "";
+  for (let iteration = 0; iteration < MAX_MARKER_AGENT_ITERATIONS; iteration += 1) {
+    const reply = await generate(plugin, modelId, history, systemPrompt, signal);
+    const markers = await runSkillMarkers(plugin, reply, skills, signal, { vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders });
+    answer += (answer && markers.processedContent ? "\n\n" : "") + markers.processedContent;
+    if (markers.aborted || !markers.followUpMessage) break;
+    history = [...history,
+      { role: "assistant", content: reply, timestamp: Date.now() },
+      { role: "user", content: markers.followUpMessage, timestamp: Date.now() }];
+  }
+  return answer;
 }
