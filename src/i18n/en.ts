@@ -2,6 +2,12 @@ import type { SharedTranslationKey } from "obsidian-llm-hub-common/i18n";
 
 // English translations (base language)
 export const en = {
+  "settings.webSearch": "Web search",
+  "settings.webSearch.provider": "Active provider",
+  "settings.webSearch.desc": "Register both API keys and select one provider. Web search uses function calls and counts toward the tool call limit. Tavily uses basic search with up to 5 results.",
+  "settings.webSearch.apiKey": "{{name}} API key",
+  "settings.webSearch.apiKey.desc": "Follows the credential storage setting (plugin files or device-local SecretStorage).",
+
   "input.hideContext": "Hide model and skill controls",
   "input.showContext": "Show model and skill controls",
   // Settings - Credential storage

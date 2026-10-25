@@ -154,3 +154,18 @@ describe("credential bundle", () => {
     });
   });
 });
+
+
+describe("external search credentials", () => {
+  it("round-trips both keys independently and never persists either in secret storage mode", () => {
+    const { settings } = fixtures();
+    settings.webSearch = { provider: "brave", tavilyApiKey: "tavily-key", braveApiKey: "brave-key" };
+    const bundle = collectSettingsCredentials(settings);
+    const stripped = stripSettingsCredentials(settings);
+    expect(stripped.webSearch).toEqual({ provider: "brave", tavilyApiKey: "", braveApiKey: "" });
+    expect(settings.webSearch.tavilyApiKey).toBe("tavily-key");
+    applySettingsCredentials(stripped, bundle);
+    expect(stripped.webSearch).toEqual(settings.webSearch);
+    expect(mergeConfiguredCredentials(settings, [])).toEqual(expect.arrayContaining([credentialSlot.tavily, credentialSlot.brave]));
+  });
+});

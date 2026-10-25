@@ -1,3 +1,4 @@
+import { displayWebSearchSettings } from "src/ui/settings/webSearchSettings";
 import { PluginSettingTab, App, type SettingDefinitionItem } from "obsidian";
 import type { LlmHubPlugin } from "src/plugin";
 import type { SettingsContext } from "src/ui/settings/settingsContext";
@@ -37,7 +38,7 @@ export class SettingsTab extends PluginSettingTab {
       aliases: [
         "credentials", "CLI", "local LLM", "API provider", "proxy", "workspace",
         "knowledge", "edit history", "encryption", "Langfuse", "slash commands",
-        "skills", "agent plugins", "RAG", "MCP servers",
+        "skills", "agent plugins", "RAG", "MCP servers", "Web search", "Tavily", "Brave",
       ],
       render: (setting) => {
         const containerEl = setting.settingEl;
@@ -66,6 +67,7 @@ export class SettingsTab extends PluginSettingTab {
         displaySkillsSettings(containerEl, ctx);
         displayExternalSkillSettings(containerEl, ctx);
         displayAgentPluginSettings(containerEl, ctx);
+        const cleanupWebSearch = displayWebSearchSettings(containerEl, ctx);
         displayRagSettings(containerEl, ctx);
         displayMcpServersSettings(containerEl, ctx);
 
@@ -77,6 +79,7 @@ export class SettingsTab extends PluginSettingTab {
         this.plugin.settingsEmitter.on("settings-updated", listener);
 
         return () => {
+          cleanupWebSearch();
           this.plugin.settingsEmitter.off("settings-updated", listener);
           if (this.settingsListener === listener) this.settingsListener = null;
         };

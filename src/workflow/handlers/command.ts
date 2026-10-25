@@ -466,6 +466,7 @@ export async function handleCommandNode(
               apiSystemPrompt, apiToolExecutor,
               undefined, undefined,
               plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+              node.properties["ragSetting"] === "__websearch__", { settings: plugin.settings.webSearch, maxCalls: plugin.settings.maxFunctionCalls },
             )
           : openaiChatWithToolsStream(
               providerConfig.baseUrl, providerConfig.apiKey,
@@ -473,6 +474,7 @@ export async function handleCommandNode(
               apiSystemPrompt, apiToolExecutor,
               undefined, undefined,
               plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+              node.properties["ragSetting"] === "__websearch__", undefined, undefined, { settings: plugin.settings.webSearch, maxCalls: plugin.settings.maxFunctionCalls },
             );
         for await (const chunk of streamFn) {
           if (chunk.type === "text") {
@@ -558,7 +560,7 @@ export async function handleCommandNode(
         geminiProviderConfig.apiKey || getGeminiApiKey(plugin.settings),
         model,
         plugin.settings.proxyUrl,
-        plugin.settings.proxyBypass
+        plugin.settings.proxyBypass, plugin.settings.webSearch
       )
     : getGeminiClient();
   if (!client) {

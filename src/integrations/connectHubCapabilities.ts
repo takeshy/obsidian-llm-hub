@@ -33,7 +33,7 @@ export function registerConnectHubIntegration(plugin: LlmHubPlugin): void {
     listModels: () => getAvailableModels(plugin.settings),
     getDefaultModel: () => getDefaultModel(plugin.settings),
     listRagSettings: () => plugin.getRagSettingNames(),
-    supportsWebSearch: model => modelSupportsWebSearch(model as ModelType, plugin.settings.apiProviders),
+    supportsWebSearch: model => modelSupportsWebSearch(model as ModelType, plugin.settings.apiProviders, plugin.settings.webSearch),
     listSkills: async () => ({
       prompts: structuredClone(plugin.settings.slashCommands),
       folders: (await discoverSkills(plugin.app, plugin.settings.skillsFolder || SKILLS_FOLDER)).map(({ name, description, folderPath }) => ({ name, description, folderPath })),

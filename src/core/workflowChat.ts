@@ -87,7 +87,7 @@ async function* streamProviderChat(
       if (!geminiApiKey) {
         throw new Error(t("aiWorkflow.apiKeyNotConfigured"));
       }
-      const client = new GeminiClient(geminiApiKey, resolvedModelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
+      const client = new GeminiClient(geminiApiKey, resolvedModelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings.webSearch);
       yield* client.generateWorkflowStream(userMessages, systemPrompt, traceId);
       return;
     }
@@ -99,7 +99,7 @@ async function* streamProviderChat(
         resolvedModelName, userMessages, [],
         systemPrompt, noopToolExecutor, abortController.signal,
         true,
-        plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+        plugin.settings.proxyUrl, plugin.settings.proxyBypass, undefined, { settings: plugin.settings.webSearch, maxCalls: plugin.settings.maxFunctionCalls },
       );
       return;
     }
@@ -112,7 +112,7 @@ async function* streamProviderChat(
         resolvedModelName, userMessages, [],
         systemPrompt, noopToolExecutor, abortController.signal,
         true,
-        plugin.settings.proxyUrl, plugin.settings.proxyBypass,
+        plugin.settings.proxyUrl, plugin.settings.proxyBypass, undefined, undefined, undefined, { settings: plugin.settings.webSearch, maxCalls: plugin.settings.maxFunctionCalls },
       );
       return;
     }
@@ -122,7 +122,7 @@ async function* streamProviderChat(
     if (!geminiApiKey) {
       throw new Error(t("aiWorkflow.apiKeyNotConfigured"));
     }
-    const client = new GeminiClient(geminiApiKey, resolvedModelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
+    const client = new GeminiClient(geminiApiKey, resolvedModelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings.webSearch);
     yield* client.generateWorkflowStream(userMessages, systemPrompt, traceId);
   }
 

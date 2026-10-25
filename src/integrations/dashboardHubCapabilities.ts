@@ -76,11 +76,11 @@ function toolStream(plugin: LlmHubPlugin, model: ModelType, messages: Message[],
     if (provider.type === "gemini") {
       const key = provider.apiKey || getGeminiApiKey(plugin.settings);
       if (!key) throw new Error("Gemini API key is not configured.");
-      return new GeminiClient(key, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass)
+      return new GeminiClient(key, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings.webSearch)
         .chatWithToolsStream(messages, tools, systemPrompt, execute, undefined, webSearch, { functionCallLimits: { maxFunctionCalls: 12 }, enableThinking: true, traceId: null });
     }
-    if (provider.type === "anthropic") return anthropicChatWithToolsStream(provider.baseUrl, provider.apiKey, modelName, messages, tools, systemPrompt, execute, signal, true, plugin.settings.proxyUrl, plugin.settings.proxyBypass, webSearch);
-    return openaiChatWithToolsStream(provider.baseUrl, provider.apiKey, modelName, messages, tools, systemPrompt, execute, signal, true, plugin.settings.proxyUrl, plugin.settings.proxyBypass, webSearch);
+    if (provider.type === "anthropic") return anthropicChatWithToolsStream(provider.baseUrl, provider.apiKey, modelName, messages, tools, systemPrompt, execute, signal, true, plugin.settings.proxyUrl, plugin.settings.proxyBypass, webSearch, { settings: plugin.settings.webSearch, maxCalls: plugin.settings.maxFunctionCalls });
+    return openaiChatWithToolsStream(provider.baseUrl, provider.apiKey, modelName, messages, tools, systemPrompt, execute, signal, true, plugin.settings.proxyUrl, plugin.settings.proxyBypass, webSearch, undefined, undefined, { settings: plugin.settings.webSearch, maxCalls: plugin.settings.maxFunctionCalls });
   }
   if (isLocalLlmModel(model)) {
     const config = getLocalLlmConfig(model, plugin.settings);
@@ -131,7 +131,7 @@ export async function getDashboardTimelineOptions(plugin: LlmHubPlugin, modelId:
   return {
     // Read-only Vault tools are wired only for API provider models; local and CLI models answer without them.
     vaultRead: isApiProviderModel(model),
-    webSearch: modelSupportsWebSearch(model, plugin.settings.apiProviders),
+    webSearch: modelSupportsWebSearch(model, plugin.settings.apiProviders, plugin.settings.webSearch),
     ragSettings: plugin.getRagSettingNames().filter((name) => plugin.getRagSearchSetting(name) !== null),
     // MCP tools need the same tool-calling path as the Vault tools.
     mcpServers: isApiProviderModel(model) ? (plugin.settings.mcpServers ?? []).map((server) => server.name) : [],

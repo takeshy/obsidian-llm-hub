@@ -10,13 +10,13 @@ timestamp: 2026-07-05T00:00:00Z
 
 LLM Hub requires Obsidian v1.10.0 or later and runs as a desktop-only plugin. Configure at least one provider, such as Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, a local OpenAI-compatible endpoint, or a supported CLI provider (Antigravity, Claude, or Codex CLI).
 
-Free Gemini API keys support basic chat, vault operations, Gemini web search, and workflows. Official OpenAI, Anthropic, and xAI APIs also expose their native web-search tools when supported by the selected model. Paid provider keys and local/CLI backends unlock the models and capabilities offered by those providers.
+Gemini API keys support basic chat, vault operations, and workflows. Web search is configured separately with a Tavily or Brave Search API key. API models, including compatible gateways, use the active external search provider through function calling. Paid provider keys and local/CLI backends unlock the models and capabilities offered by those providers.
 
 # Model Availability
 
 There is no fixed model list. After entering an API key, Verify fetches the provider's available models, and the user checks which models to enable; enabled models appear in the chat model dropdown. Multiple providers can be configured simultaneously.
 
-Native web search also avoids a fixed chat-model allowlist. It is enabled by provider capability, and unsupported models surface the provider's error. Development smoke tests covered OpenAI GPT-5.6 Sol and Anthropic Claude Opus 4.8, Sonnet 5, Fable 5, and Haiku 4.5; automated Responses-stream tests cover Grok 4.5. OpenAI image-generation models, Grok image/video-generation models, and non-official compatible gateways are excluded from native web search.
+External Web search is available to API text models that support function calling. Gemini image models retrieve references through a text model before image generation; this adds text-model usage. OpenAI image-generation and Grok image/video-generation paths do not expose this Web search option. Register keys and select the active service in Settings → Web search.
 
 Local LLM models are auto-detected from the running server during Verify. CLI providers use their own authenticated accounts and appear as single model entries after verification.
 

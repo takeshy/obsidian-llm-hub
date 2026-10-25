@@ -213,3 +213,7 @@ npm version major
 - [RAG Semantic Search](../features/rag.md) explains RAG settings.
 - [OKF Knowledge Sources](../features/okf.md) explains OKF settings.
 - [Agent Skills](../features/agent-skills.md) explains skill installation.
+
+# Web search
+
+Register separate Tavily and Brave Search API keys, then select one active provider or None. Both keys are retained when switching providers and follow the existing credential storage preference. Tavily uses basic search without automatic depth escalation, and both providers return up to five results per call. Search uses function calling; configure the tool call limit to bound searches. The API keys are used only for the search HTTP request, never added to model tool definitions.

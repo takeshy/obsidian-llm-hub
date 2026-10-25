@@ -15,7 +15,7 @@
 - **セマンティック検索（RAG）** - 専用検索タブ、PDF プレビュー、検索結果からチャットへの連携を備えたローカルベクトル検索
 - **Discussion Hub 連携** - 別プラグインのマルチプロバイダー [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) に API、CLI、ローカルモデルを提供
 - **編集履歴** - AI による変更を差分表示で追跡・復元
-- **Web 検索** - Gemini、OpenAI 公式 API、Anthropic 公式 API、xAI 公式 API から引用付きの最新情報を取得
+- **Web 検索** - Tavily／Brave Searchで最新情報と出典リンクを取得
 - **画像生成** - Gemini または DALL-E で画像を作成
 - **LLM Connect Hub 連携** - Discord と [Kakeratta](https://kakeratta.net/lp/) に接続し、LLM Hub のモデルや RAG を利用可能
 - **暗号化** - チャット履歴とワークフロー実行ログをパスワード保護
@@ -25,17 +25,17 @@
 
 | プロバイダー | チャット | Vault ツール | Web 検索 | 画像生成 | RAG |
 |----------|------|-------------|------------|-----------|-----|
-| **Gemini** (API) | ✅ Streaming | ✅ Function calling | ✅ Google Search | ✅ Gemini 画像モデル | ✅ |
-| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ ネイティブ検索（公式 API） | ✅ DALL-E | ✅ |
-| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ ネイティブ検索（公式 API） | ❌ | ✅ |
-| **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
-| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ ネイティブ検索（xAI 公式 API） | ❌ | ✅ |
-| **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
+| **Gemini** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ✅ Gemini 画像モデル | ✅ |
+| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ✅ DALL-E | ✅ |
+| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
 | **ローカル LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling（自動フォールバック） | ❌ | ❌ | ✅ |
 | **ローカル LLM** (Ollama, OpenCode) | ✅ Streaming | ❌（マーカーモード） | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
-Web 検索は Gemini、および公式 API ホストを使用する OpenAI / Anthropic / Grok プロバイダーで表示されます。プロンプトを送信する前に検索メニューを開き、**Web search** をチェックしてください。Web 検索と 1 つのセマンティック検索（RAG）設定を同時に有効にできるため、モデルは最新の Web 情報と Vault から取得したコンテキストを統合できます。モデルに検索を依頼するだけではツールは有効になりません。有効化後も検索するかどうかはモデルが判断します。回答にはインラインの引用リンクと、引用元をまとめたクリック可能な一覧が表示されます。カスタムゲートウェイや OpenAI 互換ゲートウェイは、プロバイダー固有のネイティブ検索には対応扱いになりません。
+APIモデルのWeb検索は、互換ゲートウェイも含め、選択中のTavily／Brave Searchを使用します。設定 → Web検索で登録後、Chatの検索メニューで有効にしてください。RAG設定とも併用できます。
 
 > [!TIP]
 > **複数のプロバイダーを同時に設定可能。** チャット中にモデルを自由に切り替えられます — 各プロバイダーは独自の API キーと設定を持ちます。
@@ -49,7 +49,7 @@ Web 検索は Gemini、および公式 API ホストを使用する OpenAI / Ant
 ### Gemini 無料 API キーのヒント
 
 - **レート制限**はモデルごとで毎日リセット。別モデルに切り替えて作業を継続。
-- **Gemma 4** は Function Calling と RAG/Web Search を同一リクエストで併用できません。RAG または Web Search が有効な場合、Vault ツールは自動的に無効になります。**CLI モデル**、**Ollama**、**OpenCode (Local)** は Vault ツールに非対応のため、ノート操作は**ワークフロー**（`note`、`note-read` など）または `{content}` / `{selection}` 変数を使用してください。**LM Studio / vLLM / AnythingLLM** のローカル LLM は、モデルが OpenAI 形式の Function Calling に対応していれば Vault ツールを利用可能 — 非対応モデルは初回利用時に自動検出されてマーカー方式のスキルモードにフォールバックします。
+- **Gemma 4** は Function Calling と RAG を同一リクエストで併用できません。RAG または Web Search が有効な場合、Vault ツールは自動的に無効になります。**CLI モデル**、**Ollama**、**OpenCode (Local)** は Vault ツールに非対応のため、ノート操作は**ワークフロー**（`note`、`note-read` など）または `{content}` / `{selection}` 変数を使用してください。**LM Studio / vLLM / AnythingLLM** のローカル LLM は、モデルが OpenAI 形式の Function Calling に対応していれば Vault ツールを利用可能 — 非対応モデルは初回利用時に自動検出されてマーカー方式のスキルモードにフォールバックします。
 
 ---
 
@@ -94,19 +94,11 @@ AI チャット機能は、Obsidian Vault と統合された、選択した LLM 
 
 ## Web 検索
 
-対応する API モデルを選び、モデル選択の横にある検索メニューを開いて **Web search** をチェックしてから送信します。同じメニューで 1 つのセマンティック検索設定も選択できます。両方が有効な場合、Vault から取得したコンテキストを追加したうえで、プロバイダーのネイティブ Web 検索ツールを利用できます。プロンプトに「Web を検索して」と書くだけでは検索は有効になりません。
+**設定 → Web検索** でTavilyとBrave SearchのAPIキーを登録し、使用するサービスを1つ選択します。切り替えても両方のキーを保持します。キーは既存の認証情報の保存設定に従います。APIモデルのChat、Workflowのcommandノード（`ragSetting: __websearch__`）、Dashboard、Connect Hubの回答は、選択したサービスを `web_search` のfunction callingで使います。CLIとローカルモデルの対応範囲は従来どおりです。Geminiの画像生成ではテキストモデルで参考情報を取得してから生成します（検索は最大3回）。追加のテキストモデル利用分もトークン使用量に含めます。これらの外部検索経路では組み込み検索を要求しません。Tavilyはbasic検索で、両サービスとも1回につき最大5件を取得します。
 
-Web と RAG の選択はワークスペースごとに保存されます。非対応モデルへ切り替えた場合も設定は保持され、一時的に無効として表示されます。対応モデルへ戻ると自動的に再有効化されます。複数のインデックスを検索する場合は、既存の結合 RAG 設定を使用してください。
+API仕様：[Tavily](https://docs.tavily.com/documentation/api-reference/endpoint/search)、[Brave Search](https://api-dashboard.search.brave.com/app/documentation/web-search)。
 
-- **Gemini:** Google Search Grounding を使用します。
-- **OpenAI:** `api.openai.com` のみ対応し、Responses API で検索します。Vault / MCP の Function Tool と併用できます。画像生成モデルは対象外です。
-- **Anthropic:** `api.anthropic.com` のみ対応し、ネイティブの Server Tool で検索します。Vault / MCP の Client Tool と併用できます。
-- **Grok:** `api.x.ai` のみ対応し、xAI の Responses API で検索します。Vault / MCP の Function Tool と併用できます。画像・動画生成モデルは対象外です。
-- **その他:** OpenRouter、カスタムゲートウェイ、ローカル LLM、CLI プロバイダーはネイティブ検索の対象外です。
-
-チャットモデルの固定許可リストはありません。互換性のある現在および将来のモデルは検索を利用でき、非対応モデルではプロバイダーのエラーがそのまま表示されます。開発時のライブ確認では OpenAI GPT-5.6 Sol、Anthropic Claude Opus 4.8、Sonnet 5、Fable 5、Haiku 4.5 を検証し、Grok 4.5 は Responses ストリームの自動テストで確認しています。
-
-表示されるのは引用されたソースのみです。引用位置には番号付き Markdown リンクが挿入され、xAI が返すインライン Markdown 引用はそのまま保持されます。重複を除いたソースは **Used web search** バッジの下にクリック可能な項目として表示されます。検索ソースとプロバイダー固有の継続データはチャット履歴に保存され、エンドポイント、モデル、履歴範囲が一致する後続ターンで再利用されます。OpenAI / Anthropic の検索料金は現在 1 回 `$0.01` として見積もり、xAI はレスポンスに含まれる正確な請求額（Web 検索は現在 1 回 `$0.005`）を使用します。
+送信前に検索メニューで **Web search** を有効にしてください。RAG設定とも併用できます。検索の実行はモデルが判断し、出典リンクはチャット履歴に保持します。外部検索料金はTavily／Brave Search側で発生し、AIトークンの料金見積もりとは別です。
 
 ## スラッシュコマンド
 
@@ -192,7 +184,7 @@ AI が Chat でノートを扱う際は Vault ツールを経由します。添�
 **一部モードが強制される理由：**
 
 - **CLI モデル、Ollama、OpenCode (Local)**: OpenAI 形式の Function Calling に対応していないため、Vault ツールは使用できません。**LM Studio / vLLM / AnythingLLM** のローカル LLM はツール対応モデルであれば Vault ツールを利用可能です。モデルが初回のツール送信を拒否した場合は自動的にフラグが立ち、以降のターンはマーカーモードにフォールバックします（**設定 → ローカル LLM → ツールを再有効化** でフラグをクリアできます）。
-- **Gemma 4**: Function Calling と RAG/Web Search は同一リクエストで併用できません。一方が有効な場合、もう一方は自動的に無効になります。
+- **Gemma 4**: Function Calling と RAG は同一リクエストで併用できません。一方が有効な場合、もう一方は自動的に無効になります。
 
 **LLM の Vault ツール許可フォルダ:**
 
@@ -1002,7 +994,7 @@ Jevを有効にすると、クエリに一致すると判定された2件だけ�
 **LLM プロバイダーに送信されるデータ：**
 
 - チャットメッセージと添付ファイルは、設定された API プロバイダー（Gemini、OpenAI、Anthropic、OpenRouter、Grok、またはカスタムエンドポイント）に送信されます
-- Web 検索を有効にすると、検索クエリが選択したプロバイダーのネイティブ検索サービス（Gemini は Google、OpenAI は OpenAI Web Search、Anthropic は Anthropic Web Search、Grok は xAI Web Search）に送信されます
+- Web検索を有効にすると、検索クエリは選択中のTavily／Brave Searchに送信され、取得結果はツールの参照情報としてチャットモデルに送信されます。
 - ローカル LLM プロバイダーはローカルサーバーにのみデータを送信します
 
 **サードパーティサービスへの送信：**
@@ -1053,3 +1045,5 @@ MIT
 このプラグインが役に立ったら、コーヒーをおごってください！
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/takeshy)
+
+Web検索の設定では、各APIキーの下に使用量を表示します。Tavilyは **残りクレジットを表示** ボタンを押したときだけ取得し、プラン・APIキー・従量課金枠を分けて表示します。Braveは実際の検索時に取得した残り回数と取得日時を表示し、確認用の追加検索は実行しません。取得情報はAPIキーごとにメモリに保持し、プラグイン再読み込みで消去します。Braveの値はリクエスト枠であり、金額としての残高ではありません。

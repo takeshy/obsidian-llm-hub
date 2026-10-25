@@ -1,3 +1,4 @@
+import { createExternalSearchSession, searchError, type ExternalWebSearchOptions } from "./externalWebSearch";
 /**
  * Anthropic Native Provider
  * Uses the official Anthropic SDK for full feature support:
@@ -177,7 +178,16 @@ export async function* anthropicChatWithToolsStream(
   proxyUrl?: string,
   proxyBypass?: string,
   webSearchEnabled?: boolean,
+  externalSearch?: ExternalWebSearchOptions,
 ): AsyncGenerator<StreamChunk> {
+  if (webSearchEnabled && externalSearch) {
+    try {
+      const session = createExternalSearchSession(externalSearch, tools, systemPrompt, executeToolCall, proxyUrl, proxyBypass, signal);
+      yield* session.wrap(anthropicChatWithToolsStream(baseUrl, apiKey, model, messages, session.tools, session.systemPrompt, session.execute, signal, enableThinking, proxyUrl, proxyBypass, false));
+    } catch (error) { yield searchError(error); }
+    return;
+  }
+
   const sdkFetch = buildSdkFetch(proxyUrl, proxyBypass);
   const client = new Anthropic({
     apiKey,

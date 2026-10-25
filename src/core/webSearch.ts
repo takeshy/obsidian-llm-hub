@@ -1,3 +1,4 @@
+import { isWebSearchConfigured, type WebSearchSettings } from "obsidian-llm-hub-common/core";
 import type {
   ApiProviderConfig,
   ModelType,
@@ -66,7 +67,11 @@ export function getOfficialResponsesProvider(baseUrl: string): "openai" | "xai" 
   return null;
 }
 
-export function providerSupportsWebSearch(provider: ApiProviderConfig, modelName: string): boolean {
+export function providerSupportsWebSearch(provider: ApiProviderConfig, modelName: string, search?: WebSearchSettings): boolean {
+  if (search) {
+    if (!isWebSearchConfigured(search)) return false;
+    return provider.type === "gemini" || !/^(?:dall-e|gpt-image|grok-imagine-(?:image|video))/i.test(modelName);
+  }
   // Flash Lite Image generates images but does not support Google Search grounding.
   if (provider.type === "gemini") return !/^gemini-3\.1-flash-lite-image(?:-|$)/i.test(modelName);
   if (isOfficialOpenAiProvider(provider)) return !/^(?:dall-e|gpt-image)/i.test(modelName);
@@ -77,11 +82,12 @@ export function providerSupportsWebSearch(provider: ApiProviderConfig, modelName
 export function modelSupportsWebSearch(
   model: ModelType,
   providers: ApiProviderConfig[],
+  search?: WebSearchSettings,
 ): boolean {
   if (!isApiProviderModel(model)) return false;
   const provider = providers.find(p => p.id === getApiProviderId(model) && p.enabled && p.verified);
   if (!provider) return false;
-  return providerSupportsWebSearch(provider, getApiProviderModelName(model) || provider.enabledModels[0] || "");
+  return providerSupportsWebSearch(provider, getApiProviderModelName(model) || provider.enabledModels[0] || "", search);
 }
 
 export function isSafeWebUrl(value: string): boolean {

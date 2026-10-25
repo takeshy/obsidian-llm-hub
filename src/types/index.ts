@@ -1,3 +1,4 @@
+import { DEFAULT_WEB_SEARCH_SETTINGS, type WebSearchSettings } from "obsidian-llm-hub-common/core";
 import type { McpServerConfig } from "obsidian-llm-hub-common/core";
 import { DEFAULT_VOICE_CHAT_SETTINGS, type VoiceChatSettings } from "obsidian-llm-hub-common/core";
 export type { McpServerConfig, McpTransport, McpFraming } from "obsidian-llm-hub-common/core";
@@ -134,6 +135,7 @@ export interface KnowledgeSource {
 
 // Settings interface
 export interface LlmHubSettings {
+  webSearch: WebSearchSettings;
 
   // CLI provider settings
   cliConfig: CliProviderConfig;
@@ -806,6 +808,7 @@ export const WORKFLOWS_FOLDER = "workflows";
 
 // Default settings
 export const DEFAULT_SETTINGS: LlmHubSettings = {
+  webSearch: { ...DEFAULT_WEB_SEARCH_SETTINGS },
   cliConfig: DEFAULT_CLI_CONFIG,
   localLlmConfigs: [],
   workspaceFolder: DEFAULT_WORKSPACE_FOLDER,

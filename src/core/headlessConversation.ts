@@ -289,7 +289,7 @@ export class HeadlessConversationRunner {
       return { content: await this.generateViaLocalLlm(model, messages, systemPrompt, scriptMap, workflowMap, vaultBasePath) };
     }
 
-    const webSearchEnabled = conversation.webSearch && modelSupportsWebSearch(model, settings.apiProviders);
+    const webSearchEnabled = conversation.webSearch && modelSupportsWebSearch(model, settings.apiProviders, settings.webSearch);
 
     if (isApiProviderModel(model)) {
       const providerId = getApiProviderId(model);
@@ -298,7 +298,7 @@ export class HeadlessConversationRunner {
       );
       // Gemini-type API providers use Interactions API chaining
       if (providerConfig?.type === "gemini") {
-        const { response, interactionId } = await this.generateViaGemini(
+        const { response, interactionId, ...search } = await this.generateViaGemini(
           messages, tools, systemPrompt, executeToolCall,
           getApiProviderModelName(model) || providerConfig.enabledModels[0] || "",
           false,
@@ -306,21 +306,21 @@ export class HeadlessConversationRunner {
           webSearchEnabled,
         );
         conversation.lastInteractionId = interactionId;
-        return { content: response, webSearchUsed: webSearchEnabled || undefined };
+        return { content: response, ...search };
       }
       conversation.lastInteractionId = undefined;
       return await this.generateViaApiProvider(model, messages, tools, systemPrompt, executeToolCall, webSearchEnabled);
     }
 
     // Default: Gemini
-    const { response, interactionId } = await this.generateViaGemini(
+    const { response, interactionId, ...search } = await this.generateViaGemini(
       messages, tools, systemPrompt, executeToolCall,
       undefined, undefined,
       conversation.lastInteractionId,
       webSearchEnabled,
     );
     conversation.lastInteractionId = interactionId;
-    return { content: response, webSearchUsed: webSearchEnabled || undefined };
+    return { content: response, ...search };
   }
 
   private async generateViaCli(
@@ -379,8 +379,8 @@ export class HeadlessConversationRunner {
     // For Gemini-type API providers, fall through to Gemini client
     // (normally handled in generateResponse for Interactions API chaining, but kept as safety fallback)
     if (providerConfig.type === "gemini") {
-      const { response } = await this.generateViaGemini(messages, tools, systemPrompt, executeToolCall, modelName, enableThinking);
-      return { content: response, webSearchUsed: webSearchEnabled || undefined };
+      const { response, ...search } = await this.generateViaGemini(messages, tools, systemPrompt, executeToolCall, modelName, enableThinking, undefined, webSearchEnabled);
+      return { content: response, ...search };
     }
 
     const streamFn = providerConfig.type === "anthropic"
@@ -391,7 +391,7 @@ export class HeadlessConversationRunner {
           this.signal,
           enableThinking,
           this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
-          webSearchEnabled,
+          webSearchEnabled, { settings: this.plugin.settings.webSearch, maxCalls: this.plugin.settings.maxFunctionCalls },
         )
       : openaiChatWithToolsStream(
           providerConfig.baseUrl, providerConfig.apiKey,
@@ -400,7 +400,7 @@ export class HeadlessConversationRunner {
           this.signal,
           enableThinking,
           this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass,
-          webSearchEnabled,
+          webSearchEnabled, undefined, undefined, { settings: this.plugin.settings.webSearch, maxCalls: this.plugin.settings.maxFunctionCalls },
         );
 
     let fullResponse = "";
@@ -476,13 +476,13 @@ export class HeadlessConversationRunner {
     enableThinking?: boolean,
     previousInteractionId?: string,
     webSearchEnabled?: boolean,
-  ): Promise<{ response: string; interactionId?: string }> {
+  ): Promise<{ response: string; interactionId?: string; webSearchUsed?: boolean; webSearchSources?: WebSearchSource[] }> {
     // Use a separate client instance to avoid race conditions with the shared singleton
     let client: GeminiClient;
     if (modelOverride) {
       const apiKey = getGeminiApiKey(this.plugin.settings);
       if (!apiKey) throw new Error("Gemini API key not configured");
-      client = new GeminiClient(apiKey, modelOverride as ModelType, this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass);
+      client = new GeminiClient(apiKey, modelOverride as ModelType, this.plugin.settings.proxyUrl, this.plugin.settings.proxyBypass, this.plugin.settings.webSearch);
     } else {
       const shared = getGeminiClient();
       if (!shared) throw new Error("Gemini client not initialized");
@@ -491,6 +491,8 @@ export class HeadlessConversationRunner {
 
     let fullResponse = "";
     let interactionId: string | undefined;
+    let webSearchUsed = false;
+    let webSearchSources: WebSearchSource[] | undefined;
     const stream = client.chatWithToolsStream(
       messages, tools, systemPrompt, executeToolCall, undefined,
       webSearchEnabled,
@@ -499,13 +501,15 @@ export class HeadlessConversationRunner {
     for await (const chunk of stream) {
       this.checkActive();
       if (chunk.type === "text") fullResponse += chunk.content;
+      else if (chunk.type === "web_search_used") webSearchUsed = true;
       else if (chunk.type === "error") throw new Error(chunk.error || "Unknown Gemini error");
       else if (chunk.type === "done") {
         interactionId = chunk.interactionId;
+        webSearchSources = chunk.webSearchSources;
         break;
       }
     }
-    return { response: fullResponse, interactionId };
+    return { response: fullResponse, interactionId, webSearchUsed: webSearchUsed || undefined, webSearchSources };
   }
 
   // ========================================

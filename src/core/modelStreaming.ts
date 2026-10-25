@@ -27,7 +27,7 @@ export async function* streamChatForModel(
 
     if (providerConfig.type === "gemini") {
       const { GeminiClient } = await import("./gemini");
-      const client = new GeminiClient(providerConfig.apiKey, modelName as ModelType, settings.proxyUrl, settings.proxyBypass);
+      const client = new GeminiClient(providerConfig.apiKey, modelName as ModelType, settings.proxyUrl, settings.proxyBypass, settings.webSearch);
       for await (const chunk of client.chatWithToolsStream(
         messages,
         [],
@@ -50,7 +50,7 @@ export async function* streamChatForModel(
         signal,
         undefined,
         settings.proxyUrl,
-        settings.proxyBypass,
+        settings.proxyBypass, undefined, { settings: settings.webSearch, maxCalls: settings.maxFunctionCalls },
       );
     } else {
       const { openaiChatWithToolsStream } = await import("./openaiProvider");
@@ -65,7 +65,7 @@ export async function* streamChatForModel(
         signal,
         undefined,
         settings.proxyUrl,
-        settings.proxyBypass,
+        settings.proxyBypass, undefined, undefined, undefined, { settings: settings.webSearch, maxCalls: settings.maxFunctionCalls },
       );
     }
   } else if (isLocalLlmModel(model) && !Platform.isMobile) {

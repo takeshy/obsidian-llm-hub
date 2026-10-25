@@ -1,3 +1,5 @@
+import { DEFAULT_WEB_SEARCH_SETTINGS, generateWithWebReferences, type WebSearchSettings } from "obsidian-llm-hub-common/core";
+import { createExternalSearchSession, searchError } from "./externalWebSearch";
 import {
   GoogleGenAI,
   HarmCategory,
@@ -86,7 +88,7 @@ export function patchGeminiProxy(ai: GoogleGenAI, proxyUrl: string, proxyBypass?
 export class GeminiClient extends GeminiGenerationClient<ModelType> {
   private ai: GoogleGenAI;
 
-  constructor(apiKey: string, model: ModelType = "gemini-3.8-flash" as ModelType, proxyUrl?: string, proxyBypass?: string) {
+  constructor(private readonly apiKey: string, model: ModelType = "gemini-3.8-flash" as ModelType, private readonly proxyUrl?: string, private readonly proxyBypass?: string, private readonly webSearchSettings: WebSearchSettings = DEFAULT_WEB_SEARCH_SETTINGS) {
     const ai = new GoogleGenAI({ apiKey });
     super(model, {
       generate: request => ai.models.generateContent(request),
@@ -262,7 +264,37 @@ export class GeminiClient extends GeminiGenerationClient<ModelType> {
 
   // Streaming chat with Function Calling using Interactions API (SSE-based streaming)
   // Supports: function calling + RAG + Google Search simultaneously, server-side conversation state
-  async *chatWithToolsStream(
+  async *chatWithToolsStream(messages: Message[], tools: ToolDefinition[], systemPrompt?: string,
+    executeToolCall?: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+    ragStoreIds?: string[], webSearchEnabled?: boolean, options?: ChatWithToolsOptions): AsyncGenerator<StreamChunk> {
+    if (!webSearchEnabled) {
+      yield* this.chatWithToolsStreamInternal(messages, tools, systemPrompt, executeToolCall, ragStoreIds, false, options);
+      return;
+    }
+    try {
+      const session = createExternalSearchSession({ settings: this.webSearchSettings }, options?.disableTools ? [] : tools,
+        systemPrompt, executeToolCall, this.proxyUrl, this.proxyBypass);
+      yield* session.wrap(this.chatWithToolsStreamInternal(messages, session.tools, session.systemPrompt, session.execute,
+        ragStoreIds, false, { ...options, disableTools: false }));
+    } catch (error) { yield searchError(error); }
+  }
+
+  async *generateImageStream(messages: Message[], imageModel: ModelType, systemPrompt?: string,
+    webSearchEnabled?: boolean, ragStoreIds?: string[], traceId?: string | null): AsyncGenerator<StreamChunk> {
+    if (!webSearchEnabled) {
+      yield* super.generateImageStream(messages, imageModel, systemPrompt, false, ragStoreIds, traceId);
+      return;
+    }
+    const planner = new GeminiClient(this.apiKey, "gemini-3.8-flash" as ModelType, this.proxyUrl, this.proxyBypass, this.webSearchSettings);
+    yield* generateWithWebReferences({ systemPrompt,
+      search: () => planner.chatWithToolsStream(messages, [],
+        "Use web_search to find references relevant to the image request. Summarize useful facts and cite URLs.",
+        undefined, undefined, true, { traceId, functionCallLimits: { maxFunctionCalls: 3 } }),
+      generate: prompt => super.generateImageStream(messages, imageModel, prompt, false, ragStoreIds, traceId),
+    });
+  }
+
+  private async *chatWithToolsStreamInternal(
     messages: Message[],
     tools: ToolDefinition[],
     systemPrompt?: string,
@@ -467,8 +499,8 @@ export function getGeminiClient(): GeminiClient | null {
   return geminiClientInstance;
 }
 
-export function initGeminiClient(apiKey: string, model: ModelType, proxyUrl?: string, proxyBypass?: string): GeminiClient {
-  geminiClientInstance = new GeminiClient(apiKey, model, proxyUrl, proxyBypass);
+export function initGeminiClient(apiKey: string, model: ModelType, proxyUrl?: string, proxyBypass?: string, webSearchSettings?: WebSearchSettings): GeminiClient {
+  geminiClientInstance = new GeminiClient(apiKey, model, proxyUrl, proxyBypass, webSearchSettings);
   return geminiClientInstance;
 }
 

@@ -1,5 +1,11 @@
 // Japanese translations
 export const ja: Record<string, string> = {
+  "settings.webSearch": "Web検索",
+  "settings.webSearch.provider": "使用するサービス",
+  "settings.webSearch.desc": "両方のAPIキーを登録し、使用先を1つ選択します。検索はfunction callingで実行され、ツール呼び出し回数の制限に含まれます。Tavilyはbasic検索で最大5件を取得します。",
+  "settings.webSearch.apiKey": "{{name}} APIキー",
+  "settings.webSearch.apiKey.desc": "認証情報の保存設定（プラグインファイル／端末のSecretStorage）に従います。",
+
   "input.hideContext": "モデル・スキル表示を隠す",
   "input.showContext": "モデル・スキル表示を戻す",
   // Settings - Credential storage

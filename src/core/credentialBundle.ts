@@ -29,6 +29,7 @@ export function ragCredentialSecretId(workspaceFolder: string): string {
 }
 
 export interface SettingsCredentialBundle {
+  webSearchKeys: { tavilyApiKey: string; braveApiKey: string };
   apiProviderKeys: Record<string, string>;
   jevApiKey: string;
   localLlmCredentials: Record<string, { apiKey?: string; password?: string }>;
@@ -57,6 +58,8 @@ export const credentialSlot = {
   localLlmPassword: (id: string) => `localLlm:${id}:password`,
   mcpHeaders: (server: McpServerConfig) => `mcp:${mcpCredentialKey(server)}:headers`,
   mcpEnv: (server: McpServerConfig) => `mcp:${mcpCredentialKey(server)}:env`,
+  tavily: "webSearch:tavily",
+  brave: "webSearch:brave",
   jev: "jev",
   langfuse: "langfuse",
   discord: "discord",
@@ -64,6 +67,7 @@ export const credentialSlot = {
 
 export function collectSettingsCredentials(settings: LlmHubSettings): SettingsCredentialBundle {
   return {
+    webSearchKeys: { tavilyApiKey: settings.webSearch.tavilyApiKey, braveApiKey: settings.webSearch.braveApiKey },
     apiProviderKeys: Object.fromEntries(
       settings.apiProviders.filter(provider => provider.apiKey).map(provider => [provider.id, provider.apiKey])
     ),
@@ -94,6 +98,8 @@ export function applySettingsCredentials(
   for (const provider of settings.apiProviders) {
     provider.apiKey = provider.apiKey || bundle.apiProviderKeys?.[provider.id] || "";
   }
+  settings.webSearch.tavilyApiKey ||= bundle.webSearchKeys?.tavilyApiKey || "";
+  settings.webSearch.braveApiKey ||= bundle.webSearchKeys?.braveApiKey || "";
   settings.jevApiKey = settings.jevApiKey || bundle.jevApiKey || "";
   for (const config of settings.localLlmConfigs) {
     const stored = bundle.localLlmCredentials?.[config.id];
@@ -113,6 +119,7 @@ export function applySettingsCredentials(
 export function stripSettingsCredentials(settings: LlmHubSettings): LlmHubSettings {
   return {
     ...settings,
+    webSearch: { ...settings.webSearch, tavilyApiKey: "", braveApiKey: "" },
     apiProviders: settings.apiProviders.map(provider => ({ ...provider, apiKey: "" })),
     jevApiKey: "",
     localLlmConfigs: settings.localLlmConfigs.map(config => ({ ...config, apiKey: undefined, password: undefined })),
@@ -128,6 +135,8 @@ function slotsWithValue(settings: LlmHubSettings): string[] {
   for (const provider of settings.apiProviders) {
     if (provider.apiKey) slots.push(credentialSlot.apiProvider(provider.id));
   }
+  if (settings.webSearch.tavilyApiKey) slots.push(credentialSlot.tavily);
+  if (settings.webSearch.braveApiKey) slots.push(credentialSlot.brave);
   if (settings.jevApiKey) slots.push(credentialSlot.jev);
   for (const config of settings.localLlmConfigs) {
     if (config.apiKey) slots.push(credentialSlot.localLlmApiKey(config.id));
@@ -144,7 +153,7 @@ function slotsWithValue(settings: LlmHubSettings): string[] {
 
 /** Every slot that still has an owner in the settings, whether filled or not. */
 function existingSlots(settings: LlmHubSettings): Set<string> {
-  const slots = new Set<string>([credentialSlot.langfuse, credentialSlot.discord, credentialSlot.jev]);
+  const slots = new Set<string>([credentialSlot.langfuse, credentialSlot.discord, credentialSlot.jev, credentialSlot.tavily, credentialSlot.brave]);
   for (const provider of settings.apiProviders) slots.add(credentialSlot.apiProvider(provider.id));
   for (const config of settings.localLlmConfigs) {
     slots.add(credentialSlot.localLlmApiKey(config.id));

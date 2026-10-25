@@ -1,3 +1,4 @@
+import { createExternalSearchSession, searchError, type ExternalWebSearchOptions } from "./externalWebSearch";
 /**
  * OpenAI Native Provider
  * Uses the official OpenAI SDK for full feature support:
@@ -739,7 +740,16 @@ export async function* openaiChatWithToolsStream(
    * to *describe* a tool call would otherwise have it executed instead.
    */
   inlineToolCalls?: boolean,
+  externalSearch?: ExternalWebSearchOptions,
 ): AsyncGenerator<StreamChunk> {
+  if (webSearchEnabled && externalSearch) {
+    try {
+      const session = createExternalSearchSession(externalSearch, tools, systemPrompt, executeToolCall, proxyUrl, proxyBypass, signal);
+      yield* session.wrap(openaiChatWithToolsStream(baseUrl, apiKey, model, messages, session.tools, session.systemPrompt, session.execute, signal, enableThinking, proxyUrl, proxyBypass, false, reasoningEffort, inlineToolCalls));
+    } catch (error) { yield searchError(error); }
+    return;
+  }
+
   const client = createClient(
     baseUrl,
     apiKey,

@@ -1,3 +1,5 @@
+import { requestUrl } from "obsidian";
+vi.mock("obsidian", async importOriginal => ({ ...await importOriginal<typeof import("obsidian")>(), requestUrl: vi.fn() }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Message, ToolDefinition } from "../types";
 
@@ -496,5 +498,42 @@ describe("Anthropic native web search", () => {
     const request = mocks.anthropicStream.mock.calls[0][0];
     expect(request.thinking).toEqual({ type: "enabled", budget_tokens: 10000 });
     expect(request.output_config).toBeUndefined();
+  });
+});
+
+
+describe("external search through API providers", () => {
+  const settings = { provider: "tavily" as const, tavilyApiKey: "search-key", braveApiKey: "" };
+  const messages: Message[] = [{ role: "user", content: "news", timestamp: 1 }];
+  beforeEach(() => {
+    vi.mocked(requestUrl).mockReset();
+    mocks.openAiChatCreate.mockReset();
+    mocks.openAiResponsesStream.mockReset();
+    mocks.anthropicStream.mockReset();
+    vi.mocked(requestUrl).mockResolvedValue({ status: 200, json: { results: [{ title: "Source", url: "https://example.com", content: "Facts" }] } } as never);
+  });
+  it("searches on function calls over an OpenAI-compatible gateway without native search", async () => {
+    mocks.openAiChatCreate.mockResolvedValueOnce(asyncEvents([
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: "search", type: "function", function: { name: "web_search", arguments: JSON.stringify({ query: "news" }) } }] } }] },
+    ])).mockResolvedValueOnce(asyncEvents([{ choices: [{ delta: { content: "answer" }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 2 } }]));
+    const chunks = await collect(openaiChatWithToolsStream("https://gateway.example.com/v1", "key", "model", messages, [tool], "system", vi.fn(),
+      undefined, undefined, undefined, undefined, true, undefined, undefined, { settings, maxCalls: 1 }));
+    const req = mocks.openAiChatCreate.mock.calls[0][0];
+    expect(req.tools.map((entry: { type: string; function: { name: string } }) => [entry.type, entry.function.name])).toEqual([["function", "read_note"], ["function", "web_search"]]);
+    expect(mocks.openAiResponsesStream).not.toHaveBeenCalled();
+    expect(requestUrl).toHaveBeenCalledOnce();
+    expect(chunks.at(-1)?.webSearchSources).toEqual([{ title: "Source", url: "https://example.com" }]);
+  });
+  it("uses Anthropic client function tools rather than server-side search", async () => {
+    const call = { type: "tool_use", id: "search", name: "web_search", input: { query: "news" } };
+    const first = { content: [call], usage: { input_tokens: 2, output_tokens: 1 }, stop_reason: "tool_use" };
+    const final = { content: [{ type: "text", text: "answer" }], usage: { input_tokens: 3, output_tokens: 2 }, stop_reason: "end_turn" };
+    mocks.anthropicStream.mockReturnValueOnce({ ...asyncEvents([{ type: "content_block_stop", index: 0 }]), currentMessage: first, finalMessage: vi.fn().mockResolvedValue(first) })
+      .mockReturnValueOnce({ ...asyncEvents([{ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "answer" } }]), currentMessage: final, finalMessage: vi.fn().mockResolvedValue(final) });
+    const chunks = await collect(anthropicChatWithToolsStream("https://api.anthropic.com", "key", "claude-model", messages, [tool], "system", vi.fn(),
+      undefined, undefined, undefined, undefined, true, { settings, maxCalls: 1 }));
+    expect(mocks.anthropicStream.mock.calls[0][0].tools.map((entry: { type?: string; name: string }) => entry.type ?? entry.name)).toEqual(["read_note", "web_search"]);
+    expect(requestUrl).toHaveBeenCalledOnce();
+    expect(chunks.at(-1)?.usage?.webSearchRequests).toBe(1);
   });
 });

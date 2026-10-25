@@ -15,7 +15,7 @@
 - **Semantic Search (RAG)** - Local vector search with dedicated search tab, PDF preview, and result-to-chat flow
 - **Discussion Hub Integration** - Supply API, CLI, and local models to the separate multi-provider [Discussion Hub](https://github.com/takeshy/obsidian-discussion-hub) plugin
 - **Edit History** - Track and restore AI-made changes with diff view
-- **Web Search** - Access up-to-date information with cited sources via Gemini and the official OpenAI, Anthropic, or xAI APIs
+- **Web Search** - Access current information with source links through Tavily or Brave Search
 - **Image Generation** - Create images with Gemini or DALL-E
 - **LLM Connect Hub Integration** - Connect to Discord and [Kakeratta](https://kakeratta.net/lp/) and use LLM Hub models and RAG
 - **Encryption** - Password-protect chat history and workflow execution logs
@@ -25,17 +25,17 @@
 
 | Provider | Chat | Vault Tools | Web Search | Image Gen | RAG |
 |----------|------|-------------|------------|-----------|-----|
-| **Gemini** (API) | ✅ Streaming | ✅ Function calling | ✅ Google Search | ✅ Gemini Image models | ✅ |
-| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Native search (official API) | ✅ DALL-E | ✅ |
-| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Native search (official API) | ❌ | ✅ |
-| **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
-| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ Native search (official xAI API) | ❌ | ✅ |
-| **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ❌ | ❌ | ✅ |
+| **Gemini** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ✅ Gemini Image models | ✅ |
+| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ✅ DALL-E | ✅ |
+| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
 | **Local LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling (auto-fallback) | ❌ | ❌ | ✅ |
 | **Local LLM** (Ollama, OpenCode) | ✅ Streaming | ❌ (marker mode) | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
-Web Search appears for Gemini providers and for OpenAI, Anthropic, or Grok providers using their official API hosts. Open the search menu and check **Web search** before sending the prompt; asking the model to browse does not enable the tool by itself. Web Search and one Semantic Search (RAG) setting can be enabled together so the model can synthesize current web information with retrieved vault context. The model decides whether a web search is needed. Search answers include inline citation links and a compact cited-source list; custom and OpenAI-compatible gateways are not assumed to support the providers' native search tools.
+Web search uses the selected Tavily or Brave Search provider for API models, including compatible gateways. Configure it in Settings → Web search, then enable Web search in the chat search menu. A RAG setting can also be selected.
 
 > [!TIP]
 > **Multiple providers can be configured simultaneously.** Switch models freely during chat — each provider has its own API key and settings.
@@ -49,7 +49,7 @@ Web Search appears for Gemini providers and for OpenAI, Anthropic, or Grok provi
 ### Gemini Free API Key Tips
 
 - **Rate limits** are per-model and reset daily. Switch models to continue working.
-- **Gemma 4** cannot combine function calling with RAG/Web Search in a single request. When RAG or Web Search is active, vault tools are automatically disabled. **CLI models**, **Ollama**, and the **OpenCode local server** don't support vault tools (use **Workflows** with `note`, `note-read`, etc., or `{content}` / `{selection}` variables). **LM Studio / vLLM / AnythingLLM** local LLMs DO support vault tools when the underlying model supports OpenAI-style function calling — incompatible models are auto-detected on first use and downgraded to marker-based skill mode.
+- **Gemma 4** cannot combine function calling with RAG in a single request. When RAG is active, vault tools are automatically disabled. **CLI models**, **Ollama**, and the **OpenCode local server** don't support vault tools (use **Workflows** with `note`, `note-read`, etc., or `{content}` / `{selection}` variables). **LM Studio / vLLM / AnythingLLM** local LLMs DO support vault tools when the underlying model supports OpenAI-style function calling — incompatible models are auto-detected on first use and downgraded to marker-based skill mode.
 
 ---
 
@@ -94,19 +94,11 @@ The AI Chat feature provides an interactive conversation interface with your cho
 
 ## Web Search
 
-Choose a supported API model, then open the search menu beside the model picker and check **Web search**. You may also select one Semantic Search setting in the same menu; when both are active, matching vault context is injected before the provider receives the prompt with its native web-search tool enabled. Prompt wording alone does not turn search on. Search remains model-controlled: enabling the tool allows the model to search, but does not force a search for every prompt.
+In **Settings → Web search**, register Tavily and Brave Search keys and select one active provider. Both keys are retained when switching. Keys follow the existing credential storage preference. API-model Chat, Workflow command nodes (`ragSetting: __websearch__`), Dashboard and Connect Hub answers use the selected provider through the `web_search` function tool. CLI and local-model capabilities are unchanged. Gemini image generation first retrieves references with a text model (up to three searches); the extra token usage is included in the reported total. Native search is not requested on these external-search paths. Tavily uses basic search and each provider returns up to five results.
 
-The Web and RAG choices are saved per workspace. Switching to a model that cannot use one of them leaves the preference visibly selected but inactive, and it automatically becomes active again when you return to a compatible model. Use a combined RAG setting when several indexes should be searched together.
+API references: [Tavily](https://docs.tavily.com/documentation/api-reference/endpoint/search), [Brave Search](https://api-dashboard.search.brave.com/app/documentation/web-search).
 
-- **Gemini:** supported through Google Search grounding.
-- **OpenAI:** supported only through `api.openai.com`; search uses the Responses API and can run alongside vault and MCP function tools. OpenAI image-generation models are excluded.
-- **Anthropic:** supported only through `api.anthropic.com`; native server search can run alongside vault and MCP client tools.
-- **Grok:** supported only through `api.x.ai`; search uses xAI's Responses API and can run alongside vault and MCP function tools. Grok image/video-generation models are excluded.
-- **Other endpoints:** OpenRouter, custom gateways, local LLMs, and CLI providers are not treated as native-search providers even if they offer OpenAI-compatible chat APIs.
-
-The implementation intentionally has no chat-model allowlist. Compatible current or future models may use search, while an unsupported model returns the provider's actionable error. Live compatibility checks during development covered OpenAI GPT-5.6 Sol and Anthropic Claude Opus 4.8, Sonnet 5, Fable 5, and Haiku 4.5; automated Responses-stream coverage includes Grok 4.5.
-
-Only cited sources are displayed. Provider citation positions become numbered Markdown links, while xAI's native inline Markdown citations are preserved; deduplicated sources appear as clickable pills beneath the **Used web search** badge. Search source metadata and provider-native continuation items are saved with chat history so later turns can retain search context when the endpoint, model, and retained message pair still match. Usage estimates add the current `$0.01` OpenAI/Anthropic search fee per request; xAI responses use the provider's exact billed cost (currently `$0.005` per web-search invocation), including token and tool charges.
+Enable **Web search** in the search menu before sending a prompt. It can be combined with a RAG setting. The model decides when to call the tool. Source links are retained in chat history. External search fees are billed by Tavily or Brave Search and are separate from AI token-cost estimates.
 
 ## Slash Commands
 
@@ -192,7 +184,7 @@ The same Database icon menu also has **Previous messages (0-99)**. This controls
 **Why some modes are forced:**
 
 - **CLI models, Ollama, OpenCode (Local)**: These do not expose OpenAI-style function calling, so Vault tools cannot be used. **LM Studio / vLLM / AnythingLLM** local LLMs CAN use Vault tools when the loaded model supports tool calling; if a model rejects the first tools request, it is auto-flagged and falls back to marker mode for subsequent turns (clear the flag in **Settings → Local LLM → Re-enable tools**).
-- **Gemma 4**: Function calling and RAG/Web Search cannot be combined in a single request. When one is active, the other is automatically disabled.
+- **Gemma 4**: Function calling and RAG cannot be combined in a single request. When one is active, the other is automatically disabled.
 
 **LLM vault tool folders:**
 
@@ -1002,7 +994,7 @@ The **RAG Search** tab provides a dedicated interface for searching, filtering, 
 
 **Data sent to LLM providers:**
 - Chat messages and file attachments are sent to the configured API provider (Gemini, OpenAI, Anthropic, OpenRouter, Grok, or custom endpoint)
-- When Web Search is enabled, queries are sent through the selected provider's native search service (Google for Gemini, OpenAI Web Search, Anthropic Web Search, or xAI Web Search)
+- When Web Search is enabled, queries are sent to the selected Tavily or Brave Search provider; retrieved results are sent to the chat model as tool context.
 - Local LLM providers send data only to your local server
 
 **Data sent to third-party services:**
@@ -1048,3 +1040,5 @@ MIT
 If you find this plugin useful, consider buying me a coffee!
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/takeshy)
+
+Web search usage: each API key has its own usage row in Settings → Web search. Tavily fetches plan, API-key and pay-as-you-go credits only when **Show remaining credits** is clicked. Brave displays the last observed request quota and timestamp from real searches, without sending an extra search. Values are kept in memory, isolated by API key; they are cleared on plugin reload. Brave quota is a request allowance, not a monetary balance.

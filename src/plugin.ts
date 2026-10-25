@@ -1,3 +1,4 @@
+import { DEFAULT_WEB_SEARCH_SETTINGS } from "obsidian-llm-hub-common/core";
 import { configureMcpClientInfo, configureMcpStdioClient } from "obsidian-llm-hub-common/mcp";
 import { configureAgentPluginBase } from "obsidian-llm-hub-common/skills";
 import { handleCommandNode } from "src/workflow/handlers/command";
@@ -815,6 +816,7 @@ export class LlmHubPlugin extends Plugin {
       ...DEFAULT_SETTINGS,
       ...loaded,
       voiceChat: { ...DEFAULT_SETTINGS.voiceChat, ...loaded.voiceChat },
+      webSearch: { ...DEFAULT_WEB_SEARCH_SETTINGS, ...loaded.webSearch },
       maxSavedChatHistories: loaded.maxSavedChatHistories
         ?? (isExistingInstall ? 0 : DEFAULT_SETTINGS.maxSavedChatHistories),
       skillsFolder: typeof loaded.skillsFolder === "string"
@@ -1108,7 +1110,7 @@ export class LlmHubPlugin extends Plugin {
       // Use first available model from Gemini provider, or a reasonable default
       const geminiProvider = this.settings.apiProviders.find(p => p.type === "gemini" && p.enabled);
       const defaultModel = geminiProvider?.enabledModels[0] || "gemini-3.8-flash";
-      initGeminiClient(geminiApiKey, defaultModel as ModelType, this.settings.proxyUrl, this.settings.proxyBypass);
+      initGeminiClient(geminiApiKey, defaultModel as ModelType, this.settings.proxyUrl, this.settings.proxyBypass, this.settings.webSearch);
     }
     initLangfuse(this.settings.langfuse);
 

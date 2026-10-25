@@ -3,6 +3,7 @@ import tseslint from 'typescript-eslint';
 import { DEFAULT_BRANDS } from 'eslint-plugin-obsidianmd/dist/lib/rules/ui/brands.js';
 
 const BRANDS = [
+  'Brave Search',
   ...DEFAULT_BRANDS,
   'Dashboard Hub',
   'LLM Hub',

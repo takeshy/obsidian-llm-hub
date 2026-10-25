@@ -127,3 +127,17 @@ describe("continuationMatches", () => {
     expect(continuationMatches(continuation, "openai", "https://api.openai.com", "gpt-5.4-mini")).toBe(false);
   });
 });
+
+
+describe("external search capability", () => {
+  const search = { provider: "tavily" as const, tavilyApiKey: "key", braveApiKey: "" };
+  it("supports compatible API gateways and Gemini image references with the selected provider", () => {
+    expect(providerSupportsWebSearch(provider({ type: "custom", baseUrl: "https://example.com" }), "model", search)).toBe(true);
+    expect(providerSupportsWebSearch(provider({ type: "gemini" }), "gemini-3.1-flash-lite-image", search)).toBe(true);
+    expect(providerSupportsWebSearch(provider({}), "gpt-image-1", search)).toBe(false);
+  });
+  it("requires the active search provider's own key", () => {
+    expect(providerSupportsWebSearch(provider({}), "gpt-5.4", { ...search, provider: "brave" })).toBe(false);
+    expect(modelSupportsWebSearch("api:provider:model" as ModelType, [provider({})], search)).toBe(true);
+  });
+});

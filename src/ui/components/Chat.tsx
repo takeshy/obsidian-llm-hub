@@ -254,7 +254,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	const [webSearchEnabled, setWebSearchEnabled] = useState(plugin.workspaceState.webSearchEnabled === true);
 
 	// Vault tool mode includes readOnly for search/read without mutations.
-	// Gemma 4 + RAG/Web Search: must disable function calling tools (mutually exclusive)
+	// Gemma 4 + RAG: must disable function calling tools (mutually exclusive)
 	const initialModel = plugin.getSelectedModel();
 	// Mirror isCliMode's exception for tools-capable Local LLMs: they should
 	// boot with vaultToolMode "all", not "none" — same default as API providers.
@@ -461,10 +461,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	// Check if configuration is ready (any CLI verified OR API provider configured)
 	const isConfigReady = anyCliVerified || hasEnabledApiProvider;
 
-	// Native web search is available on Gemini plus official OpenAI, Anthropic, and xAI endpoints.
+	// Web search uses the configured external provider for API models.
 	const activeSearchProvider = getActiveApiProvider();
 	const allowWebSearch = !isCliMode && !!activeSearchProvider
-		&& providerSupportsWebSearch(activeSearchProvider, getApiProviderModelName(currentModel) || "");
+		&& providerSupportsWebSearch(activeSearchProvider, getApiProviderModelName(currentModel) || "", plugin.settings.webSearch);
 	// Server RAG needs API mode; local RAG works everywhere
 	const allowRag = ragEnabledState;
 	const resolvedApiModelName = getApiProviderModelName(currentModel) || "";
@@ -981,7 +981,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		}
 	}, [pendingEditFeedback, isLoading]);
 
-	// Gemma 4 cannot combine Google Search with Function Calling in one request
+	// Keep the existing Gemma-specific local RAG behavior.
 	const isGemma4 = (model: string) => {
 		if (isApiProviderModel(model)) {
 			return getApiProviderModelName(model).toLowerCase().includes("gemma-4");
@@ -998,8 +998,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		setSelectedRagSetting(effectiveSelection.ragSetting);
 		setWebSearchEnabled(effectiveSelection.webSearch);
 		if (persist) void plugin.selectSearchSelection(effectiveSelection);
-		// Gemma 4: RAG or Web Search selected → disable function calling tools
-		if (isGemma4(model) && (effectiveSelection.ragSetting || effectiveSelection.webSearch)) {
+		// Gemma 4: RAG selected → disable function calling tools
+		if (isGemma4(model) && effectiveSelection.ragSetting) {
 			setVaultToolMode("none");
 			setVaultToolNoneReason("manual");
 			setMcpServers(servers => servers.map(s => ({ ...s, enabled: false })));
@@ -1010,8 +1010,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	const handleVaultToolModeChange = (mode: VaultToolMode) => {
 		setVaultToolMode(mode);
 		setVaultToolNoneReason(mode === "none" ? "manual" : null);
-		// Gemma 4: vault tools enabled → clear RAG/Web Search
-		if (isGemma4(currentModel) && mode !== "none" && (selectedRagSetting || webSearchEnabled)) {
+		// Gemma 4: vault tools enabled → clear RAG
+		if (isGemma4(currentModel) && mode !== "none" && selectedRagSetting) {
 			handleSearchSelectionChange({ ragSetting: null, webSearch: false });
 		}
 	};
@@ -1022,8 +1022,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			const updated = servers.map(s => s.name === serverName ? { ...s, enabled } : s);
 			plugin.settings.mcpServers = updated;
 			void plugin.saveSettings();
-			// Gemma 4: MCP server enabled → clear RAG/Web Search
-			if (isGemma4(currentModel) && enabled && (selectedRagSetting || webSearchEnabled)) {
+			// Gemma 4: MCP server enabled → clear RAG
+			if (isGemma4(currentModel) && enabled && selectedRagSetting) {
 				handleSearchSelectionChange({ ragSetting: null, webSearch: false });
 			}
 			return updated;
@@ -1078,9 +1078,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			setVaultToolMode("all");
 			setVaultToolNoneReason(null);
 		} else if (isGemma4(model)) {
-			// Gemma 4: RAG/Web Search and function calling are mutually exclusive
-			if (selectedRagSetting || webSearchEnabled) {
-				// RAG or Web Search active → disable vault tools
+			// Gemma 4: RAG and function calling are mutually exclusive
+			if (selectedRagSetting) {
+				// RAG active → disable vault tools
 				setVaultToolMode("none");
 				setVaultToolNoneReason("manual");
 				setMcpServers(servers => servers.map(s => ({ ...s, enabled: false })));
@@ -2580,7 +2580,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 				// Route to correct provider implementation
 				const apiEnableThinking = getThinkingToggle();
-				const isWebSearch = providerSupportsWebSearch(providerConfig, resolvedModelName)
+				const isWebSearch = providerSupportsWebSearch(providerConfig, resolvedModelName, plugin.settings.webSearch)
 					&& webSearchEnabled;
 				const isImageGen = providerConfig.type === "openai" && isOpenAiImageModel(resolvedModelName);
 				const streamFn = isImageGen
@@ -2597,7 +2597,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							systemPrompt, executeToolCall, abortController.signal,
 							apiEnableThinking,
 							plugin.settings.proxyUrl, plugin.settings.proxyBypass,
-							isWebSearch,
+							isWebSearch, { settings: plugin.settings.webSearch, maxCalls: plugin.settings.maxFunctionCalls },
 						)
 						: openaiChatWithToolsStream(
 							providerConfig.baseUrl, providerConfig.apiKey,
@@ -2605,7 +2605,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							systemPrompt, executeToolCall, abortController.signal,
 							apiEnableThinking,
 							plugin.settings.proxyUrl, plugin.settings.proxyBypass,
-							isWebSearch, selectedReasoningEffort,
+							isWebSearch, selectedReasoningEffort, undefined, { settings: plugin.settings.webSearch, maxCalls: plugin.settings.maxFunctionCalls },
 						);
 
 				for await (const chunk of streamFn) {
@@ -2748,7 +2748,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				// Initialize a GeminiClient with this provider's API key
 				const { GeminiClient } = await import("src/core/gemini");
 				const modelName = getApiProviderModelName(currentModel) || providerConfig?.enabledModels[0] || "gemini-3.8-flash";
-				const client = new GeminiClient(apiKey, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass);
+				const client = new GeminiClient(apiKey, modelName as ModelType, plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings.webSearch);
 
 				let allowedModel = modelName as ModelType;
 
@@ -3101,8 +3101,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 					let stopped = false;
 
-					// Gemma 4: RAG/Web Search and function calling are mutually exclusive
-					const effectiveTools = isGemma4(allowedModel) && (isWebSearch || localRagSources.length > 0) ? [] : tools;
+					// Gemma 4: RAG and function calling are mutually exclusive
+					const effectiveTools = isGemma4(allowedModel) && localRagSources.length > 0 ? [] : tools;
 					// Gemma 4 drops every tool when RAG or web search is on, so only describe
 					// rag_search when it actually survives into the request.
 					if (effectiveTools.some(tool => tool.name === RAG_SEARCH_TOOL_NAME)) {
