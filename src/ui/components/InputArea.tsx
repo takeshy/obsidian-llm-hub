@@ -1,3 +1,4 @@
+import { formatComposerMention } from "obsidian-llm-hub-common/chat";
 import {
   acceptedAttachmentTypes,
   detectComposerTrigger,
@@ -406,7 +407,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     const cursorPos = textareaRef.current?.selectionStart || input.length;
     const before = input.substring(0, mentionStartPos);
     const after = input.substring(cursorPos);
-    const inserted = mention.kind === "wikilink" ? `[[${mention.value}]]` : `${mention.value} `;
+    const inserted = formatComposerMention(mention.value, mention.kind);
     const newInput = before + inserted + after;
     setInput(newInput);
     setShowMentionAutocomplete(false);

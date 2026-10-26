@@ -1,7 +1,7 @@
+import { resolveChatFileMentions, messagesForModel, FILE_MENTION_TOOL_PROMPT } from "obsidian-llm-hub-common/chat";
 import { Trash2 } from "lucide-react";
 import type { MouseEvent } from "react";
 import {
-	resolveMessageVariables as resolveMessageVariablesShared,
 	useChatHistories,
 	useChatStreamSessions,
 	generateChatId,
@@ -178,7 +178,7 @@ function looksLikeAuthError(msg: string): boolean {
 
 // File mentions stay as bare vault paths whenever the model has Vault tools
 // (see resolveMessageVariables), so it has to fetch their contents itself.
-const FILE_MENTION_TOOL_PROMPT = "\n\nA bare vault-relative path in the user's message (for example `folder/note.md` or `folder/document.pdf`) is a file the user referenced by mention, not a literal string. Its content is not inlined into the message. Call read_note with that exact path before answering anything that depends on it.";
+
 
 const AUTOMATIC_RAG_RETRIEVAL = false;
 const CODEX_VAULT_TOOLS = new Set([
@@ -1111,8 +1111,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		void plugin.saveSettings();
 	};
 
-	// Both resolvers live in the shared library; the host only supplies its selection
-	// sources, PDF extraction and vault-tool scope.
+	// Resolve explicit references to vault paths; the shared resolver applies
+	// the host's selection sources, PDF extraction and vault-tool scope.
 	const commandVariableSources = (): CommandVariableSources => ({
 		takeExternalSelection: () => {
 			const pending = pendingExternalSelectionRef.current;
@@ -1123,9 +1123,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		getSelectionLocation: () => plugin.getSelectionLocation(),
 	});
 
-	const resolveMessageVariables = (content: string): Promise<string> =>
-		resolveMessageVariablesShared(plugin.app, content, {
-			...commandVariableSources(),
+	const resolveMessageVariables = (content: string): ReturnType<typeof resolveChatFileMentions> =>
+		resolveChatFileMentions(plugin.app, content, commandVariableSources(), {
 			inlineFileMentions: vaultToolMode === "none" || isVaultToolRestrictedCliMode,
 			vaultToolAllowedFolders: plugin.settings.cloudVaultToolAllowedFolders,
 			maxNoteChars: plugin.settings.maxNoteChars,
@@ -1363,10 +1362,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				}
 
 				// Resolve variables in the content
-				const resolvedContent = await resolveMessageVariables(content);
+				const { displayContent: resolvedDisplayContent, llmContent: resolvedContent } = await resolveMessageVariables(content);
 
 				// When skill is invoked without message, use skill name as trigger
-				let displayContent = resolvedContent.trim();
+				let displayContent = resolvedDisplayContent.trim();
 				if (!displayContent && skillPath) {
 					const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
 					displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
@@ -1376,6 +1375,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				const userMessage: Message = {
 					role: "user",
 					content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
+					llmContent: resolvedContent || undefined,
 					timestamp: Date.now(),
 					attachments,
 				};
@@ -1403,7 +1403,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				let localRagSources: string[] = [];
 
 				try {
-					const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+					const allMessages = messagesForModel(limitConversationHistory([...messages, userMessage], maxPreviousMessages));
 					let codexMcpUrl: string | undefined;
 
 					// Build system prompt for CLI. Codex's direct filesystem access stays
@@ -1775,14 +1775,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				}
 
 				// Resolve variables in the content
-				const resolvedContent = await resolveMessageVariables(content);
+				const { displayContent: resolvedDisplayContent, llmContent: resolvedContent } = await resolveMessageVariables(content);
 				// Separate image attachments (sent as multimodal) from non-image (text fallback)
 				const imageAttachments = attachments?.filter(a => a.type === "image") ?? [];
 				const nonImageAttachments = attachments?.filter(a => a.type !== "image") ?? [];
 				const localLlmContent = `${resolvedContent}${buildLocalLlmAttachmentContext(nonImageAttachments.length > 0 ? nonImageAttachments : undefined)}`.trim();
 
 				// When skill is invoked without message, use skill name as trigger
-				let displayContent = resolvedContent.trim();
+				let displayContent = resolvedDisplayContent.trim();
 				if (!displayContent && skillPath) {
 					const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
 					displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
@@ -1822,7 +1822,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				const hasSelectedSkillOrOkf = effectiveSkillPaths.length > 0 || activeOkfBundleIds.length > 0;
 				const wantsTools = (vaultToolMode !== "none" || hasSelectedSkillOrOkf)
 					&& isLocalLlmToolsEnabled(llmConfig, llmConfig.model);
-				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+				const allMessages = messagesForModel(limitConversationHistory([...messages, userMessage], maxPreviousMessages));
 
 				// Build system prompt for local LLM. Tools-mode and marker-mode
 				// have different framing — tools-mode tells the model to use
@@ -2372,9 +2372,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					return null;
 				}
 
-				const resolvedContent = await resolveMessageVariables(content);
+				const { displayContent: resolvedDisplayContent, llmContent: resolvedContent } = await resolveMessageVariables(content);
 
-				let displayContent = resolvedContent.trim();
+				let displayContent = resolvedDisplayContent.trim();
 				if (!displayContent && skillPath) {
 					const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
 					displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
@@ -2383,6 +2383,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				const userMessage: Message = {
 					role: "user",
 					content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
+					llmContent: resolvedContent || undefined,
 					timestamp: Date.now(),
 					attachments: attachments && attachments.length > 0 ? attachments : undefined,
 				};
@@ -2470,7 +2471,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				if (plugin.settings.voiceChat.autoReadAloud) systemPrompt += buildReadAloudSystemPrompt();
 
 				// Build vault tools (same as Gemini path)
-				const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+				const allMessages = messagesForModel(limitConversationHistory([...messages, userMessage], maxPreviousMessages));
 				let tools = filterVaultToolsForMode(
 					getEnabledVaultTools({ allowWrite: true, allowDelete: true, ragSyncStatus: HOST_EXECUTES_RAG_SYNC_STATUS }),
 					vaultToolMode,
@@ -2764,10 +2765,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				client.setModel(allowedModel);
 
 				// Resolve variables in the content ({selection}, {content}, file paths)
-				const resolvedContent = await resolveMessageVariables(content);
+				const { displayContent: resolvedDisplayContent, llmContent: resolvedContent } = await resolveMessageVariables(content);
 
 				// When skill is invoked without message, use skill name as trigger
-				let displayContent = resolvedContent.trim();
+				let displayContent = resolvedDisplayContent.trim();
 				if (!displayContent && skillPath) {
 					const skillMeta = availableSkills.find(s => s.folderPath === skillPath);
 					displayContent = skillMeta ? `/${skillMeta.name}` : "/skill";
@@ -2777,6 +2778,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				const userMessage: Message = {
 					role: "user",
 					content: displayContent || (attachments ? `[${attachments.length} file(s) attached]` : ""),
+					llmContent: resolvedContent || undefined,
 					timestamp: Date.now(),
 					attachments,
 				};
@@ -3073,7 +3075,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					// Let the model search the selected index on demand.
 					if (toolsEnabled && ragSearchRunner) tools.push(RAG_SEARCH_TOOL);
 
-					const allMessages = limitConversationHistory([...messages, userMessage], maxPreviousMessages);
+					const allMessages = messagesForModel(limitConversationHistory([...messages, userMessage], maxPreviousMessages));
 
 					// Use streaming with tools
 					const stream = createStreamAccumulation();
