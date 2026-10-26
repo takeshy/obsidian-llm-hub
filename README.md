@@ -26,16 +26,16 @@
 | Provider | Chat | Vault Tools | Web Search | Image Gen | RAG |
 |----------|------|-------------|------------|-----------|-----|
 | **Gemini** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ✅ Gemini Image models | ✅ |
-| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ✅ DALL-E | ✅ |
-| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Native / Tavily / Brave Search | ✅ DALL-E | ✅ |
+| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Native / Tavily / Brave Search | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
-| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ Native / Tavily / Brave Search | ❌ | ✅ |
 | **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
 | **Local LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling (auto-fallback) | ❌ | ❌ | ✅ |
 | **Local LLM** (Ollama, OpenCode) | ✅ Streaming | ❌ (marker mode) | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
-Web search uses the selected Tavily or Brave Search provider for API models, including compatible gateways. Configure it in Settings → Web search, then enable Web search in the chat search menu. A RAG setting can also be selected.
+Web search defaults to built-in search for supported official OpenAI, Anthropic, and Grok APIs. Select Tavily or Brave Search for external search, including compatible gateways. Gemini requires a configured external provider; otherwise Web search stays off. Enable Web search in the chat search menu to use it alongside RAG.
 
 > [!TIP]
 > **Multiple providers can be configured simultaneously.** Switch models freely during chat — each provider has its own API key and settings.
@@ -94,7 +94,7 @@ The AI Chat feature provides an interactive conversation interface with your cho
 
 ## Web Search
 
-In **Settings → Web search**, register Tavily and Brave Search keys and select one active provider. Both keys are retained when switching. Keys follow the existing credential storage preference. API-model Chat, Workflow command nodes (`ragSetting: __websearch__`), Dashboard and Connect Hub answers use the selected provider through the `web_search` function tool. CLI and local-model capabilities are unchanged. Gemini image generation first retrieves references with a text model (up to three searches); the extra token usage is included in the reported total. Native search is not requested on these external-search paths. Tavily uses basic search and each provider returns up to five results.
+In **Settings → Web search**, choose **Built-in search (default)**, **Tavily**, or **Brave Search**. Existing Tavily/Brave selections are preserved; old empty settings default to built-in search. API keys are retained when switching and follow the credential storage preference. Built-in search uses the official OpenAI, Anthropic, or Grok API. Gemini never uses Google Search: without a selected external provider and its API key, the Web search toggle is disabled and shown as off. Chat, Workflow command nodes (`ragSetting: __websearch__`), Dashboard and Connect Hub use the same selection. External search uses the `web_search` function tool and never falls back to built-in search. Gemini image generation with external search first retrieves references using a text model (up to three searches), including its token usage in the total. Tavily uses basic search; both external providers return up to five results.
 
 API references: [Tavily](https://docs.tavily.com/documentation/api-reference/endpoint/search), [Brave Search](https://api-dashboard.search.brave.com/app/documentation/web-search).
 
@@ -996,7 +996,7 @@ The **RAG Search** tab provides a dedicated interface for searching, filtering, 
 
 **Data sent to LLM providers:**
 - Chat messages and file attachments are sent to the configured API provider (Gemini, OpenAI, Anthropic, OpenRouter, Grok, or custom endpoint)
-- When Web Search is enabled, queries are sent to the selected Tavily or Brave Search provider; retrieved results are sent to the chat model as tool context.
+- Web search uses the selected model provider for built-in search. With Tavily or Brave Search selected, queries go to that service and results are sent to the model as tool context. Gemini requires external search.
 - Local LLM providers send data only to your local server
 
 **Data sent to third-party services:**
@@ -1043,4 +1043,4 @@ If you find this plugin useful, consider buying me a coffee!
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/takeshy)
 
-Web search usage: each API key has its own usage row in Settings → Web search. Tavily fetches plan, API-key and pay-as-you-go credits only when **Show remaining credits** is clicked. Brave displays the last observed request quota and timestamp from real searches, without sending an extra search. Values are kept in memory, isolated by API key; they are cleared on plugin reload. Brave quota is a request allowance, not a monetary balance.
+Web search usage: the selected external provider has a usage row in Settings → Web search. Tavily fetches plan, API-key and pay-as-you-go credits only when **Show remaining credits** is clicked. Brave displays the last observed request quota and timestamp from real searches, without sending an extra search. Values are kept in memory, isolated by API key; they are cleared on plugin reload. Brave quota is a request allowance, not a monetary balance.

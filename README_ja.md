@@ -26,16 +26,16 @@
 | プロバイダー | チャット | Vault ツール | Web 検索 | 画像生成 | RAG |
 |----------|------|-------------|------------|-----------|-----|
 | **Gemini** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ✅ Gemini 画像モデル | ✅ |
-| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ✅ DALL-E | ✅ |
-| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **OpenAI** (API) | ✅ Streaming | ✅ Function calling | ✅ Native / Tavily / Brave Search | ✅ DALL-E | ✅ |
+| **Anthropic** (API) | ✅ Streaming | ✅ Tool use | ✅ Native / Tavily / Brave Search | ❌ | ✅ |
 | **OpenRouter** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
-| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
+| **Grok** (API) | ✅ Streaming | ✅ Function calling | ✅ Native / Tavily / Brave Search | ❌ | ✅ |
 | **OpenCode Zen / Go** (API) | ✅ Streaming | ✅ Function calling | ✅ Tavily / Brave Search | ❌ | ✅ |
 | **ローカル LLM** (LM Studio, vLLM, AnythingLLM) | ✅ Streaming | ✅ Function calling（自動フォールバック） | ❌ | ❌ | ✅ |
 | **ローカル LLM** (Ollama, OpenCode) | ✅ Streaming | ❌（マーカーモード） | ❌ | ❌ | ✅ |
 | **CLI** (Antigravity, Claude, Codex) | ✅ Streaming | ❌ | ❌ | ❌ | ✅ |
 
-APIモデルのWeb検索は、互換ゲートウェイも含め、選択中のTavily／Brave Searchを使用します。設定 → Web検索で登録後、Chatの検索メニューで有効にしてください。RAG設定とも併用できます。
+Web検索は対応するOpenAI・Anthropic・Grok公式APIの内蔵検索がデフォルトです。外部検索にはTavily／Brave Searchを選択でき、互換ゲートウェイでも使用できます。Geminiは外部検索の設定が必要で、未設定の場合はWeb検索がOFFになります。Chatの検索メニューで有効にするとRAG設定とも併用できます。
 
 > [!TIP]
 > **複数のプロバイダーを同時に設定可能。** チャット中にモデルを自由に切り替えられます — 各プロバイダーは独自の API キーと設定を持ちます。
@@ -94,7 +94,7 @@ AI チャット機能は、Obsidian Vault と統合された、選択した LLM 
 
 ## Web 検索
 
-**設定 → Web検索** でTavilyとBrave SearchのAPIキーを登録し、使用するサービスを1つ選択します。切り替えても両方のキーを保持します。キーは既存の認証情報の保存設定に従います。APIモデルのChat、Workflowのcommandノード（`ragSetting: __websearch__`）、Dashboard、Connect Hubの回答は、選択したサービスを `web_search` のfunction callingで使います。CLIとローカルモデルの対応範囲は従来どおりです。Geminiの画像生成ではテキストモデルで参考情報を取得してから生成します（検索は最大3回）。追加のテキストモデル利用分もトークン使用量に含めます。これらの外部検索経路では組み込み検索を要求しません。Tavilyはbasic検索で、両サービスとも1回につき最大5件を取得します。
+**設定 → Web検索** で **内蔵検索（デフォルト）／Tavily／Brave Search** を選択します。既存のTavily／Braveの選択は維持し、旧設定が未設定の場合は内蔵検索を使います。切り替えてもAPIキーは保持され、認証情報の保存設定に従います。内蔵検索はOpenAI・Anthropic・Grokの公式APIを使います。GeminiではGoogle検索を使用せず、外部検索の選択とAPIキーの設定がない場合、Web検索はOFF表示で切り替えできません。Chat・Workflowのcommandノード（`ragSetting: __websearch__`）・Dashboard・Connect Hubで同じ設定を使用します。外部検索は `web_search` のfunction callingで実行し、内蔵検索への自動切り替えはしません。Geminiの画像生成で外部検索を使う場合はテキストモデルで参考情報を取得してから生成します（検索は最大3回）。追加のテキストモデル利用分もトークン使用量に含めます。Tavilyはbasic検索で、両サービスとも1回につき最大5件を取得します。
 
 API仕様：[Tavily](https://docs.tavily.com/documentation/api-reference/endpoint/search)、[Brave Search](https://api-dashboard.search.brave.com/app/documentation/web-search)。
 
@@ -996,7 +996,7 @@ Jevを有効にすると、クエリに一致すると判定された2件だけ�
 **LLM プロバイダーに送信されるデータ：**
 
 - チャットメッセージと添付ファイルは、設定された API プロバイダー（Gemini、OpenAI、Anthropic、OpenRouter、Grok、またはカスタムエンドポイント）に送信されます
-- Web検索を有効にすると、検索クエリは選択中のTavily／Brave Searchに送信され、取得結果はツールの参照情報としてチャットモデルに送信されます。
+- 内蔵検索は選択中のモデルのサービスを使用します。Tavily／Brave Searchを選択した場合、検索クエリはそのサービスに送信され、取得結果はツールの参照情報としてモデルに送信されます。Geminiは外部検索が必要です。
 - ローカル LLM プロバイダーはローカルサーバーにのみデータを送信します
 
 **サードパーティサービスへの送信：**
@@ -1048,4 +1048,4 @@ MIT
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/takeshy)
 
-Web検索の設定では、各APIキーの下に使用量を表示します。Tavilyは **残りクレジットを表示** ボタンを押したときだけ取得し、プラン・APIキー・従量課金枠を分けて表示します。Braveは実際の検索時に取得した残り回数と取得日時を表示し、確認用の追加検索は実行しません。取得情報はAPIキーごとにメモリに保持し、プラグイン再読み込みで消去します。Braveの値はリクエスト枠であり、金額としての残高ではありません。
+Web検索の設定では、選択中の外部検索サービスのAPIキーの下に使用量を表示します。Tavilyは **残りクレジットを表示** ボタンを押したときだけ取得し、プラン・APIキー・従量課金枠を分けて表示します。Braveは実際の検索時に取得した残り回数と取得日時を表示し、確認用の追加検索は実行しません。取得情報はAPIキーごとにメモリに保持し、プラグイン再読み込みで消去します。Braveの値はリクエスト枠であり、金額としての残高ではありません。

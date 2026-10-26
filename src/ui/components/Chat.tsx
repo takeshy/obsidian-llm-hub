@@ -461,7 +461,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	// Check if configuration is ready (any CLI verified OR API provider configured)
 	const isConfigReady = anyCliVerified || hasEnabledApiProvider;
 
-	// Web search uses the configured external provider for API models.
+	// Gemini requires external search; other API providers may use native search.
 	const activeSearchProvider = getActiveApiProvider();
 	const allowWebSearch = !isCliMode && !!activeSearchProvider
 		&& providerSupportsWebSearch(activeSearchProvider, getApiProviderModelName(currentModel) || "", plugin.settings.webSearch);

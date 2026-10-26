@@ -1,4 +1,5 @@
-import { isWebSearchConfigured, type WebSearchSettings } from "obsidian-llm-hub-common/core";
+import { resolveWebSearchMode, type WebSearchSettings } from "./webSearchMode";
+import { isWebSearchConfigured } from "obsidian-llm-hub-common/core";
 import type {
   ApiProviderConfig,
   ModelType,
@@ -68,12 +69,12 @@ export function getOfficialResponsesProvider(baseUrl: string): "openai" | "xai" 
 }
 
 export function providerSupportsWebSearch(provider: ApiProviderConfig, modelName: string, search?: WebSearchSettings): boolean {
-  if (search) {
+  if (search && resolveWebSearchMode(search) === "external") {
     if (!isWebSearchConfigured(search)) return false;
     return provider.type === "gemini" || !/^(?:dall-e|gpt-image|grok-imagine-(?:image|video))/i.test(modelName);
   }
-  // Flash Lite Image generates images but does not support Google Search grounding.
-  if (provider.type === "gemini") return !/^gemini-3\.1-flash-lite-image(?:-|$)/i.test(modelName);
+  // Gemini requires a configured external search provider.
+  if (provider.type === "gemini") return false;
   if (isOfficialOpenAiProvider(provider)) return !/^(?:dall-e|gpt-image)/i.test(modelName);
   if (isOfficialGrokProvider(provider)) return !/^grok-imagine-(?:image|video)/i.test(modelName);
   return isOfficialAnthropicProvider(provider);

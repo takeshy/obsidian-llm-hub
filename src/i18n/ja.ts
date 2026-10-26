@@ -2,7 +2,8 @@
 export const ja: Record<string, string> = {
   "settings.webSearch": "Web検索",
   "settings.webSearch.provider": "使用するサービス",
-  "settings.webSearch.desc": "両方のAPIキーを登録し、使用先を1つ選択します。検索はfunction callingで実行され、ツール呼び出し回数の制限に含まれます。Tavilyはbasic検索で最大5件を取得します。",
+  "settings.webSearch.native": "内蔵検索（デフォルト）",
+  "settings.webSearch.desc": "内蔵検索・Tavily・Brave Searchから選択します。検索のON／OFFはチャットの検索メニューで切り替えます。内蔵検索は選択中のモデルのサービス（OpenAI・Claude・Grok）を使い、対応する公式APIが必要です。外部検索はツール呼び出し回数に含まれ、Tavilyはbasic検索で最大5件を取得します。Geminiは外部検索を選択してAPIキーを設定した場合のみ利用でき、それ以外はWeb検索がOFFになります。",
   "settings.webSearch.apiKey": "{{name}} APIキー",
   "settings.webSearch.apiKey.desc": "認証情報の保存設定（プラグインファイル／端末のSecretStorage）に従います。",
 

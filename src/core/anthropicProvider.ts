@@ -1,3 +1,4 @@
+import { resolveWebSearchMode } from "./webSearchMode";
 import { createExternalSearchSession, searchError, type ExternalWebSearchOptions } from "./externalWebSearch";
 /**
  * Anthropic Native Provider
@@ -180,7 +181,7 @@ export async function* anthropicChatWithToolsStream(
   webSearchEnabled?: boolean,
   externalSearch?: ExternalWebSearchOptions,
 ): AsyncGenerator<StreamChunk> {
-  if (webSearchEnabled && externalSearch) {
+  if (webSearchEnabled && externalSearch && resolveWebSearchMode(externalSearch.settings) === "external") {
     try {
       const session = createExternalSearchSession(externalSearch, tools, systemPrompt, executeToolCall, proxyUrl, proxyBypass, signal);
       yield* session.wrap(anthropicChatWithToolsStream(baseUrl, apiKey, model, messages, session.tools, session.systemPrompt, session.execute, signal, enableThinking, proxyUrl, proxyBypass, false));

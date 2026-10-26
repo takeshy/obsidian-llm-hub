@@ -1,8 +1,9 @@
-import { createWebSearchSession, type WebSearchTransport, type ExternalWebSearchOptions } from "obsidian-llm-hub-common/core";
+import type { WebSearchSettings } from "./webSearchMode";
+import { createWebSearchSession, type WebSearchTransport, type ExternalWebSearchOptions as SharedExternalWebSearchOptions } from "obsidian-llm-hub-common/core";
 import type { StreamChunk, ToolDefinition } from "src/types";
 import { createProxyFetch } from "./proxyFetch";
 
-export type { ExternalWebSearchOptions };
+export type ExternalWebSearchOptions = Omit<SharedExternalWebSearchOptions, "settings"> & { settings: WebSearchSettings };
 
 export function createExternalSearchSession(options: ExternalWebSearchOptions, tools: ToolDefinition[],
   systemPrompt: string | undefined, execute?: (name: string, args: Record<string, unknown>) => Promise<unknown>,

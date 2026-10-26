@@ -769,7 +769,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
               none: t("input.searchNone"),
             }}
             webSearch={{
-              checked: webSearchEnabled,
+              checked: allowWebSearch && webSearchEnabled,
               disabled: !allowWebSearch,
               combinable: true,
             }}

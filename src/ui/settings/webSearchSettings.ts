@@ -1,3 +1,4 @@
+import { resolveWebSearchMode } from "src/core/webSearchMode";
 import { createWebSearchTransport } from "src/core/externalWebSearch";
 import { addWebSearchUsageSetting } from "obsidian-llm-hub-common/settings";
 import { Setting } from "obsidian";
@@ -5,22 +6,36 @@ import { t } from "src/i18n";
 import type { SettingsContext } from "./settingsContext";
 
 export function displayWebSearchSettings(containerEl: HTMLElement, { plugin }: SettingsContext): () => void {
-  const cleanup: Array<() => void> = [];
+  let disposeUsage: (() => void) | undefined;
+  const selectedProvider = () => resolveWebSearchMode(plugin.settings.webSearch) === "external"
+    ? plugin.settings.webSearch.provider : resolveWebSearchMode(plugin.settings.webSearch);
   new Setting(containerEl).setName(t("settings.webSearch")).setHeading();
   new Setting(containerEl).setName(t("settings.webSearch.provider"))
     .setDesc(t("settings.webSearch.desc"))
     .addDropdown(dropdown => {
-      dropdown.addOption("none", t("common.none")).addOption("tavily", "Tavily").addOption("brave", "Brave Search")
-        .setValue(plugin.settings.webSearch.provider)
+      dropdown.addOption("native", t("settings.webSearch.native")).addOption("tavily", "Tavily").addOption("brave", "Brave Search")
+        .setValue(selectedProvider())
         .onChange(value => {
-          if (value === "none" || value === "tavily" || value === "brave") {
+          if (value === "native") {
+            plugin.settings.webSearch.mode = value;
+          } else if (value === "tavily" || value === "brave") {
+            plugin.settings.webSearch.mode = "external";
             plugin.settings.webSearch.provider = value;
-            void plugin.saveSettings();
-          }
+          } else return;
+          renderProviderSettings();
+          void plugin.saveSettings();
         });
     });
-  for (const [key, name] of [["tavilyApiKey", "Tavily"], ["braveApiKey", "Brave Search"]] as const) {
-    const setting = new Setting(containerEl).setName(t("settings.webSearch.apiKey", { name }))
+  const providerContainer = containerEl.createDiv();
+  function renderProviderSettings(): void {
+    disposeUsage?.();
+    disposeUsage = undefined;
+    providerContainer.empty();
+    const provider = selectedProvider();
+    if (provider !== "tavily" && provider !== "brave") return;
+    const key = provider === "tavily" ? "tavilyApiKey" : "braveApiKey";
+    const name = provider === "tavily" ? "Tavily" : "Brave Search";
+    const setting = new Setting(providerContainer).setName(t("settings.webSearch.apiKey", { name }))
       .setDesc(t("settings.webSearch.apiKey.desc"));
     setting.addText(text => {
       text.setValue(plugin.settings.webSearch[key]).onChange(value => {
@@ -38,12 +53,13 @@ export function displayWebSearchSettings(containerEl: HTMLElement, { plugin }: S
           button.setIcon(input.type === "password" ? "eye" : "eye-off");
         }
       }));
-    const usage = addWebSearchUsageSetting(containerEl, {
+    const usage = addWebSearchUsageSetting(providerContainer, {
       provider: key === "tavilyApiKey" ? "tavily" : "brave",
       getApiKey: () => plugin.settings.webSearch[key],
       transport: createWebSearchTransport(plugin.settings.proxyUrl, plugin.settings.proxyBypass),
     });
-    cleanup.push(usage.dispose);
+    disposeUsage = usage.dispose;
   }
-  return () => { for (const dispose of cleanup) dispose(); };
+  renderProviderSettings();
+  return () => { disposeUsage?.(); };
 }

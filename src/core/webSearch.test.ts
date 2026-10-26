@@ -1,3 +1,4 @@
+import { resolveWebSearchMode } from "./webSearchMode";
 import { describe, expect, it } from "vitest";
 import type { ApiProviderConfig, ModelType } from "../types";
 import {
@@ -25,8 +26,8 @@ function provider(overrides: Partial<ApiProviderConfig>): ApiProviderConfig {
 }
 
 describe("web search capability", () => {
-  it("allows Gemini and only official OpenAI/Anthropic/xAI endpoints", () => {
-    expect(providerSupportsWebSearch(provider({ type: "gemini", baseUrl: "https://example.test" }), "gemini-3.8-flash")).toBe(true);
+  it("allows only official OpenAI/Anthropic/xAI native endpoints", () => {
+    expect(providerSupportsWebSearch(provider({ type: "gemini", baseUrl: "https://example.test" }), "gemini-3.8-flash")).toBe(false);
     expect(providerSupportsWebSearch(provider({ type: "gemini", baseUrl: "https://example.test" }), "gemini-3.1-flash-lite-image")).toBe(false);
     expect(providerSupportsWebSearch(provider({}), "gpt-5.4")).toBe(true);
     expect(providerSupportsWebSearch(provider({ baseUrl: "https://api.openai.com/" }), "gpt-5.4")).toBe(true);
@@ -139,5 +140,26 @@ describe("external search capability", () => {
   it("requires the active search provider's own key", () => {
     expect(providerSupportsWebSearch(provider({}), "gpt-5.4", { ...search, provider: "brave" })).toBe(false);
     expect(modelSupportsWebSearch("api:provider:model" as ModelType, [provider({})], search)).toBe(true);
+  });
+});
+
+
+describe("search mode selection", () => {
+  const empty = { provider: "none" as const, tavilyApiKey: "", braveApiKey: "" };
+  it("defaults old empty settings to native and preserves external choices", () => {
+    expect(resolveWebSearchMode(empty)).toBe("native");
+    const gemini = provider({ type: "gemini" });
+    expect(providerSupportsWebSearch(gemini, "gemini-3.8-flash", empty)).toBe(false);
+    expect(providerSupportsWebSearch(gemini, "gemini-3.8-flash", { ...empty, provider: "tavily", tavilyApiKey: "key" })).toBe(true);
+    expect(providerSupportsWebSearch(gemini, "gemini-3.8-flash", { ...empty, provider: "brave" })).toBe(false);
+    expect(resolveWebSearchMode({ ...empty, provider: "tavily" })).toBe("external");
+    expect(resolveWebSearchMode({ ...empty, provider: "brave" })).toBe("external");
+  });
+  it("uses the explicit mode even when an external key is retained", () => {
+    const search = { ...empty, provider: "tavily" as const, tavilyApiKey: "key", mode: "native" as const };
+    expect(providerSupportsWebSearch(provider({}), "gpt-5.4", search)).toBe(true);
+    expect(providerSupportsWebSearch(provider({ baseUrl: "https://gateway.test" }), "gpt-5.4", search)).toBe(false);
+    expect(providerSupportsWebSearch(provider({ baseUrl: "https://gateway.test" }), "gpt-5.4", { ...search, mode: "external" })).toBe(true);
+    expect(providerSupportsWebSearch(provider({}), "gpt-5.4", { ...empty, mode: "external" })).toBe(false);
   });
 });

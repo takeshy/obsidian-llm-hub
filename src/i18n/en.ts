@@ -4,7 +4,8 @@ import type { SharedTranslationKey } from "obsidian-llm-hub-common/i18n";
 export const en = {
   "settings.webSearch": "Web search",
   "settings.webSearch.provider": "Active provider",
-  "settings.webSearch.desc": "Register both API keys and select one provider. Web search uses function calls and counts toward the tool call limit. Tavily uses basic search with up to 5 results.",
+  "settings.webSearch.native": "Built-in search (default)",
+  "settings.webSearch.desc": "Choose a search provider. Toggle web search in the chat search menu. Built-in search uses the selected model provider (OpenAI, Claude, or Grok) and requires a supported official API. External searches count toward the tool call limit; Tavily uses basic search with up to 5 results. Gemini requires a configured external search provider; otherwise web search stays off.",
   "settings.webSearch.apiKey": "{{name}} API key",
   "settings.webSearch.apiKey.desc": "Follows the credential storage setting (plugin files or device-local SecretStorage).",
 

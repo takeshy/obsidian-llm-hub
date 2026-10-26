@@ -1,4 +1,5 @@
-import { DEFAULT_WEB_SEARCH_SETTINGS, type WebSearchSettings } from "obsidian-llm-hub-common/core";
+import type { WebSearchSettings } from "../core/webSearchMode";
+import { DEFAULT_WEB_SEARCH_SETTINGS } from "obsidian-llm-hub-common/core";
 import type { McpServerConfig } from "obsidian-llm-hub-common/core";
 import { DEFAULT_VOICE_CHAT_SETTINGS, type VoiceChatSettings } from "obsidian-llm-hub-common/core";
 export type { McpServerConfig, McpTransport, McpFraming } from "obsidian-llm-hub-common/core";
@@ -808,7 +809,7 @@ export const WORKFLOWS_FOLDER = "workflows";
 
 // Default settings
 export const DEFAULT_SETTINGS: LlmHubSettings = {
-  webSearch: { ...DEFAULT_WEB_SEARCH_SETTINGS },
+  webSearch: { ...DEFAULT_WEB_SEARCH_SETTINGS, mode: "native" },
   cliConfig: DEFAULT_CLI_CONFIG,
   localLlmConfigs: [],
   workspaceFolder: DEFAULT_WORKSPACE_FOLDER,

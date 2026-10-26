@@ -1,4 +1,5 @@
-import { DEFAULT_WEB_SEARCH_SETTINGS, generateWithWebReferences, type WebSearchSettings } from "obsidian-llm-hub-common/core";
+import { resolveWebSearchMode, type WebSearchSettings } from "./webSearchMode";
+import { DEFAULT_WEB_SEARCH_SETTINGS, isWebSearchConfigured, generateWithWebReferences } from "obsidian-llm-hub-common/core";
 import { createExternalSearchSession, searchError } from "./externalWebSearch";
 import {
   GoogleGenAI,
@@ -267,7 +268,8 @@ export class GeminiClient extends GeminiGenerationClient<ModelType> {
   async *chatWithToolsStream(messages: Message[], tools: ToolDefinition[], systemPrompt?: string,
     executeToolCall?: (name: string, args: Record<string, unknown>) => Promise<unknown>,
     ragStoreIds?: string[], webSearchEnabled?: boolean, options?: ChatWithToolsOptions): AsyncGenerator<StreamChunk> {
-    if (!webSearchEnabled) {
+    const mode = resolveWebSearchMode(this.webSearchSettings);
+    if (!webSearchEnabled || mode !== "external" || !isWebSearchConfigured(this.webSearchSettings)) {
       yield* this.chatWithToolsStreamInternal(messages, tools, systemPrompt, executeToolCall, ragStoreIds, false, options);
       return;
     }
@@ -281,7 +283,8 @@ export class GeminiClient extends GeminiGenerationClient<ModelType> {
 
   async *generateImageStream(messages: Message[], imageModel: ModelType, systemPrompt?: string,
     webSearchEnabled?: boolean, ragStoreIds?: string[], traceId?: string | null): AsyncGenerator<StreamChunk> {
-    if (!webSearchEnabled) {
+    const mode = resolveWebSearchMode(this.webSearchSettings);
+    if (!webSearchEnabled || mode !== "external" || !isWebSearchConfigured(this.webSearchSettings)) {
       yield* super.generateImageStream(messages, imageModel, systemPrompt, false, ragStoreIds, traceId);
       return;
     }

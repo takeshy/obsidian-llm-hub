@@ -537,3 +537,32 @@ describe("external search through API providers", () => {
     expect(chunks.at(-1)?.usage?.webSearchRequests).toBe(1);
   });
 });
+
+
+describe("search mode routing with retained external keys", () => {
+  const messages: Message[] = [{ role: "user", content: "news", timestamp: 1 }];
+  const settings = { provider: "tavily" as const, tavilyApiKey: "key", braveApiKey: "" };
+  beforeEach(() => {
+    vi.mocked(requestUrl).mockReset();
+    mocks.openAiChatCreate.mockReset();
+    mocks.openAiResponsesStream.mockReset();
+  });
+  it.each(["native", undefined] as const)("uses OpenAI native search for mode %s", async mode => {
+    const response = { id: "resp", output: [], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } };
+    mocks.openAiResponsesStream.mockReturnValue({ ...asyncEvents([]), finalResponse: vi.fn().mockResolvedValue(response) });
+    await collect(openaiChatWithToolsStream("https://api.openai.com/v1", "key", "gpt-5.4", messages, [], "system", vi.fn(),
+      undefined, undefined, undefined, undefined, true, undefined, undefined,
+      { settings: mode ? { ...settings, mode } : { ...settings, provider: "none" }, maxCalls: 1 }));
+    expect(mocks.openAiResponsesStream.mock.calls[0][0].tools).toEqual([{ type: "web_search" }]);
+    expect(requestUrl).not.toHaveBeenCalled();
+    expect(mocks.openAiChatCreate).not.toHaveBeenCalled();
+  });
+  it("keeps search disabled by the chat toggle with external keys retained", async () => {
+    mocks.openAiChatCreate.mockResolvedValue(asyncEvents([{ choices: [{ delta: { content: "answer" }, finish_reason: "stop" }] }]));
+    await collect(openaiChatWithToolsStream("https://api.openai.com/v1", "key", "gpt-5.4", messages, [], "system", vi.fn(),
+      undefined, undefined, undefined, undefined, false, undefined, undefined, { settings: { ...settings, mode: "native" }, maxCalls: 1 }));
+    expect(mocks.openAiResponsesStream).not.toHaveBeenCalled();
+    expect(mocks.openAiChatCreate.mock.calls[0][0].tools).toBeUndefined();
+    expect(requestUrl).not.toHaveBeenCalled();
+  });
+});

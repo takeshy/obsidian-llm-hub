@@ -159,10 +159,11 @@ describe("external Web search integration", () => {
     for await (const chunk of stream) chunks.push(chunk);
     return chunks;
   }
-  it("fails before calling Gemini when the selected search provider is unconfigured", async () => {
-    const chunks = await all(new GeminiClient("key").chatWithToolsStream(messages, [], undefined, undefined, undefined, true));
-    expect(chunks[0].type).toBe("error");
-    expect(create).not.toHaveBeenCalled();
+  it("keeps Web search off when the external search key is missing", async () => {
+    create.mockResolvedValue(events([{ event_type: "interaction.completed", interaction: { status: "completed" } }]));
+    const chunks = await all(new GeminiClient("key", "gemini-3.8-flash" as ModelType, undefined, undefined, { ...searchSettings, tavilyApiKey: "" }).chatWithToolsStream(messages, [], undefined, undefined, undefined, true));
+    expect(chunks.some(chunk => chunk.type === "error")).toBe(false);
+    expect(create.mock.calls[0][0].tools ?? []).not.toContainEqual({ type: "google_search" });
     expect(requestUrl).not.toHaveBeenCalled();
   });
   it.each(["gemini-3.8-flash", "gemma-4-31b-it"] as const)("uses search only on a function call for %s", async model => {
@@ -201,5 +202,16 @@ describe("external Web search integration", () => {
       { disableTools: true, functionCallLimits: { maxFunctionCalls: 1 } }));
     expect(requestUrl).toHaveBeenCalledOnce();
     expect(create.mock.calls[1][0].tools).toBeUndefined();
+  });
+});
+
+
+describe("native Gemini search selection", () => {
+  it("keeps search off when native is selected despite a retained Tavily key", async () => {
+    create.mockResolvedValue(events([{ event_type: "interaction.completed", interaction: { status: "completed" } }]));
+    const client = new GeminiClient("key", "gemini-3.8-flash" as ModelType, undefined, undefined, { ...searchSettings, mode: "native" });
+    for await (const chunk of client.chatWithToolsStream([{ role: "user", content: "news", timestamp: 0 }], [], undefined, undefined, undefined, true)) void chunk;
+    expect(create.mock.calls[0][0].tools ?? []).not.toContainEqual({ type: "google_search" });
+    expect(requestUrl).not.toHaveBeenCalled();
   });
 });
