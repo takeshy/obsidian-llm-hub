@@ -22,26 +22,45 @@ export async function filterRagResultsWithJev(
   proxyBypass?: string,
   fetchImpl?: JevFetch,
   useOpenRouter = true,
+  resolvePdfText?: (result: LocalRagSearchResult) => Promise<string | null>,
 ): Promise<LocalRagSearchResult[]> {
   if (results.length === 0) return [];
   if (!apiKey.trim()) throw new Error(`${useOpenRouter ? "OpenRouter" : "Jev"} API key is required for Jev RAG filtering`);
 
   const questions: Record<string, unknown> = {};
-  results.forEach((result, index) => {
+  const retained = new Set<number>();
+  for (const [index, result] of results.entries()) {
+    let text = result.text;
+    if (result.contentType === "pdf" && /^\[Pdf:/i.test(text.trim())) {
+      // Native PDF embeddings store a label, not the document's contents.
+      // A text-only decision cannot reject a PDF whose text is unavailable.
+      let extracted: string | null = null;
+      try {
+        extracted = await resolvePdfText?.(result) ?? null;
+      } catch (error) {
+        console.warn(`Failed to extract PDF text for Jev filtering: ${result.filePath}`, error);
+      }
+      if (!extracted?.trim()) {
+        retained.add(index);
+        continue;
+      }
+      text = extracted;
+    }
     questions[`result_${index}`] = {
       type: "choice",
       instructions: [
         "検索クエリとRAG検索結果を照合してください。",
         "検索結果がクエリへの回答または回答を支える情報として実質的に一致するか判定します。",
         "単語の重複だけでは一致とせず、クエリと無関係な結果は除外してください。",
-        `検索結果: ${result.filePath}\n${result.text}`,
+        `検索結果: ${result.filePath}\n${text}`,
       ].join("\n"),
       criteria: {
         keep: "クエリに一致し、回答または回答の根拠として有用",
         exclude: "クエリに一致しない、または回答の根拠として有用でない",
       },
     };
-  });
+  }
+  if (Object.keys(questions).length === 0) return results;
 
   const requestFetch = fetchImpl
     ?? (proxyUrl?.trim() ? createProxyFetch(proxyUrl, proxyBypass) : createNodeFetch());
@@ -65,6 +84,7 @@ export async function filterRagResultsWithJev(
   if (!payload.answers) throw new Error("Jev RAG filtering returned an invalid response");
 
   return results.filter((_, index) => {
+    if (retained.has(index)) return true;
     const choice = payload.answers?.[`result_${index}`]?.choice;
     if (choice !== "keep" && choice !== "exclude") {
       throw new Error(`Jev RAG filtering omitted result_${index}`);

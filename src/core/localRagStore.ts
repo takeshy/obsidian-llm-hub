@@ -24,7 +24,7 @@ import {
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type LlmHubSettings, type RagSetting } from "../types";
 import { filterRagResultsWithJev, getOpenRouterApiKey } from "./jevRagFilter";
 // PDF text extraction and page-label mapping are shared.
-import { extractPdfTextWithOffsets, computePdfPageLabel } from "obsidian-llm-hub-common/vault";
+import { extractPdfText, extractPdfTextWithOffsets, computePdfPageLabel } from "obsidian-llm-hub-common/vault";
 
 const MAX_CHANGED_FILES_PER_SYNC = 50;
 const SCAN_YIELD_INTERVAL = 25;
@@ -166,6 +166,15 @@ class LocalRagStore {
   private externalPaths = new Map<string, string>();
   private sourceRagSettings = new Map<string, string[]>();
   workspaceFolder = "LLMHub";
+
+  /** Resolve the native PDF chunk's page text for text-only relevance filtering. */
+  async extractSearchResultPdfText(result: LocalRagSearchResult): Promise<string | null> {
+    if (!this.app) return null;
+    const range = result.pageLabel ? parsePageLabel(result.pageLabel) : null;
+    // Without a valid range, the whole document could match an unrelated chunk.
+    if (!range) return null;
+    return extractPdfText(this.app, result.filePath, range.startPage, range.endPage);
+  }
 
   async load(app: App, settingNames: string[], ragSettings?: Record<string, RagSetting>): Promise<void> {
     this.app = app;
@@ -947,6 +956,7 @@ export async function searchLocalRagResults(
   const key = useOpenRouter ? openRouterKey : settings.jevApiKey;
   return filterRagResultsWithJev(
     query, results, key, settings.proxyUrl, settings.proxyBypass, undefined, useOpenRouter,
+    result => store.extractSearchResultPdfText(result),
   );
 }
 

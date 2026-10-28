@@ -944,6 +944,8 @@ Use a pre-built index instead of syncing from the vault:
 
 Vector search returns semantically similar chunks, so its results can include text that shares related wording without actually matching the question. Enable **Jev → Keep only matching RAG results** in Settings to have Jev compare every retrieved chunk with the query and retain only matching results. This global setting applies not only to RAG Search, but also whenever RAG is used from Chat, Workflows, or Discord.
 
+For PDFs indexed with Gemini's native embeddings, Jev uses text extracted from the matched pages. PDF results whose text cannot be extracted, such as scanned pages, are retained without Jev filtering so their contents remain available as PDF attachments.
+
 Jev can be configured in either of these ways:
 
 - Enter a Jev API key obtained from [jevtypesafeai.com](https://jevtypesafeai.com/dashboard)
