@@ -21,6 +21,7 @@ import type { Attachment, ModelType, ModelInfo, Message } from "src/types";
 import { getGeminiApiKey, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, localLlmDisplayName } from "src/types";
 import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, searchLocalRagResults, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
+import { getJevRagFilterConfig } from "src/core/jevRagFilter";
 import { extractPdfText } from "obsidian-llm-hub-common/vault";
 import { getPdfResultModePreference, setPdfResultModePreference, type PdfResultMode } from "./pdfResultModePreference";
 import { extensionToMimeType } from "src/core/embeddingProvider";
@@ -131,6 +132,8 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   const [refineModel, setRefineModel] = useState<ModelType | "">(plugin.workspaceState.selectedModel || "");
   const availableModels = getAvailableModels(plugin);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSavingJev, setIsSavingJev] = useState(false);
+  const [, refreshSettings] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
   const [topK, setTopK] = useState(() => {
     const setting = plugin.getRagSetting(
@@ -206,6 +209,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   // Keep the search panel in sync with workspace state and RAG setting changes.
   useEffect(() => {
     const syncRagSettings = () => {
+      refreshSettings(revision => revision + 1);
       const names = plugin.getRagSettingNames();
       setRagSettingNames(names);
       setSelectedRagSetting(prev => {
@@ -225,6 +229,28 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
       plugin.settingsEmitter.off("rag-setting-changed", syncRagSettings);
     };
   }, [plugin]);
+
+  // Re-read the selected index's toggle when either settings screen updates it.
+  useEffect(() => {
+    const refresh = () => refreshSettings(revision => revision + 1);
+    plugin.settingsEmitter.on("rag-filter-changed", refresh);
+    plugin.settingsEmitter.on("settings-updated", refresh);
+    return () => {
+      plugin.settingsEmitter.off("rag-filter-changed", refresh);
+      plugin.settingsEmitter.off("settings-updated", refresh);
+    };
+  }, [plugin]);
+
+  const handleJevChange = async (enabled: boolean) => {
+    setIsSavingJev(true);
+    try {
+      await plugin.updateRagSetting(selectedRagSetting, { jevRagFilterEnabled: enabled });
+    } catch (error) {
+      new Notice(t("common.error") + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsSavingJev(false);
+    }
+  };
 
   useEffect(() => {
     const setting = plugin.getRagSetting(selectedRagSetting);
@@ -785,6 +811,18 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
         </div>
         {showRagConfig && (
           <div className="llm-hub-rag-config-section">
+            {currentRagSetting && getJevRagFilterConfig(plugin.settings) && (
+              <label className="llm-hub-search-jev-toggle" title={t("settings.jevRagFilter.desc")}>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={currentRagSetting.jevRagFilterEnabled}
+                  disabled={isSearching || isSavingJev}
+                  onChange={e => { void handleJevChange(e.target.checked); }}
+                />
+                {t("search.jevFilter")}
+              </label>
+            )}
             {isInternalRag && (
               <>
                 <div className="llm-hub-rag-config-row">

@@ -73,14 +73,17 @@ export class SettingsTab extends PluginSettingTab {
 
         if (this.settingsListener) {
           this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
+          this.plugin.settingsEmitter.off("rag-filter-changed", this.settingsListener);
         }
         const listener = () => this.update();
         this.settingsListener = listener;
         this.plugin.settingsEmitter.on("settings-updated", listener);
+        this.plugin.settingsEmitter.on("rag-filter-changed", listener);
 
         return () => {
           cleanupWebSearch();
           this.plugin.settingsEmitter.off("settings-updated", listener);
+          this.plugin.settingsEmitter.off("rag-filter-changed", listener);
           if (this.settingsListener === listener) this.settingsListener = null;
         };
       },
@@ -90,6 +93,7 @@ export class SettingsTab extends PluginSettingTab {
   hide(): void {
     if (this.settingsListener) {
       this.plugin.settingsEmitter.off("settings-updated", this.settingsListener);
+      this.plugin.settingsEmitter.off("rag-filter-changed", this.settingsListener);
       this.settingsListener = null;
     }
   }

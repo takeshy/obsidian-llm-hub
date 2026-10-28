@@ -22,7 +22,7 @@ import {
   loadExternalRagVectors,
 } from "./localRagStorage";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type LlmHubSettings, type RagSetting } from "../types";
-import { filterRagResultsWithJev, getOpenRouterApiKey } from "./jevRagFilter";
+import { filterRagResultsWithJev, getJevRagFilterConfig } from "./jevRagFilter";
 // PDF text extraction and page-label mapping are shared.
 import { extractPdfText, extractPdfTextWithOffsets, computePdfPageLabel } from "obsidian-llm-hub-common/vault";
 
@@ -936,7 +936,7 @@ export async function searchLocalRagResults(
   proxyUrl?: string,
   proxyBypass?: string,
   topK?: number,
-  settings?: Pick<LlmHubSettings, "apiProviders" | "proxyUrl" | "proxyBypass" | "jevRagFilterEnabled" | "jevApiKey" | "jevUseOpenRouter">,
+  settings?: Pick<LlmHubSettings, "apiProviders" | "proxyUrl" | "proxyBypass" | "jevApiKey" | "jevUseOpenRouter">,
 ): Promise<LocalRagSearchResult[]> {
   const store = getLocalRagStore();
   const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
@@ -950,12 +950,11 @@ export async function searchLocalRagResults(
     ragSetting.searchFileExtensions,
     proxyUrl, proxyBypass,
   );
-  if (!settings?.jevRagFilterEnabled) return results;
-  const openRouterKey = getOpenRouterApiKey(settings.apiProviders);
-  const useOpenRouter = settings.jevUseOpenRouter && openRouterKey.length > 0;
-  const key = useOpenRouter ? openRouterKey : settings.jevApiKey;
+  if (!settings || !ragSetting.jevRagFilterEnabled) return results;
+  const config = getJevRagFilterConfig(settings);
+  if (!config) return results;
   return filterRagResultsWithJev(
-    query, results, key, settings.proxyUrl, settings.proxyBypass, undefined, useOpenRouter,
+    query, results, config.apiKey, settings.proxyUrl, settings.proxyBypass, undefined, config.useOpenRouter,
     result => store.extractSearchResultPdfText(result),
   );
 }
@@ -967,7 +966,7 @@ export async function searchLocalRag(
   fallbackApiKey: string,
   proxyUrl?: string,
   proxyBypass?: string,
-  settings?: Pick<LlmHubSettings, "apiProviders" | "proxyUrl" | "proxyBypass" | "jevRagFilterEnabled" | "jevApiKey" | "jevUseOpenRouter">,
+  settings?: Pick<LlmHubSettings, "apiProviders" | "proxyUrl" | "proxyBypass" | "jevApiKey" | "jevUseOpenRouter">,
 ): Promise<LocalRagResult> {
   const results = await searchLocalRagResults(
     settingName, query, ragSetting, fallbackApiKey, proxyUrl, proxyBypass, undefined, settings,

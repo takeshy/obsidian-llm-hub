@@ -12,19 +12,6 @@ export function displayJevSettings(containerEl: HTMLElement, ctx: SettingsContex
 
   new Setting(containerEl).setName(t("settings.jev")).setHeading();
 
-  new Setting(containerEl)
-    .setName(t("settings.jevRagFilter"))
-    .setDesc(t("settings.jevRagFilter.desc"))
-    .addToggle(toggle => toggle
-      .setValue(plugin.settings.jevRagFilterEnabled)
-      .onChange(async value => {
-        plugin.settings.jevRagFilterEnabled = value;
-        await plugin.saveSettings();
-        display();
-      }));
-
-  if (!plugin.settings.jevRagFilterEnabled) return;
-
   if (openRouterConfigured) {
     const openRouterSetting = new Setting(containerEl)
       .setName(t("settings.jevUseOpenRouter"))

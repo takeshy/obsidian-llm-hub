@@ -54,8 +54,9 @@ describe("Jev filtering of PDF search results", () => {
   });
 
   function search(filterEnabled = true) {
-    return searchLocalRagResults("test", "train arrival", DEFAULT_RAG_SETTING, "embedding-key",
-      undefined, undefined, undefined, { ...settings, jevRagFilterEnabled: filterEnabled });
+    return searchLocalRagResults("test", "train arrival",
+      { ...DEFAULT_RAG_SETTING, jevRagFilterEnabled: filterEnabled }, "embedding-key",
+      undefined, undefined, undefined, settings);
   }
 
   function respond(answers: Record<string, { choice: string }>) {
@@ -126,5 +127,27 @@ describe("Jev filtering of PDF search results", () => {
     await expect(search(false)).resolves.toEqual([pdf, unrelated]);
     expect(extractPdfText).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("filters one index and leaves another unfiltered with shared credentials", async () => {
+    vi.mocked(extractPdfText).mockResolvedValue("The train arrives at 09:10.");
+    respond({ result_0: { choice: "keep" }, result_1: { choice: "exclude" } });
+    // The legacy global flag must no longer override per-index choices.
+    const shared = { ...settings, jevRagFilterEnabled: false };
+    await expect(searchLocalRagResults("Notes", "train arrival", DEFAULT_RAG_SETTING,
+      "embedding-key", undefined, undefined, undefined, shared)).resolves.toEqual([pdf]);
+    await expect(searchLocalRagResults("PDFs", "train arrival",
+      { ...DEFAULT_RAG_SETTING, jevRagFilterEnabled: false }, "embedding-key",
+      undefined, undefined, undefined, shared)).resolves.toEqual([pdf, unrelated]);
+    expect(request).toHaveBeenCalledOnce();
+    expect(extractPdfText).toHaveBeenCalledOnce();
+  });
+
+  it("does not filter or extract PDF text without configured Jev credentials", async () => {
+    await expect(searchLocalRagResults("test", "train arrival", DEFAULT_RAG_SETTING,
+      "embedding-key", undefined, undefined, undefined,
+      { ...settings, apiProviders: [], jevApiKey: "   " })).resolves.toEqual([pdf, unrelated]);
+    expect(request).not.toHaveBeenCalled();
+    expect(extractPdfText).not.toHaveBeenCalled();
   });
 });

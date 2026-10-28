@@ -186,7 +186,7 @@ export const en = {
   "settings.scoreThreshold": "Score threshold",
   "settings.scoreThreshold.desc": "Minimum similarity score (0.0-1.0) to include in results. 0 = no filtering",
   "settings.jevRagFilter": "Keep only matching RAG results",
-  "settings.jevRagFilter.desc": "Use Jev to keep only results that match the query. This also applies when RAG is used in chat.",
+  "settings.jevRagFilter.desc": "Use Jev to keep only matching results from this RAG index. Also applies in chat, workflows, and Discord. Enabled by default for new indexes.",
   "settings.jevRagFilter.requiresKey": "Enter a Jev API key, or select OpenRouter and configure its API key first.",
   "settings.jevApiKey": "Jev API key",
   "settings.jevApiKey.desc": "API key from jevtypesafeai.com. Leave this empty when using OpenRouter.",
@@ -194,6 +194,7 @@ export const en = {
   "settings.jevUseOpenRouter.desc": "Use the API key already configured for the OpenRouter API provider. The Jev API key may remain empty.",
   "settings.jevUseOpenRouter.requiresKey": "Configure an OpenRouter API key under API providers before using this option.",
   "settings.jev": "Jev",
+  "search.jevFilter": "Filter with Jev",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "Embedding model",

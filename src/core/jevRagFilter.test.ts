@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ApiProviderConfig } from "../types";
+import { DEFAULT_SETTINGS, type ApiProviderConfig } from "../types";
 import type { LocalRagSearchResult } from "./localRagStore";
 import {
   filterRagResultsWithJev,
   getOpenRouterApiKey,
+  getJevRagFilterConfig,
   JEV_MODEL,
   OPENROUTER_DECISIONS_URL,
   TYPESAFE_DECISIONS_URL,
@@ -22,6 +23,23 @@ describe("getOpenRouterApiKey", () => {
       { type: "openrouter", apiKey: "  router-key  " },
     ] as ApiProviderConfig[];
     expect(getOpenRouterApiKey(providers)).toBe("router-key");
+  });
+});
+
+describe("getJevRagFilterConfig", () => {
+  it("is inactive without credentials or with an unselected OpenRouter key", () => {
+    expect(getJevRagFilterConfig(DEFAULT_SETTINGS)).toBeNull();
+    expect(getJevRagFilterConfig({ ...DEFAULT_SETTINGS,
+      apiProviders: [{ type: "openrouter", apiKey: "router-key" }] as ApiProviderConfig[],
+    })).toBeNull();
+  });
+
+  it("uses the selected shared credentials", () => {
+    expect(getJevRagFilterConfig({ ...DEFAULT_SETTINGS, jevApiKey: " direct-key " }))
+      .toEqual({ apiKey: "direct-key", useOpenRouter: false });
+    expect(getJevRagFilterConfig({ ...DEFAULT_SETTINGS, jevApiKey: "direct-key", jevUseOpenRouter: true,
+      apiProviders: [{ type: "openrouter", apiKey: "router-key" }] as ApiProviderConfig[],
+    })).toEqual({ apiKey: "router-key", useOpenRouter: true });
   });
 });
 

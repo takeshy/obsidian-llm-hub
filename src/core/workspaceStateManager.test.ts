@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
-import type { LlmHubSettings } from "../types";
+import { DEFAULT_SETTINGS, DEFAULT_RAG_SETTING, type LlmHubSettings } from "../types";
 import { EventEmitter } from "../utils/EventEmitter";
 import { WorkspaceStateManager } from "./workspaceStateManager";
 
-function createManager(initialContent: string) {
+function createManager(initialContent: string, overrides: Partial<LlmHubSettings> = {}) {
   let content = initialContent;
   const write = vi.fn(async (_path: string, value: string) => { content = value; });
   const adapter = {
@@ -17,7 +17,7 @@ function createManager(initialContent: string) {
   const emitter = new EventEmitter();
   const manager = new WorkspaceStateManager(
     { vault: { adapter } } as unknown as App,
-    () => ({ workspaceFolder: "LLMHub", apiProviders: [], cliConfig: {} } as unknown as LlmHubSettings),
+    () => ({ ...DEFAULT_SETTINGS, workspaceFolder: "LLMHub", ...overrides }),
     emitter,
     async () => ({}),
   );
@@ -98,6 +98,48 @@ describe("WorkspaceStateManager combined search persistence", () => {
       webSearchEnabled: true,
     });
     expect(listener).toHaveBeenCalledWith({ webSearch: true, ragSetting: "Research" });
+  });
+});
+
+describe("WorkspaceStateManager per-index Jev filtering", () => {
+  it.each([true, false])("persists the legacy global value %s on existing indexes once", async (enabled) => {
+    const { jevRagFilterEnabled: _unused, ...legacy } = DEFAULT_RAG_SETTING;
+    const harness = createManager(JSON.stringify({ ragSettings: { Notes: legacy, PDFs: legacy } }),
+      { jevRagFilterEnabled: enabled });
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.workspaceState.ragSettings.Notes.jevRagFilterEnabled).toBe(enabled);
+    expect(harness.manager.workspaceState.ragSettings.PDFs.jevRagFilterEnabled).toBe(enabled);
+    expect(harness.write).toHaveBeenCalledOnce();
+
+    // Reload with the opposite legacy flag: persisted per-index values win.
+    const reloaded = createManager(harness.getContent(), { jevRagFilterEnabled: !enabled });
+    await reloaded.manager.loadWorkspaceState();
+    expect(reloaded.manager.workspaceState.ragSettings.Notes.jevRagFilterEnabled).toBe(enabled);
+    expect(reloaded.write).not.toHaveBeenCalled();
+  });
+
+  it("preserves independent choices and defaults new indexes to ON", async () => {
+    const harness = createManager(JSON.stringify({ ragSettings: {
+      Notes: DEFAULT_RAG_SETTING,
+      PDFs: { ...DEFAULT_RAG_SETTING, jevRagFilterEnabled: false },
+    } }));
+    await harness.manager.loadWorkspaceState();
+    await harness.manager.createRagSetting("New");
+    expect(harness.manager.getRagSetting("Notes")?.jevRagFilterEnabled).toBe(true);
+    expect(harness.manager.getRagSetting("PDFs")?.jevRagFilterEnabled).toBe(false);
+    expect(harness.manager.getRagSetting("New")?.jevRagFilterEnabled).toBe(true);
+
+    const onFilterChanged = vi.fn();
+    const onSettingsChanged = vi.fn();
+    harness.emitter.on("rag-filter-changed", onFilterChanged);
+    harness.emitter.on("settings-updated", onSettingsChanged);
+    await harness.manager.updateRagSetting("Notes", { jevRagFilterEnabled: false });
+    expect(onFilterChanged).toHaveBeenCalledExactlyOnceWith("Notes");
+    // Global settings changes restart CLI sessions; a filter toggle must not.
+    expect(onSettingsChanged).not.toHaveBeenCalled();
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Notes")?.jevRagFilterEnabled).toBe(false);
+    expect(harness.manager.getRagSetting("New")?.jevRagFilterEnabled).toBe(true);
   });
 });
 

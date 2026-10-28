@@ -1,5 +1,6 @@
 import { Setting, Notice } from "obsidian";
 import { getLocalRagStore } from "src/core/localRagStore";
+import { getJevRagFilterConfig } from "src/core/jevRagFilter";
 import { fetchEmbeddingModels } from "src/core/embeddingProvider";
 import { t } from "src/i18n";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, getGeminiApiKey } from "src/types";
@@ -55,6 +56,17 @@ function displaySelectedRagSetting(
   const { plugin, display } = ctx;
 
   addRagSettingHeader(containerEl, plugin, name, display);
+
+  if (getJevRagFilterConfig(plugin.settings)) {
+    new Setting(containerEl)
+      .setName(t("settings.jevRagFilter"))
+      .setDesc(t("settings.jevRagFilter.desc"))
+      .addToggle(toggle => toggle
+        .setValue(ragSetting.jevRagFilterEnabled)
+        .onChange(async value => {
+          await plugin.updateRagSetting(name, { jevRagFilterEnabled: value });
+        }));
+  }
 
   // All RAG is now local - go directly to local store settings
   displayLocalStoreSettings(containerEl, ctx, name, ragSetting);

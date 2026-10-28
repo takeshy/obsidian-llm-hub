@@ -114,10 +114,14 @@ export class WorkspaceStateManager {
     }
 
     // Ensure each RAG setting has all required fields (migration for new fields)
+    let migratedJev = false;
     for (const [settingName, setting] of Object.entries(this.workspaceState.ragSettings)) {
+      const legacyJev = setting.jevRagFilterEnabled === undefined;
+      migratedJev ||= legacyJev;
       this.workspaceState.ragSettings[settingName] = {
         ...DEFAULT_RAG_SETTING,
         ...setting,
+        jevRagFilterEnabled: setting.jevRagFilterEnabled ?? this.settings.jevRagFilterEnabled ?? false,
       };
     }
 
@@ -126,7 +130,7 @@ export class WorkspaceStateManager {
     const stored = readSecretJson<RagCredentialBundle>(this.app, ragCredentialSecretId(this.workspaceFolder));
     if (stored) applyRagCredentials(this.workspaceState, stored);
 
-    if (legacyWebSearch) {
+    if (legacyWebSearch || migratedJev) {
       await this.app.vault.adapter.write(filePath, JSON.stringify(this.persistableWorkspaceState(), null, 2));
     }
   }
@@ -309,6 +313,9 @@ export class WorkspaceStateManager {
     );
 
     await this.saveWorkspaceState();
+    if (updates.jevRagFilterEnabled !== undefined) {
+      this.settingsEmitter.emit("rag-filter-changed", name);
+    }
   }
 
   // Delete a RAG setting

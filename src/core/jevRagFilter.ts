@@ -1,4 +1,4 @@
-import type { ApiProviderConfig } from "../types";
+import type { ApiProviderConfig, LlmHubSettings } from "../types";
 import type { LocalRagSearchResult } from "./localRagStore";
 import { createNodeFetch, createProxyFetch } from "./proxyFetch";
 
@@ -11,6 +11,16 @@ type JevFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respon
 
 export function getOpenRouterApiKey(providers: ApiProviderConfig[]): string {
   return providers.find(provider => provider.type === "openrouter" && provider.apiKey.trim())?.apiKey.trim() ?? "";
+}
+
+/** Shared credentials for per-index filtering. An unconfigured Jev is inactive. */
+export function getJevRagFilterConfig(
+  settings: Pick<LlmHubSettings, "apiProviders" | "jevApiKey" | "jevUseOpenRouter">,
+): { apiKey: string; useOpenRouter: boolean } | null {
+  const openRouterKey = getOpenRouterApiKey(settings.apiProviders);
+  const useOpenRouter = settings.jevUseOpenRouter && openRouterKey.length > 0;
+  const apiKey = (useOpenRouter ? openRouterKey : settings.jevApiKey).trim();
+  return apiKey ? { apiKey, useOpenRouter } : null;
 }
 
 /** Keep only RAG chunks that Jev judges to answer or materially support the query. */

@@ -2622,6 +2622,15 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   max-width: none;
 }
 
+.llm-hub-search-jev-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: var(--font-ui-small);
+  cursor: pointer;
+}
+
 /* Text button (sync / config toggle) */
 .llm-hub-rag-text-btn {
   display: flex;
