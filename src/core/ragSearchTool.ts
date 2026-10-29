@@ -1,10 +1,9 @@
-import type { ToolDefinition } from "../types";
+import { DEFAULT_RAG_SETTING, type ToolDefinition } from "../types";
 import { formatError } from "obsidian-llm-hub-common/core";
 import type { LocalRagSearchResult } from "./localRagStore";
 
 export const RAG_SEARCH_TOOL_NAME = "rag_search";
 export const MAX_RAG_SEARCHES_PER_TURN = 3;
-export const MAX_DYNAMIC_RAG_RESULTS = 3;
 
 export const RAG_SEARCH_TOOL: ToolDefinition = {
   name: RAG_SEARCH_TOOL_NAME,
@@ -26,9 +25,12 @@ export const RAG_SEARCH_TOOL: ToolDefinition = {
  * retrieval embeds the user's message verbatim, which is a weak query for
  * follow-ups; saying so is what makes a model reach for the tool at all.
  */
-export const RAG_SEARCH_SYSTEM_PROMPT = `\n\nThe selected RAG index is available through the ${RAG_SEARCH_TOOL_NAME} tool. Use it with a self-contained, focused semantic query when the user's request may depend on indexed vault knowledge. Do not claim that the index lacks relevant information before searching it. At most ${MAX_RAG_SEARCHES_PER_TURN} RAG searches are allowed per turn; each search returns at most ${MAX_DYNAMIC_RAG_RESULTS} chunks.`;
+function buildRagSearchSystemPrompt(topK: number): string {
+  return `\n\nThe selected RAG index is available through the ${RAG_SEARCH_TOOL_NAME} tool. Use it with a self-contained, focused semantic query when the user's request may depend on indexed vault knowledge. Do not claim that the index lacks relevant information before searching it. At most ${MAX_RAG_SEARCHES_PER_TURN} RAG searches are allowed per turn; each search retrieves up to ${topK} candidate chunks before optional Jev filtering, which may return fewer results.`;
+}
 
 export interface RagSearchRunner {
+  readonly systemPrompt: string;
   /** Execute one rag_search tool call. */
   run(args: Record<string, unknown>): Promise<unknown>;
 }
@@ -41,10 +43,13 @@ export function createRagSearchRunner(
   search: (query: string, topK: number) => Promise<LocalRagSearchResult[]>,
   /** Called with the file paths a tool-driven search surfaced, so the reply can cite them. */
   onSources?: (filePaths: string[]) => void,
+  topK = DEFAULT_RAG_SETTING.topK,
 ): RagSearchRunner {
   let searchCount = 0;
+  const candidateLimit = Number.isFinite(topK) && topK >= 1 ? Math.floor(topK) : DEFAULT_RAG_SETTING.topK;
 
   return {
+    systemPrompt: buildRagSearchSystemPrompt(candidateLimit),
     async run(args: Record<string, unknown>) {
       if (searchCount >= MAX_RAG_SEARCHES_PER_TURN) {
         return { error: `RAG search limit reached (${MAX_RAG_SEARCHES_PER_TURN} searches per turn).` };
@@ -54,7 +59,7 @@ export function createRagSearchRunner(
 
       let results: LocalRagSearchResult[];
       try {
-        results = await search(query, MAX_DYNAMIC_RAG_RESULTS);
+        results = await search(query, candidateLimit);
       } catch (e) {
         // Not counted against the budget: the index was never reached.
         return { error: `RAG search failed: ${formatError(e)}` };

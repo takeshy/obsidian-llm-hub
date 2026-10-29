@@ -2850,6 +2850,7 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 
 .llm-hub-search-params {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-bottom: 8px;
@@ -2862,6 +2863,25 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.llm-hub-search-top-k-note {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.llm-hub-chat-rag-top-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.llm-hub-chat-rag-top-k input {
+  width: 55px;
 }
 
 .llm-hub-search-param-input {

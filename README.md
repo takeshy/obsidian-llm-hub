@@ -944,11 +944,13 @@ Use a pre-built index instead of syncing from the vault:
 
 Vector search returns semantically similar chunks, so its results can include text that shares related wording without actually matching the question. Configure shared credentials under **Jev** in Settings, then toggle **Keep only matching RAG results** separately for each RAG setting. For example, enable it for notes and disable it for PDFs. Jev filtering also applies when that RAG index is used from Chat, Workflows, or Discord. For a combined index, its own toggle applies to the combined results.
 
-New RAG settings default to ON; existing settings retain the previous global ON/OFF value when upgrading. Filtering is inactive until Jev credentials are configured.
+New RAG settings default to ON; existing settings retain the previous global ON/OFF value when upgrading. Filtering is inactive until Jev credentials are configured. In RAG Search, Top K is the number of candidates checked per round. With Jev active, set **Target result count** to repeat in Top K batches until that many results remain or no candidates above the score threshold remain. Leave it blank to check Top K candidates once. Repeated checks can increase API usage and search time.
+
+In Chat, select a RAG index and set **RAG Top K** next to the search selector. Chat uses this many candidate chunks per `rag_search` call, before Jev filtering, with at most three calls per turn. The value is saved to the selected RAG setting and also applies to Workflows and Discord.
 
 You can also toggle **Filter with Jev** in the settings card opened with the settings icon in RAG Search. This saves the selected index's setting and applies from the next search.
 
-For PDFs indexed with Gemini's native embeddings, Jev uses text extracted from the matched pages. PDF results whose text cannot be extracted, such as scanned pages, are retained without Jev filtering so their contents remain available as PDF attachments.
+For PDFs indexed with Gemini's native embeddings, Jev uses text extracted from the matched pages. If no text can be extracted, the matched pages are rendered as images for Jev to judge, including scanned PDFs without a text layer. This works with both OpenRouter and a direct Jev key. Each scanned chunk uses a separate image request. Results are retained without filtering if rendering fails or exceeds the limits (16 pages or 12 MiB of base64 image data per chunk).
 
 Jev can be configured in either of these ways:
 

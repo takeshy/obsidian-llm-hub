@@ -192,7 +192,10 @@ export const ja: Record<string, string> = {
   "settings.jevUseOpenRouter.desc": "APIプロバイダーに設定済みのOpenRouter APIキーを使います。Jev APIキーは未入力でも利用できます。",
   "settings.jevUseOpenRouter.requiresKey": "このオプションを使うには、APIプロバイダーでOpenRouterのAPIキーを設定してください。",
   "settings.jev": "Jev",
+  "search.resultCount": "取得目標件数",
+  "search.helpResultCount": "取得目標件数 — Jev有効時に指定できます。この件数に達するか候補が尽きるまでTop K件ずつ繰り返し判定します。空欄なら1回のみ判定します。",
   "search.jevFilter": "Jevで絞り込む",
+  "search.topKJevNote": "Jevが有効のときは、Top K件ずつ候補を判定します。取得目標件数を指定すると、その件数に達するかスコア閾値を超える候補がなくなるまで、類似度順に追加判定します。空欄ならTop K件を一度だけ判定します。繰り返すとAPI使用量と検索時間が増える場合があります。",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "埋め込みモデル",
@@ -276,6 +279,8 @@ export const ja: Record<string, string> = {
 
   // InputArea
   "input.ragPdfChunkPages": "PDF分割ページ数",
+  "input.ragTopK": "RAG Top K",
+  "input.ragTopKDesc": "RAG検索1回で取得する候補の件数（Jev判定前）。選択中のRAG設定に保存され、WorkflowやDiscordにも適用されます。",
   "input.thinkingLabel": "常に思考",
 
   // MessageBubble
@@ -438,7 +443,7 @@ export const ja: Record<string, string> = {
   "search.discussWithSelected": "選択してディスカッション",
   "search.pdfMode": "PDF結果",
   "search.helpTitle": "パラメータヘルプ",
-  "search.helpTopK": "Top K — 返す結果の最大件数。",
+  "search.helpTopK": "Top K — 1回に取得する候補の件数。Jevによる絞り込み前の件数です。",
   "search.helpScoreThreshold": "最低スコア — 類似度の最低スコア（0.0〜1.0）。この値未満の結果は除外されます。",
   "search.helpExt": "Ext. — 結果をフィルタするファイル拡張子（カンマ区切り、例：md, pdf）。空欄は全ファイル対象。",
   "search.helpChunkSize": "チャンクサイズ — インデックス作成時のテキストチャンクあたりの文字数。大きいほど文脈を保持しますが精度が下がる場合があります。",

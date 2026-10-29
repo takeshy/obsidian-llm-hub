@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_RAG_SETTING } from "../types";
 import type { LocalRagSearchResult } from "./localRagStore";
 import {
-  MAX_DYNAMIC_RAG_RESULTS,
   MAX_RAG_SEARCHES_PER_TURN,
   RAG_SEARCH_TOOL,
   createRagSearchRunner,
@@ -35,10 +35,27 @@ describe("rag_search tool", () => {
     expect(result.remainingSearches).toBe(MAX_RAG_SEARCHES_PER_TURN - 1);
   });
 
-  it("caps how many chunks a follow-up search may pull", async () => {
+  it("uses the default RAG Top K when no override is provided", async () => {
     const search = vi.fn(async () => [chunk("a.md")]);
     await createRagSearchRunner(search).run({ query: "q" });
-    expect(search).toHaveBeenCalledWith("q", MAX_DYNAMIC_RAG_RESULTS);
+    expect(search).toHaveBeenCalledWith("q", DEFAULT_RAG_SETTING.topK);
+  });
+
+  it.each([1, 8, 20])("uses the configured Top K (%s) in retrieval and model instructions", async (topK) => {
+    const search = vi.fn(async () => [chunk("a.md")]);
+    const runner = createRagSearchRunner(search, undefined, topK);
+    await runner.run({ query: "q" });
+    expect(search).toHaveBeenCalledWith("q", topK);
+    expect(runner.systemPrompt).toContain(`up to ${topK} candidate chunks`);
+    expect(runner.systemPrompt).toContain("before optional Jev filtering");
+  });
+
+  it.each([0, -1, NaN, Infinity])("falls back to the RAG default for invalid Top K (%s)", async (topK) => {
+    const search = vi.fn(async () => []);
+    const runner = createRagSearchRunner(search, undefined, topK);
+    await runner.run({ query: "q" });
+    expect(search).toHaveBeenCalledWith("q", DEFAULT_RAG_SETTING.topK);
+    expect(runner.systemPrompt).toContain(`up to ${DEFAULT_RAG_SETTING.topK} candidate chunks`);
   });
 
   it("allows three on-demand searches per turn", async () => {

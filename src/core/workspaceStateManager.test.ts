@@ -143,6 +143,25 @@ describe("WorkspaceStateManager per-index Jev filtering", () => {
   });
 });
 
+describe("WorkspaceStateManager RAG Top K", () => {
+  it("persists Top K per index and notifies chats without restarting CLI sessions", async () => {
+    const harness = createManager(JSON.stringify({ ragSettings: {
+      Notes: DEFAULT_RAG_SETTING, PDFs: DEFAULT_RAG_SETTING,
+    } }));
+    await harness.manager.loadWorkspaceState();
+    const onTopKChanged = vi.fn();
+    const onSettingsChanged = vi.fn();
+    harness.emitter.on("rag-top-k-changed", onTopKChanged);
+    harness.emitter.on("settings-updated", onSettingsChanged);
+    await harness.manager.updateRagSetting("Notes", { topK: 12 });
+    expect(onTopKChanged).toHaveBeenCalledExactlyOnceWith("Notes");
+    expect(onSettingsChanged).not.toHaveBeenCalled();
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Notes")?.topK).toBe(12);
+    expect(harness.manager.getRagSetting("PDFs")?.topK).toBe(DEFAULT_RAG_SETTING.topK);
+  });
+});
+
 describe("WorkspaceStateManager RAG setting names and their index", () => {
   const setting = (overrides: Record<string, unknown> = {}) => ({
     embeddingBaseUrl: "", embeddingApiKey: "", embeddingModel: "", chunkSize: 500, chunkOverlap: 100,

@@ -23,6 +23,7 @@ import {
 } from "./localRagStorage";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type LlmHubSettings, type RagSetting } from "../types";
 import { filterRagResultsWithJev, getJevRagFilterConfig } from "./jevRagFilter";
+import { renderRagPdfImages } from "./ragPdfImages";
 // PDF text extraction and page-label mapping are shared.
 import { extractPdfText, extractPdfTextWithOffsets, computePdfPageLabel } from "obsidian-llm-hub-common/vault";
 
@@ -174,6 +175,12 @@ class LocalRagStore {
     // Without a valid range, the whole document could match an unrelated chunk.
     if (!range) return null;
     return extractPdfText(this.app, result.filePath, range.startPage, range.endPage);
+  }
+
+  async renderSearchResultPdfImages(result: LocalRagSearchResult) {
+    const range = result.pageLabel ? parsePageLabel(result.pageLabel) : null;
+    if (!this.app || !range) return null;
+    return renderRagPdfImages(this.app, result.filePath, range.startPage, range.endPage);
   }
 
   async load(app: App, settingNames: string[], ragSettings?: Record<string, RagSetting>): Promise<void> {
@@ -937,26 +944,44 @@ export async function searchLocalRagResults(
   proxyBypass?: string,
   topK?: number,
   settings?: Pick<LlmHubSettings, "apiProviders" | "proxyUrl" | "proxyBypass" | "jevApiKey" | "jevUseOpenRouter">,
+  resultCount?: number,
 ): Promise<LocalRagSearchResult[]> {
   const store = getLocalRagStore();
   const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
   if (!store || (!apiKey && !ragSetting.embeddingBaseUrl)) return [];
-  const results = await store.search(
+  const resultLimit = topK ?? ragSetting.topK;
+  if (!Number.isFinite(resultLimit) || resultLimit < 1) return [];
+  const limit = Math.floor(resultLimit);
+  const filterConfig = settings && ragSetting.jevRagFilterEnabled ? getJevRagFilterConfig(settings) : null;
+  const repeat = Boolean(filterConfig && resultCount !== undefined && Number.isFinite(resultCount) && resultCount >= 1);
+  const target = repeat && resultCount !== undefined ? Math.floor(resultCount) : limit;
+  // search already scores and sorts the entire index. Retrieve the eligible
+  // candidates once so refilling does not embed the same query again.
+  const candidates = await store.search(
     settingName, query, apiKey,
     ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),
-    topK ?? ragSetting.topK,
+    repeat ? Infinity : limit,
     ragSetting.embeddingBaseUrl || undefined,
     ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
     ragSetting.searchFileExtensions,
     proxyUrl, proxyBypass,
   );
-  if (!settings || !ragSetting.jevRagFilterEnabled) return results;
-  const config = getJevRagFilterConfig(settings);
-  if (!config) return results;
-  return filterRagResultsWithJev(
-    query, results, config.apiKey, settings.proxyUrl, settings.proxyBypass, undefined, config.useOpenRouter,
-    result => store.extractSearchResultPdfText(result),
-  );
+  if (!filterConfig || !settings) return candidates;
+
+  const kept: LocalRagSearchResult[] = [];
+  // Top K is the candidate batch size. Only an explicit result count enables
+  // refilling; otherwise judge the first batch once, even if it has no matches.
+  const eligible = repeat ? candidates : candidates.slice(0, limit);
+  for (let offset = 0; offset < eligible.length && kept.length < target; offset += limit) {
+    const batch = eligible.slice(offset, offset + limit);
+    const matches = await filterRagResultsWithJev(
+      query, batch, filterConfig.apiKey, settings.proxyUrl, settings.proxyBypass, undefined, filterConfig.useOpenRouter,
+      result => store.extractSearchResultPdfText(result),
+      result => store.renderSearchResultPdfImages(result),
+    );
+    kept.push(...matches);
+  }
+  return kept.slice(0, target);
 }
 
 export async function searchLocalRag(

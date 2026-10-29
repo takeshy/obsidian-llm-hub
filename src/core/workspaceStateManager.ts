@@ -316,6 +316,9 @@ export class WorkspaceStateManager {
     if (updates.jevRagFilterEnabled !== undefined) {
       this.settingsEmitter.emit("rag-filter-changed", name);
     }
+    if (updates.topK !== undefined) {
+      this.settingsEmitter.emit("rag-top-k-changed", name);
+    }
   }
 
   // Delete a RAG setting

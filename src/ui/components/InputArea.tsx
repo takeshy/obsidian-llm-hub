@@ -54,6 +54,8 @@ interface InputAreaProps {
   ragEnabled: boolean;
   ragSettings: string[];
   selectedRagSetting: string | null;
+  ragTopK: number;
+  onRagTopKChange: (topK: number) => void;
   onSearchSelectionChange: (selection: SearchSelection) => void;
   vaultToolMode: VaultToolMode;
   onVaultToolModeChange: (mode: VaultToolMode) => void;
@@ -127,6 +129,8 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   ragEnabled,
   ragSettings,
   selectedRagSetting,
+  ragTopK,
+  onRagTopKChange,
   onSearchSelectionChange,
   vaultToolMode,
   onVaultToolModeChange,
@@ -780,6 +784,19 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
             }}
             onChange={onSearchSelectionChange}
           />
+          {ragEnabled && selectedRagSetting && !isImageGenerationModel(model) && (
+            <label className="llm-hub-chat-rag-top-k" title={t("input.ragTopKDesc")}>
+              {t("input.ragTopK")}
+              <input
+                type="number"
+                min={1}
+                max={999}
+                value={ragTopK}
+                disabled={isLoading}
+                onChange={event => onRagTopKChange(Math.max(1, Math.min(999, parseInt(event.target.value) || 1)))}
+              />
+            </label>
+          )}
         </ModelRow>
       )}
       {!isCollapsed && !isContextHidden && availableSkills.length > 0 && (

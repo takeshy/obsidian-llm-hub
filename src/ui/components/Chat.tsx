@@ -28,6 +28,7 @@ import Lock from "lucide-react/dist/esm/icons/lock";
 import type { LlmHubPlugin } from "src/plugin";
 import {
 	DEFAULT_CLI_CONFIG,
+	DEFAULT_RAG_SETTING,
 	CLI_MODEL,
 	CLAUDE_CLI_MODEL,
 	CODEX_CLI_MODEL,
@@ -75,7 +76,7 @@ import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsWebSearch } from "src/core/webSearch";
 import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments, buildRagPdfTextContext } from "src/core/localRagStore";
 import { resolveApiProviderPdfInputMode, resolveLocalLlmPdfInputMode } from "src/core/pdfInputMode";
-import { createRagSearchRunner, RAG_SEARCH_SYSTEM_PROMPT, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
+import { createRagSearchRunner, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
 import { buildNoDiscoverySystemPrompt } from "./chat/noDiscoveryPrompt";
 import { createToolExecutor } from "src/vault/toolExecutor";
 import { extractPdfText } from "obsidian-llm-hub-common/vault";
@@ -252,6 +253,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		plugin.workspaceState.selectedRagSetting
 	);
 	const [webSearchEnabled, setWebSearchEnabled] = useState(plugin.workspaceState.webSearchEnabled === true);
+	const [, refreshRagConfig] = useState(0);
+	const ragTopK = (selectedRagSetting ? plugin.getRagSetting(selectedRagSetting)?.topK : undefined) ?? DEFAULT_RAG_SETTING.topK;
 
 	// Vault tool mode includes readOnly for search/read without mutations.
 	// Gemma 4 + RAG: must disable function calling tools (mutually exclusive)
@@ -919,11 +922,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			setWebSearchEnabled(selection.webSearch);
 		};
 
+		const handleRagTopKChanged = () => refreshRagConfig(revision => revision + 1);
+		plugin.settingsEmitter.on("rag-top-k-changed", handleRagTopKChanged);
 		plugin.settingsEmitter.on("workspace-state-loaded", handleWorkspaceStateLoaded);
 		plugin.settingsEmitter.on("rag-setting-changed", handleRagSettingChanged);
 		plugin.settingsEmitter.on("search-selection-changed", handleSearchSelectionChanged);
 
 		return () => {
+			plugin.settingsEmitter.off("rag-top-k-changed", handleRagTopKChanged);
 			plugin.settingsEmitter.off("workspace-state-loaded", handleWorkspaceStateLoaded);
 			plugin.settingsEmitter.off("rag-setting-changed", handleRagSettingChanged);
 			plugin.settingsEmitter.off("search-selection-changed", handleSearchSelectionChanged);
@@ -1459,6 +1465,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 								plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK, plugin.settings,
 							),
 							(filePaths) => { for (const path of filePaths) if (!localRagSources.includes(path)) localRagSources.push(path); },
+							cliRagSetting.topK,
 						);
 					}
 
@@ -1566,7 +1573,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					if (plugin.settings.voiceChat.autoReadAloud) systemPrompt += buildReadAloudSystemPrompt();
 
 					if (ragSearchToolOffered) {
-						systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
+						systemPrompt += ragSearchRunner?.systemPrompt ?? "";
 					}
 
 					let stopped = false;
@@ -1869,6 +1876,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK, plugin.settings,
 						),
 						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+						ragSettingObj.topK,
 					);
 					if (AUTOMATIC_RAG_RETRIEVAL) try {
 						const localRag = await searchLocalRag(
@@ -2080,7 +2088,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					// Kept out of `systemPrompt` itself: a tools rejection falls through to
 					// the marker flow below, which has no tool to offer.
 					if (ragSearchRunner) toolsBundle.push(RAG_SEARCH_TOOL);
-					const toolsSystemPrompt = ragSearchRunner ? systemPrompt + RAG_SEARCH_SYSTEM_PROMPT : systemPrompt;
+					const toolsSystemPrompt = ragSearchRunner ? systemPrompt + ragSearchRunner.systemPrompt : systemPrompt;
 
 					const baseExecuteToolCall = async (name: string, args: Record<string, unknown>) => {
 						if (name === RAG_SEARCH_TOOL_NAME && ragSearchRunner) return await ragSearchRunner.run(args);
@@ -2430,6 +2438,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK, plugin.settings,
 						),
 						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+						ragSettingObj.topK,
 					);
 					if (AUTOMATIC_RAG_RETRIEVAL) try {
 						const localRag = await searchLocalRag(
@@ -2527,7 +2536,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 				// Let the model search the selected index on demand.
 				if (ragSearchRunner) {
 					tools.push(RAG_SEARCH_TOOL);
-					systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
+					systemPrompt += ragSearchRunner?.systemPrompt ?? "";
 				}
 
 				const apiSkillWorkflowMap = collectSkillWorkflows(apiLoadedSkills);
@@ -3032,6 +3041,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 								plugin.settings.proxyUrl, plugin.settings.proxyBypass, topK, plugin.settings,
 							),
 							(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
+							ragSettingObj.topK,
 						);
 						if (AUTOMATIC_RAG_RETRIEVAL) try {
 							const localRag = await searchLocalRag(
@@ -3108,7 +3118,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					// Gemma 4 drops every tool when RAG or web search is on, so only describe
 					// rag_search when it actually survives into the request.
 					if (effectiveTools.some(tool => tool.name === RAG_SEARCH_TOOL_NAME)) {
-						systemPrompt += RAG_SEARCH_SYSTEM_PROMPT;
+						systemPrompt += ragSearchRunner?.systemPrompt ?? "";
 					}
 
 					// Use image generation stream or regular chat stream
@@ -3577,6 +3587,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 								ragEnabled={allowRag}
 								ragSettings={allowRag ? ragSettingNames : []}
 								selectedRagSetting={selectedRagSetting}
+								ragTopK={ragTopK}
+								onRagTopKChange={(topK) => {
+									if (!selectedRagSetting) return;
+									void plugin.updateRagSetting(selectedRagSetting, { topK }).catch((error: unknown) => {
+										new Notice(formatError(error));
+									});
+									refreshRagConfig(revision => revision + 1);
+								}}
 								onSearchSelectionChange={handleSearchSelectionChange}
 								vaultToolMode={vaultToolMode}
 								onVaultToolModeChange={handleVaultToolModeChange}

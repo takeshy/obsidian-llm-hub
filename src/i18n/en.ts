@@ -194,7 +194,10 @@ export const en = {
   "settings.jevUseOpenRouter.desc": "Use the API key already configured for the OpenRouter API provider. The Jev API key may remain empty.",
   "settings.jevUseOpenRouter.requiresKey": "Configure an OpenRouter API key under API providers before using this option.",
   "settings.jev": "Jev",
+  "search.resultCount": "Target result count",
+  "search.helpResultCount": "Target result count — available with Jev enabled. Repeat in Top K batches until this many results remain or eligible candidates run out. Leave blank to check one batch only.",
   "search.jevFilter": "Filter with Jev",
+  "search.topKJevNote": "With Jev enabled, Top K is the number of candidates checked per round. Set a target result count to repeat until that many results remain or no candidates above the score threshold remain. Leave it blank to check Top K candidates once. Repeated checks can increase API usage and search time.",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "Embedding model",
@@ -280,6 +283,8 @@ export const en = {
 
   // InputArea
   "input.ragPdfChunkPages": "PDF chunk pages",
+  "input.ragTopK": "RAG Top K",
+  "input.ragTopKDesc": "Candidate chunks per RAG search, before Jev filtering. Saved to the selected RAG setting and also used by workflows and Discord.",
   "input.thinkingLabel": "Always think",
 
   // MessageBubble
@@ -442,7 +447,7 @@ export const en = {
   "search.discussWithSelected": "Discuss with selected",
   "search.pdfMode": "PDF results",
   "search.helpTitle": "Parameter help",
-  "search.helpTopK": "Top K — maximum number of results to return.",
+  "search.helpTopK": "Top K — number of candidates to retrieve per round, before Jev filtering.",
   "search.helpScoreThreshold": "Min score — Minimum similarity score (0.0–1.0). Results below this threshold are excluded.",
   "search.helpExt": "Ext. — Comma-separated file extensions to filter results (e.g., md, pdf). Empty means all files.",
   "search.helpChunkSize": "Chunk size — number of characters per text chunk when indexing. Larger chunks retain more context but may reduce precision.",

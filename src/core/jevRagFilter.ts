@@ -1,6 +1,7 @@
 import type { ApiProviderConfig, LlmHubSettings } from "../types";
 import type { LocalRagSearchResult } from "./localRagStore";
 import { createNodeFetch, createProxyFetch } from "./proxyFetch";
+import type { RagPdfImage } from "./ragPdfImages";
 
 export const OPENROUTER_DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions";
 export const JEV_MODEL = "~typesafe/jev-latest";
@@ -33,17 +34,42 @@ export async function filterRagResultsWithJev(
   fetchImpl?: JevFetch,
   useOpenRouter = true,
   resolvePdfText?: (result: LocalRagSearchResult) => Promise<string | null>,
+  resolvePdfImages?: (result: LocalRagSearchResult) => Promise<RagPdfImage[] | null>,
 ): Promise<LocalRagSearchResult[]> {
   if (results.length === 0) return [];
   if (!apiKey.trim()) throw new Error(`${useOpenRouter ? "OpenRouter" : "Jev"} API key is required for Jev RAG filtering`);
 
+  const requestFetch = fetchImpl
+    ?? (proxyUrl?.trim() ? createProxyFetch(proxyUrl, proxyBypass) : createNodeFetch());
+  const endpoint = useOpenRouter ? OPENROUTER_DECISIONS_URL : TYPESAFE_DECISIONS_URL;
+  const model = useOpenRouter ? JEV_MODEL : TYPESAFE_JEV_MODEL;
+  async function decide(questions: Record<string, unknown>, assets?: Record<string, RagPdfImage>) {
+    const response = await requestFetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        "Content-Type": "application/json",
+        ...(assets ? { "TypeSafe-Danger-Zone-Images": "true", "TypeSafe-Danger-Zone-Long-Context": "true" } : {}),
+      },
+      body: JSON.stringify({ model, state: `検索クエリ: ${query}`, questions, ...(assets ? { assets } : {}) }),
+    });
+    if (!response.ok) throw new Error(`Jev RAG filtering failed: HTTP ${response.status}`);
+    const payload = await response.json() as { answers?: Record<string, { choice?: string }> };
+    if (!payload.answers) throw new Error("Jev RAG filtering returned an invalid response");
+    for (const key of Object.keys(questions)) {
+      const choice = payload.answers[key]?.choice;
+      if (choice !== "keep" && choice !== "exclude") throw new Error(`Jev RAG filtering omitted ${key}`);
+    }
+    return payload.answers;
+  }
   const questions: Record<string, unknown> = {};
   const retained = new Set<number>();
   for (const [index, result] of results.entries()) {
     let text = result.text;
+    let assets: Record<string, RagPdfImage> | undefined;
     if (result.contentType === "pdf" && /^\[Pdf:/i.test(text.trim())) {
       // Native PDF embeddings store a label, not the document's contents.
-      // A text-only decision cannot reject a PDF whose text is unavailable.
+      // Use page images when the PDF has no extractable text layer.
       let extracted: string | null = null;
       try {
         extracted = await resolvePdfText?.(result) ?? null;
@@ -51,12 +77,28 @@ export async function filterRagResultsWithJev(
         console.warn(`Failed to extract PDF text for Jev filtering: ${result.filePath}`, error);
       }
       if (!extracted?.trim()) {
-        retained.add(index);
-        continue;
+        let images: RagPdfImage[] | null = null;
+        try {
+          images = await resolvePdfImages?.(result) ?? null;
+        } catch (error) {
+          console.warn(`Failed to render PDF for Jev filtering: ${result.filePath}`, error);
+        }
+        if (!images?.length) {
+          retained.add(index);
+          continue;
+        }
+        const imageAssets: Record<string, RagPdfImage> = {};
+        assets = imageAssets;
+        const references = images.map((image) => {
+          const reference = crypto.randomUUID();
+          imageAssets[reference] = image;
+          return reference;
+        });
+        text = `該当ページ (${result.pageLabel ?? "PDF"}) の画像: ${references.join("\n")}`;
       }
-      text = extracted;
+      if (extracted?.trim()) text = extracted;
     }
-    questions[`result_${index}`] = {
+    const question = {
       type: "choice",
       instructions: [
         "検索クエリとRAG検索結果を照合してください。",
@@ -69,36 +111,18 @@ export async function filterRagResultsWithJev(
         exclude: "クエリに一致しない、または回答の根拠として有用でない",
       },
     };
-  }
-  if (Object.keys(questions).length === 0) return results;
-
-  const requestFetch = fetchImpl
-    ?? (proxyUrl?.trim() ? createProxyFetch(proxyUrl, proxyBypass) : createNodeFetch());
-  const endpoint = useOpenRouter ? OPENROUTER_DECISIONS_URL : TYPESAFE_DECISIONS_URL;
-  const model = useOpenRouter ? JEV_MODEL : TYPESAFE_JEV_MODEL;
-  const response = await requestFetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey.trim()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model, state: `検索クエリ: ${query}`, questions }),
-  });
-  if (!response.ok) {
-    throw new Error(`Jev RAG filtering failed: HTTP ${response.status}`);
-  }
-
-  const payload = await response.json() as {
-    answers?: Record<string, { choice?: string }>;
-  };
-  if (!payload.answers) throw new Error("Jev RAG filtering returned an invalid response");
-
-  return results.filter((_, index) => {
-    if (retained.has(index)) return true;
-    const choice = payload.answers?.[`result_${index}`]?.choice;
-    if (choice !== "keep" && choice !== "exclude") {
-      throw new Error(`Jev RAG filtering omitted result_${index}`);
+    const key = `result_${index}`;
+    if (assets) {
+      // Each complete PDF chunk gets its own bounded image request. Do not
+      // repeat its images across unrelated questions or combine many scans.
+      const answers = await decide({ [key]: question }, assets);
+      if (answers[key].choice === "keep") retained.add(index);
+    } else {
+      questions[key] = question;
     }
-    return choice === "keep";
-  });
+  }
+  if (Object.keys(questions).length === 0) return results.filter((_, index) => retained.has(index));
+
+  const answers = await decide(questions);
+  return results.filter((_, index) => retained.has(index) || answers[`result_${index}`]?.choice === "keep");
 }
