@@ -944,9 +944,9 @@ Use a pre-built index instead of syncing from the vault:
 
 Vector search returns semantically similar chunks, so its results can include text that shares related wording without actually matching the question. Configure shared credentials under **Jev** in Settings, then toggle **Keep only matching RAG results** separately for each RAG setting. For example, enable it for notes and disable it for PDFs. Jev filtering also applies when that RAG index is used from Chat, Workflows, or Discord. For a combined index, its own toggle applies to the combined results.
 
-New RAG settings default to ON; existing settings retain the previous global ON/OFF value when upgrading. Filtering is inactive until Jev credentials are configured. In RAG Search, Top K is the number of candidates checked per round. With Jev active, set **Target result count** to repeat in Top K batches until that many results remain or no candidates above the score threshold remain. Leave it blank to check Top K candidates once. Repeated checks can increase API usage and search time.
+New RAG settings default to ON; existing settings retain the previous global ON/OFF value when upgrading. Filtering is inactive until Jev credentials are configured. In RAG Search, Top K is the number of candidates checked per round. With Jev active, enable **Search until an answer is found** to check Top K batches in similarity order until matching results are found or no candidates meet the score threshold. All matches from the first successful batch are returned. Leave it off to check Top K candidates once. Repeated checks can increase API usage and search time.
 
-In Chat, select a RAG index and set **RAG Top K** next to the search selector. Chat uses this many candidate chunks per `rag_search` call, before Jev filtering, with at most three calls per turn. The value is saved to the selected RAG setting and also applies to Workflows and Discord.
+In Chat, select a RAG index and set **RAG Top K** next to the search selector. Chat uses this many candidate chunks per `rag_search` call, before Jev filtering, with at most three calls per turn. With Jev active, **Search until an answer is found** appears beside Top K. Both values are saved per RAG setting, remembered after restarting, and shared with RAG Search, Workflows, and Discord. Workflow command nodes also offer this checkbox when the selected index has Jev active; a node can override the saved preference with `ragSearchUntilFound: true` or `false`. Omit this property to follow the index preference.
 
 You can also toggle **Filter with Jev** in the settings card opened with the settings icon in RAG Search. This saves the selected index's setting and applies from the next search.
 
@@ -954,7 +954,7 @@ For PDFs indexed with Gemini's native embeddings, Jev uses text extracted from t
 
 Jev can be configured in either of these ways:
 
-- Enter a Jev API key obtained from [jevtypesafeai.com](https://jevtypesafeai.com/dashboard)
+- Enter an official TypeSafe API key created in the [TypeSafe console](https://console.typesafe.ai/). Direct requests use `https://api.typesafe.ai/v1/systemone`, as documented in the [official API reference](https://docs.typesafe.ai/api/system-one).
 - If an OpenRouter key is already configured under API providers, enable **Use the OpenRouter key**; no separate Jev API key is required
 
 ![Jev RAG filtering settings](docs/images/jev_setting.png)

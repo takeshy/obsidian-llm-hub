@@ -56,6 +56,9 @@ interface InputAreaProps {
   selectedRagSetting: string | null;
   ragTopK: number;
   onRagTopKChange: (topK: number) => void;
+  ragJevEnabled: boolean;
+  ragSearchUntilFound: boolean;
+  onRagSearchUntilFoundChange: (enabled: boolean) => void;
   onSearchSelectionChange: (selection: SearchSelection) => void;
   vaultToolMode: VaultToolMode;
   onVaultToolModeChange: (mode: VaultToolMode) => void;
@@ -131,6 +134,9 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   selectedRagSetting,
   ragTopK,
   onRagTopKChange,
+  ragJevEnabled,
+  ragSearchUntilFound,
+  onRagSearchUntilFoundChange,
   onSearchSelectionChange,
   vaultToolMode,
   onVaultToolModeChange,
@@ -785,17 +791,30 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
             onChange={onSearchSelectionChange}
           />
           {ragEnabled && selectedRagSetting && !isImageGenerationModel(model) && (
-            <label className="llm-hub-chat-rag-top-k" title={t("input.ragTopKDesc")}>
-              {t("input.ragTopK")}
-              <input
-                type="number"
-                min={1}
-                max={999}
-                value={ragTopK}
-                disabled={isLoading}
-                onChange={event => onRagTopKChange(Math.max(1, Math.min(999, parseInt(event.target.value) || 1)))}
-              />
-            </label>
+            <>
+              <label className="llm-hub-chat-rag-top-k" title={t("input.ragTopKDesc")}>
+                {t("input.ragTopK")}
+                <input
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={ragTopK}
+                  disabled={isLoading}
+                  onChange={event => onRagTopKChange(Math.max(1, Math.min(999, parseInt(event.target.value) || 1)))}
+                />
+              </label>
+              {ragJevEnabled && (
+                <label className="llm-hub-chat-rag-top-k" title={t("search.topKJevNote")}>
+                  <input
+                    type="checkbox"
+                    checked={ragSearchUntilFound}
+                    disabled={isLoading}
+                    onChange={event => onRagSearchUntilFoundChange(event.target.checked)}
+                  />
+                  {t("search.searchUntilFound")}
+                </label>
+              )}
+            </>
           )}
         </ModelRow>
       )}

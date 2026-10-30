@@ -144,6 +144,27 @@ describe("WorkspaceStateManager per-index Jev filtering", () => {
 });
 
 describe("WorkspaceStateManager RAG Top K", () => {
+  it("remembers search-until-found per index after reload and while Jev is off", async () => {
+    const { searchUntilFound: _unused, ...legacy } = DEFAULT_RAG_SETTING;
+    const harness = createManager(JSON.stringify({ ragSettings: { Notes: legacy, PDFs: legacy } }));
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Notes")?.searchUntilFound).toBe(false);
+    const onFilterChanged = vi.fn();
+    const onSettingsChanged = vi.fn();
+    harness.emitter.on("rag-filter-changed", onFilterChanged);
+    harness.emitter.on("settings-updated", onSettingsChanged);
+    await harness.manager.updateRagSetting("Notes", { searchUntilFound: true });
+    expect(onFilterChanged).toHaveBeenCalledExactlyOnceWith("Notes");
+    expect(onSettingsChanged).not.toHaveBeenCalled();
+    await harness.manager.updateRagSetting("Notes", { jevRagFilterEnabled: false });
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Notes")?.searchUntilFound).toBe(true);
+    expect(harness.manager.getRagSetting("PDFs")?.searchUntilFound).toBe(false);
+    await harness.manager.updateRagSetting("Notes", { searchUntilFound: false });
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Notes")?.searchUntilFound).toBe(false);
+  });
+
   it("persists Top K per index and notifies chats without restarting CLI sessions", async () => {
     const harness = createManager(JSON.stringify({ ragSettings: {
       Notes: DEFAULT_RAG_SETTING, PDFs: DEFAULT_RAG_SETTING,

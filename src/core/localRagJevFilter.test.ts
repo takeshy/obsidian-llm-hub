@@ -10,6 +10,7 @@ import {
 } from "./localRagStore";
 import { createNodeFetch } from "./proxyFetch";
 import { renderRagPdfImages } from "./ragPdfImages";
+import { workflowRagSearchSetting } from "../workflow/ragSearchOptions";
 
 vi.mock("./ragPdfImages", () => ({ renderRagPdfImages: vi.fn() }));
 
@@ -117,7 +118,9 @@ describe("Jev filtering of PDF search results", () => {
       { ...settings, jevUseOpenRouter: useOpenRouter, jevApiKey: "direct-key" })).resolves.toEqual([pdf]);
     expect(renderRagPdfImages).toHaveBeenCalledExactlyOnceWith(app, pdf.filePath, 3, 4);
     const [url, init] = request.mock.calls[0];
-    expect(url).toContain(useOpenRouter ? "openrouter.ai" : "jevtypesafeai.com");
+    expect(url).toBe(useOpenRouter
+      ? "https://openrouter.ai/api/alpha/decisions"
+      : "https://api.typesafe.ai/v1/systemone");
     expect(init?.headers).toMatchObject({ "TypeSafe-Danger-Zone-Images": "true", "TypeSafe-Danger-Zone-Long-Context": "true" });
     const body = JSON.parse(String(init?.body));
     expect(Object.values(body.assets).map((image: { data_base64: string }) => image.data_base64)).toEqual(["page3", "page4"]);
@@ -189,7 +192,7 @@ describe("Jev filtering of PDF search results", () => {
     expect(extractPdfText).toHaveBeenCalledOnce();
   });
 
-  it("fills the target result count in Top K batches without repeating vector search or decisions", async () => {
+  it("checks Top K batches until matches are found without repeating vector search or decisions", async () => {
     const candidates = Array.from({ length: 8 }, (_, index) => ({
       filePath: `note-${index}.md`, text: `Candidate ${index}`, chunkIndex: 0, score: 1 - index / 10,
     }));
@@ -202,13 +205,13 @@ describe("Jev filtering of PDF search results", () => {
         const instructions = (question as { instructions: string }).instructions;
         const name = /note-\d+\.md/.exec(instructions)![0];
         judged.push(name);
-        answers[key] = { choice: ["note-1.md", "note-4.md"].includes(name) ? "keep" : "exclude" };
+        answers[key] = { choice: ["note-4.md", "note-5.md", "note-6.md"].includes(name) ? "keep" : "exclude" };
       }
       return new Response(JSON.stringify({ answers }));
     });
     await expect(searchLocalRagResults("test", "query", { ...DEFAULT_RAG_SETTING, scoreThreshold: 0.3,
-      searchFileExtensions: ["md"] }, "embedding-key", undefined, undefined, 2, settings, 2))
-      .resolves.toEqual([candidates[1], candidates[4]]);
+      searchFileExtensions: ["md"] }, "embedding-key", undefined, undefined, 2, settings, true))
+      .resolves.toEqual([candidates[4], candidates[5]]);
     expect(vectorSearch).toHaveBeenCalledOnce();
     expect(vectorSearch.mock.calls[0][4]).toBe(Infinity);
     expect(vectorSearch.mock.calls[0][6]).toBe(0.3);
@@ -216,7 +219,7 @@ describe("Jev filtering of PDF search results", () => {
     expect(judged).toEqual(candidates.slice(0, 6).map(candidate => candidate.filePath));
   });
 
-  it("returns fewer than the target result count when eligible candidates run out", async () => {
+  it("finds a match in the final partial batch", async () => {
     const candidates = Array.from({ length: 5 }, (_, index) => ({
       filePath: `note-${index}.md`, text: `Candidate ${index}`, chunkIndex: 0, score: 0.9,
     }));
@@ -224,18 +227,20 @@ describe("Jev filtering of PDF search results", () => {
     request.mockImplementation(async (_url, init) => {
       const body = JSON.parse(String(init?.body));
       return new Response(JSON.stringify({ answers: Object.fromEntries(Object.keys(body.questions)
-        .map(key => [key, { choice: request.mock.calls.length === 1 && key === "result_0" ? "keep" : "exclude" }])) }));
+        .map(key => [key, { choice: request.mock.calls.length === 3 && key === "result_0" ? "keep" : "exclude" }])) }));
     });
     await expect(searchLocalRagResults("test", "query", DEFAULT_RAG_SETTING,
-      "embedding-key", undefined, undefined, 2, settings, 4)).resolves.toEqual([candidates[0]]);
+      "embedding-key", undefined, undefined, 2, settings, true)).resolves.toEqual([candidates[4]]);
     expect(request).toHaveBeenCalledTimes(3);
   });
 
-  it("stops after the first batch when it already fills Top K", async () => {
-    vi.mocked(initLocalRagStore().search).mockResolvedValue([unrelated, { ...unrelated, filePath: "later.md" }]);
-    respond({ result_0: { choice: "keep" } });
+  it("stops after the first batch with a match even if fewer than Top K match", async () => {
+    vi.mocked(initLocalRagStore().search).mockResolvedValue([
+      unrelated, { ...unrelated, filePath: "excluded.md" }, { ...unrelated, filePath: "later.md" },
+    ]);
+    respond({ result_0: { choice: "keep" }, result_1: { choice: "exclude" } });
     await expect(searchLocalRagResults("test", "query", DEFAULT_RAG_SETTING,
-      "embedding-key", undefined, undefined, 1, settings)).resolves.toEqual([unrelated]);
+      "embedding-key", undefined, undefined, 2, settings, true)).resolves.toEqual([unrelated]);
     expect(request).toHaveBeenCalledOnce();
   });
 
@@ -243,11 +248,11 @@ describe("Jev filtering of PDF search results", () => {
     vi.mocked(initLocalRagStore().search).mockResolvedValue([unrelated, { ...unrelated, filePath: "later.md" }]);
     respond({ result_0: { choice: "exclude" } });
     await expect(searchLocalRagResults("test", "query", DEFAULT_RAG_SETTING,
-      "embedding-key", undefined, undefined, 1, settings, 2)).resolves.toEqual([]);
+      "embedding-key", undefined, undefined, 1, settings, true)).resolves.toEqual([]);
     expect(request).toHaveBeenCalledTimes(2);
   });
 
-  it("checks only Top K candidates when the target result count is blank", async () => {
+  it("checks only Top K candidates when search until found is off", async () => {
     const vectorSearch = vi.mocked(initLocalRagStore().search).mockResolvedValue([
       unrelated, { ...unrelated, filePath: "later.md" },
     ]);
@@ -258,33 +263,38 @@ describe("Jev filtering of PDF search results", () => {
     expect(request).toHaveBeenCalledOnce();
   });
 
-  it("can collect more results than Top K and trims the last batch to the target", async () => {
-    const candidates = Array.from({ length: 6 }, (_, index) => ({
-      ...unrelated, filePath: `note-${index}.md`,
-    }));
-    vi.mocked(initLocalRagStore().search).mockResolvedValue(candidates);
-    respond({ result_0: { choice: "keep" }, result_1: { choice: "keep" } });
+  it("returns no results without calling Jev when no candidates meet the threshold", async () => {
+    vi.mocked(initLocalRagStore().search).mockResolvedValue([]);
     await expect(searchLocalRagResults("test", "query", DEFAULT_RAG_SETTING,
-      "embedding-key", undefined, undefined, 2, settings, 3)).resolves.toEqual(candidates.slice(0, 3));
-    expect(request).toHaveBeenCalledTimes(2);
+      "embedding-key", undefined, undefined, 2, settings, true)).resolves.toEqual([]);
+    expect(request).not.toHaveBeenCalled();
   });
 
-  it("limits results to the target even when it is smaller than Top K", async () => {
-    vi.mocked(initLocalRagStore().search).mockResolvedValue([
-      unrelated, { ...unrelated, filePath: "later.md" },
-    ]);
-    respond({ result_0: { choice: "keep" }, result_1: { choice: "keep" } });
-    await expect(searchLocalRagResults("test", "query", DEFAULT_RAG_SETTING,
-      "embedding-key", undefined, undefined, 2, settings, 1)).resolves.toEqual([unrelated]);
-    expect(request).toHaveBeenCalledOnce();
+  it.each([
+    [false, undefined, 1], [true, undefined, 2], [false, "true", 2], [true, "false", 1],
+  ] as const)("uses the saved preference %s with workflow override %s", async (saved, override, calls) => {
+    const candidates = [unrelated, { ...unrelated, filePath: "answer.md" }];
+    const vectorSearch = vi.mocked(initLocalRagStore().search).mockResolvedValue(candidates);
+    request.mockImplementation(async () => new Response(JSON.stringify({ answers: {
+      result_0: { choice: request.mock.calls.length === 2 ? "keep" : "exclude" },
+    } })));
+    const setting = { ...DEFAULT_RAG_SETTING, topK: 1, searchUntilFound: saved };
+    const resolved = workflowRagSearchSetting(setting, override === undefined ? {} : { ragSearchUntilFound: override });
+    await expect(searchLocalRagResults("test", "query", resolved,
+      "embedding-key", undefined, undefined, undefined, settings))
+      .resolves.toEqual(calls === 2 ? [candidates[1]] : []);
+    expect(request).toHaveBeenCalledTimes(calls);
+    expect(vectorSearch.mock.calls[0][4]).toBe(calls === 2 ? Infinity : 1);
+    expect(setting.searchUntilFound).toBe(saved);
   });
 
   it("keeps the original retrieval limit when filtering is disabled or unconfigured", async () => {
     const vectorSearch = vi.mocked(initLocalRagStore().search);
-    await search(false);
+    await searchLocalRagResults("test", "query", { ...DEFAULT_RAG_SETTING, jevRagFilterEnabled: false },
+      "embedding-key", undefined, undefined, undefined, settings, true);
     expect(vectorSearch.mock.calls[0][4]).toBe(DEFAULT_RAG_SETTING.topK);
     await searchLocalRagResults("test", "query", DEFAULT_RAG_SETTING,
-      "embedding-key", undefined, undefined, 3, { ...settings, apiProviders: [], jevApiKey: "" }, 10);
+      "embedding-key", undefined, undefined, 3, { ...settings, apiProviders: [], jevApiKey: "" }, true);
     expect(vectorSearch.mock.calls[1][4]).toBe(3);
     expect(request).not.toHaveBeenCalled();
   });

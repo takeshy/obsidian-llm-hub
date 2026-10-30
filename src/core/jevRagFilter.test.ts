@@ -68,7 +68,7 @@ describe("filterRagResultsWithJev", () => {
       .rejects.toThrow("OpenRouter API key is required");
   });
 
-  it("supports a direct Jev API key", async () => {
+  it("sends direct Jev requests only to the official TypeSafe API", async () => {
     const request = vi.fn(async () => new Response(JSON.stringify({
       answers: {
         result_0: { choice: "keep" },
@@ -76,9 +76,11 @@ describe("filterRagResultsWithJev", () => {
       },
     }), { status: 200 }));
 
-    await filterRagResultsWithJev("query", results, "jv_live_key", undefined, undefined, request, false);
+    await filterRagResultsWithJev("query", results, "official-key", undefined, undefined, request, false);
     const [url, init] = request.mock.calls[0];
     expect(url).toBe(TYPESAFE_DECISIONS_URL);
+    expect(url).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(init?.headers).toMatchObject({ Authorization: "Bearer official-key" });
     expect(JSON.parse(String(init?.body)).model).toBe(TYPESAFE_JEV_MODEL);
   });
 

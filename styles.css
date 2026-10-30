@@ -2880,7 +2880,7 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   white-space: nowrap;
 }
 
-.llm-hub-chat-rag-top-k input {
+.llm-hub-chat-rag-top-k input[type="number"] {
   width: 55px;
 }
 

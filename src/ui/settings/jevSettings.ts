@@ -32,7 +32,7 @@ export function displayJevSettings(containerEl: HTMLElement, ctx: SettingsContex
       .setDesc(t("settings.jevApiKey.desc"))
       .addText(text => {
         text
-          .setPlaceholder("jv_live_…")
+          .setPlaceholder(t("settings.jevApiKey"))
           .setValue(plugin.settings.jevApiKey)
           .onChange(async value => {
             plugin.settings.jevApiKey = value.trim();

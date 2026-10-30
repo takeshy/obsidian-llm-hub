@@ -5,7 +5,7 @@ import type { RagPdfImage } from "./ragPdfImages";
 
 export const OPENROUTER_DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions";
 export const JEV_MODEL = "~typesafe/jev-latest";
-export const TYPESAFE_DECISIONS_URL = "https://jevtypesafeai.com/api/v1/decide";
+export const TYPESAFE_DECISIONS_URL = "https://api.typesafe.ai/v1/systemone";
 export const TYPESAFE_JEV_MODEL = "jev-latest";
 
 type JevFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;

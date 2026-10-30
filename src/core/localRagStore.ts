@@ -944,7 +944,7 @@ export async function searchLocalRagResults(
   proxyBypass?: string,
   topK?: number,
   settings?: Pick<LlmHubSettings, "apiProviders" | "proxyUrl" | "proxyBypass" | "jevApiKey" | "jevUseOpenRouter">,
-  resultCount?: number,
+  searchUntilFound = ragSetting.searchUntilFound ?? false,
 ): Promise<LocalRagSearchResult[]> {
   const store = getLocalRagStore();
   const apiKey = ragSetting.embeddingApiKey || fallbackApiKey;
@@ -953,8 +953,7 @@ export async function searchLocalRagResults(
   if (!Number.isFinite(resultLimit) || resultLimit < 1) return [];
   const limit = Math.floor(resultLimit);
   const filterConfig = settings && ragSetting.jevRagFilterEnabled ? getJevRagFilterConfig(settings) : null;
-  const repeat = Boolean(filterConfig && resultCount !== undefined && Number.isFinite(resultCount) && resultCount >= 1);
-  const target = repeat && resultCount !== undefined ? Math.floor(resultCount) : limit;
+  const repeat = Boolean(filterConfig && searchUntilFound);
   // search already scores and sorts the entire index. Retrieve the eligible
   // candidates once so refilling does not embed the same query again.
   const candidates = await store.search(
@@ -968,20 +967,19 @@ export async function searchLocalRagResults(
   );
   if (!filterConfig || !settings) return candidates;
 
-  const kept: LocalRagSearchResult[] = [];
-  // Top K is the candidate batch size. Only an explicit result count enables
-  // refilling; otherwise judge the first batch once, even if it has no matches.
+  // Top K is the candidate batch size. Repeat only when explicitly enabled,
+  // stopping at the first batch with matches or when eligible candidates run out.
   const eligible = repeat ? candidates : candidates.slice(0, limit);
-  for (let offset = 0; offset < eligible.length && kept.length < target; offset += limit) {
+  for (let offset = 0; offset < eligible.length; offset += limit) {
     const batch = eligible.slice(offset, offset + limit);
     const matches = await filterRagResultsWithJev(
       query, batch, filterConfig.apiKey, settings.proxyUrl, settings.proxyBypass, undefined, filterConfig.useOpenRouter,
       result => store.extractSearchResultPdfText(result),
       result => store.renderSearchResultPdfImages(result),
     );
-    kept.push(...matches);
+    if (matches.length > 0) return matches;
   }
-  return kept.slice(0, target);
+  return [];
 }
 
 export async function searchLocalRag(

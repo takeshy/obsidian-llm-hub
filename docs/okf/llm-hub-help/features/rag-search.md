@@ -12,7 +12,7 @@ The RAG Search tab is the manual counterpart to Chat's search menu. It lets user
 
 # Search and Filtering
 
-Results are ranked by cosine similarity between the query embedding and indexed chunks. After retrieval, users can filter the result list with one or more keyword fields:
+Results are ranked by cosine similarity between the query embedding and indexed chunks. With Jev active, **Search until an answer is found** checks Top K candidates per batch until a batch contains matches or eligible candidates run out, then returns all matches from that batch. The checkbox is saved per RAG setting and shared with Chat, Workflows, and Discord. Chat exposes it beside RAG Top K. A Workflow command node can override the saved value with `ragSearchUntilFound: true` or `false`; omitted values follow the index preference. After retrieval, users can filter the result list with one or more keyword fields:
 
 - Terms inside one field use OR logic.
 - Quoted phrases (e.g. `"release notes"`) are matched as a single term.

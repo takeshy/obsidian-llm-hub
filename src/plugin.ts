@@ -18,6 +18,7 @@ import { ChatView, VIEW_TYPE_GEMINI_CHAT } from "src/ui/ChatView";
 import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
 import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
 import { SettingsTab } from "src/ui/SettingsTab";
+import { getJevRagFilterConfig } from "./core/jevRagFilter";
 import { configureWorkflowHost } from "obsidian-llm-hub-common/workflow";
 import { getWorkflowModelOptions } from "src/core/workflowModels";
 import { configureMcpAppViewer, configureStoragePrefix } from "obsidian-llm-hub-common/modals";
@@ -318,6 +319,14 @@ export class LlmHubPlugin extends Plugin {
         void this.saveSettings();
       },
       getRagSettingNames: () => Object.keys(this.workspaceState.ragSettings || {}),
+      getRagSearchOptions: (name) => {
+        const settingName = name === undefined ? this.workspaceState.selectedRagSetting : name;
+        const setting = settingName ? this.getRagSetting(settingName) : null;
+        return {
+          jevEnabled: Boolean(setting?.jevRagFilterEnabled && getJevRagFilterConfig(this.settings)),
+          searchUntilFound: setting?.searchUntilFound ?? false,
+        };
+      },
       getMcpServerNames: () => (this.settings.mcpServers || []).map(server => server.name),
       getWorkflowSpecification: () => getWorkflowSpecification(buildWorkflowSpecContext(this)),
       getWorkspaceFolder: () => this.settings.workspaceFolder,

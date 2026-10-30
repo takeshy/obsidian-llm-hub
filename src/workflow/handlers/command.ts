@@ -15,6 +15,7 @@ import { tracing } from "../../core/tracingHooks";
 import { formatError } from "obsidian-llm-hub-common/core";
 import { handleExecuteJavascriptTool, EXECUTE_JAVASCRIPT_TOOL } from "../../core/sandboxExecutor";
 import { searchLocalRag, loadRagMediaAttachments } from "../../core/localRagStore";
+import { workflowRagSearchSetting } from "../ragSearchOptions";
 import { openaiChatWithToolsStream } from "../../core/openaiProvider";
 import { anthropicChatWithToolsStream } from "../../core/anthropicProvider";
 import { localLlmChatStream } from "../../core/localLlmProvider";
@@ -373,7 +374,7 @@ export async function handleCommandNode(
           try {
             const localRag = await searchLocalRag(
               effectiveApiRagName, prompt,
-              resolvedRagSetting, getGeminiApiKey(plugin.settings),
+              workflowRagSearchSetting(resolvedRagSetting, node.properties), getGeminiApiKey(plugin.settings),
               plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings
             );
             if (localRag.sources.length > 0) {
@@ -538,7 +539,7 @@ export async function handleCommandNode(
         try {
           const localRag = await searchLocalRag(
             effectiveRagSettingName, prompt,
-            resolvedRagSetting, getGeminiApiKey(plugin.settings),
+            workflowRagSearchSetting(resolvedRagSetting, node.properties), getGeminiApiKey(plugin.settings),
             plugin.settings.proxyUrl, plugin.settings.proxyBypass, plugin.settings
           );
           if (localRag.sources.length > 0) {

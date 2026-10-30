@@ -76,6 +76,7 @@ import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsWebSearch } from "src/core/webSearch";
 import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments, buildRagPdfTextContext } from "src/core/localRagStore";
 import { resolveApiProviderPdfInputMode, resolveLocalLlmPdfInputMode } from "src/core/pdfInputMode";
+import { getJevRagFilterConfig } from "src/core/jevRagFilter";
 import { createRagSearchRunner, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
 import { buildNoDiscoverySystemPrompt } from "./chat/noDiscoveryPrompt";
 import { createToolExecutor } from "src/vault/toolExecutor";
@@ -254,7 +255,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	);
 	const [webSearchEnabled, setWebSearchEnabled] = useState(plugin.workspaceState.webSearchEnabled === true);
 	const [, refreshRagConfig] = useState(0);
-	const ragTopK = (selectedRagSetting ? plugin.getRagSetting(selectedRagSetting)?.topK : undefined) ?? DEFAULT_RAG_SETTING.topK;
+	const selectedRagConfig = selectedRagSetting ? plugin.getRagSetting(selectedRagSetting) : null;
+	const ragTopK = selectedRagConfig?.topK ?? DEFAULT_RAG_SETTING.topK;
+	const ragJevEnabled = Boolean(selectedRagConfig?.jevRagFilterEnabled && getJevRagFilterConfig(plugin.settings));
 
 	// Vault tool mode includes readOnly for search/read without mutations.
 	// Gemma 4 + RAG: must disable function calling tools (mutually exclusive)
@@ -924,12 +927,14 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 		const handleRagTopKChanged = () => refreshRagConfig(revision => revision + 1);
 		plugin.settingsEmitter.on("rag-top-k-changed", handleRagTopKChanged);
+		plugin.settingsEmitter.on("rag-filter-changed", handleRagTopKChanged);
 		plugin.settingsEmitter.on("workspace-state-loaded", handleWorkspaceStateLoaded);
 		plugin.settingsEmitter.on("rag-setting-changed", handleRagSettingChanged);
 		plugin.settingsEmitter.on("search-selection-changed", handleSearchSelectionChanged);
 
 		return () => {
 			plugin.settingsEmitter.off("rag-top-k-changed", handleRagTopKChanged);
+			plugin.settingsEmitter.off("rag-filter-changed", handleRagTopKChanged);
 			plugin.settingsEmitter.off("workspace-state-loaded", handleWorkspaceStateLoaded);
 			plugin.settingsEmitter.off("rag-setting-changed", handleRagSettingChanged);
 			plugin.settingsEmitter.off("search-selection-changed", handleSearchSelectionChanged);
@@ -3588,6 +3593,15 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 								ragSettings={allowRag ? ragSettingNames : []}
 								selectedRagSetting={selectedRagSetting}
 								ragTopK={ragTopK}
+								ragJevEnabled={ragJevEnabled}
+								ragSearchUntilFound={selectedRagConfig?.searchUntilFound ?? false}
+								onRagSearchUntilFoundChange={(searchUntilFound) => {
+									if (!selectedRagSetting) return;
+									void plugin.updateRagSetting(selectedRagSetting, { searchUntilFound }).catch((error: unknown) => {
+										new Notice(formatError(error));
+									});
+									refreshRagConfig(revision => revision + 1);
+								}}
 								onRagTopKChange={(topK) => {
 									if (!selectedRagSetting) return;
 									void plugin.updateRagSetting(selectedRagSetting, { topK }).catch((error: unknown) => {

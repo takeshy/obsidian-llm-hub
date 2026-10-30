@@ -36,7 +36,7 @@ class SearchHelpModal extends Modal {
     contentEl.createEl("h3", { text: t("search.helpTitle") });
     const helpKeys = [
       "search.helpTopK",
-      "search.helpResultCount",
+      "search.helpSearchUntilFound",
       "search.helpScoreThreshold",
       "search.helpExt",
       "search.helpChunkSize",
@@ -136,7 +136,6 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   const [isSavingJev, setIsSavingJev] = useState(false);
   const [, refreshSettings] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
-  const [resultCount, setResultCount] = useState<number | "">("");
   const [topK, setTopK] = useState(() => {
     const setting = plugin.getRagSetting(
       plugin.workspaceState.selectedRagSetting ?? ragSettingNames[0] ?? ""
@@ -196,6 +195,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
 
   // Check if current setting is internal (not external index)
   const currentRagSetting = plugin.getRagSetting(selectedRagSetting);
+  const searchUntilFound = currentRagSetting?.searchUntilFound ?? false;
   const jevFilterActive = Boolean(currentRagSetting?.jevRagFilterEnabled && getJevRagFilterConfig(plugin.settings));
   const topKJevNoteId = useId();
   const isInternalRag = currentRagSetting
@@ -259,7 +259,6 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   useEffect(() => {
     const setting = plugin.getRagSetting(selectedRagSetting);
     setTopK(setting?.topK ?? DEFAULT_RAG_SETTING.topK);
-    setResultCount("");
     setScoreThreshold(setting?.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold);
     setChunkSize(setting?.chunkSize ?? DEFAULT_RAG_SETTING.chunkSize);
     setChunkOverlap(setting?.chunkOverlap ?? DEFAULT_RAG_SETTING.chunkOverlap);
@@ -454,7 +453,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
         plugin.settings.proxyBypass,
         topK,
         plugin.settings,
-        jevFilterActive && resultCount !== "" ? resultCount : undefined,
+        jevFilterActive && searchUntilFound,
       );
       setResults(searchResults);
     } catch (err) {
@@ -996,18 +995,17 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
           </label>
           {jevFilterActive && (
             <label className="llm-hub-search-param-label">
-              {t("search.resultCount")}:
               <input
-                type="number"
-                min={1}
-                max={999}
-                value={resultCount}
-                placeholder="—"
+                type="checkbox"
+                checked={searchUntilFound}
                 aria-describedby={topKJevNoteId}
                 disabled={isSearching}
-                onChange={e => setResultCount(e.target.value === "" ? "" : Math.max(1, Math.min(999, parseInt(e.target.value) || 1)))}
-                className="llm-hub-search-param-input"
+                onChange={e => {
+                  void plugin.updateRagSetting(selectedRagSetting, { searchUntilFound: e.target.checked })
+                    .catch((error: unknown) => new Notice(t("common.error") + String(error)));
+                }}
               />
+              {t("search.searchUntilFound")}
             </label>
           )}
           <label className="llm-hub-search-param-label">

@@ -313,7 +313,7 @@ export class WorkspaceStateManager {
     );
 
     await this.saveWorkspaceState();
-    if (updates.jevRagFilterEnabled !== undefined) {
+    if (updates.jevRagFilterEnabled !== undefined || updates.searchUntilFound !== undefined) {
       this.settingsEmitter.emit("rag-filter-changed", name);
     }
     if (updates.topK !== undefined) {

@@ -26,7 +26,7 @@ export const RAG_SEARCH_TOOL: ToolDefinition = {
  * follow-ups; saying so is what makes a model reach for the tool at all.
  */
 function buildRagSearchSystemPrompt(topK: number): string {
-  return `\n\nThe selected RAG index is available through the ${RAG_SEARCH_TOOL_NAME} tool. Use it with a self-contained, focused semantic query when the user's request may depend on indexed vault knowledge. Do not claim that the index lacks relevant information before searching it. At most ${MAX_RAG_SEARCHES_PER_TURN} RAG searches are allowed per turn; each search retrieves up to ${topK} candidate chunks before optional Jev filtering, which may return fewer results.`;
+  return `\n\nThe selected RAG index is available through the ${RAG_SEARCH_TOOL_NAME} tool. Use it with a self-contained, focused semantic query when the user's request may depend on indexed vault knowledge. Do not claim that the index lacks relevant information before searching it. At most ${MAX_RAG_SEARCHES_PER_TURN} RAG searches are allowed per turn; each search retrieves up to ${topK} candidate chunks per round before optional Jev filtering, which may return fewer results. If the user enabled searching until an answer is found, a search checks further batches until matching results are found or eligible candidates run out.`;
 }
 
 export interface RagSearchRunner {
