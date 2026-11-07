@@ -1,5 +1,5 @@
 import { resolveChatFileMentions, messagesForModel, FILE_MENTION_TOOL_PROMPT } from "obsidian-llm-hub-common/chat";
-import { Trash2 } from "lucide-react";
+import { Mic, Trash2 } from "lucide-react";
 import type { MouseEvent } from "react";
 import {
 	useChatHistories,
@@ -106,6 +106,7 @@ import {
 	clampReadAloudRate,
 	useVoiceConversation,
 	buildReadAloudSystemPrompt,
+	stopReadingAloud,
 	type ChatTurnOutcome,
 	type ChatTurnUi,
 } from "obsidian-llm-hub-common/chat";
@@ -117,6 +118,8 @@ import { buildBuiltinOkfSystemPrompt, buildOkfSystemPrompt, discoverOkfBundles, 
 import { executeReadOkfDocumentTool, READ_OKF_DOCUMENT_TOOL, READ_OKF_DOCUMENT_TOOL_NAME } from "src/core/okfDocumentTool";
 import { promptForValue } from "./workflow/ValuePromptModal";
 import { t } from "src/i18n";
+import { getLiveProviders } from "src/core/live/live-session";
+import LiveConversation from "./LiveConversation";
 import {
 	shouldUseImageModel,
 	PAID_RATE_LIMIT_RETRY_DELAYS_MS,
@@ -247,6 +250,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	const [isSidebarWide, setIsSidebarWide] = useState(false);
 	const [isCompacting, setIsCompacting] = useState(false);
 	const [currentModel, setCurrentModel] = useState<ModelType>(plugin.getSelectedModel());
+	const [liveCall, setLiveCall] = useState<{
+		providers: ApiProviderConfig[]; messages: Message[]; chatId: string; ragSetting: string | null;
+	} | null>(null);
 	const [codexModels, setCodexModels] = useState<CodexModelOption[]>([]);
 	const ragEnabledState = true;  // RAG is always available; individual stores managed in settings
 	const [ragSettingNames, setRagSettingNames] = useState<string[]>(plugin.getRagSettingNames());
@@ -314,7 +320,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	});
 	const inputAreaRef = useRef<InputAreaHandle>(null);
 	const [voiceChatSettings, setVoiceChatSettings] = useState(() => ({ ...plugin.settings.voiceChat }));
-	useAutoReadAloud(messages, isLoading, voiceChatSettings.autoReadAloud);
+	useAutoReadAloud(messages, isLoading, voiceChatSettings.autoReadAloud && !liveCall);
 	useReadAloudRate(voiceChatSettings.readAloudRate);
 	const handleAutoReadAloudChange = useCallback((enabled: boolean) => {
 		setVoiceChatSettings((previous) => {
@@ -3462,6 +3468,27 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		inputAreaRef.current?.focus();
 	}, []);
 
+	const openLive = () => {
+		const providers = getLiveProviders(plugin.settings.apiProviders);
+		if (!providers.length || isLoading || isCompacting) return;
+		voiceConversation.end();
+		stopReadingAloud();
+		const chatId = currentChatId ?? generateChatId();
+		setCurrentChatId(chatId);
+		setLiveCall({ providers: providers.map(provider => ({ ...provider })), messages: [...messages], chatId, ragSetting: selectedRagSetting });
+	};
+	const closeLive = (transcript: Message[]) => {
+		if (!liveCall) return;
+		setLiveCall(null);
+		if (transcript.length === 0) return;
+		const nextMessages = [...liveCall.messages, ...transcript];
+		const foreground = currentChatId === liveCall.chatId;
+		if (foreground) { setMessages(nextMessages); setCliSession(null); }
+		void saveChatToDisk(nextMessages, liveCall.chatId, { foreground, session: null }).catch((error: unknown) => {
+			new Notice(formatError(error));
+		});
+	};
+
 	return (
 		<ChatLayout classPrefix="llm-hub" modifiers={[isKeyboardVisible && "keyboard-visible", isDecryptInputFocused && "decrypt-input-focused"]}>
 			<ChatHeader classPrefix="llm-hub">
@@ -3484,7 +3511,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					<HeaderButton classPrefix="llm-hub" title={t("chat.chatHistory")} onClick={() => setShowHistory(!showHistory)}>
 						<History size={16} />
 					</HeaderButton>
+					{getLiveProviders(plugin.settings.apiProviders).length > 0 && <HeaderButton classPrefix="llm-hub" title={t("live.title")} disabled={isLoading || isCompacting} onClick={openLive}>
+						<Mic size={16} />
+					</HeaderButton>}
 				</ChatHeader>
+
+			{liveCall && <LiveConversation plugin={plugin} providers={liveCall.providers} messages={liveCall.messages}
+				selectedRagSetting={liveCall.ragSetting} initialFileAccess={vaultToolMode === "all" || vaultToolMode === "readOnly"} onClose={closeLive} />}
 
 			{showHistory && <HistoryList classPrefix="llm-hub"
         entries={chatHistories.map(history => ({ ...history, dateLabel: formatHistoryDate(history.updatedAt), encrypted: history.isEncrypted }))}
@@ -3657,6 +3690,13 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							/>
 						</>
 					)}
+				</>
+			) : getLiveProviders(plugin.settings.apiProviders).length > 0 ? (
+				<>
+					{messages.length > 0 && <MessageList ref={messagesContainerRef} messages={messages}
+						streamingContent="" streamingThinking="" isLoading={false} app={plugin.app}
+						localLlmConfigs={plugin.settings.localLlmConfigs} skillsFolder={plugin.settings.skillsFolder} />}
+					<p className="llm-hub-live-key-only">{t("live.keyOnlyReady")}</p>
 				</>
 			) : (
 				<div className="llm-hub-config-required">

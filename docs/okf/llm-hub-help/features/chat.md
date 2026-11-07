@@ -29,6 +29,14 @@ Vault tools let the AI read, create, search, rename, edit, and delete notes and 
 - Vault: read only - allows Vault search and reading, but blocks note/folder creation, editing, deletion, and renaming. External MCP and skill tools retain their own permissions.
 - Vault: off - no vault tools.
 
+# Live Voice Conversation
+
+The microphone in the chat header is available whenever an official Gemini or OpenAI API key is saved, independently of the normal chat model and text-model verification/enabled flags. Choose the Live provider, model, and voice in the dialog. Stop to switch and restart; earlier transcripts are retained. This is separate from the speech-popup voice-input loop. Before starting, choose whether to include the last 20 messages (at most 40,000 characters), read-only Vault access, and an optional RAG index. RAG can be used even with Vault access off. The user can interrupt the AI, mute, or finish the call.
+
+Live may read unsaved text in the current Markdown editor. Vault reads and searches respect the configured allowed folders; RAG uses the selected index and its existing Top K/Jev settings, independently of the Vault tool folder list. Mutation, skill, script, MCP, and Web search tools are unavailable. The transcript is appended to the same chat on finish or view close and saved according to normal history/encryption settings. When automatic history is disabled, it stays in the current chat without an automatic disk save. Audio recordings are not saved.
+
+Audio goes directly to the selected provider; API charges apply and the output voice is AI generated. Only session setup HTTP requests use the configured HTTP proxy; realtime connections may be blocked on proxy-only networks. Disconnects do not silently reconnect. Finish, close, cancellation, and fatal errors release microphone, connection, and playback resources.
+
 # Conversation Context Limit
 
 The Database icon tool menu also contains **Previous messages (0-99)**. It controls how many messages before the current prompt are sent to the model. A value of 0 disables prior conversation injection and sends only the current prompt; this is useful when processing unrelated PDFs or notes one at a time. The selected value is saved in workspace state and applies across supported chat providers.

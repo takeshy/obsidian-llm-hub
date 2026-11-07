@@ -9,6 +9,7 @@
 ## Highlights
 
 - **Multi-Provider LLM Chat** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, local LLMs, or CLI backends
+- **Live Voice Conversation** - Talk with Gemini or OpenAI, switch Live models independently of chat, and optionally use read-only Vault tools or RAG
 - **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, and tools-capable local LLMs via LM Studio / vLLM / AnythingLLM)
 - **Workflow Builder** - Automate multi-step tasks with visual node editor and 25 node types
 - **Dashboard Hub Integration** - Supply AI models, Chat, Base generation, and Workflow execution to the separate [Dashboard Hub](https://github.com/takeshy/obsidian-dashboard-hub) plugin
@@ -91,6 +92,29 @@ The AI Chat feature provides an interactive conversation interface with your cho
 - On Flatpak Obsidian, allow the host portal once with `flatpak override --user --talk-name=org.freedesktop.Flatpak md.obsidian.Obsidian`, then set the binary's full host path (for example `/home/you/.local/bin/speech-popup`) as the command above; the plugin sends its commands through `flatpak-spawn --host`. Snap has no equivalent portal - use the AppImage or the Flatpak.
 
 [Watch the voice conversation demo on YouTube](https://www.youtube.com/watch?v=w8uyateB-0s)
+
+## Live Voice Conversation
+
+Talk directly with **Gemini** or **OpenAI** by voice. Live has its own provider, model, and voice selection, so you can use it even when normal chat uses OpenRouter, a compatible gateway, a local model, or a CLI. No speech-popup installation is required.
+
+![Live conversation with provider, model, voice, Vault access, RAG, and transcript controls](docs/images/live-conversation.png)
+
+1. In provider settings, enter a **Gemini** or **OpenAI** API key and click **Save**. Verification, fetching models, and enabling text-chat models are optional for Live.
+2. Click the **microphone in the chat header**, then choose the Live **Provider**, **Model**, and **Voice**.
+3. Choose chat context, Vault file access, and a RAG index independently using the options below.
+4. Click **Start conversation** and speak. You can interrupt the AI or use **Mute** / **Unmute**.
+
+| Option | What it enables |
+|--------|-----------------|
+| **Use the current chat as conversation context** | Include the last 20 text messages, up to 40,000 characters. |
+| **Read and search vault files (read-only)** | Read and search notes within **LLM vault tool folders**, including unsaved text in the current Markdown editor. |
+| **RAG** | Search the selected index with its existing Top K and Jev settings. **Works even when Vault file access is off.** Choose **Do not use** to disable RAG. The Vault tool folder list does not filter indexed results. |
+
+Use **Stop** to pause, switch provider/model/voice or search options, and start again while keeping the transcript. **End conversation**, **Return to chat**, or closing the dialog adds the transcript to the same chat. Normal chat history and encryption settings apply; with automatic history disabled, it stays in the current chat without an automatic disk save.
+
+RAG embedding credentials are independent of the Live provider. For example, OpenAI Live can search an index created with Gemini Embedding 2 using the index's embedding key or a registered Gemini key, even if that Gemini provider is disabled for text chat. Jev filtering uses its own Jev API key or the configured OpenRouter key. The dialog shows whether RAG was called, its result count, and actual tool errors.
+
+Live connects to the official Gemini/OpenAI APIs using the saved key for the provider selected in the dialog. API charges apply, and the response voice is AI generated. Session setup uses the configured HTTP proxy; realtime audio connects directly to the provider and may be unavailable on networks that require a proxy. Writing, deletion, skills, scripts, MCP, and external Web search are unavailable in Live. Audio recordings are not saved. Stopping, disconnecting, or closing the view releases microphone and playback resources.
 
 ## Web Search
 

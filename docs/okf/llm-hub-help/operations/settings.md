@@ -57,7 +57,7 @@ The API Providers section manages multiple providers that can be configured simu
 - Provider type - Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen, OpenCode Go, or a custom OpenAI-compatible endpoint.
 - Name and base URL - known providers get default base URLs.
 - API key - stored in Obsidian settings.
-- Verify - required before saving; fetches the provider's available models.
+- Verify - fetches the provider's available models and is required for text chat. Official Gemini/OpenAI keys can be saved without verification for Live conversation; other provider types still require verification before saving.
 - Add model manually - enter an exact model ID, including suffixes such as `:nitro` or `:floor`. Adding enables it; uncheck it to disable it or use its trash icon to remove the manual entry. Manual entries survive Verify. Click Save to persist changes.
 - Enabled models - checked models appear in the chat model dropdown.
 

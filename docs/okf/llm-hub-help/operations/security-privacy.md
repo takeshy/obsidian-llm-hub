@@ -20,6 +20,12 @@ Edit history tracks AI and manual file changes while Obsidian is running. It is 
 
 MCP Apps run in sandboxed iframes and cannot directly access the parent Obsidian UI or local storage.
 
+# Live Voice Sessions
+
+Live sends microphone audio to the official Gemini or OpenAI API chosen inside the Live dialog, independently of the normal chat model. Any registered official Gemini/OpenAI key can be selected; text-chat enabled/verification flags do not gate Live. Stop before switching provider/model; prior transcripts remain in the dialog. The saved key creates short-lived credentials locally: a single-use Gemini WebSocket token or OpenAI WebRTC client secret. Session setup follows HTTP proxy settings; realtime media is direct. No KiokuFlow server is used.
+
+Users choose whether to include the current chat, enable read-only Vault access, and independently search an optional RAG index, even when direct Vault access is off. Vault reads, including unsaved editor text, honor the allowed-folder list. RAG results come from the selected index and are not filtered by that separate Vault tool folder list. Live has no write/delete, skill, script, MCP, or external Web search tools. Text transcripts follow the existing chat history and encryption settings; the plugin does not persist raw audio.
+
 # Related
 
 - [Chat](../features/chat.md) explains safe editing.

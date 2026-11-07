@@ -7,6 +7,7 @@ import { verifyAnthropicProvider } from "src/core/anthropicProvider";
 import { verifyGeminiProvider } from "src/core/gemini";
 import { addManualApiProviderModel, getApiProviderModelChoices, refreshApiProviderModels } from "./apiProviderModels";
 import { credentialSlot } from "src/core/credentialBundle";
+import { getLiveProvider } from "src/core/live/live-session";
 import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
 import type { LlmHubPlugin } from "src/plugin";
 import type { SettingsContext } from "./settingsContext";
@@ -35,6 +36,8 @@ export function displayApiProviderSettings(containerEl: HTMLElement, ctx: Settin
       statusEl.textContent = t("settings.cliVerified");
     } else if (!provider.enabled) {
       statusEl.textContent = t("settings.apiProviderDisabled");
+    } else if (getLiveProvider(provider)) {
+      statusEl.textContent = t("settings.apiProviderKeySaved");
     }
 
     // Toggle enable/disable
@@ -274,7 +277,9 @@ class ApiProviderModal extends Modal {
       // Not yet verified — show hint
       new Setting(contentEl)
         .setName(t("settings.apiProviderModel"))
-        .setDesc(t("settings.apiProviderVerifyRequired"));
+        .setDesc(t(this.config.type === "gemini" || this.config.type === "openai"
+          ? "settings.apiProviderLiveKeyOnly"
+          : "settings.apiProviderVerifyRequired"));
     }
 
     let manualModelName = "";
@@ -351,7 +356,7 @@ class ApiProviderModal extends Modal {
             new Notice(t("settings.apiProviderApiKeyRequired"));
             return;
           }
-          if (!this.config.verified) {
+          if (!this.config.verified && !getLiveProvider(this.config)) {
             new Notice(t("settings.apiProviderVerifyRequired"));
             return;
           }
