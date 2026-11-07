@@ -55,6 +55,20 @@ describe("openaiChatWithToolsStream", () => {
     openAiConstructor.mockReset();
   });
 
+  it("sends manually entered OpenRouter model suffixes unchanged", async () => {
+    createCompletion.mockResolvedValueOnce(round({ content: "Hello." }));
+    const stream = openaiChatWithToolsStream(
+      "https://openrouter.ai/api", "key", "vendor/model:nitro:exacto",
+      [{ role: "user", content: "Hello", timestamp: 0 }],
+      [], "system", async () => "",
+    );
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    expect(chunks.some(chunk => chunk.type === "error")).toBe(false);
+    expect(createCompletion).toHaveBeenCalledTimes(1);
+    expect(createCompletion.mock.calls[0][0].model).toBe("vendor/model:nitro:exacto");
+  });
+
   it("runs a tool call a local model wrote as text, and takes the JSON back", async () => {
     // llama3.1 and mistral 7b routinely answer with the call as JSON instead
     // of filling in `tool_calls`; without this the tool never runs and the

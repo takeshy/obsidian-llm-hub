@@ -1,11 +1,11 @@
-import { Setting, Notice, Modal, Platform } from "obsidian";
+import { Setting, Notice, Modal, Platform, ExtraButtonComponent } from "obsidian";
 import { t } from "src/i18n";
 import type { ApiProviderConfig, ApiProviderType } from "src/types";
-import { KNOWN_PROVIDER_DEFAULTS, normalizeDeprecatedGeminiModelName } from "src/types";
+import { KNOWN_PROVIDER_DEFAULTS } from "src/types";
 import { verifyApiProvider, verifyOpencodeGo } from "src/core/openaiProvider";
 import { verifyAnthropicProvider } from "src/core/anthropicProvider";
 import { verifyGeminiProvider } from "src/core/gemini";
-import { getKnownModels } from "src/core/modelPricing";
+import { addManualApiProviderModel, getApiProviderModelChoices, refreshApiProviderModels } from "./apiProviderModels";
 import { credentialSlot } from "src/core/credentialBundle";
 import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
 import type { LlmHubPlugin } from "src/plugin";
@@ -115,7 +115,12 @@ class ApiProviderModal extends Modal {
   constructor(plugin: LlmHubPlugin, config: ApiProviderConfig, onSave: (config: ApiProviderConfig) => Promise<void>, proxyUrl?: string, proxyBypass?: string) {
     super(plugin.app);
     this.plugin = plugin;
-    this.config = { ...config };
+    this.config = {
+      ...config,
+      enabledModels: [...config.enabledModels],
+      availableModels: [...config.availableModels],
+      manualModels: [...(config.manualModels ?? [])],
+    };
     this.onSave = onSave;
     this.proxyUrl = proxyUrl;
     this.proxyBypass = proxyBypass;
@@ -141,6 +146,11 @@ class ApiProviderModal extends Modal {
         dropdown.setValue(this.config.type);
         dropdown.onChange((value) => {
           this.config.type = value as ApiProviderType;
+          // The previous provider's catalog and verification do not apply here.
+          this.config.availableModels = [];
+          this.config.enabledModels = [];
+          this.config.manualModels = [];
+          this.config.verified = false;
           const defaults = KNOWN_PROVIDER_DEFAULTS[value];
           if (defaults) {
             this.config.baseUrl = defaults.baseUrl;
@@ -206,16 +216,7 @@ class ApiProviderModal extends Modal {
         .onChange((value) => { this.config.pdfInputMode = value as import("src/types").PdfInputMode; }));
 
     // Model selection — checkboxes for enabling/disabling models
-    const knownModels = getKnownModels(this.config.type);
-    const fetchedModels = this.config.availableModels;
-    // Merge: known models first, then any fetched models not in the known list.
-    // Deprecated Gemini model names (e.g. "gemini-2.5-flash-lite") are excluded here
-    // since their replacement is already in knownModels — selecting the old name
-    // directly would bypass normalizeDeprecatedGeminiModelName() and lose behavior
-    // tied to the new model id (e.g. thinking config).
-    const modelChoices = knownModels.length > 0
-      ? [...knownModels, ...fetchedModels.filter(m => !knownModels.includes(m) && normalizeDeprecatedGeminiModelName(m) === m)]
-      : fetchedModels;
+    const modelChoices = getApiProviderModelChoices(this.config);
 
     if (modelChoices.length > 0) {
       const modelSetting = new Setting(contentEl)
@@ -242,8 +243,9 @@ class ApiProviderModal extends Modal {
 
       const listEl = modelSetting.controlEl.createDiv({ cls: "llm-hub-model-checklist" });
       for (const m of modelChoices) {
-        const label = listEl.createEl("label", { cls: "llm-hub-model-check-item" });
-        const cb = label.createEl("input", { type: "checkbox" });
+        const row = listEl.createDiv({ cls: "llm-hub-model-check-row" });
+        const item = row.createDiv({ cls: "llm-hub-model-check-item" });
+        const cb = item.createEl("input", { type: "checkbox", attr: { "aria-label": m } });
         cb.checked = this.config.enabledModels.includes(m);
         cb.addEventListener("change", () => {
           if (cb.checked) {
@@ -254,15 +256,50 @@ class ApiProviderModal extends Modal {
             this.config.enabledModels = this.config.enabledModels.filter(x => x !== m);
           }
         });
-        label.createSpan({ text: m });
-        items.push(label);
+        item.createSpan({ text: m });
+        if (this.config.manualModels?.includes(m)) {
+          new ExtraButtonComponent(row)
+            .setIcon("trash")
+            .setTooltip(t("settings.apiProviderManualModelRemove"))
+            .onClick(() => {
+              this.config.manualModels = this.config.manualModels?.filter(model => model !== m);
+              this.config.enabledModels = this.config.enabledModels.filter(model => model !== m);
+              this.onOpen();
+            });
+        }
+        items.push(row);
       }
-    } else if (!this.config.verified) {
+    }
+    if (!this.config.verified) {
       // Not yet verified — show hint
       new Setting(contentEl)
         .setName(t("settings.apiProviderModel"))
         .setDesc(t("settings.apiProviderVerifyRequired"));
     }
+
+    let manualModelName = "";
+    const addManualModel = () => {
+      if (addManualApiProviderModel(this.config, manualModelName)) {
+        this.onOpen();
+      }
+    };
+    new Setting(contentEl)
+      .setName(t("settings.apiProviderManualModel"))
+      .setDesc(t("settings.apiProviderManualModel.desc"))
+      .addText((text) => {
+        text.setPlaceholder(this.config.type === "openrouter" ? "vendor/model:nitro" : "model")
+          .onChange(value => { manualModelName = value; });
+        text.inputEl.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && !event.isComposing) {
+            event.preventDefault();
+            event.stopPropagation();
+            addManualModel();
+          }
+        });
+      })
+      .addButton(btn => btn
+        .setButtonText(t("settings.apiProviderManualModelAdd"))
+        .onClick(addManualModel));
 
     // Buttons: Verify + Save
     const buttonSetting = new Setting(contentEl);
@@ -286,11 +323,7 @@ class ApiProviderModal extends Modal {
             }
             if (result.success) {
               this.config.verified = true;
-              this.config.availableModels = result.models || [];
-              if (result.models) {
-                const availableModels = new Set(result.models);
-                this.config.enabledModels = this.config.enabledModels.filter(model => availableModels.has(model));
-              }
+              refreshApiProviderModels(this.config, result.models);
               new Notice(t("settings.apiProviderVerified", { count: String(this.config.availableModels.length) }));
               this.onOpen(); // Re-render with models
             } else {

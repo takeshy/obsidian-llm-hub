@@ -631,6 +631,10 @@ npm run build
 
 Add one or more API providers in plugin settings. Each provider has its own API key and model selection.
 
+Click **Verify** to refresh the model list, or use **Add model manually** to enter an exact model ID, including provider suffixes such as `:nitro` or `:floor`. Added models are enabled automatically and kept when you verify again. Uncheck a model to disable it, or use its trash icon to remove a manual entry. Click **Save** to keep your changes.
+
+Built-in model suggestions appear after a successful model fetch. Before that, the settings show a connection verification prompt. Changing the provider type clears the previous provider's model selection and requires verification again.
+
 | Provider | Get API Key |
 |----------|-------------|
 | Gemini | [ai.google.dev](https://ai.google.dev) |

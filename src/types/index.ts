@@ -476,6 +476,8 @@ export interface ApiProviderConfig {
   availableModels: string[];
   verified: boolean;
   enabled: boolean;
+  /** User-entered model IDs, retained when the provider's catalog is refreshed. */
+  manualModels?: string[];
   /** How PDF files returned by vault tools are supplied to this provider. */
   pdfInputMode?: PdfInputMode;
 }

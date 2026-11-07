@@ -976,28 +976,43 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
   overflow-y: auto;
 }
 
-.llm-hub-model-check-item {
+.llm-hub-model-check-row {
   display: flex;
   flex-shrink: 0;
   align-items: flex-start;
   gap: 6px;
+}
+
+.llm-hub-model-check-row .llm-hub-model-check-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.llm-hub-model-check-item {
+  display: grid;
+  grid-template-columns: var(--checkbox-size, 16px) minmax(0, 1fr);
+  flex-shrink: 0;
+  align-items: start;
+  gap: 4px;
   font-size: var(--font-ui-small);
   cursor: pointer;
   overflow-wrap: anywhere;
 }
 
 .llm-hub-model-check-item input[type="checkbox"] {
-  flex: 0 0 var(--checkbox-size, 16px);
   width: var(--checkbox-size, 16px);
   height: var(--checkbox-size, 16px);
   margin: 0;
 }
 
 .llm-hub-model-check-item span {
-  flex: 1;
   min-width: 0;
   color: var(--text-normal);
+  text-align: start;
   white-space: normal;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Settings Tab - CLI Introduction */

@@ -58,7 +58,10 @@ The API Providers section manages multiple providers that can be configured simu
 - Name and base URL - known providers get default base URLs.
 - API key - stored in Obsidian settings.
 - Verify - required before saving; fetches the provider's available models.
+- Add model manually - enter an exact model ID, including suffixes such as `:nitro` or `:floor`. Adding enables it; uncheck it to disable it or use its trash icon to remove the manual entry. Manual entries survive Verify. Click Save to persist changes.
 - Enabled models - checked models appear in the chat model dropdown.
+
+Built-in model suggestions are hidden until a successful model fetch. Before verification, a connection verification prompt is shown; manually added entries remain visible. Changing the provider type clears its catalog, enabled and manual model entries, and verification status so the previous provider's models cannot be reused accidentally.
 
 Providers can be enabled, disabled, edited, and deleted from the list.
 

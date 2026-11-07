@@ -16,6 +16,10 @@ Gemini API keys support basic chat, vault operations, and workflows. Web search 
 
 There is no fixed model list. After entering an API key, Verify fetches the provider's available models, and the user checks which models to enable; enabled models appear in the chat model dropdown. Multiple providers can be configured simultaneously.
 
+Built-in suggestions are hidden until the provider successfully returns a non-empty model list. Before verification, the settings prompt the user to verify the connection. Changing the provider type clears the previous catalog, enabled and manual entries, and verification status.
+
+Use **Add model manually** in a provider's settings to register an exact model ID, including suffixes such as `:nitro` or `:floor`. The ID is sent to the provider with its suffixes intact. Added models are enabled automatically and retained when Verify refreshes the catalog; they can be unchecked or removed. Click **Save** to persist changes. A successful connection verification is still required before saving a provider.
+
 External Web search is available to API text models that support function calling. Gemini image models retrieve references through a text model before image generation; this adds text-model usage. OpenAI image-generation and Grok image/video-generation paths do not expose this Web search option. Register keys and select the active service in Settings → Web search.
 
 Local LLM models are auto-detected from the running server during Verify. CLI providers use their own authenticated accounts and appear as single model entries after verification.
