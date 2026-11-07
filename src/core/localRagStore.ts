@@ -1,4 +1,4 @@
-import { type App, TFile } from "obsidian";
+import { type App, TFile, htmlToMarkdown } from "obsidian";
 import { PDFDocument } from "pdf-lib";
 import {
   generateEmbeddings,
@@ -29,6 +29,11 @@ import { extractPdfText, extractPdfTextWithOffsets, computePdfPageLabel } from "
 
 const MAX_CHANGED_FILES_PER_SYNC = 50;
 const SCAN_YIELD_INTERVAL = 25;
+const TEXT_EXTENSIONS = new Set(["md", "html", "htm", "txt"]);
+
+function isTextFile(file: TFile): boolean {
+  return TEXT_EXTENSIONS.has(file.extension.toLowerCase());
+}
 
 async function yieldToEventLoop(): Promise<void> {
   await new Promise<void>(resolve => window.setTimeout(resolve, 0));
@@ -263,7 +268,7 @@ class LocalRagStore {
 
     // Determine eligible file extensions
     const isEligibleFile = (f: TFile) => {
-      if (f.extension === "md") return true;
+      if (isTextFile(f)) return true;
       // PDFs: Gemini native uses binary embedding; others use text extraction
       if (indexMultimodal && f.extension === "pdf") return true;
       if (indexMultimodal && isGeminiNative && MULTIMODAL_EXTENSIONS.has(f.extension)) return true;
@@ -277,10 +282,9 @@ class LocalRagStore {
 
     // Calculate checksums for current files
     const currentChecksums: Record<string, string> = {};
-    const contentCache = new Map<string, string>();
     for (let i = 0; i < allFiles.length; i++) {
       const file = allFiles[i];
-      if (file.extension === "md") {
+      if (isTextFile(file)) {
         const content = await app.vault.read(file);
         currentChecksums[file.path] = simpleChecksum(content);
       } else {
@@ -368,13 +372,17 @@ class LocalRagStore {
       onProgress?.(currentOp, totalOps, file.path, "embed");
 
       try {
-        if (file.extension === "md") {
+        if (isTextFile(file)) {
           // Text file: chunk and embed
-          const content = contentCache.get(file.path) ?? await app.vault.read(file);
-          contentCache.set(file.path, content);
-          if (!content) continue;
+          const rawContent = await app.vault.read(file);
+          const extension = file.extension.toLowerCase();
+          const content = extension === "html" || extension === "htm"
+            ? htmlToMarkdown(rawContent) : rawContent;
           const chunks = chunkText(content, chunkSize, chunkOverlap);
-          if (chunks.length === 0) continue;
+          if (chunks.length === 0) {
+            embeddedChecksums[file.path] = currentChecksums[file.path];
+            continue;
+          }
 
           let embeddings: number[][];
           if (isGeminiNative) {

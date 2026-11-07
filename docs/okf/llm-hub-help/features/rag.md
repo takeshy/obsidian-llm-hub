@@ -12,7 +12,7 @@ RAG is LLM Hub's semantic search feature. It chunks selected vault files, genera
 
 Because retrieval happens locally before the LLM call, RAG works with every chat provider — API providers, CLI backends, and local LLM servers — and can be combined with function calling (vault tools). With a supported API model, Chat can also keep Web Search enabled alongside one RAG setting so the response synthesizes current web information with retrieved vault context. Non-text results (images, PDF pages, audio, video) are additionally attached to the LLM call as files so the model can see the actual content.
 
-Use RAG when the user wants broad retrieval over notes, PDFs, images, or audio/video. Use vault tools when the target file is known or exact file operations are needed. Use OKF for curated concepts and stable domain knowledge.
+Use RAG when the user wants broad retrieval over notes, HTML, plain text, PDFs, images, or audio/video. Use vault tools when the target file is known or exact file operations are needed. Use OKF for curated concepts and stable domain knowledge.
 
 # Embedding Providers
 
@@ -33,7 +33,7 @@ Combined mode uses `sourceRagSettings`: a setting can merge the indexes of other
 
 # Eligible Files
 
-- Markdown (`md`) is always indexed.
+- Markdown (`md`), HTML (`html`, `htm`), and plain text (`txt`) are indexed independently of the Index multimodal setting. Extensions are case-insensitive. HTML is converted to Markdown with Obsidian's HTML conversion before chunking and embedding; plain text is read as-is. These text formats work with both Gemini native and OpenAI-compatible embedding providers.
 - PDF (`pdf`) is indexed when Index multimodal is enabled. With Gemini native embedding, PDF pages are embedded directly in chunks of 1-6 pages (PDF chunk pages setting); with other providers, PDF text is extracted and embedded as text chunks.
 - Images (`png`, `jpg`, `jpeg`) and audio/video (`mp3`, `wav`, `mp4`, `mpeg`) are indexed only when Index multimodal is enabled and Gemini native embedding is used.
 

@@ -934,6 +934,8 @@ Local vector-based search that injects relevant vault content into LLM conversat
 4. Click **Sync** to build the vector index from your vault
 5. Select the RAG setting in the search menu to activate it; Web Search can remain checked at the same time
 
+Text indexing supports Markdown (`md`), HTML (`html`, `htm`), and plain text (`txt`), including uppercase extensions, with either embedding provider. HTML is converted to Markdown before chunking. These formats do not require multimodal indexing. Sync again after upgrading to include existing HTML and text files.
+
 | Setting | Description | Default |
 |---------|-------------|---------|
 | **Embedding Base URL** | Custom embedding server URL (empty = Gemini API) | empty |
