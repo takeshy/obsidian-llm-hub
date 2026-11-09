@@ -3,10 +3,12 @@ type: Feature
 title: Live Voice Conversation
 description: Direct Gemini/OpenAI voice sessions with optional chat context, read-only Vault tools, RAG, and transcript history.
 tags: [live, voice, audio, gemini, openai, rag]
-timestamp: 2026-11-07T00:00:00Z
+timestamp: 2026-11-08T00:00:00Z
 ---
 
 # Live voice conversation
+
+Select a microphone and audio output, or keep System default. Use Allow microphone and refresh devices if devices or names are missing; this briefly opens the microphone locally without sending audio. Selections are saved on this device. Stop before changing devices. If output selection is unavailable, choose the output in system sound settings. If a saved device is disconnected, reconnect it or select another device. Check system microphone permission if access is denied.
 
 Save a Gemini or OpenAI API key, then click the chat header microphone regardless of the normal chat model. Select the Live provider, model, and voice. Text-model verification/enabling is not required. Speak naturally, interrupt, or mute. Stop to switch provider/model and restart; transcripts are retained. End conversation or Return to chat finishes. API charges apply; the voice is AI generated. Live connects only to official Gemini/OpenAI APIs. speech-popup is not required.
 

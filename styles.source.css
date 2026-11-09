@@ -991,6 +991,7 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 .llm-hub-live-options label,
 .llm-hub-live-rag { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .llm-hub-live-options select { max-width: 100%; }
+.llm-hub-live-options button { align-self: flex-end; white-space: normal; }
 .llm-hub-live-check { display: flex; align-items: flex-start; gap: 6px; margin: 12px 0; }
 .llm-hub-live-check input { flex: 0 0 auto; margin: 2px 0 0; }
 .llm-hub-live-actions { justify-content: flex-start; flex-wrap: wrap; }

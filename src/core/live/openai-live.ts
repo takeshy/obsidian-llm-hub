@@ -1,5 +1,6 @@
 // Ported from KiokuFlow; provider transports run locally in Obsidian.
 import { createOpenAILiveAnswer } from "./live-connection";
+import { liveMicrophoneConstraints, openLiveMicrophone, setLiveAudioOutput } from "./live-audio";
 import type { LiveConnectionConfig } from "./live-session";
 export const LIVE_MODELS = ["gpt-realtime-2.1", "gpt-realtime-2.1-mini", "gpt-realtime", "gpt-realtime-mini"] as const;
 export const LIVE_VOICES = ["marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"] as const;
@@ -113,9 +114,11 @@ export class OpenAILiveSession {
       if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === "undefined") {
         throw new Error("Live requires a browser with microphone access over HTTPS or localhost.");
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
+      const stream = await openLiveMicrophone(liveMicrophoneConstraints(options.inputDeviceId));
       if (!isCurrent()) { stream.getTracks().forEach((track) => track.stop()); return; }
       this.stream = stream;
+      await setLiveAudioOutput(this.callbacks.audio, options.outputDeviceId);
+      if (!isCurrent()) return;
       const peer = new RTCPeerConnection(); this.peer = peer;
       peer.ontrack = (event) => {
         if (!isCurrent()) return;

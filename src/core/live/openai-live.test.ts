@@ -12,7 +12,8 @@ function fixture(t: import("vitest").TestContext, mic?: Promise<unknown>, onTool
   let stopped = 0;
   const track = { enabled: true, stop() { stopped++; } };
   const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
-  const audio = { pause() {}, play: async () => {}, srcObject: null };
+  const audio = { pause() {}, play: async () => {}, srcObject: null, setSinkId: vi.fn().mockResolvedValue(undefined) };
+  const getUserMedia = vi.fn(async (_constraints: MediaStreamConstraints) => mic ? mic : stream);
   const states: LiveState[] = [];
   const errors: string[] = [];
   let transcript: LiveTranscript[] = [];
@@ -26,7 +27,7 @@ function fixture(t: import("vitest").TestContext, mic?: Promise<unknown>, onTool
     setRemoteDescription: async () => { channel.onopen?.(); }, close() { peerClosed = true; },
   };
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
-  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { mediaDevices: { getUserMedia: async () => mic ? mic : stream } } });
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { mediaDevices: { getUserMedia } } });
   t.onTestFinished(() => { if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor); });
   const globals = globalThis as unknown as Record<string, unknown>;
   const previousPeer = globals.RTCPeerConnection;
@@ -35,9 +36,57 @@ function fixture(t: import("vitest").TestContext, mic?: Promise<unknown>, onTool
   createAnswer.mockResolvedValue("answer");
   const session = new OpenAILiveSession({ audio: audio as unknown as HTMLAudioElement, onState: (state) => states.push(state), onToolCall, onError: (error) => errors.push(error), onTranscript: (items) => { transcript = items; } }, { apiKey: "test-key" });
   t.onTestFinished(() => session.stop());
-  return { session, track, stream, states, errors, channel, peer, sent, get stopped() { return stopped; }, get peerClosed() { return peerClosed; }, get transcript() { return transcript; } };
+  return { session, audio, getUserMedia, track, stream, states, errors, channel, peer, sent, get stopped() { return stopped; }, get peerClosed() { return peerClosed; }, get transcript() { return transcript; } };
 }
 const options = { model: "gpt-realtime-2.1", voice: "marin", language: "ja" as const, instructions: "Converse" };
+
+test("OpenAI uses the selected microphone and speaker and resets output for the next default session", async t => {
+  const f = fixture(t);
+  await f.session.start({ ...options, inputDeviceId: "usb-mic", outputDeviceId: "headphones" });
+  assert.deepEqual(f.getUserMedia.mock.calls[0][0], { audio: { echoCancellation: true, noiseSuppression: true, deviceId: { exact: "usb-mic" } }, video: false });
+  assert.equal(f.audio.setSinkId.mock.calls[0][0], "headphones");
+  await f.session.start(options);
+  assert.equal(f.audio.setSinkId.mock.calls.at(-1)![0], "");
+});
+
+test("OpenAI output failure releases the microphone before negotiating a connection", async t => {
+  const f = fixture(t);
+  createAnswer.mockClear();
+  f.audio.setSinkId.mockRejectedValue(new Error("Device missing"));
+  await f.session.start({ ...options, outputDeviceId: "disconnected" });
+  assert.equal(f.stopped, 1);
+  assert.match(f.errors[0], /selected audio output/);
+  assert.equal(createAnswer.mock.calls.length, 0);
+});
+
+test("OpenAI reports a missing selected microphone without retrying another input", async t => {
+  const f = fixture(t);
+  createAnswer.mockClear();
+  f.getUserMedia.mockRejectedValue(new Error("Requested microphone is unavailable"));
+  await f.session.start({ ...options, inputDeviceId: "disconnected" });
+  assert.equal(f.getUserMedia.mock.calls.length, 1);
+  assert.equal(createAnswer.mock.calls.length, 0);
+  assert.equal(f.errors[0], "Requested microphone is unavailable");
+  assert.equal(f.states.at(-1), "idle");
+});
+
+test("OpenAI explains a disconnected saved microphone even when the browser error is empty", async t => {
+  const f = fixture(t);
+  f.getUserMedia.mockRejectedValue(Object.assign(new Error(""), { name: "OverconstrainedError" }));
+  await f.session.start({ ...options, inputDeviceId: "disconnected" });
+  assert.match(f.errors[0], /selected microphone is unavailable/);
+  assert.equal(f.states.at(-1), "idle");
+});
+
+test("stopping OpenAI while output selection is pending prevents a late connection", async t => {
+  const f = fixture(t), sink = deferred<void>();
+  f.audio.setSinkId.mockReturnValue(sink.promise);
+  const starting = f.session.start({ ...options, outputDeviceId: "headphones" });
+  await new Promise(resolve => setImmediate(resolve));
+  f.session.stop(); sink.resolve(); await starting;
+  assert.equal(f.stopped, 1);
+  assert.ok(!f.states.includes("connected"));
+});
 
 test("Live establishes a voice connection, supports mute, and releases all resources on stop", async (t) => {
   const f = fixture(t);
