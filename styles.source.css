@@ -948,6 +948,14 @@ body.llm-hub-hide-workspace-folder .nav-folder > .nav-folder-title[data-path="LL
 }
 
 /* Live voice conversation */
+.llm-hub-text-composer { display: contents; }
+.llm-hub-text-composer[hidden] { display: none; }
+.llm-hub-live-controls { flex: 0 0 auto; padding: 12px; border-top: 1px solid var(--background-modifier-border); max-height: 45vh; overflow-y: auto; }
+.llm-hub-live-controls p { margin: 6px 0; }
+.llm-hub-live-call-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; overflow-wrap: anywhere; }
+.llm-hub-live-call-info span { color: var(--text-muted); font-size: var(--font-ui-small); }
+.llm-hub-live-status-bar { gap: 6px; }
+.llm-hub-live-status-bar button { font-size: var(--font-ui-smaller); height: auto; padding: 2px 6px; }
 .llm-hub-live-key-only { flex: 0 0 auto; padding: 12px; color: var(--text-muted); font-size: var(--font-ui-small); }
 
 .llm-hub-live-backdrop {

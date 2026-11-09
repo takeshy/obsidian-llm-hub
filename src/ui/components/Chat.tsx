@@ -120,6 +120,7 @@ import { promptForValue } from "./workflow/ValuePromptModal";
 import { t } from "src/i18n";
 import { getLiveProviders } from "src/core/live/live-session";
 import LiveConversation from "./LiveConversation";
+import { LiveChatHistory } from "./liveChatHistory";
 import {
 	shouldUseImageModel,
 	PAID_RATE_LIMIT_RETRY_DELAYS_MS,
@@ -211,9 +212,10 @@ function shouldLimitLlmVaultTools(model: ModelType): boolean {
 interface ChatProps {
 	plugin: LlmHubPlugin;
 	onToggleSidebarWidth: () => boolean;
+	onRevealChat: () => void;
 }
 
-const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, ref) => {
+const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth, onRevealChat }, ref) => {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [maxPreviousMessages, setMaxPreviousMessages] = useState(() => {
 		const saved = plugin.workspaceState.maxPreviousMessages;
@@ -233,18 +235,26 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 		getMaxSavedChatHistories: () => plugin.settings.maxSavedChatHistories,
 		getEncryption: () => plugin.settings.encryption,
 	};
+	const pendingLiveSaveRef = useRef<Promise<void>>(Promise.resolve());
 	const {
 		chatHistories,
 		currentChatId,
 		setCurrentChatId,
 		saveNoteState,
 		loadChatHistories,
-		saveChatToDisk,
+		saveChatToDisk: saveHistoryToDisk,
 		saveCurrentChat,
 		deleteChat: deleteChatFromHistory,
 		saveAsNote,
 		decryptChat,
 	} = useChatHistories(chatStorageHost);
+	// A fast text response must not be overwritten by the call's final, slower history write.
+	const saveChatToDisk = useCallback<typeof saveHistoryToDisk>((value, chatId, options = {}) => {
+		const revision = activeSessionIdRef.current;
+		return pendingLiveSaveRef.current.then(() => saveHistoryToDisk(value, chatId, {
+			...options, foreground: options.foreground && revision === activeSessionIdRef.current,
+		}));
+	}, [saveHistoryToDisk]);
 	const [cliSession, setCliSession] = useState<CliSessionInfo | null>(null);  // CLI session for resumption
 	const [showHistory, setShowHistory] = useState(false);
 	const [isSidebarWide, setIsSidebarWide] = useState(false);
@@ -252,7 +262,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	const [currentModel, setCurrentModel] = useState<ModelType>(plugin.getSelectedModel());
 	const [liveCall, setLiveCall] = useState<{
 		providers: ApiProviderConfig[]; messages: Message[]; chatId: string; ragSetting: string | null;
+		started: boolean; history: LiveChatHistory;
 	} | null>(null);
+	const liveCallRef = useRef(liveCall);
+	liveCallRef.current = liveCall;
 	const [codexModels, setCodexModels] = useState<CodexModelOption[]>([]);
 	const ragEnabledState = true;  // RAG is always available; individual stores managed in settings
 	const [ragSettingNames, setRagSettingNames] = useState<string[]>(plugin.getRagSettingNames());
@@ -850,9 +863,9 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 			if (container) {
 				container.scrollTop = container.scrollHeight;
 			}
-		}, 150);
+		}, liveCall?.started ? 0 : 150);
 		return () => window.clearTimeout(timer);
-	}, [messages, streamingContent]);
+	}, [messages, streamingContent, liveCall?.started]);
 
 	// Handle iOS keyboard visibility using focus events
 	const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -1244,6 +1257,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	// Start new chat (works even while a stream is running – the old stream
 	// continues in the background and saves its result to history when done).
 	const startNewChat = () => {
+		if (liveCallRef.current) return;
 		leaveCurrentChat();
 
 		setMessages([]);
@@ -1261,9 +1275,11 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 	// Decrypt and load encrypted chat
 	const decryptAndLoadChat = async (chatId: string, password: string) => {
+		if (liveCallRef.current) return;
 		leaveCurrentChat();
 		try {
 			const parsed = await decryptChat(chatId, password);
+			if (liveCallRef.current) return;
 			setMessages(parsed.messages);
 			setCurrentChatId(chatId);
 			setCliSession(parsed.cliSession || null);
@@ -1286,6 +1302,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 	// Load a chat from history
 	const loadChat = (history: ChatHistory) => {
+		if (liveCallRef.current) return;
 		leaveCurrentChat();
 		if (history.isEncrypted) {
 			// If password is cached, try to decrypt automatically
@@ -1315,6 +1332,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	// Delete a chat from history
 	const deleteChat = async (chatId: string, e: MouseEvent) => {
 		e.stopPropagation();
+		if (liveCallRef.current) return;
 
 		await deleteChatFromHistory(chatId);
 
@@ -2704,7 +2722,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 	// Send message to Gemini
 	const sendMessage = async (content: string, attachments?: Attachment[], skillPath?: string) => {
-		if ((!content.trim() && !skillPath && (!attachments || attachments.length === 0)) || isLoading) return;
+		if ((!content.trim() && !skillPath && (!attachments || attachments.length === 0)) || isLoading || liveCallRef.current) return;
 
 		try {
 			// Use API provider if in api-provider mode
@@ -3288,7 +3306,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	// Compact/compress conversation history
 	// Saves current chat as-is, then starts a new chat with the summary as context
 	const handleCompact = async () => {
-		if (messages.length < 2 || isLoading || isCompacting) return;
+		if (messages.length < 2 || isLoading || isCompacting || liveCallRef.current) return;
 
 		// CLI mode and Local LLM mode do not support compact (requires Gemini).
 		// `isCliMode` excludes tools-capable Local LLMs now, so check the
@@ -3308,6 +3326,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 		try {
 			// Save current chat first (preserves full history)
+			await pendingLiveSaveRef.current;
 			await saveCurrentChat(messages, { session: cliSession });
 
 			// Build conversation text for summarization
@@ -3469,24 +3488,38 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 	}, []);
 
 	const openLive = () => {
+		if (liveCallRef.current) { onRevealChat(); return; }
 		const providers = getLiveProviders(plugin.settings.apiProviders);
 		if (!providers.length || isLoading || isCompacting) return;
+		leaveCurrentChat();
 		voiceConversation.end();
 		stopReadingAloud();
+		setShowHistory(false);
 		const chatId = currentChatId ?? generateChatId();
 		setCurrentChatId(chatId);
-		setLiveCall({ providers: providers.map(provider => ({ ...provider })), messages: [...messages], chatId, ragSetting: selectedRagSetting });
+		const precedingSave = pendingLiveSaveRef.current;
+		const history = new LiveChatHistory(messages,
+			value => precedingSave.then(() => saveHistoryToDisk(value, chatId, { foreground: false, session: null })),
+			error => { new Notice(formatError(error)); },
+		);
+		const call = { providers: providers.map(provider => ({ ...provider })), messages: [...messages], chatId, ragSetting: selectedRagSetting, started: false, history };
+		liveCallRef.current = call;
+		setLiveCall(call);
+	};
+	const updateLiveTranscript = (transcript: Message[]) => {
+		const call = liveCallRef.current;
+		if (!call) return;
+		const next = call.history.update(transcript);
+		if (next) { setMessages(next); if (transcript.length) setCliSession(null); }
 	};
 	const closeLive = (transcript: Message[]) => {
-		if (!liveCall) return;
+		const call = liveCallRef.current;
+		if (!call) return;
+		liveCallRef.current = null;
 		setLiveCall(null);
-		if (transcript.length === 0) return;
-		const nextMessages = [...liveCall.messages, ...transcript];
-		const foreground = currentChatId === liveCall.chatId;
-		if (foreground) { setMessages(nextMessages); setCliSession(null); }
-		void saveChatToDisk(nextMessages, liveCall.chatId, { foreground, session: null }).catch((error: unknown) => {
-			new Notice(formatError(error));
-		});
+		pendingLiveSaveRef.current = call.history.finish(transcript);
+		if (transcript.length) { setMessages(call.history.messages); setCliSession(null); }
+		window.setTimeout(() => inputAreaRef.current?.focus(), 0);
 	};
 
 	return (
@@ -3505,20 +3538,16 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 						title={saveNoteState === "saved" ? t("chat.savedAsNote", { path: "" }) : t("chat.saveAsNote")}
 						onClick={() => { void saveAsNote(messages); }}
 					/>
-					<HeaderButton classPrefix="llm-hub" title={t("chat.newChat")} onClick={startNewChat}>
+					<HeaderButton classPrefix="llm-hub" title={t("chat.newChat")} disabled={!!liveCall} onClick={startNewChat}>
 						<Plus size={16} />
 					</HeaderButton>
-					<HeaderButton classPrefix="llm-hub" title={t("chat.chatHistory")} onClick={() => setShowHistory(!showHistory)}>
+					<HeaderButton classPrefix="llm-hub" title={t("chat.chatHistory")} disabled={!!liveCall} onClick={() => setShowHistory(!showHistory)}>
 						<History size={16} />
 					</HeaderButton>
-					{getLiveProviders(plugin.settings.apiProviders).length > 0 && <HeaderButton classPrefix="llm-hub" title={t("live.title")} disabled={isLoading || isCompacting} onClick={openLive}>
+					{(liveCall || getLiveProviders(plugin.settings.apiProviders).length > 0) && <HeaderButton classPrefix="llm-hub" title={t(liveCall?.started ? "live.showCall" : "live.title")} disabled={isLoading || isCompacting} onClick={openLive}>
 						<Mic size={16} />
 					</HeaderButton>}
 				</ChatHeader>
-
-			{liveCall && <LiveConversation plugin={plugin} providers={liveCall.providers} messages={liveCall.messages}
-				selectedRagSetting={liveCall.ragSetting} initialFileAccess={vaultToolMode === "all" || vaultToolMode === "readOnly"} onClose={closeLive} />}
-
 			{showHistory && <HistoryList classPrefix="llm-hub"
         entries={chatHistories.map(history => ({ ...history, dateLabel: formatHistoryDate(history.updatedAt), encrypted: history.isEncrypted }))}
         currentId={currentChatId} emptyLabel={t("chat.noChatHistory")} deleteLabel={t("common.delete")}
@@ -3563,7 +3592,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 
 			{isConfigReady ? (
 				<>
-					{isNativeCliTerminalMode ? (
+					{isNativeCliTerminalMode && <div className="llm-hub-text-composer" hidden={liveCall?.started === true}>
 						<CliTerminalPanel
 							plugin={plugin}
 							provider="claude-cli"
@@ -3571,7 +3600,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							onModelChange={handleModelChange}
 							onBackToChat={handleBackToChat}
 						/>
-					) : (
+					</div>}
+					{(!isNativeCliTerminalMode || liveCall?.started) && (
 						<>
 							<MessageList
 								ref={messagesContainerRef}
@@ -3579,8 +3609,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 								streamingContent={streamingContent}
 								streamingThinking={streamingThinking}
 								isLoading={isLoading}
-								onApplyEdit={handleApplyEdit}
-							onDiscardEdit={handleDiscardEdit}
+								onApplyEdit={liveCall ? undefined : handleApplyEdit}
+							onDiscardEdit={liveCall ? undefined : handleDiscardEdit}
 							app={plugin.app}
 							localLlmConfigs={plugin.settings.localLlmConfigs}
 							skillsFolder={plugin.settings.skillsFolder}
@@ -3594,6 +3624,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 							fileSkill={editorFileSkill}
 						/>
 
+							<div className="llm-hub-text-composer" hidden={liveCall?.started === true}>
 							<InputArea
 								ref={inputAreaRef}
 								onSend={(content, attachments, skillPath) => {
@@ -3688,15 +3719,16 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 								hasSelection={hasSelection}
 								app={plugin.app}
 							/>
+							</div>
 						</>
 					)}
 				</>
 			) : getLiveProviders(plugin.settings.apiProviders).length > 0 ? (
 				<>
-					{messages.length > 0 && <MessageList ref={messagesContainerRef} messages={messages}
+					{(messages.length > 0 || liveCall?.started) && <MessageList ref={messagesContainerRef} messages={messages}
 						streamingContent="" streamingThinking="" isLoading={false} app={plugin.app}
 						localLlmConfigs={plugin.settings.localLlmConfigs} skillsFolder={plugin.settings.skillsFolder} />}
-					<p className="llm-hub-live-key-only">{t("live.keyOnlyReady")}</p>
+					{!liveCall?.started && <p className="llm-hub-live-key-only">{t("live.keyOnlyReady")}</p>}
 				</>
 			) : (
 				<div className="llm-hub-config-required">
@@ -3713,6 +3745,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth }, r
 					</div>
 				</div>
 			)}
+			{liveCall && <LiveConversation plugin={plugin} providers={liveCall.providers} messages={liveCall.messages}
+				selectedRagSetting={liveCall.ragSetting} initialFileAccess={vaultToolMode === "all" || vaultToolMode === "readOnly"}
+				onStart={() => setLiveCall(previous => previous ? { ...previous, started: true } : null)}
+				onTranscript={updateLiveTranscript} onReveal={onRevealChat} onClose={closeLive} />}
 		</ChatLayout>
 	);
 });

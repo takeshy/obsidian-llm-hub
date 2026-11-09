@@ -20,10 +20,11 @@ export interface TabContainerRef {
 interface TabContainerProps {
   plugin: LlmHubPlugin;
   onToggleSidebarWidth: () => boolean;
+  onReveal: () => void;
 }
 
 const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
-  ({ plugin, onToggleSidebarWidth }, ref) => {
+  ({ plugin, onToggleSidebarWidth, onReveal }, ref) => {
     const [activeTab, setActiveTab] = useState<TabType>("chat");
     const chatRef = useRef<ChatRef>(null);
 
@@ -75,7 +76,7 @@ const TabContainer = forwardRef<TabContainerRef, TabContainerProps>(
         </div>
         <div className="llm-hub-tab-content">
           <div className={`llm-hub-tab-panel ${activeTab === "chat" ? "is-active" : ""}`}>
-            <Chat ref={chatRef} plugin={plugin} onToggleSidebarWidth={onToggleSidebarWidth} />
+            <Chat ref={chatRef} plugin={plugin} onToggleSidebarWidth={onToggleSidebarWidth} onRevealChat={() => { setActiveTab("chat"); onReveal(); }} />
           </div>
           <div className={`llm-hub-tab-panel ${activeTab === "workflow" ? "is-active" : ""}`}>
             <WorkflowPanel app={plugin.app} />

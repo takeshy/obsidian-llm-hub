@@ -102,7 +102,7 @@ Talk directly with **Gemini** or **OpenAI** by voice. Live has its own provider,
 1. In provider settings, enter a **Gemini** or **OpenAI** API key and click **Save**. Verification, fetching models, and enabling text-chat models are optional for Live.
 2. Click the **microphone in the chat header**, then choose the Live **Provider**, **Model**, and **Voice**.
 3. Choose chat context, Vault file access, and a RAG index independently using the options below.
-4. Click **Start conversation** and speak. You can interrupt the AI or use **Mute** / **Unmute**.
+4. Click **Start conversation**. Setup closes and the existing chat sidebar shows the transcript as you speak. Use the controls below the messages to **Mute** / **Unmute**, **Stop**, or **End conversation**.
 
 | Option | What it enables |
 |--------|-----------------|
@@ -110,9 +110,11 @@ Talk directly with **Gemini** or **OpenAI** by voice. Live has its own provider,
 | **Read and search vault files (read-only)** | Read and search notes within **LLM vault tool folders**, including unsaved text in the current Markdown editor. |
 | **RAG** | Search the selected index with its existing Top K and Jev settings. **Works even when Vault file access is off.** Choose **Do not use** to disable RAG. The Vault tool folder list does not filter indexed results. |
 
-Use **Stop** to pause, switch provider/model/voice or search options, and start again while keeping the transcript. **End conversation**, **Return to chat**, or closing the dialog adds the transcript to the same chat. Normal chat history and encryption settings apply; with automatic history disabled, it stays in the current chat without an automatic disk save.
+Use **Stop** to release the microphone and playback, then **Call settings** to change provider/model/voice, audio devices, or search options before restarting. **End conversation** / **Return to chat** restores the text composer with your draft intact so you can continue by text. Partial speech updates existing chat messages; history is checkpointed during the call and saved when it ends. Normal chat history and encryption settings apply; automatic history off means no automatic disk save. Finish the call before starting or loading a different chat.
 
-RAG embedding credentials are independent of the Live provider. For example, OpenAI Live can search an index created with Gemini Embedding 2 using the index's embedding key or a registered Gemini key, even if that Gemini provider is disabled for text chat. Jev filtering uses its own Jev API key or the configured OpenRouter key. The dialog shows whether RAG was called, its result count, and actual tool errors.
+You can edit notes, hide the sidebar, or switch to Search/Workflow while the call continues. Use the Obsidian status bar to return to the call or **Stop** it. Closing the LLM Hub view ends the call.
+
+RAG embedding credentials are independent of the Live provider. For example, OpenAI Live can search an index created with Gemini Embedding 2 using the index's embedding key or a registered Gemini key, even if that Gemini provider is disabled for text chat. Jev filtering uses its own Jev API key or the configured OpenRouter key. The call controls show whether RAG was called, its result count, and actual tool errors.
 
 Live connects to the official Gemini/OpenAI APIs using the saved key for the provider selected in the dialog. API charges apply, and the response voice is AI generated. Session setup uses the configured HTTP proxy; realtime audio connects directly to the provider and may be unavailable on networks that require a proxy. Writing, deletion, skills, scripts, MCP, and external Web search are unavailable in Live. Audio recordings are not saved. Stopping, disconnecting, or closing the view releases microphone and playback resources.
 
