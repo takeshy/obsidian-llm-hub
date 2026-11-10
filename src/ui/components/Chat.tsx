@@ -1897,6 +1897,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth, onR
 				// Local RAG: search and inject context into system prompt
 				let localRagSources: string[] = [];
 				let ragSearchRunner: RagSearchRunner | null = null;
+				let injectRagContext: (() => Promise<void>) | null = null;
 				const ragSettingObj = selectedRagSetting ? plugin.getRagSearchSetting(selectedRagSetting) : null;
 				if (selectedRagSetting && ragSettingObj) {
 					ragSearchRunner = createRagSearchRunner(
@@ -1907,7 +1908,10 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth, onR
 						(filePaths) => { for (const p of filePaths) if (!localRagSources.includes(p)) localRagSources.push(p); },
 						ragSettingObj.topK,
 					);
-					if (AUTOMATIC_RAG_RETRIEVAL) try {
+					// rag_search is only offered through function calling. A turn without
+					// tools (tools-incompatible model, Vault tools off, or a tools
+					// rejection) retrieves up front instead, or RAG would be silently unused.
+					injectRagContext = async () => { try {
 						const localRag = await searchLocalRag(
 							selectedRagSetting, resolvedContent,
 							ragSettingObj, getGeminiApiKey(plugin.settings),
@@ -1936,7 +1940,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth, onR
 						}
 					} catch (e) {
 						console.error("Local RAG search failed:", formatError(e));
-					}
+					} };
+					if (AUTOMATIC_RAG_RETRIEVAL || !wantsTools) await injectRagContext();
 				}
 				if (vaultToolMode === "noSearch") {
 					systemPrompt += buildNoDiscoverySystemPrompt({
@@ -2230,6 +2235,8 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth, onR
 						// Reset streaming UI so the marker flow starts clean
 						setStreamingContent("");
 						setStreamingThinking("");
+						// The marker flow cannot call rag_search, so give it the context up front.
+						if (!AUTOMATIC_RAG_RETRIEVAL && localRagSources.length === 0) await injectRagContext?.();
 						// Fall through to marker loop below
 					} else if (!wasAborted && toolsFlowError && !toolsFullContent && !hasMutations) {
 						// Non-tools error with no output and no committed changes →
