@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type App, loadPdfJs, TFile } from "obsidian";
-import { renderRagPdfImages } from "./ragPdfImages";
+import { renderRagImage, renderRagPdfImages } from "./ragPdfImages";
 
 vi.mock("obsidian", async (original) => ({
   ...await original<typeof import("obsidian")>(), loadPdfJs: vi.fn(),
@@ -29,7 +29,38 @@ beforeEach(() => {
     promise: Promise.resolve({ numPages: 20, getPage, destroy }),
   }) });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe("renderRagImage", () => {
+  it("scales and pads native images into bounded JPEG assets and releases blob/canvas resources", async () => {
+    const drawImage = vi.fn();
+    canvas.getContext.mockReturnValue({ fillRect: vi.fn(), drawImage });
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
+    vi.stubGlobal("Image", class {
+      naturalWidth = 4_000;
+      naturalHeight = 100;
+      onload?: () => void;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    });
+    expect(await renderRagImage(app, "diagram.webp")).toEqual([{ type: "image", format: "jpg", data_base64: "YWJj" }]);
+    expect(drawImage.mock.calls[0].slice(1)).toEqual([0, 0, 1568, 40]);
+    expect(revoke).toHaveBeenCalledWith("blob:test");
+    expect(canvas.width).toBe(0); expect(canvas.height).toBe(0);
+  });
+
+  it("returns no image on decode failures instead of scoring a filename label", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:broken");
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("Image", class {
+      onerror?: () => void;
+      set src(_value: string) { queueMicrotask(() => this.onerror?.()); }
+    });
+    expect(await renderRagImage(app, "broken.png")).toBeNull();
+    expect(revoke).toHaveBeenCalledWith("blob:broken");
+  });
+});
 
 describe("renderRagPdfImages", () => {
   it("renders only matched pages, meets Jev limits, and releases PDF and canvas resources", async () => {

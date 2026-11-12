@@ -23,6 +23,50 @@ const MAX_PAGES = 16;
 const PIXEL_BUDGET = 5_000_000;
 const MAX_ENCODED_BYTES = 12 * 1024 * 1024;
 
+/** Use the same bounded JPEG asset format for native image chunks. */
+export async function renderRagImage(app: App, filePath: string): Promise<RagPdfImage[] | null> {
+  let url: string | undefined;
+  const canvas = createEl("canvas");
+  try {
+    let data: ArrayBuffer;
+    if (filePath.startsWith("/") || /^[A-Z]:\\/i.test(filePath)) {
+      const fs = (window as { require?: (id: string) => { promises: { readFile(path: string): Promise<Uint8Array> } } }).require?.("fs");
+      if (!fs) return null;
+      data = new Uint8Array(await fs.promises.readFile(filePath)).buffer;
+    } else {
+      const file = app.vault.getAbstractFileByPath(filePath);
+      if (!(file instanceof TFile)) return null;
+      data = await app.vault.readBinary(file);
+    }
+    if (data.byteLength > 20 * 1024 * 1024) return null;
+    url = URL.createObjectURL(new Blob([data]));
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Cannot decode RAG image"));
+      image.src = url!;
+    });
+    if (!image.naturalWidth || !image.naturalHeight) return null;
+    const scale = Math.min(1, 1568 / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.ceil(image.naturalWidth * scale), height = Math.ceil(image.naturalHeight * scale);
+    canvas.width = Math.max(280, width); canvas.height = Math.max(280, height);
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    if (!dataUrl.startsWith("data:image/jpeg;base64,")) return null;
+    const base64 = dataUrl.slice("data:image/jpeg;base64,".length);
+    return base64 && base64.length <= MAX_ENCODED_BYTES ? [{ type: "image", format: "jpg", data_base64: base64 }] : null;
+  } catch (error) {
+    console.warn(`Failed to prepare RAG image for Jev: ${filePath}`, error);
+    return null;
+  } finally {
+    if (url) URL.revokeObjectURL(url);
+    canvas.width = canvas.height = 0;
+  }
+}
+
 /** Render the exact matched range without OCR; null means keep it unfiltered. */
 export async function renderRagPdfImages(
   app: App, filePath: string, startPage: number, endPage: number,

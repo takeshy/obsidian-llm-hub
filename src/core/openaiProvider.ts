@@ -56,6 +56,45 @@ function isOpenCodeGoUrl(baseUrl: string): boolean {
   return baseUrl.replace(/\/+$/, "").toLowerCase() === OPENCODE_GO_BASE_URL;
 }
 
+function isMistralApiUrl(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).hostname === "api.mistral.ai";
+  } catch {
+    return false;
+  }
+}
+
+/** Mistral replays reasoning inside content, rather than reasoning_content. */
+function mistralAssistantContent(content: unknown, thinking: string): unknown {
+  if (!thinking) return content;
+  return [
+    { type: "thinking", thinking: [{ type: "text", text: thinking }] },
+    ...(typeof content === "string" && content ? [{ type: "text", text: content }]
+      : Array.isArray(content) ? content as unknown[] : []),
+  ];
+}
+
+/** Ignore unknown blocks instead of coercing them into visible text. */
+function parseMistralContent(content: unknown[]): Array<{ type: "text" | "thinking"; content: string }> {
+  const chunks: Array<{ type: "text" | "thinking"; content: string }> = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    const block = part as Record<string, unknown>;
+    if (block.type === "text" && typeof block.text === "string" && block.text) {
+      chunks.push({ type: "text", content: block.text });
+    } else if (block.type === "thinking" && Array.isArray(block.thinking)) {
+      for (const item of block.thinking as unknown[]) {
+        if (!item || typeof item !== "object") continue;
+        const text = item as Record<string, unknown>;
+        if (text.type === "text" && typeof text.text === "string" && text.text) {
+          chunks.push({ type: "thinking", content: text.text });
+        }
+      }
+    }
+  }
+  return chunks;
+}
+
 function supportsReasoningContentReplay(baseUrl: string): boolean {
   try {
     // Groq emits reasoning for display but rejects reasoning_content in input.
@@ -799,6 +838,7 @@ export async function* openaiChatWithToolsStream(
   }
 
   const openaiTools = tools.length > 0 ? toOpenAiTools(tools) : undefined;
+  const isMistral = isMistralApiUrl(baseUrl);
   // The shared builder speaks the OpenAI wire format, which is what the SDK
   // parameter type describes; the tool loop below appends to the same array.
   const wireMessages = buildOpenAiMessages(messages, systemPrompt);
@@ -807,7 +847,11 @@ export async function* openaiChatWithToolsStream(
     // turns. Groq rejects it just as it rejects reasoning from the current turn.
     for (const message of wireMessages) delete message.reasoning_content;
   }
-  const conversationMessages = wireMessages as unknown as OpenAI.ChatCompletionMessageParam[];
+  const conversationMessages = wireMessages.map(message => {
+    if (!isMistral || message.role !== "assistant") return message;
+    const { reasoning_content, ...rest } = message;
+    return { ...rest, content: mistralAssistantContent(message.content, reasoning_content ?? "") };
+  }) as unknown as OpenAI.ChatCompletionMessageParam[];
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
@@ -870,7 +914,16 @@ export async function* openaiChatWithToolsStream(
           }
         }
 
-        if (delta?.content) {
+        if (isMistral && Array.isArray(delta?.content)) {
+          // Mistral streams thinking blocks, then mixed thinking/text blocks,
+          // then plain text. These blocks already identify the reasoning channel.
+          hasNativeReasoning = true;
+          for (const item of parseMistralContent(delta.content)) {
+            if (item.type === "thinking") reasoningContent += item.content;
+            else textContent += item.content;
+            yield item;
+          }
+        } else if (delta?.content) {
           // If no native reasoning field, parse <think> tags from content
           // (used by Qwen, MiniMax, Seed, StepFun, etc. on OpenRouter)
           if (!hasNativeReasoning && responsesProvider !== "openai") {
@@ -997,14 +1050,14 @@ export async function* openaiChatWithToolsStream(
     // Groq rejects this field, so keep its reasoning in the UI only.
     const assistantMsg: Record<string, unknown> = {
       role: "assistant",
-      content: textContent || null,
+      content: isMistral ? mistralAssistantContent(textContent || null, reasoningContent) : textContent || null,
       tool_calls: toolCallEntries.map(tc => ({
         id: tc.id,
         type: "function" as const,
         function: { name: tc.name, arguments: normalizeToolArguments(tc.arguments) },
       })),
     };
-    if (reasoningContent && supportsReasoningContentReplay(baseUrl)) {
+    if (!isMistral && reasoningContent && supportsReasoningContentReplay(baseUrl)) {
       assistantMsg.reasoning_content = reasoningContent;
     }
     conversationMessages.push(assistantMsg as unknown as OpenAI.ChatCompletionMessageParam);

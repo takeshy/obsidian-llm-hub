@@ -3,6 +3,21 @@ import { sanitizeRagSettingName as sanitizeSettingName } from "obsidian-llm-hub-
 
 const INDEX_FILENAME = "index.json";
 const VECTORS_FILENAME = "vectors.bin";
+const BM25_FILENAME = "bm25.json";
+
+export async function loadRagBm25(app: App, settingName: string, workspaceFolder: string): Promise<unknown> {
+  try {
+    const path = `${getSettingDir(workspaceFolder, settingName)}/${BM25_FILENAME}`;
+    if (!(await app.vault.adapter.exists(path))) return null;
+    return JSON.parse(await app.vault.adapter.read(path)) as unknown;
+  } catch { return null; }
+}
+
+export async function saveRagBm25(app: App, settingName: string, snapshot: unknown, workspaceFolder: string): Promise<void> {
+  const dir = getSettingDir(workspaceFolder, settingName);
+  await ensureDir(app, workspaceFolder, dir);
+  await app.vault.adapter.write(`${dir}/${BM25_FILENAME}`, JSON.stringify(snapshot));
+}
 
 export type RagContentType = "text" | "image" | "pdf" | "audio" | "video";
 
@@ -140,6 +155,11 @@ export async function renameRagIndex(
         getVectorsPath(workspaceFolder, newSettingName),
         await app.vault.adapter.readBinary(oldVectors),
       );
+    }
+
+    const oldBm25 = `${oldDir}/${BM25_FILENAME}`;
+    if (await app.vault.adapter.exists(oldBm25)) {
+      await app.vault.adapter.write(`${getSettingDir(workspaceFolder, newSettingName)}/${BM25_FILENAME}`, await app.vault.adapter.read(oldBm25));
     }
 
     await app.vault.adapter.remove(oldIndex);

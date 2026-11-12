@@ -1,3 +1,4 @@
+import { RagSearchModeBadge, RagSearchResultMeta } from "obsidian-llm-hub-common/chat";
 import { useState, useEffect, useRef, useCallback, useId } from "react";
 import type { KeyboardEvent } from "react";
 import Search from "lucide-react/dist/esm/icons/search";
@@ -21,7 +22,7 @@ import type { Attachment, ModelType, ModelInfo, Message } from "src/types";
 import { getGeminiApiKey, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, localLlmDisplayName } from "src/types";
 import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, searchLocalRagResults, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
-import { getJevRagFilterConfig } from "src/core/jevRagFilter";
+import { getJevRagFilterConfig, getJevRagMode } from "src/core/jevRagFilter";
 import { extractPdfText } from "obsidian-llm-hub-common/vault";
 import { getPdfResultModePreference, setPdfResultModePreference, type PdfResultMode } from "./pdfResultModePreference";
 import { extensionToMimeType } from "src/core/embeddingProvider";
@@ -36,6 +37,7 @@ class SearchHelpModal extends Modal {
     contentEl.createEl("h3", { text: t("search.helpTitle") });
     const helpKeys = [
       "search.helpTopK",
+      "search.helpJev",
       "search.helpSearchUntilFound",
       "search.helpScoreThreshold",
       "search.helpExt",
@@ -196,7 +198,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   // Check if current setting is internal (not external index)
   const currentRagSetting = plugin.getRagSetting(selectedRagSetting);
   const searchUntilFound = currentRagSetting?.searchUntilFound ?? false;
-  const jevFilterActive = Boolean(currentRagSetting?.jevRagFilterEnabled && getJevRagFilterConfig(plugin.settings));
+  const jevActive = Boolean(getJevRagMode(currentRagSetting) === "rerank" && getJevRagFilterConfig(plugin.settings));
   const topKJevNoteId = useId();
   const isInternalRag = currentRagSetting
     ? !currentRagSetting.externalIndexPath && currentRagSetting.sourceRagSettings.length === 0
@@ -453,7 +455,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
         plugin.settings.proxyBypass,
         topK,
         plugin.settings,
-        jevFilterActive && searchUntilFound,
+        jevActive && searchUntilFound,
       );
       setResults(searchResults);
     } catch (err) {
@@ -821,7 +823,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                 <input
                   type="checkbox"
                   role="switch"
-                  checked={currentRagSetting.jevRagFilterEnabled}
+                  checked={getJevRagMode(currentRagSetting) !== "off"}
                   disabled={isSearching || isSavingJev}
                   onChange={e => { void handleJevChange(e.target.checked); }}
                 />
@@ -988,12 +990,12 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
               min={1}
               max={999}
               value={topK}
-              aria-describedby={jevFilterActive ? topKJevNoteId : undefined}
+              aria-describedby={jevActive ? topKJevNoteId : undefined}
               onChange={e => setTopK(Math.max(1, Math.min(999, parseInt(e.target.value) || 10)))}
               className="llm-hub-search-param-input"
             />
           </label>
-          {jevFilterActive && (
+          {jevActive && (
             <label className="llm-hub-search-param-label">
               <input
                 type="checkbox"
@@ -1031,11 +1033,12 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
             />
           </label>
         </div>
-        {jevFilterActive && (
+        {jevActive && (
           <div id={topKJevNoteId} className="llm-hub-search-top-k-note">
             {t("search.topKJevNote")}
           </div>
         )}
+        <RagSearchModeBadge hybridSearch={currentRagSetting?.hybridSearch === true} />
         <div className="llm-hub-search-query-row">
           <textarea
             className="llm-hub-search-query-input"
@@ -1198,9 +1201,12 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                   {result.contentType === "pdf" && result.pageLabel && (
                     <span className="llm-hub-search-result-page-label">{result.pageLabel}</span>
                   )}
-                  <span className="llm-hub-search-result-score">
-                    {(result.score * 100).toFixed(1)}%
-                  </span>
+                  <RagSearchResultMeta score={result.score} retrievalSource={result.retrievalSource} />
+                  {result.jevScore !== undefined && (
+                    <span className="llm-hub-search-result-score" title={t("search.jevScore")}>
+                      Jev {result.jevScore.toFixed(2)}/3
+                    </span>
+                  )}
                   {editedIndices.has(index) && (
                     <span className="llm-hub-search-result-edited-badge">{t("search.edited")}</span>
                   )}

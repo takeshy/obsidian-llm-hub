@@ -59,6 +59,51 @@ Each RAG setting controls retrieval:
 - `scoreThreshold` - minimum cosine similarity score (0.0-1.0).
 - `searchFileExtensions` - restrict results to given file extensions; empty means all.
 - `chunkSize` / `chunkOverlap` - chunking parameters used at index time.
+- `jevRagFilterEnabled` - existing Jev ON/OFF toggle. ON uses Score reranking; new indexes default off.
+- `jevRerankCandidateK` - internal scoring batch size; default 40, at least Top K. No extra UI control.
+
+# Jev Reranking
+
+Configure a direct TypeSafe key or select the existing OpenRouter key in Settings → Jev.
+Keep using the per-index Jev ON/OFF toggle and the existing search-until-found checkbox.
+There is no filter/rerank selector, minimum-score field, or candidate-count input.
+Existing enabled filter flags and the transitional `filter` mode migrate to enabled
+Score reranking. Explicit off stays off. The old global toggle is used only when
+migrating settings without a per-index choice.
+
+With search-until-found off, score one candidate batch, sort by descending relevance
+with retrieval order breaking ties, and return Top K even when scores are below 2.
+With **Search until an answer is found** on, score consecutive batches until at least
+one result scores **2 or higher**. Return only results at or above 2 from that first
+qualifying batch, sorted by score and limited to Top K. Stop even if fewer than Top K
+qualify. If all retrieved candidates are exhausted below 2, return no results.
+The internal batch size is max(topK, jevRerankCandidateK), defaulting to at least 40.
+The initial candidate retrieval happens once, without re-embedding for later batches.
+
+The ordered relevance rubric is 0 unrelated, 1 keyword overlap only, 2 partially
+useful, and 3 directly answers the query. Jev's `score` can be fractional; confidence
+measures distribution concentration and is not used for relevance ordering. The
+Search tab shows the Jev score out of 3 alongside the original retrieval score.
+
+Text candidates share one request with the query included once in `state`. Native
+PDF chunks use extracted page text; scanned PDF chunks and native images are scored
+individually with bounded JPEG assets. If content cannot be resolved, the original
+retrieval order is retained rather than scoring a filename label. Audio/video chunks
+also fall back to the original order.
+
+Reranking depends on a cloud service and sends the query and candidate contents to
+the configured TypeSafe or OpenRouter endpoint. More candidates increase processing
+time and cost. OpenRouter Decisions (`/api/alpha/decisions`) is alpha. Each scoring batch
+has a 20-second deadline, including media preparation and rate-limit retries. HTTP 429 observes `Retry-After` within that deadline. A timeout, incomplete
+score response, or other failure stops further batches and returns the original
+retrieval first Top K candidates. Unscored candidates are never treated as below 2.
+
+An in-memory cache holds up to 1,000 scores for 10 minutes. Keys hash the query,
+actual chunk contents (including resolved PDF text/images), path, chunk/page,
+endpoint/model, rubric version, and account. No scores are persisted to disk.
+
+Official contracts: [TypeSafe System One](https://docs.typesafe.ai/api/system-one.md)
+and [OpenRouter Jev](https://openrouter.ai/~typesafe/jev-latest).
 
 # Operations
 

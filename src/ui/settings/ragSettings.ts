@@ -1,6 +1,6 @@
 import { Setting, Notice } from "obsidian";
 import { getLocalRagStore } from "src/core/localRagStore";
-import { getJevRagFilterConfig } from "src/core/jevRagFilter";
+import { getJevRagFilterConfig, getJevRagMode } from "src/core/jevRagFilter";
 import { fetchEmbeddingModels } from "src/core/embeddingProvider";
 import { t } from "src/i18n";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, getGeminiApiKey } from "src/types";
@@ -9,6 +9,7 @@ import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { formatError } from "obsidian-llm-hub-common/core";
 import { setDestructiveButton } from "obsidian-llm-hub-common/obsidian";
 import {
+  addHybridSearchSettings,
   addExcludePatternsSetting,
   addRagSettingHeader,
   addRagSettingSelector,
@@ -56,15 +57,16 @@ function displaySelectedRagSetting(
   const { plugin, display } = ctx;
 
   addRagSettingHeader(containerEl, plugin, name, display);
+  addHybridSearchSettings(containerEl, ragSetting, updates => plugin.updateRagSetting(name, updates), display);
 
   if (getJevRagFilterConfig(plugin.settings)) {
     new Setting(containerEl)
       .setName(t("settings.jevRagFilter"))
       .setDesc(t("settings.jevRagFilter.desc"))
       .addToggle(toggle => toggle
-        .setValue(ragSetting.jevRagFilterEnabled)
-        .onChange(async value => {
-          await plugin.updateRagSetting(name, { jevRagFilterEnabled: value });
+        .setValue(getJevRagMode(ragSetting) !== "off")
+        .onChange(async enabled => {
+          await plugin.updateRagSetting(name, { jevRagFilterEnabled: enabled });
         }));
   }
 

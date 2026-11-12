@@ -1,3 +1,4 @@
+import { ChunkBm25Index, collectHybridCandidates, normalizeHybridSearchOptions, type HybridSearchOptions, type RagRetrievalSource } from "obsidian-llm-hub-common/core";
 import { type App, TFile, htmlToMarkdown } from "obsidian";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -13,6 +14,8 @@ import {
   type LocalRagChunkMeta,
   type RagContentType,
   loadRagIndex,
+  loadRagBm25,
+  saveRagBm25,
   saveRagIndex,
   loadRagVectors,
   saveRagVectors,
@@ -22,8 +25,9 @@ import {
   loadExternalRagVectors,
 } from "./localRagStorage";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type LlmHubSettings, type RagSetting } from "../types";
-import { filterRagResultsWithJev, getJevRagFilterConfig } from "./jevRagFilter";
-import { renderRagPdfImages } from "./ragPdfImages";
+import { getJevRagFilterConfig, getJevRagMode } from "./jevRagFilter";
+import { rerankRagResultsWithJev } from "./jevRagRerank";
+import { renderRagImage, renderRagPdfImages } from "./ragPdfImages";
 // PDF text extraction and page-label mapping are shared.
 import { extractPdfText, extractPdfTextWithOffsets, computePdfPageLabel } from "obsidian-llm-hub-common/vault";
 
@@ -85,6 +89,7 @@ function mergeLoadedIndexes(items: { index: LocalRagIndex; vectors: Float32Array
 }
 
 interface LocalRagEntry {
+  bm25?: Promise<ChunkBm25Index>;
   index: LocalRagIndex | null;
   vectors: Float32Array | null;
 }
@@ -135,6 +140,10 @@ function shouldIncludeFile(filePath: string, config: FilterConfig): boolean {
 }
 
 export interface LocalRagSearchResult {
+  /** Jev relevance on the ordered 0–3 rubric; the retrieval score stays intact. */
+  jevScore?: number;
+  /** Only present on RRF results; kept with the result when settings change. */
+  retrievalSource?: RagRetrievalSource;
   filePath: string;
   text: string;
   score: number;
@@ -188,6 +197,11 @@ class LocalRagStore {
     return renderRagPdfImages(this.app, result.filePath, range.startPage, range.endPage);
   }
 
+  async renderSearchResultJevImages(result: LocalRagSearchResult) {
+    if (result.contentType === "pdf") return this.renderSearchResultPdfImages(result);
+    return this.app && result.contentType === "image" ? renderRagImage(this.app, result.filePath) : null;
+  }
+
   async load(app: App, settingNames: string[], ragSettings?: Record<string, RagSetting>): Promise<void> {
     this.app = app;
     if (ragSettings) {
@@ -237,12 +251,14 @@ class LocalRagStore {
     indexMultimodal = false,
     proxyUrl?: string,
     proxyBypass?: string,
+    hybridSearch = false,
   ): Promise<{ embedded: number; skipped: number; removed: number; errors: string[]; deferredFiles?: number; failedFiles?: string[] }> {
     this.app = app;
     const result = { embedded: 0, skipped: 0, removed: 0, errors: [] as string[] };
     const entry = await this.ensureLoaded(app, settingName);
     let index = entry.index;
     let vectors = entry.vectors;
+    const bm25Snapshot = hybridSearch ? (await this.ensureBm25(app, settingName, entry)).serialize() : undefined;
 
     // Gemini native mode = no custom baseUrl (uses SDK directly)
     const isGeminiNative = !embeddingBaseUrl;
@@ -575,6 +591,11 @@ class LocalRagStore {
 
     await saveRagIndex(app, settingName, index, this.workspaceFolder);
     await saveRagVectors(app, settingName, vectors, this.workspaceFolder);
+    if (bm25Snapshot) {
+      // Keep in-flight searches on the old entry's metadata and postings.
+      const bm25 = new ChunkBm25Index(index.meta, bm25Snapshot);
+      await this.persistBm25(app, settingName, bm25);
+    }
     this.clearAll();
 
     return { ...result, deferredFiles: deferredFiles.length, failedFiles };
@@ -591,6 +612,7 @@ class LocalRagStore {
     searchFileExtensions?: string[],
     proxyUrl?: string,
     proxyBypass?: string,
+    hybrid?: Partial<HybridSearchOptions>,
   ): Promise<LocalRagSearchResult[]> {
     if (!this.app) {
       return [];
@@ -646,15 +668,27 @@ class LocalRagStore {
     }
 
     scores.sort((a, b) => b.score - a.score);
-    const topResults = scores.slice(0, topK);
+    const options = normalizeHybridSearchOptions(hybrid ?? {});
+    let topResults: Array<{ index: number; score: number; retrievalSource?: RagRetrievalSource }> = scores.slice(0, options.hybridSearch ? options.hybridCandidateK : topK)
+      .filter(r => r.score > (scoreThreshold ?? 0));
+    if (options.hybridSearch) {
+      const bm25 = await this.ensureBm25(this.app, settingName, entry);
+      const lexical = bm25.search(query, options.hybridCandidateK, i => {
+        const ext = index.meta[i].filePath.split(".").pop()?.toLowerCase() ?? "";
+        return !extFilter || extFilter.has(ext);
+      });
+      topResults = collectHybridCandidates(
+        topResults.map(r => ({ id: String(r.index), score: r.score })), lexical, topK, options,
+      ).map(r => ({ index: Number(r.id), score: r.score, retrievalSource: r.retrievalSource }));
+    }
 
     return topResults
-      .filter(r => r.score > (scoreThreshold ?? 0))
       .map(r => ({
         filePath: index.meta[r.index].filePath,
         text: index.meta[r.index].text,
         score: r.score,
         chunkIndex: index.meta[r.index].chunkIndex,
+        ...(r.retrievalSource ? { retrievalSource: r.retrievalSource } : {}),
         contentType: index.meta[r.index].contentType,
         pageLabel: index.meta[r.index].pageLabel,
       }));
@@ -791,6 +825,21 @@ class LocalRagStore {
       contentType: meta.contentType,
       pageLabel: meta.pageLabel,
     };
+  }
+
+  private ensureBm25(app: App, settingName: string, entry: LocalRagEntry): Promise<ChunkBm25Index> {
+    return entry.bm25 ??= (async () => {
+      const persistent = !this.externalPaths.has(settingName) && !this.sourceRagSettings.has(settingName);
+      const snapshot = persistent ? await loadRagBm25(app, settingName, this.workspaceFolder) : null;
+      const bm25 = new ChunkBm25Index(entry.index?.meta ?? [], snapshot);
+      if (persistent) await this.persistBm25(app, settingName, bm25);
+      return bm25;
+    })();
+  }
+
+  private async persistBm25(app: App, settingName: string, bm25: ChunkBm25Index): Promise<void> {
+    try { await saveRagBm25(app, settingName, bm25.serialize(), this.workspaceFolder); }
+    catch (error) { console.warn("LLM Hub: could not save BM25 cache", error); }
   }
 
   private async ensureLoaded(
@@ -960,32 +1009,42 @@ export async function searchLocalRagResults(
   const resultLimit = topK ?? ragSetting.topK;
   if (!Number.isFinite(resultLimit) || resultLimit < 1) return [];
   const limit = Math.floor(resultLimit);
-  const filterConfig = settings && ragSetting.jevRagFilterEnabled ? getJevRagFilterConfig(settings) : null;
-  const repeat = Boolean(filterConfig && searchUntilFound);
+  const mode = getJevRagMode(ragSetting);
+  const jevConfig = settings && mode !== "off" ? getJevRagFilterConfig(settings) : null;
+  const repeat = Boolean(jevConfig && searchUntilFound);
+  const candidateK = Number.isFinite(ragSetting.jevRerankCandidateK) && ragSetting.jevRerankCandidateK >= 1
+    ? Math.floor(ragSetting.jevRerankCandidateK) : DEFAULT_RAG_SETTING.jevRerankCandidateK;
   // search already scores and sorts the entire index. Retrieve the eligible
   // candidates once so refilling does not embed the same query again.
   const candidates = await store.search(
     settingName, query, apiKey,
     ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),
-    repeat ? Infinity : limit,
+    repeat ? Infinity : jevConfig ? Math.max(limit, candidateK) : limit,
     ragSetting.embeddingBaseUrl || undefined,
     ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
     ragSetting.searchFileExtensions,
-    proxyUrl, proxyBypass,
+    proxyUrl, proxyBypass, ragSetting,
   );
-  if (!filterConfig || !settings) return candidates;
+  if (!jevConfig || !settings) return candidates;
+  const rerankOptions = {
+    ...jevConfig, proxyUrl: settings.proxyUrl, proxyBypass: settings.proxyBypass,
+    resolvePdfText: (result: LocalRagSearchResult) => store.extractSearchResultPdfText(result),
+    resolveImages: (result: LocalRagSearchResult) => store.renderSearchResultJevImages(result),
+  };
+  if (!repeat) return rerankRagResultsWithJev(query, candidates, limit, rerankOptions);
 
-  // Top K is the candidate batch size. Repeat only when explicitly enabled,
-  // stopping at the first batch with matches or when eligible candidates run out.
-  const eligible = repeat ? candidates : candidates.slice(0, limit);
-  for (let offset = 0; offset < eligible.length; offset += limit) {
-    const batch = eligible.slice(offset, offset + limit);
-    const matches = await filterRagResultsWithJev(
-      query, batch, filterConfig.apiKey, settings.proxyUrl, settings.proxyBypass, undefined, filterConfig.useOpenRouter,
-      result => store.extractSearchResultPdfText(result),
-      result => store.renderSearchResultPdfImages(result),
-    );
-    if (matches.length > 0) return matches;
+  const batchSize = Math.max(limit, candidateK);
+  for (let offset = 0; offset < candidates.length; offset += batchSize) {
+    const batch = candidates.slice(offset, offset + batchSize);
+    // Score the complete batch before applying the answer threshold or Top K.
+    const ranked = await rerankRagResultsWithJev(query, batch, batch.length, rerankOptions);
+    if (ranked.some(result => result.jevScore === undefined)) {
+      // A fallback is not evidence of a score below 2. Stop instead of retrying
+      // every remaining batch, and keep the original retrieval's first results.
+      return candidates.slice(0, limit);
+    }
+    const answers = ranked.filter(result => result.jevScore! >= 2);
+    if (answers.length) return answers.slice(0, limit);
   }
   return [];
 }

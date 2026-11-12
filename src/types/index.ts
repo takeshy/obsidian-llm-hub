@@ -1,3 +1,4 @@
+import { DEFAULT_HYBRID_SEARCH, type HybridSearchOptions } from "obsidian-llm-hub-common/core";
 import type { WebSearchSettings } from "../core/webSearchMode";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "obsidian-llm-hub-common/core";
 import type { McpServerConfig } from "obsidian-llm-hub-common/core";
@@ -314,9 +315,13 @@ export const DEFAULT_ENCRYPTION_SETTINGS: EncryptionSettings = {
 };
 
 // 個別のRAG設定
-export interface RagSetting {
-  jevRagFilterEnabled: boolean;  // Filter this index when Jev credentials are configured
-  searchUntilFound: boolean;     // Check further Jev batches until a match is found
+export type JevRagMode = "off" | "rerank";
+
+export interface RagSetting extends HybridSearchOptions {
+  jevMode: JevRagMode;
+  jevRerankCandidateK: number;
+  jevRagFilterEnabled: boolean;  // Existing ON/OFF toggle; synchronized with jevMode === "rerank"
+  searchUntilFound: boolean;     // Check further Jev batches until a score >= 2 is found
   embeddingBaseUrl: string;      // Embedding API URL (空 = Gemini default)
   embeddingApiKey: string;       // APIキー (空 = Gemini API key fallback)
   embeddingApiKeyConfigured?: boolean; // 別端末で設定済み (secretStorage利用時のみ)
@@ -352,7 +357,10 @@ export const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-2-preview";
 
 // デフォルトのRAG設定
 export const DEFAULT_RAG_SETTING: RagSetting = {
-  jevRagFilterEnabled: true,
+  ...DEFAULT_HYBRID_SEARCH,
+  jevMode: "off",
+  jevRerankCandidateK: 40,
+  jevRagFilterEnabled: false,
   searchUntilFound: false,
   embeddingBaseUrl: "",
   embeddingApiKey: "",

@@ -1,19 +1,24 @@
 # Shared library package
 
-`obsidian-llm-hub-common-0.1.14.tgz` contains prebuilt JavaScript and TypeScript declarations for `npm ci --ignore-scripts`.
+`obsidian-llm-hub-common-0.1.16.tgz` contains prebuilt JavaScript and TypeScript declarations for `npm ci --ignore-scripts`.
 
-Source: [takeshy/obsidian-llm-hub-common commit 1727cce](https://github.com/takeshy/obsidian-llm-hub-common/commit/1727cce954654b6ee2579abc1103915a6e8f6f8c), version 0.1.14, committed and pushed to main with a clean working tree.
+Source: [takeshy/obsidian-llm-hub-common commit 3176799](https://github.com/takeshy/obsidian-llm-hub-common/commit/317679917d7984721c50c909e2800bf99a6fb333), version 0.1.16, on branch `feat/hybrid-rag-search`.
 
-Since 0.1.11, the library rejects `rag-sync` on hosts without `runRagSyncNode` (0.1.12) and documents that `rag-sync.path` may be omitted and that `ragSetting` supports `{{variables}}` (0.1.13). Version 0.1.14 makes the `rag-sync` node editor's RAG setting a text field with setting-name suggestions, lets `runRagSyncNode` return the setting it used so logs and history record it, shows a single group of loading dots in the generation modal, and replaces Cancel with Close after a generation error.
+Version 0.1.16 adds retrieval-source metadata to fused candidates, shared search-mode
+and source badges, and explicit RRF score display. Both hosts use the same UI and
+all nine translations. Ordinary vector results retain cosine percentage display;
+fused results show `RRF` scores and a Vector / BM25 / Both label. The mode badge
+reflects current settings, while existing results retain their retrieval metadata.
 
-The optional `WorkflowHost.getRagSearchOptions` hook and the Jev command-node search-until-found checkbox from 0.1.11 are unchanged. Jev credentials, API requests, and search behavior remain in this plugin.
-
-The shared file-reference resolver handles wikilinks, @ references, and vault paths. Chat messages preserve the original references. Only model requests annotate each tool-readable reference with path, type, and byte size; file contents are fetched on demand and reading instructions stay in the system prompt. Hosts retain their inline fallback policy, vault tool scope, PDF reader, and character limit.
+Includes the shared tokenizer, incremental BM25 index, chunk cache adapter and RRF
+candidate selection from 0.1.15. Hybrid retrieval remains opt-in. Existing cached
+text builds BM25 without new document embeddings.
 
 Archive integrity:
 
 ```text
-sha512-Qr/V5tGdXj+QjVEXoIRrtwyKpvKhnakgbTH9VUp2aTWl1i06TaUNEuViVYW1mTRHiEKfDHBTavkbiVIBUI5/fg==
+sha512-uXRYdbZVP9W8YuVK5/Ri4NmQY2ZZQGrnTpw4jb59ybAtGCI0Uc8+EvLbrkgaVek1+ie4IJrUwOgY7DXJ5Bp14g==
 ```
 
-Created with `npm pack --ignore-scripts` after the build and the full shared-library test suite passed. The MIT license is included.
+Created with `npm pack --ignore-scripts` after the build and full shared-library
+test suite passed. The MIT license is included. Previous archives are retained.

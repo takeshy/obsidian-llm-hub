@@ -1,5 +1,13 @@
 // Portuguese translations
 export const pt: Record<string, string> = {
+  "search.topKJevNote": "Jev avalia grupos; Top K limita os resultados. A busca até resposta retorna notas de 2 ou mais do primeiro grupo válido. Verificações adicionais aumentam uso da API e tempo.",
+  "search.helpSearchUntilFound": "Pesquisar até encontrar resposta — com Jev, avaliar grupos até encontrar candidatos com pelo menos 2 pontos ou esgotar os candidatos. Desativado: apenas um grupo.",
+  "search.helpJev": "Jev pontua e ordena candidatos. Pesquisar até encontrar resposta exige pelo menos 2 pontos e retorna até Top K do primeiro grupo válido.",
+  "search.jevFilter": "Ordenar com Jev",
+  "settings.jevRagFilter.desc": "Jev pontua a relevância de 0 a 3 e ordena candidatos. Aplica-se ao Chat, fluxos e Discord. Desativado por padrão para novos índices.",
+  "settings.jevRagFilter": "Ordenar resultados RAG com Jev",
+  "search.jevScore": "Relevância Jev: 0 irrelevante, 1 apenas palavras-chave, 2 parcialmente útil, 3 resposta direta.",
+
   // Settings - Headings
   "settings.cliProviders": "Provedores CLI",
 
@@ -367,7 +375,7 @@ export const pt: Record<string, string> = {
   "search.discussWithSelected": "Discutir com selecionados",
   "search.pdfMode": "Resultados PDF",
   "search.helpTitle": "Ajuda de parametros",
-  "search.helpTopK": "Top K — Numero maximo de resultados a retornar.",
+  "search.helpTopK": "Top K — máximo de resultados após a ordenação.",
   "search.helpScoreThreshold": "Pontuacao minima — Pontuacao de similaridade minima (0.0–1.0). Resultados abaixo sao excluidos.",
   "search.helpExt": "Ext. — Extensoes de arquivo separadas por virgulas para filtrar (ex. md, pdf). Vazio = todos os arquivos.",
   "search.helpChunkSize": "Tamanho do fragmento — Numero de caracteres por fragmento de texto ao indexar. Fragmentos maiores retêm mais contexto, mas podem reduzir a precisão.",

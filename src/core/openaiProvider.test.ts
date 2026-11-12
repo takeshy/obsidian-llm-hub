@@ -55,6 +55,110 @@ describe("openaiChatWithToolsStream", () => {
     openAiConstructor.mockReset();
   });
 
+  it.each(["https://api.mistral.ai/v1", "https://API.MISTRAL.AI/v1/"])(
+    "separates Mistral thinking arrays, mixed blocks and plain text at %s", async (baseUrl) => {
+      createCompletion.mockResolvedValueOnce(round(
+        { content: [{ type: "thinking", thinking: [{ type: "text", text: "Let me " }] }] },
+        { content: [
+          { type: "thinking", thinking: [{ type: "text", text: "think." }] },
+          { type: "text", text: "Hello" },
+        ] },
+        { content: "!" },
+      ));
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of openaiChatWithToolsStream(
+        baseUrl, "key", "zai-glm-5-3-flash",
+        [{ role: "user", content: "Hello", timestamp: 0 }], [], "system", async () => "",
+      )) chunks.push(chunk);
+
+      expect(chunks.filter(chunk => chunk.type === "thinking").map(chunk => chunk.content).join(""))
+        .toBe("Let me think.");
+      expect(chunks.filter(chunk => chunk.type === "text").map(chunk => chunk.content).join(""))
+        .toBe("Hello!");
+      expect(chunks.some(chunk => chunk.type === "error")).toBe(false);
+      expect(chunks.at(-1)?.type).toBe("done");
+    },
+  );
+
+  it("ignores empty, malformed and unknown Mistral content blocks", async () => {
+    createCompletion.mockResolvedValueOnce(round(
+      { content: null },
+      { content: [] },
+      { content: [null, 42, { type: "other", text: "skip" }, { type: "text", text: {} },
+        { type: "thinking", thinking: [null, { type: "text", text: 42 }] },
+        { type: "thinking", thinking: [] }, { type: "text", text: "Answer." }] },
+    ));
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of openaiChatWithToolsStream(
+      "https://api.mistral.ai/v1", "key", "zai-glm-5-3-flash",
+      [{ role: "user", content: "Hello", timestamp: 0 }], [], "system", async () => "",
+    )) chunks.push(chunk);
+    expect(chunks.filter(chunk => chunk.type !== "done")).toEqual([{ type: "text", content: "Answer." }]);
+    expect(chunks.at(-1)?.type).toBe("done");
+  });
+
+  it("replays Mistral thinking in content on saved turns and tool continuations", async () => {
+    createCompletion.mockImplementationOnce(async request => {
+      const saved = request.messages.find((message: { role: string }) => message.role === "assistant");
+      expect(saved.content).toEqual([
+        { type: "thinking", thinking: [{ type: "text", text: "Earlier reasoning." }] },
+        { type: "text", text: "Earlier answer." },
+      ]);
+      expect(saved).not.toHaveProperty("reasoning_content");
+      return round(
+        { content: [{ type: "thinking", thinking: [{ type: "text", text: "Read the note." }] }] },
+        { content: [{ type: "text", text: "Reading." }] },
+        { tool_calls: [{ index: 0, id: "call_read", type: "function", function: { name: "read_note", arguments: '{"path":"a.md"}' } }] },
+      );
+    }).mockImplementationOnce(async request => {
+      const assistant = request.messages.filter((message: { role: string }) => message.role === "assistant").at(-1);
+      expect(assistant.content).toEqual([
+        { type: "thinking", thinking: [{ type: "text", text: "Read the note." }] },
+        { type: "text", text: "Reading." },
+      ]);
+      expect(assistant).not.toHaveProperty("reasoning_content");
+      expect(request.messages.at(-1)).toEqual({ role: "tool", content: "note body", tool_call_id: "call_read" });
+      return round({ content: "Here it is." });
+    });
+    const executeTool = vi.fn().mockResolvedValue("note body");
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of openaiChatWithToolsStream(
+      "https://api.mistral.ai/v1", "key", "zai-glm-5-3-flash",
+      [
+        { role: "assistant", content: "Earlier answer.", thinking: "Earlier reasoning.", timestamp: 0 },
+        { role: "user", content: "read a.md", timestamp: 1 },
+      ], [readNote], "system", executeTool,
+    )) chunks.push(chunk);
+    expect(executeTool).toHaveBeenCalledWith("read_note", { path: "a.md" });
+    expect(createCompletion).toHaveBeenCalledTimes(2);
+    expect(chunks.some(chunk => chunk.type === "error")).toBe(false);
+    expect(chunks.at(-1)?.type).toBe("done");
+  });
+
+  it.each([
+    "http://localhost:1234/v1", "https://openrouter.ai/api/v1",
+    "https://api.mistral.ai.example.com/v1", "https://example.com/api.mistral.ai/v1",
+  ])("preserves other providers' reasoning format at %s even with a GLM model name", async baseUrl => {
+    createCompletion.mockImplementationOnce(async request => {
+      const saved = request.messages.find((message: { role: string }) => message.role === "assistant");
+      expect(saved.content).toBe("Earlier answer.");
+      expect(saved.reasoning_content).toBe("Earlier reasoning.");
+      return round({ content: "<think>New reasoning.</think>Answer." });
+    });
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of openaiChatWithToolsStream(
+      baseUrl, "key", "zai-glm-5-3-flash",
+      [
+        { role: "assistant", content: "Earlier answer.", thinking: "Earlier reasoning.", timestamp: 0 },
+        { role: "user", content: "Hello", timestamp: 1 },
+      ], [], "system", async () => "",
+    )) chunks.push(chunk);
+    expect(chunks.filter(chunk => chunk.type !== "done")).toEqual([
+      { type: "thinking", content: "New reasoning." }, { type: "text", content: "Answer." },
+    ]);
+    expect(chunks.at(-1)?.type).toBe("done");
+  });
+
   it("sends manually entered OpenRouter model suffixes unchanged", async () => {
     createCompletion.mockResolvedValueOnce(round({ content: "Hello." }));
     const stream = openaiChatWithToolsStream(

@@ -12,7 +12,20 @@ The RAG Search tab is the manual counterpart to Chat's search menu. It lets user
 
 # Search and Filtering
 
-Results are ranked by cosine similarity between the query embedding and indexed chunks. With Jev active, **Search until an answer is found** checks Top K candidates per batch until a batch contains matches or eligible candidates run out, then returns all matches from that batch. The checkbox is saved per RAG setting and shared with Chat, Workflows, and Discord. Chat exposes it beside RAG Top K. A Workflow command node can override the saved value with `ragSearchUntilFound: true` or `false`; omitted values follow the index preference. After retrieval, users can filter the result list with one or more keyword fields:
+The existing Jev toggle enables Score reranking; no separate mode selector or
+candidate-count input is shown. Jev scores candidate passages on the 0–3 rubric,
+sorts them, preserves retrieval order for ties, and returns up to Top K. The header
+shows Jev's score out of 3 separately from the original retrieval score.
+
+With **Search until an answer is found** enabled, candidates are checked in batches
+until the first batch contains a score **at least 2**. Only results scoring at least
+2 from that batch are returned, in score order, up to Top K. If none qualify before
+candidates run out, return no results. If the checkbox is off, score one batch and
+return the best Top K, including scores below 2. On a scoring failure, stop and return
+the original retrieval Top K. The preference is shared with Chat, Workflows, and
+Discord; workflow `ragSearchUntilFound: true` or `false` can override the saved value.
+
+After retrieval, users can filter the result list with one or more keyword fields:
 
 - Terms inside one field use OR logic.
 - Quoted phrases (e.g. `"release notes"`) are matched as a single term.
@@ -70,6 +83,7 @@ The search file extensions filter sits in the search parameter row next to Top K
 The Search tab gear exposes per-RAG-setting controls. For all settings:
 
 - AI Refine Model.
+- Existing Jev ON/OFF toggle, when credentials are configured.
 - Last-sync timestamp.
 - Indexed files list with per-file chunk counts.
 
