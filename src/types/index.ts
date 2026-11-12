@@ -315,13 +315,13 @@ export const DEFAULT_ENCRYPTION_SETTINGS: EncryptionSettings = {
 };
 
 // 個別のRAG設定
-export type JevRagMode = "off" | "filter" | "rerank";
+export type JevRagMode = "off" | "rerank";
 
 export interface RagSetting extends HybridSearchOptions {
   jevMode: JevRagMode;
   jevRerankCandidateK: number;
-  jevRagFilterEnabled: boolean;  // Legacy alias, synchronized with jevMode === "filter"
-  searchUntilFound: boolean;     // Check further Jev batches until a match is found
+  jevRagFilterEnabled: boolean;  // Existing ON/OFF toggle; synchronized with jevMode === "rerank"
+  searchUntilFound: boolean;     // Check further Jev batches until a score >= 2 is found
   embeddingBaseUrl: string;      // Embedding API URL (空 = Gemini default)
   embeddingApiKey: string;       // APIキー (空 = Gemini API key fallback)
   embeddingApiKeyConfigured?: boolean; // 別端末で設定済み (secretStorage利用時のみ)

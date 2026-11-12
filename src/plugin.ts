@@ -323,7 +323,7 @@ export class LlmHubPlugin extends Plugin {
         const settingName = name === undefined ? this.workspaceState.selectedRagSetting : name;
         const setting = settingName ? this.getRagSetting(settingName) : null;
         return {
-          jevEnabled: Boolean(getJevRagMode(setting) === "filter" && getJevRagFilterConfig(this.settings)),
+          jevEnabled: Boolean(getJevRagMode(setting) === "rerank" && getJevRagFilterConfig(this.settings)),
           searchUntilFound: setting?.searchUntilFound ?? false,
         };
       },

@@ -1,14 +1,12 @@
 // Korean translations
 export const ko: Record<string, string> = {
-  "settings.jevMode": "Jev 모드",
-  "settings.jevMode.desc": "필터는 불일치 결과를 제외하고 재정렬은 관련도를 0~3으로 평가합니다. 설정된 클라우드 API를 사용합니다. 재정렬은 기본적으로 꺼져 있습니다.",
-  "settings.jevMode.off": "끄기",
-  "settings.jevMode.filter": "필터",
-  "settings.jevMode.rerank": "재정렬",
-  "settings.jevRerankCandidateK": "재정렬 후보 수",
-  "settings.jevRerankCandidateK.desc": "Top K를 반환하기 전에 평가할 후보 수입니다(기본 40, 최소 Top K). 후보가 많을수록 클라우드 처리 시간과 비용이 늘어납니다.",
+  "search.topKJevNote": "Jev가 후보 그룹을 평가하고 Top K는 반환 수를 제한합니다. 답변을 찾을 때까지 검색은 처음 일치한 그룹의 2점 이상 결과를 반환합니다. 반복 검사는 API 사용량과 시간을 늘릴 수 있습니다.",
+  "search.helpSearchUntilFound": "답변을 찾을 때까지 검색 — Jev를 켜면 2점 이상인 후보가 나오거나 후보가 소진될 때까지 다음 그룹을 평가합니다. 끄면 한 그룹만 평가합니다.",
+  "search.helpJev": "Jev가 후보를 평가하고 정렬합니다. 답변을 찾을 때까지 검색은 2점 이상을 요구하며 처음 일치한 그룹에서 최대 Top K개를 반환합니다.",
+  "search.jevFilter": "Jev로 정렬",
+  "settings.jevRagFilter.desc": "Jev가 관련도를 0~3점으로 평가해 후보를 정렬합니다. Chat, 워크플로 및 Discord에도 적용됩니다. 새 인덱스에서는 기본적으로 꺼집니다.",
+  "settings.jevRagFilter": "Jev로 RAG 결과 정렬",
   "search.jevScore": "Jev 관련도: 0 무관, 1 키워드만 일치, 2 부분적으로 유용, 3 질문에 직접 답변.",
-  "search.helpJevMode": "Jev는 불일치를 제외하거나 더 많은 후보를 평가하여 Top K를 반환합니다. 답변을 찾을 때까지 검색은 필터 모드 전용입니다. 재정렬 실패 시 원래 검색 순서를 유지합니다.",
 
   // Settings - Headings
   "settings.cliProviders": "CLI 제공자",
@@ -377,7 +375,7 @@ export const ko: Record<string, string> = {
   "search.discussWithSelected": "선택 항목으로 토론",
   "search.pdfMode": "PDF 결과",
   "search.helpTitle": "매개변수 도움말",
-  "search.helpTopK": "Top K — 반환할 최대 결과 수.",
+  "search.helpTopK": "Top K — 정렬 후 반환할 최대 결과 수입니다.",
   "search.helpScoreThreshold": "최소 점수 — 최소 유사도 점수 (0.0–1.0). 이 값 미만의 결과는 제외됩니다.",
   "search.helpExt": "Ext. — 결과를 필터링할 파일 확장자 (쉼표 구분, 예: md, pdf). 비어 있으면 모든 파일.",
   "search.helpChunkSize": "청크 크기 — 인덱싱 시 텍스트 청크당 문자 수. 클수록 더 많은 맥락을 유지하지만 정밀도가 떨어질 수 있습니다.",

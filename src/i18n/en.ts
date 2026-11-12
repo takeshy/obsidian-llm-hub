@@ -2,15 +2,8 @@ import type { SharedTranslationKey } from "obsidian-llm-hub-common/i18n";
 
 // English translations (base language)
 export const en = {
-  "settings.jevMode": "Jev mode",
-  "settings.jevMode.desc": "Filter removes nonmatching results; rerank scores relevance from 0 to 3 and sorts candidates. Uses the configured cloud API. Reranking is off by default.",
-  "settings.jevMode.off": "Off",
-  "settings.jevMode.filter": "Filter",
-  "settings.jevMode.rerank": "Rerank",
-  "settings.jevRerankCandidateK": "Rerank candidates",
-  "settings.jevRerankCandidateK.desc": "Candidates to score before returning Top K (default 40, at least Top K). More candidates increase cloud processing time and cost.",
+  "search.helpJev": "Jev scores and sorts candidates. Search until an answer is found requires a score of at least 2 and returns up to Top K from the first qualifying batch.",
   "search.jevScore": "Jev relevance: 0 unrelated, 1 keyword overlap only, 2 partially useful, 3 directly answers the query.",
-  "search.helpJevMode": "Jev: filter removes nonmatches; rerank scores a larger candidate pool and returns Top K. Search until an answer is found applies only to filter mode. Reranking failures keep the original retrieval order.",
 
   "live.title": "Live conversation",
   "live.provider": "Provider",
@@ -245,8 +238,8 @@ export const en = {
   // Settings - RAG
   "settings.scoreThreshold": "Score threshold",
   "settings.scoreThreshold.desc": "Minimum similarity score (0.0-1.0) to include in results. 0 = no filtering",
-  "settings.jevRagFilter": "Keep only matching RAG results",
-  "settings.jevRagFilter.desc": "Use Jev to keep only matching results from this RAG index. Also applies in chat, workflows, and Discord. Enabled by default for new indexes.",
+  "settings.jevRagFilter": "Rerank RAG results with Jev",
+  "settings.jevRagFilter.desc": "Use Jev to score relevance from 0 to 3 and reorder candidates. Also applies in chat, workflows, and Discord. Off by default for new indexes.",
   "settings.jevRagFilter.requiresKey": "Enter a Jev API key, or select OpenRouter and configure its API key first.",
   "settings.jevApiKey": "Jev API key",
   "settings.jevApiKey.desc": "Official TypeSafe API key created at console.typesafe.ai. Leave this empty when using OpenRouter.",
@@ -255,9 +248,9 @@ export const en = {
   "settings.jevUseOpenRouter.requiresKey": "Configure an OpenRouter API key under API providers before using this option.",
   "settings.jev": "Jev",
   "search.searchUntilFound": "Search until an answer is found",
-  "search.helpSearchUntilFound": "Search until an answer is found — available with Jev enabled. Check Top K candidates at a time until matching results are found or no candidates meet the score threshold. When off, check one batch only.",
-  "search.jevFilter": "Filter with Jev",
-  "search.topKJevNote": "With Jev enabled, Top K is the number of candidates checked per round. Enable searching until an answer is found to check more candidates in similarity order until matching results are found or no candidates meet the score threshold. All matches from that round are returned. When off, check Top K candidates once. Repeated checks can increase API usage and search time.",
+  "search.helpSearchUntilFound": "Search until an answer is found — with Jev enabled, keep checking batches until a candidate scores at least 2 or candidates run out. When off, score one batch.",
+  "search.jevFilter": "Rerank with Jev",
+  "search.topKJevNote": "Jev scores candidate batches; Top K limits the returned results. Search until an answer is found returns scores of 2 or higher from the first qualifying batch. Repeated checks can increase API usage and time.",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "Embedding model",
@@ -507,7 +500,7 @@ export const en = {
   "search.discussWithSelected": "Discuss with selected",
   "search.pdfMode": "PDF results",
   "search.helpTitle": "Parameter help",
-  "search.helpTopK": "Top K — number of candidates to retrieve per round, before Jev filtering.",
+  "search.helpTopK": "Top K — maximum results returned after ranking.",
   "search.helpScoreThreshold": "Min score — Minimum similarity score (0.0–1.0). Results below this threshold are excluded.",
   "search.helpExt": "Ext. — Comma-separated file extensions to filter results (e.g., md, pdf). Empty means all files.",
   "search.helpChunkSize": "Chunk size — number of characters per text chunk when indexing. Larger chunks retain more context but may reduce precision.",

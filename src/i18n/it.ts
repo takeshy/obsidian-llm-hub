@@ -1,14 +1,12 @@
 // Italian translations
 export const it: Record<string, string> = {
-  "settings.jevMode": "Modalità Jev",
-  "settings.jevMode.desc": "Il filtro elimina risultati non pertinenti; il riordinamento assegna rilevanza da 0 a 3. Usa l’API cloud configurata. Riordinamento disattivato per impostazione predefinita.",
-  "settings.jevMode.off": "Disattivato",
-  "settings.jevMode.filter": "Filtra",
-  "settings.jevMode.rerank": "Riordina",
-  "settings.jevRerankCandidateK": "Candidati da riordinare",
-  "settings.jevRerankCandidateK.desc": "Candidati valutati prima di Top K (40 predefiniti, almeno Top K). Più candidati aumentano tempi e costi nel cloud.",
+  "search.topKJevNote": "Jev valuta gruppi di candidati; Top K limita i risultati. La ricerca fino a una risposta restituisce i punteggi da 2 in su del primo gruppo valido. Ulteriori verifiche aumentano uso API e durata.",
+  "search.helpSearchUntilFound": "Cerca fino a una risposta — con Jev, valuta altri gruppi finché un candidato raggiunge 2 punti o i candidati finiscono. Se disattivato, valuta un solo gruppo.",
+  "search.helpJev": "Jev valuta e ordina i candidati. La ricerca fino a una risposta richiede almeno 2 punti e restituisce fino a Top K dal primo gruppo valido.",
+  "search.jevFilter": "Ordina con Jev",
+  "settings.jevRagFilter.desc": "Jev assegna rilevanza da 0 a 3 e ordina i candidati. Vale per Chat, workflow e Discord. Disattivato per i nuovi indici.",
+  "settings.jevRagFilter": "Ordina i risultati RAG con Jev",
   "search.jevScore": "Rilevanza Jev: 0 non pertinente, 1 solo parole chiave, 2 parzialmente utile, 3 risposta diretta.",
-  "search.helpJevMode": "Jev filtra i risultati o valuta più candidati prima di Top K. La ricerca fino a una risposta vale solo per il filtro. In caso di errore, mantiene l’ordine originale.",
 
   // Settings - Headings
   "settings.cliProviders": "Provider CLI",
@@ -377,7 +375,7 @@ export const it: Record<string, string> = {
   "search.discussWithSelected": "Discuti con la selezione",
   "search.pdfMode": "Risultati PDF",
   "search.helpTitle": "Aiuto parametri",
-  "search.helpTopK": "Top K — Numero massimo di risultati da restituire.",
+  "search.helpTopK": "Top K — numero massimo di risultati dopo l’ordinamento.",
   "search.helpScoreThreshold": "Punteggio minimo — Punteggio di similarità minimo (0.0–1.0). I risultati inferiori vengono esclusi.",
   "search.helpExt": "Ext. — Estensioni file separate da virgola per filtrare (es. md, pdf). Vuoto = tutti i file.",
   "search.helpChunkSize": "Dimensione chunk — Numero di caratteri per blocco di testo durante l'indicizzazione. Blocchi più grandi mantengono più contesto ma possono ridurre la precisione.",

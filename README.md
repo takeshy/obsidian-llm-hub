@@ -980,36 +980,24 @@ The first hybrid search or enabled sync automatically creates `bm25.json` beside
 
 Japanese and other CJK text use word segmentation with `Intl.Segmenter`; older runtimes fall back to overlapping two-character tokens. Identifiers such as `PRJ-123` and `snake_case` are retained whole and split into components. Bigrams use more memory and may match partial words. A query embedding is still required. Gemini-native PDF chunks contain labels rather than extracted text, so keyword retrieval is limited for them. Existing keyword filters/search are unchanged.
 
-#### Filtering and reranking RAG results with Jev
+#### Reranking RAG results with Jev
 
-Choose **Jev mode** per RAG setting: **Off**, **Filter** (keep/exclude), or **Rerank**. Reranking retrieves at least `max(Top K, rerank candidates)` results, scores relevance on a 0–3 rubric, sorts by score with original order as the tie-breaker, and returns Top K. **Rerank candidates** defaults to 40. Score levels are 0 unrelated, 1 keyword overlap only, 2 partially useful, and 3 directly answers the query. Fractional scores are allowed; confidence is not a relevance score. The Search tab shows Jev relevance out of 3 separately from the original retrieval score.
+Use the existing **Rerank RAG results with Jev** ON/OFF toggle per index. Settings keep the same toggle and **Search until an answer is found** checkbox; there is no separate filter/rerank mode selector or candidate-count input. Existing enabled filter settings remain enabled and now use Score reranking. New indexes default to OFF. Older global preferences are used only when the index has no per-index choice.
 
-Text candidates are evaluated together, and scanned PDF/native image chunks use individual image requests. Reranking uses the configured cloud service, so more candidates can increase latency and cost. OpenRouter Decisions is alpha. A 20-second overall deadline bounds processing and `Retry-After` retries; failures return the original Top K. Successful scores are cached in memory for up to 10 minutes using content, query, source/page, model, account and rubric version. **Search until an answer is found** remains exclusive to Filter mode.
+Jev scores relevance from 0 to 3: 0 unrelated, 1 keyword overlap only, 2 partly useful, 3 directly answers the query. Scores may be fractional. Candidates are sorted by score, ties keep retrieval order, and Top K limits the returned results. Confidence is not used for ranking. Search results display the Jev score out of 3 next to the original retrieval score.
 
-Vector search returns semantically similar chunks, so its results can include text that shares related wording without actually matching the question. Configure shared credentials under **Jev** in Settings, then toggle **Keep only matching RAG results** separately for each RAG setting. For example, enable it for notes and disable it for PDFs. Jev filtering also applies when that RAG index is used from Chat, Workflows, or Discord. For a combined index, its own toggle applies to the combined results.
+With **Search until an answer is found** ON, Jev checks consecutive candidate batches until a batch contains a score **greater than or equal to 2**. It returns only those results scoring at least 2 from that first qualifying batch, in score order, up to Top K. If no candidates qualify, it returns no results. With the checkbox OFF, Jev scores one batch and returns the highest-scoring Top K, including scores below 2. The internal batch size defaults to 40 and is at least Top K; it is not an additional UI setting.
 
-New RAG settings default to Off. Existing per-index filter flags migrate to Filter when ON and Off when OFF; older global preferences are migrated only when there is no per-index choice. Filtering is inactive until Jev credentials are configured. In RAG Search, Top K is the number of candidates checked per round. In Jev Filter mode, enable **Search until an answer is found** to check Top K batches in similarity order until matching results are found or no candidates meet the score threshold. All matches from the first successful batch are returned. Leave it off to check Top K candidates once. Repeated checks can increase API usage and search time.
+The toggle, Top K, and search-until-found preference apply in Chat, RAG Search, Workflows, and Discord. Chat exposes the checkbox beside RAG Top K. Workflow command nodes can override the saved preference with `ragSearchUntilFound: true` or `false`; omitted values follow the index preference. The RAG Search gear retains the existing Jev toggle.
 
-In Chat, select a RAG index and set **RAG Top K** next to the search selector. Chat uses this many candidate chunks per `rag_search` call, before Jev filtering, with at most three calls per turn. In Jev Filter mode, **Search until an answer is found** appears beside Top K. Both values are saved per RAG setting, remembered after restarting, and shared with RAG Search, Workflows, and Discord. Workflow command nodes also offer this checkbox when the selected index has Jev active; a node can override the saved preference with `ragSearchUntilFound: true` or `false`. Omit this property to follow the index preference.
+Text candidates share one request per batch. Native PDFs use matched-page text where possible; scanned PDFs and images use individual bounded image requests. If scoring or media preparation fails, the search stops and returns the original retrieval Top K rather than treating unscored candidates as low scores. Each scoring batch has a 20-second deadline including `Retry-After` retries. Successful scores are cached in memory for ten minutes.
 
-You can also select **Jev mode** and the rerank candidate count in the settings card opened with the settings icon in RAG Search. This saves the selected index's setting and applies from the next search.
+Jev uses the configured cloud API; more candidates or repeated batches increase latency and cost. OpenRouter Decisions is alpha. Configure credentials in Settings → Jev:
 
-For PDFs indexed with Gemini's native embeddings, Jev uses text extracted from the matched pages. If no text can be extracted, the matched pages are rendered as images for Jev to judge, including scanned PDFs without a text layer. This works with both OpenRouter and a direct Jev key. Each scanned chunk uses a separate image request. Results are retained without filtering if rendering fails or exceeds the limits (16 pages or 12 MiB of base64 image data per chunk).
+- Enter a TypeSafe API key from the [TypeSafe console](https://console.typesafe.ai/). Direct requests use the [official System One endpoint](https://docs.typesafe.ai/api/system-one).
+- Or select **Use the OpenRouter key** when an OpenRouter provider key is configured.
 
-Jev can be configured in either of these ways:
-
-- Enter an official TypeSafe API key created in the [TypeSafe console](https://console.typesafe.ai/). Direct requests use `https://api.typesafe.ai/v1/systemone`, as documented in the [official API reference](https://docs.typesafe.ai/api/system-one).
-- If an OpenRouter key is already configured under API providers, enable **Use the OpenRouter key**; no separate Jev API key is required
-
-![Jev RAG filtering settings](docs/images/jev_setting.png)
-
-Without Jev, all five results from vector similarity search are displayed for this query.
-
-![RAG search results without Jev](docs/images/rag_search_without_jev.png)
-
-With Jev enabled, only the two results judged to match the query remain.
-
-![RAG search results filtered by Jev](docs/images/rag_search_with_jev.png)
+![Jev RAG settings](docs/images/jev_setting.png)
 
 ### RAG Search Tab
 

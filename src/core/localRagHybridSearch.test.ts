@@ -3,6 +3,7 @@ import { TFile, type App } from "obsidian";
 import { ChunkBm25Index } from "obsidian-llm-hub-common/core";
 import { DEFAULT_RAG_SETTING, DEFAULT_SETTINGS, type RagSetting } from "../types";
 import * as jev from "./jevRagFilter";
+import * as rerank from "./jevRagRerank";
 import { createEmptyIndex, type LocalRagIndex, type LocalRagChunkMeta } from "./localRagStorage";
 import { initLocalRagStore, resetLocalRagStore, searchLocalRagResults } from "./localRagStore";
 
@@ -89,15 +90,16 @@ describe("hybrid local RAG retrieval", () => {
     expect(filtered[0].retrievalSource).toBe("both");
   });
 
-  it("passes the fused topK, including lexical-only matches, through the existing Jev filter", async () => {
+  it("passes fused candidates, including lexical-only matches, to Jev scoring", async () => {
     const f = fixture();
     vi.spyOn(jev, "getJevRagFilterConfig").mockReturnValue({ apiKey: "jev-key", useOpenRouter: false });
-    const filter = vi.spyOn(jev, "filterRagResultsWithJev").mockImplementation(async (_query, batch) => batch.filter(r => r.filePath === "exact.md"));
-    const setting = { ...f.setting, hybridSearch: true, scoreThreshold: 0.95, topK: 2, jevMode: "filter" as const, jevRagFilterEnabled: true };
+    const rank = vi.spyOn(rerank, "rerankRagResultsWithJev").mockImplementation(async (_query, batch) => batch.filter(r => r.filePath === "exact.md").map(r => ({ ...r, jevScore: 3 })));
+    const setting = { ...f.setting, hybridSearch: true, scoreThreshold: 0.95, topK: 2, jevMode: "rerank" as const, jevRagFilterEnabled: true };
     await initLocalRagStore().load(f.app, ["test"], { test: setting });
     const results = await searchLocalRagResults("test", "PRJ-123", setting, "key", undefined, undefined, undefined, DEFAULT_SETTINGS);
     expect(results.map(r => r.filePath)).toEqual(["exact.md"]);
-    expect(filter.mock.calls[0][1].map(r => r.filePath)).toEqual(["semantic.md", "exact.md"]);
+    expect(rank.mock.calls[0][1].map(r => r.filePath)).toEqual(["semantic.md", "exact.md", "both.txt"]);
+    expect(results[0]).toMatchObject({ retrievalSource: "bm25", jevScore: 3 });
   });
 
   it("keeps in-flight searches consistent when a sync replaces their cached corpus", async () => {

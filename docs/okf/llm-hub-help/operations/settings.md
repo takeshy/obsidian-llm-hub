@@ -116,13 +116,14 @@ The Slash Commands section manages reusable `/command` prompts. Each command can
 
 # RAG Settings
 
-Each index has **Jev mode**: Off (new-setting default), Filter, or Rerank. Rerank
-scores up to the configured candidate pool (default 40, at least Top K), then
-returns Top K in relevance order. Existing enabled filter flags migrate to Filter;
-existing disabled flags migrate to Off. Shared credentials stay under Jev settings.
-Search until an answer is found applies only to Filter mode. Reranking depends on
-the cloud API, candidate count affects latency/cost, and OpenRouter Decisions is
-alpha. See [RAG](../features/rag.md) for the rubric, timeout, cache and fallback.
+Each index keeps the existing Jev ON/OFF toggle and search-until-found checkbox.
+ON uses Score reranking; there is no separate filter/rerank selector, minimum-score
+field, or candidate-count input. Existing filter choices migrate to the same toggle;
+new indexes default off. Search-until-found continues until a candidate scores at
+least 2, then returns qualifying results from that first batch. With the checkbox
+off, return Top K in score order, including lower scores. Shared credentials remain
+under Jev settings. The cloud API affects cost/latency and OpenRouter Decisions is
+alpha. See [RAG](../features/rag.md) for timeout, cache and fallback details.
 
 RAG uses a local embedding vector index stored in the workspace folder.
 

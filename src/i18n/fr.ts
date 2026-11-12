@@ -1,14 +1,12 @@
 // French translations
 export const fr: Record<string, string> = {
-  "settings.jevMode": "Mode Jev",
-  "settings.jevMode.desc": "Le filtre exclut les résultats sans correspondance ; le reclassement note la pertinence de 0 à 3. Utilise l’API cloud configurée. Reclassement désactivé par défaut.",
-  "settings.jevMode.off": "Désactivé",
-  "settings.jevMode.filter": "Filtrer",
-  "settings.jevMode.rerank": "Reclasser",
-  "settings.jevRerankCandidateK": "Candidats à reclasser",
-  "settings.jevRerankCandidateK.desc": "Candidats évalués avant Top K (40 par défaut, au moins Top K). Plus de candidats augmente le temps et le coût du traitement cloud.",
+  "search.topKJevNote": "Jev évalue les candidats par lots ; Top K limite les résultats. La recherche jusqu’à réponse renvoie les notes de 2 ou plus du premier lot pertinent. Les vérifications supplémentaires augmentent usage API et durée.",
+  "search.helpSearchUntilFound": "Chercher jusqu’à une réponse — avec Jev, évaluer les lots suivants jusqu’à trouver un candidat noté au moins 2 ou épuiser les candidats. Sinon, un seul lot.",
+  "search.helpJev": "Jev note et classe les candidats. La recherche jusqu’à une réponse exige au moins 2 points et renvoie jusqu’à Top K du premier lot pertinent.",
+  "search.jevFilter": "Classer avec Jev",
+  "settings.jevRagFilter.desc": "Jev note la pertinence de 0 à 3 et classe les candidats. S’applique au Chat, aux workflows et à Discord. Désactivé par défaut pour les nouveaux index.",
+  "settings.jevRagFilter": "Classer les résultats RAG avec Jev",
   "search.jevScore": "Pertinence Jev : 0 sans rapport, 1 mots-clés seuls, 2 partiellement utile, 3 réponse directe.",
-  "search.helpJevMode": "Jev filtre les résultats ou note un ensemble plus large avant Top K. La recherche jusqu’à une réponse concerne uniquement le filtre. Un échec de reclassement conserve l’ordre initial.",
 
   // Settings - Headings
   "settings.cliProviders": "Fournisseurs CLI",
@@ -377,7 +375,7 @@ export const fr: Record<string, string> = {
   "search.discussWithSelected": "Discuter avec la sélection",
   "search.pdfMode": "Résultats PDF",
   "search.helpTitle": "Aide sur les paramètres",
-  "search.helpTopK": "Top K — Nombre maximum de résultats à retourner.",
+  "search.helpTopK": "Top K — nombre maximal de résultats après classement.",
   "search.helpScoreThreshold": "Score minimum — Score de similarité minimum (0.0–1.0). Les résultats en dessous sont exclus.",
   "search.helpExt": "Ext. — Extensions de fichiers séparées par des virgules pour filtrer (ex. md, pdf). Vide = tous les fichiers.",
   "search.helpChunkSize": "Taille de fragment — Nombre de caractères par fragment de texte lors de l'indexation. Des fragments plus grands conservent plus de contexte mais peuvent réduire la précision.",

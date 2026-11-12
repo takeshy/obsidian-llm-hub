@@ -119,12 +119,12 @@ export class WorkspaceStateManager {
     for (const [settingName, setting] of Object.entries(this.workspaceState.ragSettings)) {
       const legacyEnabled = setting.jevRagFilterEnabled ?? this.settings.jevRagFilterEnabled ?? false;
       const mode = getJevRagMode({ ...setting, jevRagFilterEnabled: legacyEnabled });
-      migratedJev ||= setting.jevMode !== mode || setting.jevRagFilterEnabled !== (mode === "filter");
+      migratedJev ||= setting.jevMode !== mode || setting.jevRagFilterEnabled !== (mode === "rerank");
       this.workspaceState.ragSettings[settingName] = {
         ...DEFAULT_RAG_SETTING,
         ...setting,
         jevMode: mode,
-        jevRagFilterEnabled: mode === "filter",
+        jevRagFilterEnabled: mode === "rerank",
       };
     }
 
@@ -315,7 +315,7 @@ export class WorkspaceStateManager {
     this.workspaceState.ragSettings[name] = pruneRagSettingSources(
       this.workspaceState,
       name,
-      { ...existing, ...updates, jevMode: mode, jevRagFilterEnabled: mode === "filter" },
+      { ...existing, ...updates, jevMode: mode, jevRagFilterEnabled: mode === "rerank" },
     );
 
     await this.saveWorkspaceState();

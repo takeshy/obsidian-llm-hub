@@ -25,7 +25,7 @@ import {
   loadExternalRagVectors,
 } from "./localRagStorage";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type LlmHubSettings, type RagSetting } from "../types";
-import { filterRagResultsWithJev, getJevRagFilterConfig, getJevRagMode } from "./jevRagFilter";
+import { getJevRagFilterConfig, getJevRagMode } from "./jevRagFilter";
 import { rerankRagResultsWithJev } from "./jevRagRerank";
 import { renderRagImage, renderRagPdfImages } from "./ragPdfImages";
 // PDF text extraction and page-label mapping are shared.
@@ -1010,9 +1010,8 @@ export async function searchLocalRagResults(
   if (!Number.isFinite(resultLimit) || resultLimit < 1) return [];
   const limit = Math.floor(resultLimit);
   const mode = getJevRagMode(ragSetting);
-  const filterConfig = settings && mode !== "off" ? getJevRagFilterConfig(settings) : null;
-  const rerank = Boolean(filterConfig && mode === "rerank");
-  const repeat = Boolean(filterConfig && mode === "filter" && searchUntilFound);
+  const jevConfig = settings && mode !== "off" ? getJevRagFilterConfig(settings) : null;
+  const repeat = Boolean(jevConfig && searchUntilFound);
   const candidateK = Number.isFinite(ragSetting.jevRerankCandidateK) && ragSetting.jevRerankCandidateK >= 1
     ? Math.floor(ragSetting.jevRerankCandidateK) : DEFAULT_RAG_SETTING.jevRerankCandidateK;
   // search already scores and sorts the entire index. Retrieve the eligible
@@ -1020,32 +1019,32 @@ export async function searchLocalRagResults(
   const candidates = await store.search(
     settingName, query, apiKey,
     ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),
-    repeat ? Infinity : rerank ? Math.max(limit, candidateK) : limit,
+    repeat ? Infinity : jevConfig ? Math.max(limit, candidateK) : limit,
     ragSetting.embeddingBaseUrl || undefined,
     ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
     ragSetting.searchFileExtensions,
     proxyUrl, proxyBypass, ragSetting,
   );
-  if (!filterConfig || !settings) return candidates;
-  if (rerank) {
-    return rerankRagResultsWithJev(query, candidates, limit, {
-      ...filterConfig, proxyUrl: settings.proxyUrl, proxyBypass: settings.proxyBypass,
-      resolvePdfText: result => store.extractSearchResultPdfText(result),
-      resolveImages: result => store.renderSearchResultJevImages(result),
-    });
-  }
+  if (!jevConfig || !settings) return candidates;
+  const rerankOptions = {
+    ...jevConfig, proxyUrl: settings.proxyUrl, proxyBypass: settings.proxyBypass,
+    resolvePdfText: (result: LocalRagSearchResult) => store.extractSearchResultPdfText(result),
+    resolveImages: (result: LocalRagSearchResult) => store.renderSearchResultJevImages(result),
+  };
+  if (!repeat) return rerankRagResultsWithJev(query, candidates, limit, rerankOptions);
 
-  // Top K is the candidate batch size. Repeat only when explicitly enabled,
-  // stopping at the first batch with matches or when eligible candidates run out.
-  const eligible = repeat ? candidates : candidates.slice(0, limit);
-  for (let offset = 0; offset < eligible.length; offset += limit) {
-    const batch = eligible.slice(offset, offset + limit);
-    const matches = await filterRagResultsWithJev(
-      query, batch, filterConfig.apiKey, settings.proxyUrl, settings.proxyBypass, undefined, filterConfig.useOpenRouter,
-      result => store.extractSearchResultPdfText(result),
-      result => store.renderSearchResultPdfImages(result),
-    );
-    if (matches.length > 0) return matches;
+  const batchSize = Math.max(limit, candidateK);
+  for (let offset = 0; offset < candidates.length; offset += batchSize) {
+    const batch = candidates.slice(offset, offset + batchSize);
+    // Score the complete batch before applying the answer threshold or Top K.
+    const ranked = await rerankRagResultsWithJev(query, batch, batch.length, rerankOptions);
+    if (ranked.some(result => result.jevScore === undefined)) {
+      // A fallback is not evidence of a score below 2. Stop instead of retrying
+      // every remaining batch, and keep the original retrieval's first results.
+      return candidates.slice(0, limit);
+    }
+    const answers = ranked.filter(result => result.jevScore! >= 2);
+    if (answers.length) return answers.slice(0, limit);
   }
   return [];
 }

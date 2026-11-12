@@ -1,14 +1,7 @@
 // Japanese translations
 export const ja: Record<string, string> = {
-  "settings.jevMode": "Jevモード",
-  "settings.jevMode.desc": "フィルタは一致しない結果を除外し、リランクは関連度を0〜3で採点して候補を並べ替えます。設定済みのクラウドAPIを使用します。リランクは既定でオフです。",
-  "settings.jevMode.off": "オフ",
-  "settings.jevMode.filter": "フィルタ",
-  "settings.jevMode.rerank": "リランク",
-  "settings.jevRerankCandidateK": "リランク候補数",
-  "settings.jevRerankCandidateK.desc": "Top Kに絞る前に採点する候補数です（既定40、最低Top K件）。候補を増やすほどクラウドの処理時間と料金が増えます。",
+  "search.helpJev": "Jevは候補を採点して並べ替えます。「回答が見つかるまで検索する」では2点以上を回答として扱い、最初に見つかったグループから最大Top K件を返します。",
   "search.jevScore": "Jev関連度：0 無関係、1 キーワードだけ一致、2 部分的に有用、3 クエリに直接回答。",
-  "search.helpJevMode": "Jev：フィルタは不一致を除外し、リランクは多めに取得した候補を採点してTop K件を返します。「回答が見つかるまで検索する」はフィルタ専用です。リランク失敗時は元の検索順位を使います。",
 
   "live.title": "ライブ会話",
   "live.provider": "プロバイダー",
@@ -243,8 +236,8 @@ export const ja: Record<string, string> = {
   // Settings - RAG
   "settings.scoreThreshold": "スコア閾値",
   "settings.scoreThreshold.desc": "結果に含める最低類似度スコア (0.0-1.0)。0 = フィルタなし",
-  "settings.jevRagFilter": "JevでRAG結果を絞り込む",
-  "settings.jevRagFilter.desc": "このRAGインデックスの検索結果をJevで絞り込みます。Chat・Workflow・Discordでも適用されます。新規インデックスではデフォルトで有効です。",
+  "settings.jevRagFilter": "JevでRAG結果を並べ替える",
+  "settings.jevRagFilter.desc": "Jevで関連度を0〜3点で採点し、候補を並べ替えます。Chat・Workflow・Discordでも適用されます。新規インデックスでは既定オフです。",
   "settings.jevRagFilter.requiresKey": "Jev APIキーを入力するか、OpenRouterを使うを選んでOpenRouterのAPIキーを設定してください。",
   "settings.jevApiKey": "Jev APIキー",
   "settings.jevApiKey.desc": "console.typesafe.aiで作成したTypeSafe公式のAPIキーです。OpenRouterを使う場合は空欄のままで構いません。",
@@ -253,9 +246,9 @@ export const ja: Record<string, string> = {
   "settings.jevUseOpenRouter.requiresKey": "このオプションを使うには、APIプロバイダーでOpenRouterのAPIキーを設定してください。",
   "settings.jev": "Jev",
   "search.searchUntilFound": "回答が見つかるまで検索する",
-  "search.helpSearchUntilFound": "回答が見つかるまで検索する — Jev有効時に利用できます。Top K件ずつ判定し、一致する結果が見つかるか、スコア閾値を満たす候補が尽きるまで続けます。オフの場合は1回のみ判定します。",
-  "search.jevFilter": "Jevで絞り込む",
-  "search.topKJevNote": "Jevが有効のときは、Top K件ずつ候補を判定します。「回答が見つかるまで検索する」をオンにすると、一致する結果が見つかるかスコア閾値を満たす候補が尽きるまで、類似度順に追加判定します。見つかった回の一致結果をすべて返します。オフの場合はTop K件を一度だけ判定します。繰り返すとAPI使用量と検索時間が増える場合があります。",
+  "search.helpSearchUntilFound": "回答が見つかるまで検索する — Jev有効時、2点以上の候補が見つかるか候補が尽きるまで、次のグループを採点します。オフの場合は1グループだけ採点します。",
+  "search.jevFilter": "Jevで並べ替える",
+  "search.topKJevNote": "Jevは候補をグループごとに採点し、Top Kは返す結果の上限です。「回答が見つかるまで検索する」は、2点以上が最初に見つかったグループから該当結果を返します。繰り返すとAPI使用量と検索時間が増える場合があります。",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "埋め込みモデル",
@@ -503,7 +496,7 @@ export const ja: Record<string, string> = {
   "search.discussWithSelected": "選択してディスカッション",
   "search.pdfMode": "PDF結果",
   "search.helpTitle": "パラメータヘルプ",
-  "search.helpTopK": "Top K — 1回に取得する候補の件数。Jevによる絞り込み前の件数です。",
+  "search.helpTopK": "Top K — 並べ替え後に返す検索結果の上限件数です。",
   "search.helpScoreThreshold": "最低スコア — 類似度の最低スコア（0.0〜1.0）。この値未満の結果は除外されます。",
   "search.helpExt": "Ext. — 結果をフィルタするファイル拡張子（カンマ区切り、例：md, pdf）。空欄は全ファイル対象。",
   "search.helpChunkSize": "チャンクサイズ — インデックス作成時のテキストチャンクあたりの文字数。大きいほど文脈を保持しますが精度が下がる場合があります。",

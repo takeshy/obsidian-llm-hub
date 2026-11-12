@@ -276,7 +276,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth, onR
 	const [, refreshRagConfig] = useState(0);
 	const selectedRagConfig = selectedRagSetting ? plugin.getRagSetting(selectedRagSetting) : null;
 	const ragTopK = selectedRagConfig?.topK ?? DEFAULT_RAG_SETTING.topK;
-	const ragJevEnabled = Boolean(getJevRagMode(selectedRagConfig) === "filter" && getJevRagFilterConfig(plugin.settings));
+	const ragJevEnabled = Boolean(getJevRagMode(selectedRagConfig) === "rerank" && getJevRagFilterConfig(plugin.settings));
 
 	// Vault tool mode includes readOnly for search/read without mutations.
 	// Gemma 4 + RAG: must disable function calling tools (mutually exclusive)

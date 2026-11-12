@@ -1,14 +1,12 @@
 // Chinese (Simplified) translations
 export const zh: Record<string, string> = {
-  "settings.jevMode": "Jev 模式",
-  "settings.jevMode.desc": "筛选会排除不匹配的结果；重排按 0–3 的相关度评分排序。使用已配置的云端 API。重排默认关闭。",
-  "settings.jevMode.off": "关闭",
-  "settings.jevMode.filter": "筛选",
-  "settings.jevMode.rerank": "重排",
-  "settings.jevRerankCandidateK": "重排候选数",
-  "settings.jevRerankCandidateK.desc": "返回 Top K 前评分的候选数（默认 40，至少 Top K）。候选越多，云端处理时间和费用越高。",
+  "search.topKJevNote": "Jev 分组评估候选，Top K 限制返回数量。“搜索直到找到答案”返回首个满足条件分组中至少 2 分的结果。重复评估可能增加 API 用量和时间。",
+  "search.helpSearchUntilFound": "搜索直到找到答案 — 启用 Jev 后继续评估下一组，直到发现至少 2 分的候选或候选耗尽。关闭时仅评估一组。",
+  "search.helpJev": "Jev 对候选评分并排序。“搜索直到找到答案”要求至少 2 分，从首个满足条件的分组返回最多 Top K 个结果。",
+  "search.jevFilter": "使用 Jev 排序",
+  "settings.jevRagFilter.desc": "Jev 按 0–3 分评估相关度并排序候选。也适用于 Chat、工作流和 Discord。新索引默认关闭。",
+  "settings.jevRagFilter": "使用 Jev 排序 RAG 结果",
   "search.jevScore": "Jev 相关度：0 无关，1 仅关键词匹配，2 部分有用，3 直接回答查询。",
-  "search.helpJevMode": "Jev 可筛选不匹配的结果，或对更大的候选集评分后返回 Top K。“搜索直到找到答案”仅用于筛选模式。重排失败时保留原始检索顺序。",
 
   // Settings - Headings
   "settings.cliProviders": "CLI 提供商",
@@ -377,7 +375,7 @@ export const zh: Record<string, string> = {
   "search.discussWithSelected": "使用所选内容讨论",
   "search.pdfMode": "PDF 结果",
   "search.helpTitle": "参数帮助",
-  "search.helpTopK": "Top K — 返回结果的最大数量。",
+  "search.helpTopK": "Top K — 排序后返回结果的数量上限。",
   "search.helpScoreThreshold": "最低分数 — 最低相似度分数（0.0–1.0）。低于此值的结果将被排除。",
   "search.helpExt": "Ext. — 用逗号分隔的文件扩展名过滤结果（如 md, pdf）。为空表示所有文件。",
   "search.helpChunkSize": "分块大小 — 索引时每个文本块的字符数。较大的块保留更多上下文，但可能降低精度。",

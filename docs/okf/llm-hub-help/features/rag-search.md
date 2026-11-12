@@ -12,9 +12,20 @@ The RAG Search tab is the manual counterpart to Chat's search menu. It lets user
 
 # Search and Filtering
 
-Results start in retrieval order. Jev mode is selected per index: **Off** keeps that order, **Filter** removes nonmatching chunks, and **Rerank** scores a larger candidate pool on a 0–3 relevance rubric and returns Top K in score order. Ties keep the original order. The gear menu exposes Jev mode and the rerank candidate count (default 40). Results show a Jev score out of 3 after successful reranking; a failed rerank falls back to the original Top K.
+The existing Jev toggle enables Score reranking; no separate mode selector or
+candidate-count input is shown. Jev scores candidate passages on the 0–3 rubric,
+sorts them, preserves retrieval order for ties, and returns up to Top K. The header
+shows Jev's score out of 3 separately from the original retrieval score.
 
-Only in Jev **Filter** mode, **Search until an answer is found** checks Top K candidates per batch until a batch contains matches or eligible candidates run out, then returns all matches from that batch. The checkbox is saved per RAG setting and shared with Chat, Workflows, and Discord. Chat exposes it beside RAG Top K. A Workflow command node can override the saved value with `ragSearchUntilFound: true` or `false`; omitted values follow the index preference. The saved value is ignored in off/rerank modes. After retrieval, users can filter the result list with one or more keyword fields:
+With **Search until an answer is found** enabled, candidates are checked in batches
+until the first batch contains a score **at least 2**. Only results scoring at least
+2 from that batch are returned, in score order, up to Top K. If none qualify before
+candidates run out, return no results. If the checkbox is off, score one batch and
+return the best Top K, including scores below 2. On a scoring failure, stop and return
+the original retrieval Top K. The preference is shared with Chat, Workflows, and
+Discord; workflow `ragSearchUntilFound: true` or `false` can override the saved value.
+
+After retrieval, users can filter the result list with one or more keyword fields:
 
 - Terms inside one field use OR logic.
 - Quoted phrases (e.g. `"release notes"`) are matched as a single term.
@@ -72,7 +83,7 @@ The search file extensions filter sits in the search parameter row next to Top K
 The Search tab gear exposes per-RAG-setting controls. For all settings:
 
 - AI Refine Model.
-- Jev mode (off/filter/rerank), when credentials are configured, and rerank candidate count.
+- Existing Jev ON/OFF toggle, when credentials are configured.
 - Last-sync timestamp.
 - Indexed files list with per-file chunk counts.
 

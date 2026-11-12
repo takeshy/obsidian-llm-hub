@@ -3,9 +3,9 @@ import { clearJevRerankCache, JEV_RERANK_TIMEOUT_MS, rerankRagResultsWithJev } f
 import { DEFAULT_SETTINGS, type ApiProviderConfig } from "../types";
 import type { LocalRagSearchResult } from "./localRagStore";
 import {
-  filterRagResultsWithJev,
   getOpenRouterApiKey,
   getJevRagFilterConfig,
+  getJevRagMode,
   JEV_MODEL,
   OPENROUTER_DECISIONS_URL,
   TYPESAFE_DECISIONS_URL,
@@ -44,53 +44,13 @@ describe("getJevRagFilterConfig", () => {
   });
 });
 
-describe("filterRagResultsWithJev", () => {
-  it("uses the Decisions API and keeps only matching chunks", async () => {
-    const request = vi.fn(async () => new Response(JSON.stringify({
-      answers: {
-        result_0: { type: "choice", choice: "keep" },
-        result_1: { type: "choice", choice: "exclude" },
-      },
-    }), { status: 200 }));
-
-    await expect(filterRagResultsWithJev("train arrival", results, "key", undefined, undefined, request))
-      .resolves.toEqual([results[0]]);
-    expect(request).toHaveBeenCalledOnce();
-    const [url, init] = request.mock.calls[0];
-    expect(url).toBe(OPENROUTER_DECISIONS_URL);
-    expect(init?.headers).toMatchObject({ Authorization: "Bearer key" });
-    const body = JSON.parse(String(init?.body));
-    expect(body.model).toBe(JEV_MODEL);
-    expect(Object.keys(body.questions)).toEqual(["result_0", "result_1"]);
-  });
-
-  it("requires an OpenRouter key", async () => {
-    await expect(filterRagResultsWithJev("query", results, ""))
-      .rejects.toThrow("OpenRouter API key is required");
-  });
-
-  it("sends direct Jev requests only to the official TypeSafe API", async () => {
-    const request = vi.fn(async () => new Response(JSON.stringify({
-      answers: {
-        result_0: { choice: "keep" },
-        result_1: { choice: "exclude" },
-      },
-    }), { status: 200 }));
-
-    await filterRagResultsWithJev("query", results, "official-key", undefined, undefined, request, false);
-    const [url, init] = request.mock.calls[0];
-    expect(url).toBe(TYPESAFE_DECISIONS_URL);
-    expect(url).toBe("https://api.typesafe.ai/v1/systemone");
-    expect(init?.headers).toMatchObject({ Authorization: "Bearer official-key" });
-    expect(JSON.parse(String(init?.body)).model).toBe(TYPESAFE_JEV_MODEL);
-  });
-
-  it("rejects incomplete decisions instead of leaking unfiltered results", async () => {
-    const request = async () => new Response(JSON.stringify({
-      answers: { result_0: { choice: "keep" } },
-    }), { status: 200 });
-    await expect(filterRagResultsWithJev("query", results, "key", undefined, undefined, request))
-      .rejects.toThrow("omitted result_1");
+describe("getJevRagMode", () => {
+  it("unifies legacy filter settings into reranking while honoring explicit off", () => {
+    expect(getJevRagMode({ jevMode: "filter" })).toBe("rerank");
+    expect(getJevRagMode({ jevRagFilterEnabled: true })).toBe("rerank");
+    expect(getJevRagMode({ jevMode: "rerank", jevRagFilterEnabled: false })).toBe("rerank");
+    expect(getJevRagMode({ jevMode: "off", jevRagFilterEnabled: true })).toBe("off");
+    expect(getJevRagMode()).toBe("off");
   });
 });
 

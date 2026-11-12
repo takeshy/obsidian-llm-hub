@@ -10,7 +10,7 @@ export function displayJevSettings(containerEl: HTMLElement, ctx: SettingsContex
   const openRouterConfigured = getOpenRouterApiKey(plugin.settings.apiProviders).length > 0;
   const useOpenRouter = openRouterConfigured && plugin.settings.jevUseOpenRouter;
 
-  new Setting(containerEl).setName(t("settings.jev")).setDesc(t("settings.jevMode.desc")).setHeading();
+  new Setting(containerEl).setName(t("settings.jev")).setHeading();
 
   if (openRouterConfigured) {
     const openRouterSetting = new Setting(containerEl)

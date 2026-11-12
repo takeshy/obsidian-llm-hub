@@ -102,17 +102,19 @@ describe("WorkspaceStateManager combined search persistence", () => {
 });
 
 describe("WorkspaceStateManager per-index Jev filtering", () => {
-  it("migrates old per-index filter flags to modes, preserves explicit modes, and persists rerank settings", async () => {
+  it("migrates filter flags and filter modes into the unified toggle and persists enabled settings", async () => {
     const { jevMode: _unused, ...legacy } = DEFAULT_RAG_SETTING;
     const harness = createManager(JSON.stringify({ ragSettings: {
       Enabled: { ...legacy, jevRagFilterEnabled: true },
       Disabled: { ...legacy, jevRagFilterEnabled: false },
+      Filter: { ...legacy, jevMode: "filter", jevRagFilterEnabled: true },
       Rerank: { ...legacy, jevMode: "rerank", jevRerankCandidateK: 60, jevRagFilterEnabled: true },
     } }));
     await harness.manager.loadWorkspaceState();
-    expect(harness.manager.getRagSetting("Enabled")?.jevMode).toBe("filter");
+    expect(harness.manager.getRagSetting("Enabled")?.jevMode).toBe("rerank");
     expect(harness.manager.getRagSetting("Disabled")?.jevMode).toBe("off");
-    expect(harness.manager.getRagSetting("Rerank")).toMatchObject({ jevMode: "rerank", jevRerankCandidateK: 60, jevRagFilterEnabled: false });
+    expect(harness.manager.getRagSetting("Filter")).toMatchObject({ jevMode: "rerank", jevRagFilterEnabled: true });
+    expect(harness.manager.getRagSetting("Rerank")).toMatchObject({ jevMode: "rerank", jevRerankCandidateK: 60, jevRagFilterEnabled: true });
     await harness.manager.createRagSetting("New");
     expect(harness.manager.getRagSetting("New")).toMatchObject({ jevMode: "off", jevRerankCandidateK: 40 });
     const onFilterChanged = vi.fn();
