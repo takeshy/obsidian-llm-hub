@@ -9,6 +9,7 @@ import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { formatError } from "obsidian-llm-hub-common/core";
 import { setDestructiveButton } from "obsidian-llm-hub-common/obsidian";
 import {
+  addHybridSearchSettings,
   addExcludePatternsSetting,
   addRagSettingHeader,
   addRagSettingSelector,
@@ -56,6 +57,7 @@ function displaySelectedRagSetting(
   const { plugin, display } = ctx;
 
   addRagSettingHeader(containerEl, plugin, name, display);
+  addHybridSearchSettings(containerEl, ragSetting, updates => plugin.updateRagSetting(name, updates), display);
 
   if (getJevRagFilterConfig(plugin.settings)) {
     new Setting(containerEl)

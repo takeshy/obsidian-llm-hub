@@ -1,3 +1,4 @@
+import { ChunkBm25Index, collectHybridCandidates, normalizeHybridSearchOptions, type HybridSearchOptions } from "obsidian-llm-hub-common/core";
 import { type App, TFile, htmlToMarkdown } from "obsidian";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -13,6 +14,8 @@ import {
   type LocalRagChunkMeta,
   type RagContentType,
   loadRagIndex,
+  loadRagBm25,
+  saveRagBm25,
   saveRagIndex,
   loadRagVectors,
   saveRagVectors,
@@ -85,6 +88,7 @@ function mergeLoadedIndexes(items: { index: LocalRagIndex; vectors: Float32Array
 }
 
 interface LocalRagEntry {
+  bm25?: Promise<ChunkBm25Index>;
   index: LocalRagIndex | null;
   vectors: Float32Array | null;
 }
@@ -237,12 +241,14 @@ class LocalRagStore {
     indexMultimodal = false,
     proxyUrl?: string,
     proxyBypass?: string,
+    hybridSearch = false,
   ): Promise<{ embedded: number; skipped: number; removed: number; errors: string[]; deferredFiles?: number; failedFiles?: string[] }> {
     this.app = app;
     const result = { embedded: 0, skipped: 0, removed: 0, errors: [] as string[] };
     const entry = await this.ensureLoaded(app, settingName);
     let index = entry.index;
     let vectors = entry.vectors;
+    const bm25Snapshot = hybridSearch ? (await this.ensureBm25(app, settingName, entry)).serialize() : undefined;
 
     // Gemini native mode = no custom baseUrl (uses SDK directly)
     const isGeminiNative = !embeddingBaseUrl;
@@ -575,6 +581,11 @@ class LocalRagStore {
 
     await saveRagIndex(app, settingName, index, this.workspaceFolder);
     await saveRagVectors(app, settingName, vectors, this.workspaceFolder);
+    if (bm25Snapshot) {
+      // Keep in-flight searches on the old entry's metadata and postings.
+      const bm25 = new ChunkBm25Index(index.meta, bm25Snapshot);
+      await this.persistBm25(app, settingName, bm25);
+    }
     this.clearAll();
 
     return { ...result, deferredFiles: deferredFiles.length, failedFiles };
@@ -591,6 +602,7 @@ class LocalRagStore {
     searchFileExtensions?: string[],
     proxyUrl?: string,
     proxyBypass?: string,
+    hybrid?: Partial<HybridSearchOptions>,
   ): Promise<LocalRagSearchResult[]> {
     if (!this.app) {
       return [];
@@ -646,10 +658,21 @@ class LocalRagStore {
     }
 
     scores.sort((a, b) => b.score - a.score);
-    const topResults = scores.slice(0, topK);
+    const options = normalizeHybridSearchOptions(hybrid ?? {});
+    let topResults = scores.slice(0, options.hybridSearch ? options.hybridCandidateK : topK)
+      .filter(r => r.score > (scoreThreshold ?? 0));
+    if (options.hybridSearch) {
+      const bm25 = await this.ensureBm25(this.app, settingName, entry);
+      const lexical = bm25.search(query, options.hybridCandidateK, i => {
+        const ext = index.meta[i].filePath.split(".").pop()?.toLowerCase() ?? "";
+        return !extFilter || extFilter.has(ext);
+      });
+      topResults = collectHybridCandidates(
+        topResults.map(r => ({ id: String(r.index), score: r.score })), lexical, topK, options,
+      ).map(r => ({ index: Number(r.id), score: r.score }));
+    }
 
     return topResults
-      .filter(r => r.score > (scoreThreshold ?? 0))
       .map(r => ({
         filePath: index.meta[r.index].filePath,
         text: index.meta[r.index].text,
@@ -791,6 +814,21 @@ class LocalRagStore {
       contentType: meta.contentType,
       pageLabel: meta.pageLabel,
     };
+  }
+
+  private ensureBm25(app: App, settingName: string, entry: LocalRagEntry): Promise<ChunkBm25Index> {
+    return entry.bm25 ??= (async () => {
+      const persistent = !this.externalPaths.has(settingName) && !this.sourceRagSettings.has(settingName);
+      const snapshot = persistent ? await loadRagBm25(app, settingName, this.workspaceFolder) : null;
+      const bm25 = new ChunkBm25Index(entry.index?.meta ?? [], snapshot);
+      if (persistent) await this.persistBm25(app, settingName, bm25);
+      return bm25;
+    })();
+  }
+
+  private async persistBm25(app: App, settingName: string, bm25: ChunkBm25Index): Promise<void> {
+    try { await saveRagBm25(app, settingName, bm25.serialize(), this.workspaceFolder); }
+    catch (error) { console.warn("LLM Hub: could not save BM25 cache", error); }
   }
 
   private async ensureLoaded(
@@ -971,7 +1009,7 @@ export async function searchLocalRagResults(
     ragSetting.embeddingBaseUrl || undefined,
     ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
     ragSetting.searchFileExtensions,
-    proxyUrl, proxyBypass,
+    proxyUrl, proxyBypass, ragSetting,
   );
   if (!filterConfig || !settings) return candidates;
 

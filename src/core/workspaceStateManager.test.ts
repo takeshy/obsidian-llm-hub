@@ -102,6 +102,20 @@ describe("WorkspaceStateManager combined search persistence", () => {
 });
 
 describe("WorkspaceStateManager per-index Jev filtering", () => {
+  it("defaults legacy indexes to vector-only retrieval and persists independent hybrid options", async () => {
+    const legacy = { ...DEFAULT_RAG_SETTING } as Partial<typeof DEFAULT_RAG_SETTING>;
+    delete legacy.hybridSearch; delete legacy.hybridCandidateK; delete legacy.rrfK;
+    const harness = createManager(JSON.stringify({ ragSettings: { Notes: legacy, Hybrid: {
+      ...legacy, hybridSearch: true, hybridCandidateK: 45, rrfK: 25,
+    } } }));
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Notes")).toMatchObject({ hybridSearch: false, hybridCandidateK: 30, rrfK: 60 });
+    expect(harness.manager.getRagSetting("Hybrid")).toMatchObject({ hybridSearch: true, hybridCandidateK: 45, rrfK: 25 });
+    await harness.manager.updateRagSetting("Notes", { hybridSearch: true, hybridCandidateK: 40 });
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Notes")).toMatchObject({ hybridSearch: true, hybridCandidateK: 40, rrfK: 60 });
+  });
+
   it.each([true, false])("persists the legacy global value %s on existing indexes once", async (enabled) => {
     const { jevRagFilterEnabled: _unused, ...legacy } = DEFAULT_RAG_SETTING;
     const harness = createManager(JSON.stringify({ ragSettings: { Notes: legacy, PDFs: legacy } }),

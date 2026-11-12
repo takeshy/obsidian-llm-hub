@@ -1457,6 +1457,7 @@ export class LlmHubPlugin extends Plugin {
         indexMultimodal,
         this.settings.proxyUrl,
         this.settings.proxyBypass,
+        ragSetting.hybridSearch,
       );
       result.failedFiles?.forEach(filePath => failedFiles.add(filePath));
       while (result.deferredFiles) {
@@ -1477,6 +1478,7 @@ export class LlmHubPlugin extends Plugin {
           indexMultimodal,
           this.settings.proxyUrl,
           this.settings.proxyBypass,
+          ragSetting.hybridSearch,
         );
         result.failedFiles?.forEach(filePath => failedFiles.add(filePath));
       }

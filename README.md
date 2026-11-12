@@ -972,6 +972,14 @@ Use a pre-built index instead of syncing from the vault:
 
 **How it works:** When RAG is active, each chat message triggers a local vector search. Relevant chunks are injected into the system prompt as context. Sources are shown in the chat UI — click to open the referenced note.
 
+#### Hybrid search (BM25 + vector + RRF)
+
+Enable **Hybrid search** separately for each RAG setting (off by default). It combines keyword and vector rankings using reciprocal rank fusion, then applies Top K. **Candidates per search** defaults to 30 per channel; RRF k defaults to 60. The cosine threshold applies only to vector candidates, so exact keyword matches can still appear below it. Fused scores are RRF scores, not cosine similarities.
+
+The first hybrid search or enabled sync automatically creates `bm25.json` beside the existing index files using their stored text, without re-embedding. Subsequent syncs update added, changed, and deleted chunks. Combined and external indexes build their keyword index in memory and do not write to external directories. Disabling hybrid search keeps vector-only retrieval and skips BM25 cache I/O.
+
+Japanese and other CJK text use word segmentation with `Intl.Segmenter`; older runtimes fall back to overlapping two-character tokens. Identifiers such as `PRJ-123` and `snake_case` are retained whole and split into components. Bigrams use more memory and may match partial words. A query embedding is still required. Gemini-native PDF chunks contain labels rather than extracted text, so keyword retrieval is limited for them. Existing keyword filters/search are unchanged.
+
 #### Filtering RAG results with Jev
 
 Vector search returns semantically similar chunks, so its results can include text that shares related wording without actually matching the question. Configure shared credentials under **Jev** in Settings, then toggle **Keep only matching RAG results** separately for each RAG setting. For example, enable it for notes and disable it for PDFs. Jev filtering also applies when that RAG index is used from Chat, Workflows, or Discord. For a combined index, its own toggle applies to the combined results.

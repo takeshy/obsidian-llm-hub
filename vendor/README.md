@@ -1,19 +1,21 @@
 # Shared library package
 
-`obsidian-llm-hub-common-0.1.14.tgz` contains prebuilt JavaScript and TypeScript declarations for `npm ci --ignore-scripts`.
+`obsidian-llm-hub-common-0.1.15.tgz` contains prebuilt JavaScript and TypeScript declarations for `npm ci --ignore-scripts`.
 
-Source: [takeshy/obsidian-llm-hub-common commit 1727cce](https://github.com/takeshy/obsidian-llm-hub-common/commit/1727cce954654b6ee2579abc1103915a6e8f6f8c), version 0.1.14, committed and pushed to main with a clean working tree.
+Source: [takeshy/obsidian-llm-hub-common commit 5d1ee69](https://github.com/takeshy/obsidian-llm-hub-common/commit/5d1ee69307400ffbd0ffad0986e6807e394fbf4a), version 0.1.15, on branch `feat/hybrid-rag-search`.
 
-Since 0.1.11, the library rejects `rag-sync` on hosts without `runRagSyncNode` (0.1.12) and documents that `rag-sync.path` may be omitted and that `ragSetting` supports `{{variables}}` (0.1.13). Version 0.1.14 makes the `rag-sync` node editor's RAG setting a text field with setting-name suggestions, lets `runRagSyncNode` return the setting it used so logs and history record it, shows a single group of loading dots in the generation modal, and replaces Cancel with Close after a generation error.
-
-The optional `WorkflowHost.getRagSearchOptions` hook and the Jev command-node search-until-found checkbox from 0.1.11 are unchanged. Jev credentials, API requests, and search behavior remain in this plugin.
-
-The shared file-reference resolver handles wikilinks, @ references, and vault paths. Chat messages preserve the original references. Only model requests annotate each tool-readable reference with path, type, and byte size; file contents are fetched on demand and reading instructions stay in the system prompt. Hosts retain their inline fallback policy, vault tool scope, PDF reader, and character limit.
+Version 0.1.15 adds the shared tokenizer, incremental BM25 index, chunk cache adapter,
+and reciprocal rank fusion candidate selection. The shared settings UI adds an
+opt-in hybrid toggle and per-channel candidate count, translated into all nine
+locales. The default remains vector-only retrieval. Existing cached text builds
+BM25 without new document embeddings; hosts persist `bm25.json` for internal
+indexes and construct combined/external keyword indexes in memory.
 
 Archive integrity:
 
 ```text
-sha512-Qr/V5tGdXj+QjVEXoIRrtwyKpvKhnakgbTH9VUp2aTWl1i06TaUNEuViVYW1mTRHiEKfDHBTavkbiVIBUI5/fg==
+sha512-q1qHEQsOh9biUDEFwC7MmdHqZ9VZ0ChB9vek9D2RkJtMxubWbXAraDtNFdGHAG3cIgrEvabeXUHQ/HNfr75MCQ==
 ```
 
-Created with `npm pack --ignore-scripts` after the build and the full shared-library test suite passed. The MIT license is included.
+Created with `npm pack --ignore-scripts` after the build and the full shared-library
+test suite passed. The MIT license is included. Previous archives are retained for history.

@@ -1,3 +1,4 @@
+import { DEFAULT_HYBRID_SEARCH, type HybridSearchOptions } from "obsidian-llm-hub-common/core";
 import type { WebSearchSettings } from "../core/webSearchMode";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "obsidian-llm-hub-common/core";
 import type { McpServerConfig } from "obsidian-llm-hub-common/core";
@@ -314,7 +315,7 @@ export const DEFAULT_ENCRYPTION_SETTINGS: EncryptionSettings = {
 };
 
 // 個別のRAG設定
-export interface RagSetting {
+export interface RagSetting extends HybridSearchOptions {
   jevRagFilterEnabled: boolean;  // Filter this index when Jev credentials are configured
   searchUntilFound: boolean;     // Check further Jev batches until a match is found
   embeddingBaseUrl: string;      // Embedding API URL (空 = Gemini default)
@@ -352,6 +353,7 @@ export const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-2-preview";
 
 // デフォルトのRAG設定
 export const DEFAULT_RAG_SETTING: RagSetting = {
+  ...DEFAULT_HYBRID_SEARCH,
   jevRagFilterEnabled: true,
   searchUntilFound: false,
   embeddingBaseUrl: "",
