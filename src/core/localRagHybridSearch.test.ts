@@ -93,7 +93,7 @@ describe("hybrid local RAG retrieval", () => {
     const f = fixture();
     vi.spyOn(jev, "getJevRagFilterConfig").mockReturnValue({ apiKey: "jev-key", useOpenRouter: false });
     const filter = vi.spyOn(jev, "filterRagResultsWithJev").mockImplementation(async (_query, batch) => batch.filter(r => r.filePath === "exact.md"));
-    const setting = { ...f.setting, hybridSearch: true, scoreThreshold: 0.95, topK: 2, jevRagFilterEnabled: true };
+    const setting = { ...f.setting, hybridSearch: true, scoreThreshold: 0.95, topK: 2, jevMode: "filter" as const, jevRagFilterEnabled: true };
     await initLocalRagStore().load(f.app, ["test"], { test: setting });
     const results = await searchLocalRagResults("test", "PRJ-123", setting, "key", undefined, undefined, undefined, DEFAULT_SETTINGS);
     expect(results.map(r => r.filePath)).toEqual(["exact.md"]);

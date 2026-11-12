@@ -2,6 +2,16 @@ import type { SharedTranslationKey } from "obsidian-llm-hub-common/i18n";
 
 // English translations (base language)
 export const en = {
+  "settings.jevMode": "Jev mode",
+  "settings.jevMode.desc": "Filter removes nonmatching results; rerank scores relevance from 0 to 3 and sorts candidates. Uses the configured cloud API. Reranking is off by default.",
+  "settings.jevMode.off": "Off",
+  "settings.jevMode.filter": "Filter",
+  "settings.jevMode.rerank": "Rerank",
+  "settings.jevRerankCandidateK": "Rerank candidates",
+  "settings.jevRerankCandidateK.desc": "Candidates to score before returning Top K (default 40, at least Top K). More candidates increase cloud processing time and cost.",
+  "search.jevScore": "Jev relevance: 0 unrelated, 1 keyword overlap only, 2 partially useful, 3 directly answers the query.",
+  "search.helpJevMode": "Jev: filter removes nonmatches; rerank scores a larger candidate pool and returns Top K. Search until an answer is found applies only to filter mode. Reranking failures keep the original retrieval order.",
+
   "live.title": "Live conversation",
   "live.provider": "Provider",
   "settings.apiProviderKeySaved": "API key saved",

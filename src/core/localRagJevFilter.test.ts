@@ -1,7 +1,8 @@
+import { clearJevRerankCache } from "./jevRagRerank";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
 import { extractPdfText } from "obsidian-llm-hub-common/vault";
-import { DEFAULT_RAG_SETTING, DEFAULT_SETTINGS } from "../types";
+import { DEFAULT_RAG_SETTING as BASE_RAG_SETTING, DEFAULT_SETTINGS } from "../types";
 import {
   initLocalRagStore,
   resetLocalRagStore,
@@ -12,13 +13,15 @@ import { createNodeFetch } from "./proxyFetch";
 import { renderRagPdfImages } from "./ragPdfImages";
 import { workflowRagSearchSetting } from "../workflow/ragSearchOptions";
 
-vi.mock("./ragPdfImages", () => ({ renderRagPdfImages: vi.fn() }));
+vi.mock("./ragPdfImages", () => ({ renderRagPdfImages: vi.fn(), renderRagImage: vi.fn() }));
 
 vi.mock("obsidian-llm-hub-common/vault", async (importOriginal) => ({
   ...(await importOriginal<typeof import("obsidian-llm-hub-common/vault")>()),
   extractPdfText: vi.fn(),
 }));
 vi.mock("./proxyFetch", () => ({ createNodeFetch: vi.fn(), createProxyFetch: vi.fn() }));
+
+const DEFAULT_RAG_SETTING = { ...BASE_RAG_SETTING, jevMode: "filter" as const, jevRagFilterEnabled: true };
 
 const app = {} as App;
 const settings = {
@@ -60,7 +63,7 @@ describe("Jev filtering of PDF search results", () => {
 
   function search(filterEnabled = true) {
     return searchLocalRagResults("test", "train arrival",
-      { ...DEFAULT_RAG_SETTING, jevRagFilterEnabled: filterEnabled }, "embedding-key",
+      { ...DEFAULT_RAG_SETTING, jevMode: filterEnabled ? "filter" : "off", jevRagFilterEnabled: filterEnabled }, "embedding-key",
       undefined, undefined, undefined, settings);
   }
 
@@ -186,7 +189,7 @@ describe("Jev filtering of PDF search results", () => {
     await expect(searchLocalRagResults("Notes", "train arrival", DEFAULT_RAG_SETTING,
       "embedding-key", undefined, undefined, undefined, shared)).resolves.toEqual([pdf]);
     await expect(searchLocalRagResults("PDFs", "train arrival",
-      { ...DEFAULT_RAG_SETTING, jevRagFilterEnabled: false }, "embedding-key",
+      { ...DEFAULT_RAG_SETTING, jevMode: "off", jevRagFilterEnabled: false }, "embedding-key",
       undefined, undefined, undefined, shared)).resolves.toEqual([pdf, unrelated]);
     expect(request).toHaveBeenCalledOnce();
     expect(extractPdfText).toHaveBeenCalledOnce();
@@ -290,7 +293,7 @@ describe("Jev filtering of PDF search results", () => {
 
   it("keeps the original retrieval limit when filtering is disabled or unconfigured", async () => {
     const vectorSearch = vi.mocked(initLocalRagStore().search);
-    await searchLocalRagResults("test", "query", { ...DEFAULT_RAG_SETTING, jevRagFilterEnabled: false },
+    await searchLocalRagResults("test", "query", { ...DEFAULT_RAG_SETTING, jevMode: "off", jevRagFilterEnabled: false },
       "embedding-key", undefined, undefined, undefined, settings, true);
     expect(vectorSearch.mock.calls[0][4]).toBe(DEFAULT_RAG_SETTING.topK);
     await searchLocalRagResults("test", "query", DEFAULT_RAG_SETTING,
@@ -305,5 +308,58 @@ describe("Jev filtering of PDF search results", () => {
       { ...settings, apiProviders: [], jevApiKey: "   " })).resolves.toEqual([pdf, unrelated]);
     expect(request).not.toHaveBeenCalled();
     expect(extractPdfText).not.toHaveBeenCalled();
+  });
+});
+
+describe("Jev rerank integration", () => {
+  const request = vi.fn<typeof fetch>();
+  const candidates = Array.from({ length: 5 }, (_, index) => ({
+    filePath: `rerank-${index}.md`, text: `Passage ${index}`, chunkIndex: 0, score: 1 - index / 10,
+  }));
+  const rerankSetting = { ...BASE_RAG_SETTING, jevMode: "rerank" as const, topK: 2 };
+
+  beforeEach(async () => {
+    resetLocalRagStore(); clearJevRerankCache(); request.mockReset();
+    vi.mocked(createNodeFetch).mockReturnValue(request);
+    const store = initLocalRagStore();
+    await store.load(app, []);
+    vi.spyOn(store, "search").mockResolvedValue(candidates);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => { vi.restoreAllMocks(); resetLocalRagStore(); clearJevRerankCache(); });
+
+  it("retrieves candidateK once, ignores searchUntilFound and returns score-ranked topK with stable ties", async () => {
+    request.mockResolvedValue(new Response(JSON.stringify({ answers: {
+      result_0: { type: "score", score: 1, confidence: 1 },
+      result_1: { type: "score", score: 3, confidence: 0 },
+      result_2: { type: "score", score: 3, confidence: 1 },
+      result_3: { type: "score", score: 2 },
+      result_4: { type: "score", score: 0 },
+    } })));
+    expect(await searchLocalRagResults("test", "query", { ...rerankSetting, searchUntilFound: true },
+      "embedding-key", undefined, undefined, undefined, settings)).toEqual([
+      { ...candidates[1], jevScore: 3 }, { ...candidates[2], jevScore: 3 },
+    ]);
+    expect(vi.mocked(initLocalRagStore().search).mock.calls[0][4]).toBe(40);
+    expect(request).toHaveBeenCalledOnce();
+    const body = JSON.parse(String(request.mock.calls[0][1]?.body));
+    expect(Object.keys(body.questions)).toHaveLength(5);
+    expect(body.questions.result_0.type).toBe("score");
+  });
+
+  it("requests at least topK candidates and falls back to the original topK after an HTTP error", async () => {
+    request.mockResolvedValue(new Response("unavailable", { status: 503 }));
+    expect(await searchLocalRagResults("test", "query", { ...rerankSetting, jevRerankCandidateK: 1 },
+      "embedding-key", undefined, undefined, 3, settings, true)).toEqual(candidates.slice(0, 3));
+    expect(vi.mocked(initLocalRagStore().search).mock.calls[0][4]).toBe(3);
+  });
+
+  it("does not expand candidates or call Jev without credentials or in off mode", async () => {
+    await searchLocalRagResults("test", "query", { ...rerankSetting, jevMode: "off" },
+      "embedding-key", undefined, undefined, 3, settings, true);
+    await searchLocalRagResults("test", "query", rerankSetting,
+      "embedding-key", undefined, undefined, 3, { ...settings, apiProviders: [], jevApiKey: "" }, true);
+    expect(vi.mocked(initLocalRagStore().search).mock.calls.map(call => call[4])).toEqual([3, 3]);
+    expect(request).not.toHaveBeenCalled();
   });
 });

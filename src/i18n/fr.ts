@@ -1,5 +1,15 @@
 // French translations
 export const fr: Record<string, string> = {
+  "settings.jevMode": "Mode Jev",
+  "settings.jevMode.desc": "Le filtre exclut les résultats sans correspondance ; le reclassement note la pertinence de 0 à 3. Utilise l’API cloud configurée. Reclassement désactivé par défaut.",
+  "settings.jevMode.off": "Désactivé",
+  "settings.jevMode.filter": "Filtrer",
+  "settings.jevMode.rerank": "Reclasser",
+  "settings.jevRerankCandidateK": "Candidats à reclasser",
+  "settings.jevRerankCandidateK.desc": "Candidats évalués avant Top K (40 par défaut, au moins Top K). Plus de candidats augmente le temps et le coût du traitement cloud.",
+  "search.jevScore": "Pertinence Jev : 0 sans rapport, 1 mots-clés seuls, 2 partiellement utile, 3 réponse directe.",
+  "search.helpJevMode": "Jev filtre les résultats ou note un ensemble plus large avant Top K. La recherche jusqu’à une réponse concerne uniquement le filtre. Un échec de reclassement conserve l’ordre initial.",
+
   // Settings - Headings
   "settings.cliProviders": "Fournisseurs CLI",
 

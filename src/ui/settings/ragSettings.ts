@@ -1,10 +1,10 @@
 import { Setting, Notice } from "obsidian";
 import { getLocalRagStore } from "src/core/localRagStore";
-import { getJevRagFilterConfig } from "src/core/jevRagFilter";
+import { getJevRagFilterConfig, getJevRagMode } from "src/core/jevRagFilter";
 import { fetchEmbeddingModels } from "src/core/embeddingProvider";
 import { t } from "src/i18n";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, getGeminiApiKey } from "src/types";
-import type { RagSetting } from "src/types";
+import type { JevRagMode, RagSetting } from "src/types";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { formatError } from "obsidian-llm-hub-common/core";
 import { setDestructiveButton } from "obsidian-llm-hub-common/obsidian";
@@ -61,13 +61,25 @@ function displaySelectedRagSetting(
 
   if (getJevRagFilterConfig(plugin.settings)) {
     new Setting(containerEl)
-      .setName(t("settings.jevRagFilter"))
-      .setDesc(t("settings.jevRagFilter.desc"))
-      .addToggle(toggle => toggle
-        .setValue(ragSetting.jevRagFilterEnabled)
+      .setName(t("settings.jevMode"))
+      .setDesc(t("settings.jevMode.desc"))
+      .addDropdown(dropdown => dropdown
+        .addOption("off", t("settings.jevMode.off"))
+        .addOption("filter", t("settings.jevMode.filter"))
+        .addOption("rerank", t("settings.jevMode.rerank"))
+        .setValue(getJevRagMode(ragSetting))
         .onChange(async value => {
-          await plugin.updateRagSetting(name, { jevRagFilterEnabled: value });
+          await plugin.updateRagSetting(name, { jevMode: value as JevRagMode });
+          display();
         }));
+    if (getJevRagMode(ragSetting) === "rerank") {
+      new Setting(containerEl)
+        .setName(t("settings.jevRerankCandidateK"))
+        .setDesc(t("settings.jevRerankCandidateK.desc"))
+        .addSlider(slider => slider.setLimits(5, 200, 5)
+          .setValue(ragSetting.jevRerankCandidateK ?? DEFAULT_RAG_SETTING.jevRerankCandidateK)
+          .onChange(async value => { await plugin.updateRagSetting(name, { jevRerankCandidateK: value }); }));
+    }
   }
 
   // All RAG is now local - go directly to local store settings

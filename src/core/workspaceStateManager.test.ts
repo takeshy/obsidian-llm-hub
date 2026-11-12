@@ -102,6 +102,27 @@ describe("WorkspaceStateManager combined search persistence", () => {
 });
 
 describe("WorkspaceStateManager per-index Jev filtering", () => {
+  it("migrates old per-index filter flags to modes, preserves explicit modes, and persists rerank settings", async () => {
+    const { jevMode: _unused, ...legacy } = DEFAULT_RAG_SETTING;
+    const harness = createManager(JSON.stringify({ ragSettings: {
+      Enabled: { ...legacy, jevRagFilterEnabled: true },
+      Disabled: { ...legacy, jevRagFilterEnabled: false },
+      Rerank: { ...legacy, jevMode: "rerank", jevRerankCandidateK: 60, jevRagFilterEnabled: true },
+    } }));
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Enabled")?.jevMode).toBe("filter");
+    expect(harness.manager.getRagSetting("Disabled")?.jevMode).toBe("off");
+    expect(harness.manager.getRagSetting("Rerank")).toMatchObject({ jevMode: "rerank", jevRerankCandidateK: 60, jevRagFilterEnabled: false });
+    await harness.manager.createRagSetting("New");
+    expect(harness.manager.getRagSetting("New")).toMatchObject({ jevMode: "off", jevRerankCandidateK: 40 });
+    const onFilterChanged = vi.fn();
+    harness.emitter.on("rag-filter-changed", onFilterChanged);
+    await harness.manager.updateRagSetting("Enabled", { jevMode: "rerank", jevRerankCandidateK: 50 });
+    expect(onFilterChanged).toHaveBeenCalledExactlyOnceWith("Enabled");
+    await harness.manager.loadWorkspaceState();
+    expect(harness.manager.getRagSetting("Enabled")).toMatchObject({ jevMode: "rerank", jevRerankCandidateK: 50 });
+  });
+
   it("defaults legacy indexes to vector-only retrieval and persists independent hybrid options", async () => {
     const legacy = { ...DEFAULT_RAG_SETTING } as Partial<typeof DEFAULT_RAG_SETTING>;
     delete legacy.hybridSearch; delete legacy.hybridCandidateK; delete legacy.rrfK;
@@ -120,7 +141,7 @@ describe("WorkspaceStateManager per-index Jev filtering", () => {
   });
 
   it.each([true, false])("persists the legacy global value %s on existing indexes once", async (enabled) => {
-    const { jevRagFilterEnabled: _unused, ...legacy } = DEFAULT_RAG_SETTING;
+    const { jevRagFilterEnabled: _unused, jevMode: _mode, ...legacy } = DEFAULT_RAG_SETTING;
     const harness = createManager(JSON.stringify({ ragSettings: { Notes: legacy, PDFs: legacy } }),
       { jevRagFilterEnabled: enabled });
     await harness.manager.loadWorkspaceState();
@@ -135,16 +156,16 @@ describe("WorkspaceStateManager per-index Jev filtering", () => {
     expect(reloaded.write).not.toHaveBeenCalled();
   });
 
-  it("preserves independent choices and defaults new indexes to ON", async () => {
+  it("preserves legacy filter choices and defaults new indexes to off", async () => {
     const harness = createManager(JSON.stringify({ ragSettings: {
-      Notes: DEFAULT_RAG_SETTING,
-      PDFs: { ...DEFAULT_RAG_SETTING, jevRagFilterEnabled: false },
+      Notes: { ...DEFAULT_RAG_SETTING, jevMode: undefined, jevRagFilterEnabled: true },
+      PDFs: { ...DEFAULT_RAG_SETTING, jevMode: undefined, jevRagFilterEnabled: false },
     } }));
     await harness.manager.loadWorkspaceState();
     await harness.manager.createRagSetting("New");
     expect(harness.manager.getRagSetting("Notes")?.jevRagFilterEnabled).toBe(true);
     expect(harness.manager.getRagSetting("PDFs")?.jevRagFilterEnabled).toBe(false);
-    expect(harness.manager.getRagSetting("New")?.jevRagFilterEnabled).toBe(true);
+    expect(harness.manager.getRagSetting("New")?.jevRagFilterEnabled).toBe(false);
 
     const onFilterChanged = vi.fn();
     const onSettingsChanged = vi.fn();
@@ -156,7 +177,7 @@ describe("WorkspaceStateManager per-index Jev filtering", () => {
     expect(onSettingsChanged).not.toHaveBeenCalled();
     await harness.manager.loadWorkspaceState();
     expect(harness.manager.getRagSetting("Notes")?.jevRagFilterEnabled).toBe(false);
-    expect(harness.manager.getRagSetting("New")?.jevRagFilterEnabled).toBe(true);
+    expect(harness.manager.getRagSetting("New")?.jevRagFilterEnabled).toBe(false);
   });
 });
 

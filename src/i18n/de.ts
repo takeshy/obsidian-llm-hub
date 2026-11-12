@@ -1,5 +1,15 @@
 // German translations
 export const de: Record<string, string> = {
+  "settings.jevMode": "Jev-Modus",
+  "settings.jevMode.desc": "Filter entfernt unpassende Ergebnisse; Neusortierung bewertet die Relevanz von 0 bis 3. Nutzt die konfigurierte Cloud-API. Neusortierung ist standardmäßig aus.",
+  "settings.jevMode.off": "Aus",
+  "settings.jevMode.filter": "Filtern",
+  "settings.jevMode.rerank": "Neu sortieren",
+  "settings.jevRerankCandidateK": "Kandidaten zur Neusortierung",
+  "settings.jevRerankCandidateK.desc": "Kandidaten vor der Top-K-Auswahl (Standard 40, mindestens Top K). Mehr Kandidaten erhöhen Cloud-Verarbeitungszeit und Kosten.",
+  "search.jevScore": "Jev-Relevanz: 0 unpassend, 1 nur Schlüsselwörter, 2 teilweise hilfreich, 3 direkte Antwort.",
+  "search.helpJevMode": "Jev filtert unpassende Ergebnisse oder bewertet einen größeren Kandidatenpool für Top K. Weitersuchen bis zur Antwort gilt nur beim Filtern. Bei Fehlern bleibt die ursprüngliche Reihenfolge.",
+
   // Settings - Headings
   "settings.cliProviders": "CLI-Anbieter",
 

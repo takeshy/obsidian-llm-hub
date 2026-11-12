@@ -26,6 +26,7 @@ import {
 } from "obsidian-llm-hub-common/core";
 import { deleteRagIndex, renameRagIndex } from "./localRagStorage";
 import { getLocalRagStore } from "./localRagStore";
+import { getJevRagMode } from "./jevRagFilter";
 import { searchSelectionFromWorkspace } from "./webSearch";
 import {
   applyRagCredentials,
@@ -116,12 +117,14 @@ export class WorkspaceStateManager {
     // Ensure each RAG setting has all required fields (migration for new fields)
     let migratedJev = false;
     for (const [settingName, setting] of Object.entries(this.workspaceState.ragSettings)) {
-      const legacyJev = setting.jevRagFilterEnabled === undefined;
-      migratedJev ||= legacyJev;
+      const legacyEnabled = setting.jevRagFilterEnabled ?? this.settings.jevRagFilterEnabled ?? false;
+      const mode = getJevRagMode({ ...setting, jevRagFilterEnabled: legacyEnabled });
+      migratedJev ||= setting.jevMode !== mode || setting.jevRagFilterEnabled !== (mode === "filter");
       this.workspaceState.ragSettings[settingName] = {
         ...DEFAULT_RAG_SETTING,
         ...setting,
-        jevRagFilterEnabled: setting.jevRagFilterEnabled ?? this.settings.jevRagFilterEnabled ?? false,
+        jevMode: mode,
+        jevRagFilterEnabled: mode === "filter",
       };
     }
 
@@ -306,17 +309,21 @@ export class WorkspaceStateManager {
       throw new Error(`Semantic search setting "${name}" not found`);
     }
 
+    const mode = updates.jevMode !== undefined ? getJevRagMode(updates)
+      : updates.jevRagFilterEnabled !== undefined ? getJevRagMode({ jevRagFilterEnabled: updates.jevRagFilterEnabled })
+        : getJevRagMode(existing);
     this.workspaceState.ragSettings[name] = pruneRagSettingSources(
       this.workspaceState,
       name,
-      { ...existing, ...updates },
+      { ...existing, ...updates, jevMode: mode, jevRagFilterEnabled: mode === "filter" },
     );
 
     await this.saveWorkspaceState();
     if (updates.hybridSearch !== undefined) {
       this.settingsEmitter.emit("workspace-state-loaded", this.workspaceState);
     }
-    if (updates.jevRagFilterEnabled !== undefined || updates.searchUntilFound !== undefined) {
+    if (updates.jevMode !== undefined || updates.jevRerankCandidateK !== undefined
+      || updates.jevRagFilterEnabled !== undefined || updates.searchUntilFound !== undefined) {
       this.settingsEmitter.emit("rag-filter-changed", name);
     }
     if (updates.topK !== undefined) {

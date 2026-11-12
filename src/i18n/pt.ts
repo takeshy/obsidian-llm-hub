@@ -1,5 +1,15 @@
 // Portuguese translations
 export const pt: Record<string, string> = {
+  "settings.jevMode": "Modo Jev",
+  "settings.jevMode.desc": "O filtro remove resultados sem correspondência; a reordenação pontua a relevância de 0 a 3. Usa a API na nuvem configurada. Reordenação desativada por padrão.",
+  "settings.jevMode.off": "Desativado",
+  "settings.jevMode.filter": "Filtrar",
+  "settings.jevMode.rerank": "Reordenar",
+  "settings.jevRerankCandidateK": "Candidatos para reordenar",
+  "settings.jevRerankCandidateK.desc": "Candidatos avaliados antes de Top K (40 por padrão, pelo menos Top K). Mais candidatos aumentam o tempo e o custo na nuvem.",
+  "search.jevScore": "Relevância Jev: 0 irrelevante, 1 apenas palavras-chave, 2 parcialmente útil, 3 resposta direta.",
+  "search.helpJevMode": "Jev filtra resultados ou avalia mais candidatos antes de Top K. Pesquisar até encontrar resposta aplica-se apenas ao filtro. Se a reordenação falhar, mantém a ordem original.",
+
   // Settings - Headings
   "settings.cliProviders": "Provedores CLI",
 

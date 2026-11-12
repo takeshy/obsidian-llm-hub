@@ -1,4 +1,4 @@
-import type { ApiProviderConfig, LlmHubSettings } from "../types";
+import type { ApiProviderConfig, JevRagMode, LlmHubSettings, RagSetting } from "../types";
 import type { LocalRagSearchResult } from "./localRagStore";
 import { createNodeFetch, createProxyFetch } from "./proxyFetch";
 import type { RagPdfImage } from "./ragPdfImages";
@@ -9,6 +9,12 @@ export const TYPESAFE_DECISIONS_URL = "https://api.typesafe.ai/v1/systemone";
 export const TYPESAFE_JEV_MODEL = "jev-latest";
 
 type JevFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+/** Explicit modes win; old stored flags are only a migration fallback. */
+export function getJevRagMode(setting?: Partial<Pick<RagSetting, "jevMode" | "jevRagFilterEnabled">> | null): JevRagMode {
+  if (setting?.jevMode === "off" || setting?.jevMode === "filter" || setting?.jevMode === "rerank") return setting.jevMode;
+  return setting?.jevRagFilterEnabled ? "filter" : "off";
+}
 
 export function getOpenRouterApiKey(providers: ApiProviderConfig[]): string {
   return providers.find(provider => provider.type === "openrouter" && provider.apiKey.trim())?.apiKey.trim() ?? "";

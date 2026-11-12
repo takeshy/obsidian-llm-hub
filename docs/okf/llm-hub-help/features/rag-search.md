@@ -12,7 +12,9 @@ The RAG Search tab is the manual counterpart to Chat's search menu. It lets user
 
 # Search and Filtering
 
-Results are ranked by cosine similarity between the query embedding and indexed chunks. With Jev active, **Search until an answer is found** checks Top K candidates per batch until a batch contains matches or eligible candidates run out, then returns all matches from that batch. The checkbox is saved per RAG setting and shared with Chat, Workflows, and Discord. Chat exposes it beside RAG Top K. A Workflow command node can override the saved value with `ragSearchUntilFound: true` or `false`; omitted values follow the index preference. After retrieval, users can filter the result list with one or more keyword fields:
+Results start in retrieval order. Jev mode is selected per index: **Off** keeps that order, **Filter** removes nonmatching chunks, and **Rerank** scores a larger candidate pool on a 0–3 relevance rubric and returns Top K in score order. Ties keep the original order. The gear menu exposes Jev mode and the rerank candidate count (default 40). Results show a Jev score out of 3 after successful reranking; a failed rerank falls back to the original Top K.
+
+Only in Jev **Filter** mode, **Search until an answer is found** checks Top K candidates per batch until a batch contains matches or eligible candidates run out, then returns all matches from that batch. The checkbox is saved per RAG setting and shared with Chat, Workflows, and Discord. Chat exposes it beside RAG Top K. A Workflow command node can override the saved value with `ragSearchUntilFound: true` or `false`; omitted values follow the index preference. The saved value is ignored in off/rerank modes. After retrieval, users can filter the result list with one or more keyword fields:
 
 - Terms inside one field use OR logic.
 - Quoted phrases (e.g. `"release notes"`) are matched as a single term.
@@ -70,6 +72,7 @@ The search file extensions filter sits in the search parameter row next to Top K
 The Search tab gear exposes per-RAG-setting controls. For all settings:
 
 - AI Refine Model.
+- Jev mode (off/filter/rerank), when credentials are configured, and rerank candidate count.
 - Last-sync timestamp.
 - Indexed files list with per-file chunk counts.
 

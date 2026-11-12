@@ -76,7 +76,7 @@ import { anthropicChatWithToolsStream } from "src/core/anthropicProvider";
 import { formatWebSearchCitations, getSearchSelectionForModel, providerSupportsWebSearch } from "src/core/webSearch";
 import { searchLocalRag, searchLocalRagResults, loadRagMediaAttachments, buildRagPdfTextContext } from "src/core/localRagStore";
 import { resolveApiProviderPdfInputMode, resolveLocalLlmPdfInputMode } from "src/core/pdfInputMode";
-import { getJevRagFilterConfig } from "src/core/jevRagFilter";
+import { getJevRagFilterConfig, getJevRagMode } from "src/core/jevRagFilter";
 import { createRagSearchRunner, RAG_SEARCH_TOOL, RAG_SEARCH_TOOL_NAME, type RagSearchRunner } from "src/core/ragSearchTool";
 import { buildNoDiscoverySystemPrompt } from "./chat/noDiscoveryPrompt";
 import { createToolExecutor } from "src/vault/toolExecutor";
@@ -276,7 +276,7 @@ const Chat = forwardRef<ChatRef, ChatProps>(({ plugin, onToggleSidebarWidth, onR
 	const [, refreshRagConfig] = useState(0);
 	const selectedRagConfig = selectedRagSetting ? plugin.getRagSetting(selectedRagSetting) : null;
 	const ragTopK = selectedRagConfig?.topK ?? DEFAULT_RAG_SETTING.topK;
-	const ragJevEnabled = Boolean(selectedRagConfig?.jevRagFilterEnabled && getJevRagFilterConfig(plugin.settings));
+	const ragJevEnabled = Boolean(getJevRagMode(selectedRagConfig) === "filter" && getJevRagFilterConfig(plugin.settings));
 
 	// Vault tool mode includes readOnly for search/read without mutations.
 	// Gemma 4 + RAG: must disable function calling tools (mutually exclusive)

@@ -315,8 +315,12 @@ export const DEFAULT_ENCRYPTION_SETTINGS: EncryptionSettings = {
 };
 
 // 個別のRAG設定
+export type JevRagMode = "off" | "filter" | "rerank";
+
 export interface RagSetting extends HybridSearchOptions {
-  jevRagFilterEnabled: boolean;  // Filter this index when Jev credentials are configured
+  jevMode: JevRagMode;
+  jevRerankCandidateK: number;
+  jevRagFilterEnabled: boolean;  // Legacy alias, synchronized with jevMode === "filter"
   searchUntilFound: boolean;     // Check further Jev batches until a match is found
   embeddingBaseUrl: string;      // Embedding API URL (空 = Gemini default)
   embeddingApiKey: string;       // APIキー (空 = Gemini API key fallback)
@@ -354,7 +358,9 @@ export const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-2-preview";
 // デフォルトのRAG設定
 export const DEFAULT_RAG_SETTING: RagSetting = {
   ...DEFAULT_HYBRID_SEARCH,
-  jevRagFilterEnabled: true,
+  jevMode: "off",
+  jevRerankCandidateK: 40,
+  jevRagFilterEnabled: false,
   searchUntilFound: false,
   embeddingBaseUrl: "",
   embeddingApiKey: "",

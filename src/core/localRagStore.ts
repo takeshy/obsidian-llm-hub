@@ -25,8 +25,9 @@ import {
   loadExternalRagVectors,
 } from "./localRagStorage";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type LlmHubSettings, type RagSetting } from "../types";
-import { filterRagResultsWithJev, getJevRagFilterConfig } from "./jevRagFilter";
-import { renderRagPdfImages } from "./ragPdfImages";
+import { filterRagResultsWithJev, getJevRagFilterConfig, getJevRagMode } from "./jevRagFilter";
+import { rerankRagResultsWithJev } from "./jevRagRerank";
+import { renderRagImage, renderRagPdfImages } from "./ragPdfImages";
 // PDF text extraction and page-label mapping are shared.
 import { extractPdfText, extractPdfTextWithOffsets, computePdfPageLabel } from "obsidian-llm-hub-common/vault";
 
@@ -139,6 +140,8 @@ function shouldIncludeFile(filePath: string, config: FilterConfig): boolean {
 }
 
 export interface LocalRagSearchResult {
+  /** Jev relevance on the ordered 0–3 rubric; the retrieval score stays intact. */
+  jevScore?: number;
   /** Only present on RRF results; kept with the result when settings change. */
   retrievalSource?: RagRetrievalSource;
   filePath: string;
@@ -192,6 +195,11 @@ class LocalRagStore {
     const range = result.pageLabel ? parsePageLabel(result.pageLabel) : null;
     if (!this.app || !range) return null;
     return renderRagPdfImages(this.app, result.filePath, range.startPage, range.endPage);
+  }
+
+  async renderSearchResultJevImages(result: LocalRagSearchResult) {
+    if (result.contentType === "pdf") return this.renderSearchResultPdfImages(result);
+    return this.app && result.contentType === "image" ? renderRagImage(this.app, result.filePath) : null;
   }
 
   async load(app: App, settingNames: string[], ragSettings?: Record<string, RagSetting>): Promise<void> {
@@ -1001,20 +1009,31 @@ export async function searchLocalRagResults(
   const resultLimit = topK ?? ragSetting.topK;
   if (!Number.isFinite(resultLimit) || resultLimit < 1) return [];
   const limit = Math.floor(resultLimit);
-  const filterConfig = settings && ragSetting.jevRagFilterEnabled ? getJevRagFilterConfig(settings) : null;
-  const repeat = Boolean(filterConfig && searchUntilFound);
+  const mode = getJevRagMode(ragSetting);
+  const filterConfig = settings && mode !== "off" ? getJevRagFilterConfig(settings) : null;
+  const rerank = Boolean(filterConfig && mode === "rerank");
+  const repeat = Boolean(filterConfig && mode === "filter" && searchUntilFound);
+  const candidateK = Number.isFinite(ragSetting.jevRerankCandidateK) && ragSetting.jevRerankCandidateK >= 1
+    ? Math.floor(ragSetting.jevRerankCandidateK) : DEFAULT_RAG_SETTING.jevRerankCandidateK;
   // search already scores and sorts the entire index. Retrieve the eligible
   // candidates once so refilling does not embed the same query again.
   const candidates = await store.search(
     settingName, query, apiKey,
     ragSetting.embeddingModel || (ragSetting.embeddingBaseUrl ? "" : DEFAULT_GEMINI_EMBEDDING_MODEL),
-    repeat ? Infinity : limit,
+    repeat ? Infinity : rerank ? Math.max(limit, candidateK) : limit,
     ragSetting.embeddingBaseUrl || undefined,
     ragSetting.scoreThreshold ?? DEFAULT_RAG_SETTING.scoreThreshold,
     ragSetting.searchFileExtensions,
     proxyUrl, proxyBypass, ragSetting,
   );
   if (!filterConfig || !settings) return candidates;
+  if (rerank) {
+    return rerankRagResultsWithJev(query, candidates, limit, {
+      ...filterConfig, proxyUrl: settings.proxyUrl, proxyBypass: settings.proxyBypass,
+      resolvePdfText: result => store.extractSearchResultPdfText(result),
+      resolveImages: result => store.renderSearchResultJevImages(result),
+    });
+  }
 
   // Top K is the candidate batch size. Repeat only when explicitly enabled,
   // stopping at the first batch with matches or when eligible candidates run out.

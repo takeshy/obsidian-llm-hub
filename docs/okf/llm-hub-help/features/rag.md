@@ -59,6 +59,46 @@ Each RAG setting controls retrieval:
 - `scoreThreshold` - minimum cosine similarity score (0.0-1.0).
 - `searchFileExtensions` - restrict results to given file extensions; empty means all.
 - `chunkSize` / `chunkOverlap` - chunking parameters used at index time.
+- `jevMode` - `off`, `filter`, or `rerank`. New indexes default to `off`.
+- `jevRerankCandidateK` - candidates evaluated before returning Top K; default 40, at least Top K.
+
+# Jev Filtering And Reranking
+
+Configure a direct TypeSafe key or select the existing OpenRouter key in Settings → Jev.
+Choose the mode separately for each RAG setting. Existing `jevRagFilterEnabled: true`
+settings migrate to `filter`; false migrates to `off`. The old global toggle is used
+only when migrating settings that do not have a per-index choice. An explicit mode wins.
+
+Filter mode keeps the previous keep/exclude behavior and supports **Search until an
+answer is found**. Rerank mode retrieves at least `max(topK, jevRerankCandidateK)`
+candidates (subject to the existing threshold), scores them, sorts by descending
+score, preserves the original order for ties, then returns Top K. It does not use
+search-until-found and does not drop zero-score candidates automatically.
+
+The ordered relevance rubric is 0 unrelated, 1 keyword overlap only, 2 partially
+useful, and 3 directly answers the query. Jev's `score` can be fractional; confidence
+measures distribution concentration and is not used for relevance ordering. The
+Search tab shows the Jev score out of 3 alongside the original retrieval score.
+
+Text candidates share one request with the query included once in `state`. Native
+PDF chunks use extracted page text; scanned PDF chunks and native images are scored
+individually with bounded JPEG assets. If content cannot be resolved, the original
+retrieval order is retained rather than scoring a filename label. Audio/video chunks
+also fall back to the original order.
+
+Reranking depends on a cloud service and sends the query and candidate contents to
+the configured TypeSafe or OpenRouter endpoint. More candidates increase processing
+time and cost. OpenRouter Decisions (`/api/alpha/decisions`) is alpha. The whole
+operation has a 20-second deadline, including media preparation and rate-limit
+retries. HTTP 429 observes `Retry-After` within that deadline. A timeout, incomplete
+score response, or other failure returns the original first Top K candidates.
+
+An in-memory cache holds up to 1,000 scores for 10 minutes. Keys hash the query,
+actual chunk contents (including resolved PDF text/images), path, chunk/page,
+endpoint/model, rubric version, and account. No scores are persisted to disk.
+
+Official contracts: [TypeSafe System One](https://docs.typesafe.ai/api/system-one.md)
+and [OpenRouter Jev](https://openrouter.ai/~typesafe/jev-latest).
 
 # Operations
 

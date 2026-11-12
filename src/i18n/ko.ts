@@ -1,5 +1,15 @@
 // Korean translations
 export const ko: Record<string, string> = {
+  "settings.jevMode": "Jev 모드",
+  "settings.jevMode.desc": "필터는 불일치 결과를 제외하고 재정렬은 관련도를 0~3으로 평가합니다. 설정된 클라우드 API를 사용합니다. 재정렬은 기본적으로 꺼져 있습니다.",
+  "settings.jevMode.off": "끄기",
+  "settings.jevMode.filter": "필터",
+  "settings.jevMode.rerank": "재정렬",
+  "settings.jevRerankCandidateK": "재정렬 후보 수",
+  "settings.jevRerankCandidateK.desc": "Top K를 반환하기 전에 평가할 후보 수입니다(기본 40, 최소 Top K). 후보가 많을수록 클라우드 처리 시간과 비용이 늘어납니다.",
+  "search.jevScore": "Jev 관련도: 0 무관, 1 키워드만 일치, 2 부분적으로 유용, 3 질문에 직접 답변.",
+  "search.helpJevMode": "Jev는 불일치를 제외하거나 더 많은 후보를 평가하여 Top K를 반환합니다. 답변을 찾을 때까지 검색은 필터 모드 전용입니다. 재정렬 실패 시 원래 검색 순서를 유지합니다.",
+
   // Settings - Headings
   "settings.cliProviders": "CLI 제공자",
 

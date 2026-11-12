@@ -1,5 +1,15 @@
 // Japanese translations
 export const ja: Record<string, string> = {
+  "settings.jevMode": "Jevモード",
+  "settings.jevMode.desc": "フィルタは一致しない結果を除外し、リランクは関連度を0〜3で採点して候補を並べ替えます。設定済みのクラウドAPIを使用します。リランクは既定でオフです。",
+  "settings.jevMode.off": "オフ",
+  "settings.jevMode.filter": "フィルタ",
+  "settings.jevMode.rerank": "リランク",
+  "settings.jevRerankCandidateK": "リランク候補数",
+  "settings.jevRerankCandidateK.desc": "Top Kに絞る前に採点する候補数です（既定40、最低Top K件）。候補を増やすほどクラウドの処理時間と料金が増えます。",
+  "search.jevScore": "Jev関連度：0 無関係、1 キーワードだけ一致、2 部分的に有用、3 クエリに直接回答。",
+  "search.helpJevMode": "Jev：フィルタは不一致を除外し、リランクは多めに取得した候補を採点してTop K件を返します。「回答が見つかるまで検索する」はフィルタ専用です。リランク失敗時は元の検索順位を使います。",
+
   "live.title": "ライブ会話",
   "live.provider": "プロバイダー",
   "settings.apiProviderKeySaved": "APIキー登録済み",

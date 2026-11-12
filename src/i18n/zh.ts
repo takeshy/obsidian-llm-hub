@@ -1,5 +1,15 @@
 // Chinese (Simplified) translations
 export const zh: Record<string, string> = {
+  "settings.jevMode": "Jev 模式",
+  "settings.jevMode.desc": "筛选会排除不匹配的结果；重排按 0–3 的相关度评分排序。使用已配置的云端 API。重排默认关闭。",
+  "settings.jevMode.off": "关闭",
+  "settings.jevMode.filter": "筛选",
+  "settings.jevMode.rerank": "重排",
+  "settings.jevRerankCandidateK": "重排候选数",
+  "settings.jevRerankCandidateK.desc": "返回 Top K 前评分的候选数（默认 40，至少 Top K）。候选越多，云端处理时间和费用越高。",
+  "search.jevScore": "Jev 相关度：0 无关，1 仅关键词匹配，2 部分有用，3 直接回答查询。",
+  "search.helpJevMode": "Jev 可筛选不匹配的结果，或对更大的候选集评分后返回 Top K。“搜索直到找到答案”仅用于筛选模式。重排失败时保留原始检索顺序。",
+
   // Settings - Headings
   "settings.cliProviders": "CLI 提供商",
 

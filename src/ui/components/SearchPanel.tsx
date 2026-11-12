@@ -18,11 +18,11 @@ import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import { Modal, Notice, Platform } from "obsidian";
 import { RagChunkEditModal } from "./RagChunkEditModal";
 import type { LlmHubPlugin } from "src/plugin";
-import type { Attachment, ModelType, ModelInfo, Message } from "src/types";
+import type { Attachment, JevRagMode, ModelType, ModelInfo, Message } from "src/types";
 import { getGeminiApiKey, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, localLlmDisplayName } from "src/types";
 import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, searchLocalRagResults, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
-import { getJevRagFilterConfig } from "src/core/jevRagFilter";
+import { getJevRagFilterConfig, getJevRagMode } from "src/core/jevRagFilter";
 import { extractPdfText } from "obsidian-llm-hub-common/vault";
 import { getPdfResultModePreference, setPdfResultModePreference, type PdfResultMode } from "./pdfResultModePreference";
 import { extensionToMimeType } from "src/core/embeddingProvider";
@@ -37,6 +37,7 @@ class SearchHelpModal extends Modal {
     contentEl.createEl("h3", { text: t("search.helpTitle") });
     const helpKeys = [
       "search.helpTopK",
+      "search.helpJevMode",
       "search.helpSearchUntilFound",
       "search.helpScoreThreshold",
       "search.helpExt",
@@ -197,7 +198,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   // Check if current setting is internal (not external index)
   const currentRagSetting = plugin.getRagSetting(selectedRagSetting);
   const searchUntilFound = currentRagSetting?.searchUntilFound ?? false;
-  const jevFilterActive = Boolean(currentRagSetting?.jevRagFilterEnabled && getJevRagFilterConfig(plugin.settings));
+  const jevFilterActive = Boolean(getJevRagMode(currentRagSetting) === "filter" && getJevRagFilterConfig(plugin.settings));
   const topKJevNoteId = useId();
   const isInternalRag = currentRagSetting
     ? !currentRagSetting.externalIndexPath && currentRagSetting.sourceRagSettings.length === 0
@@ -246,10 +247,10 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
     };
   }, [plugin]);
 
-  const handleJevChange = async (enabled: boolean) => {
+  const handleJevChange = async (mode: JevRagMode) => {
     setIsSavingJev(true);
     try {
-      await plugin.updateRagSetting(selectedRagSetting, { jevRagFilterEnabled: enabled });
+      await plugin.updateRagSetting(selectedRagSetting, { jevMode: mode });
     } catch (error) {
       new Notice(t("common.error") + (error instanceof Error ? error.message : String(error)));
     } finally {
@@ -818,16 +819,32 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
         {showRagConfig && (
           <div className="llm-hub-rag-config-section">
             {currentRagSetting && getJevRagFilterConfig(plugin.settings) && (
-              <label className="llm-hub-search-jev-toggle" title={t("settings.jevRagFilter.desc")}>
-                <input
-                  type="checkbox"
-                  role="switch"
-                  checked={currentRagSetting.jevRagFilterEnabled}
-                  disabled={isSearching || isSavingJev}
-                  onChange={e => { void handleJevChange(e.target.checked); }}
-                />
-                {t("search.jevFilter")}
-              </label>
+              <div className="llm-hub-rag-config-row">
+                <label className="llm-hub-search-jev-toggle" title={t("settings.jevMode.desc")}>
+                  {t("settings.jevMode")}
+                  <select value={getJevRagMode(currentRagSetting)} disabled={isSearching || isSavingJev}
+                    onChange={e => { void handleJevChange(e.target.value as JevRagMode); }}>
+                    <option value="off">{t("settings.jevMode.off")}</option>
+                    <option value="filter">{t("settings.jevMode.filter")}</option>
+                    <option value="rerank">{t("settings.jevMode.rerank")}</option>
+                  </select>
+                </label>
+                {getJevRagMode(currentRagSetting) === "rerank" && (
+                  <label title={t("settings.jevRerankCandidateK.desc")}>
+                    {t("settings.jevRerankCandidateK")}
+                    <input type="number" min={1} max={200} step={1}
+                      className="llm-hub-search-param-input"
+                      value={currentRagSetting.jevRerankCandidateK ?? DEFAULT_RAG_SETTING.jevRerankCandidateK}
+                      disabled={isSearching || isSavingJev}
+                      onChange={e => {
+                        const value = Number(e.target.value);
+                        if (!Number.isInteger(value) || value < 1 || value > 200) return;
+                        void plugin.updateRagSetting(selectedRagSetting, { jevRerankCandidateK: value })
+                          .catch(error => { new Notice(String(error)); });
+                      }} />
+                  </label>
+                )}
+              </div>
             )}
             {isInternalRag && (
               <>
@@ -1201,6 +1218,11 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                     <span className="llm-hub-search-result-page-label">{result.pageLabel}</span>
                   )}
                   <RagSearchResultMeta score={result.score} retrievalSource={result.retrievalSource} />
+                  {result.jevScore !== undefined && (
+                    <span className="llm-hub-search-result-score" title={t("search.jevScore")}>
+                      Jev {result.jevScore.toFixed(2)}/3
+                    </span>
+                  )}
                   {editedIndices.has(index) && (
                     <span className="llm-hub-search-result-edited-badge">{t("search.edited")}</span>
                   )}
