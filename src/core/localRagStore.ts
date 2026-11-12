@@ -1,4 +1,4 @@
-import { ChunkBm25Index, collectHybridCandidates, normalizeHybridSearchOptions, type HybridSearchOptions } from "obsidian-llm-hub-common/core";
+import { ChunkBm25Index, collectHybridCandidates, normalizeHybridSearchOptions, type HybridSearchOptions, type RagRetrievalSource } from "obsidian-llm-hub-common/core";
 import { type App, TFile, htmlToMarkdown } from "obsidian";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -139,6 +139,8 @@ function shouldIncludeFile(filePath: string, config: FilterConfig): boolean {
 }
 
 export interface LocalRagSearchResult {
+  /** Only present on RRF results; kept with the result when settings change. */
+  retrievalSource?: RagRetrievalSource;
   filePath: string;
   text: string;
   score: number;
@@ -659,7 +661,7 @@ class LocalRagStore {
 
     scores.sort((a, b) => b.score - a.score);
     const options = normalizeHybridSearchOptions(hybrid ?? {});
-    let topResults = scores.slice(0, options.hybridSearch ? options.hybridCandidateK : topK)
+    let topResults: Array<{ index: number; score: number; retrievalSource?: RagRetrievalSource }> = scores.slice(0, options.hybridSearch ? options.hybridCandidateK : topK)
       .filter(r => r.score > (scoreThreshold ?? 0));
     if (options.hybridSearch) {
       const bm25 = await this.ensureBm25(this.app, settingName, entry);
@@ -669,7 +671,7 @@ class LocalRagStore {
       });
       topResults = collectHybridCandidates(
         topResults.map(r => ({ id: String(r.index), score: r.score })), lexical, topK, options,
-      ).map(r => ({ index: Number(r.id), score: r.score }));
+      ).map(r => ({ index: Number(r.id), score: r.score, retrievalSource: r.retrievalSource }));
     }
 
     return topResults
@@ -678,6 +680,7 @@ class LocalRagStore {
         text: index.meta[r.index].text,
         score: r.score,
         chunkIndex: index.meta[r.index].chunkIndex,
+        ...(r.retrievalSource ? { retrievalSource: r.retrievalSource } : {}),
         contentType: index.meta[r.index].contentType,
         pageLabel: index.meta[r.index].pageLabel,
       }));

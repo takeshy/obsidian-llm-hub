@@ -111,7 +111,10 @@ describe("WorkspaceStateManager per-index Jev filtering", () => {
     await harness.manager.loadWorkspaceState();
     expect(harness.manager.getRagSetting("Notes")).toMatchObject({ hybridSearch: false, hybridCandidateK: 30, rrfK: 60 });
     expect(harness.manager.getRagSetting("Hybrid")).toMatchObject({ hybridSearch: true, hybridCandidateK: 45, rrfK: 25 });
+    const onModeChanged = vi.fn();
+    harness.emitter.on("workspace-state-loaded", onModeChanged);
     await harness.manager.updateRagSetting("Notes", { hybridSearch: true, hybridCandidateK: 40 });
+    expect(onModeChanged).toHaveBeenCalledExactlyOnceWith(harness.manager.workspaceState);
     await harness.manager.loadWorkspaceState();
     expect(harness.manager.getRagSetting("Notes")).toMatchObject({ hybridSearch: true, hybridCandidateK: 40, rrfK: 60 });
   });

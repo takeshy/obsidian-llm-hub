@@ -63,6 +63,7 @@ describe("hybrid local RAG retrieval", () => {
     const results = await search(f, { scoreThreshold: 0.5 });
     expect(results.map(r => r.filePath)).toEqual(["semantic.md", "both.txt"]);
     expect(results[0].score).toBe(1);
+    expect(results.every(result => result.retrievalSource === undefined)).toBe(true);
     expect(results[1].score).toBeCloseTo(0.8);
     expect(f.adapter.exists.mock.calls.some(([path]) => path.endsWith("bm25.json"))).toBe(false);
     expect(f.adapter.write).not.toHaveBeenCalled();
@@ -73,6 +74,7 @@ describe("hybrid local RAG retrieval", () => {
     const results = await search(f, { hybridSearch: true, scoreThreshold: 0.95, topK: 2 });
     expect(results.map(r => r.filePath)).toEqual(["semantic.md", "exact.md"]);
     expect(results.map(r => r.score)).toEqual([1 / 61, 1 / 61]);
+    expect(results.map(r => r.retrievalSource)).toEqual(["vector", "bm25"]);
     expect(f.disk.has("LLMHub/rag/test/bm25.json")).toBe(true);
     expect(mocks.compatible).toHaveBeenCalledTimes(1); // query only, no re-embedding
   });
@@ -84,6 +86,7 @@ describe("hybrid local RAG retrieval", () => {
     const filtered = await search(f, { hybridSearch: true, searchFileExtensions: [".TXT"], hybridCandidateK: 1 });
     expect(filtered.map(r => r.filePath)).toEqual(["both.txt"]);
     expect(filtered[0].score).toBe(2 / 61);
+    expect(filtered[0].retrievalSource).toBe("both");
   });
 
   it("passes the fused topK, including lexical-only matches, through the existing Jev filter", async () => {

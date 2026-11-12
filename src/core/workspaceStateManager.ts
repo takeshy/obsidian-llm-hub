@@ -313,6 +313,9 @@ export class WorkspaceStateManager {
     );
 
     await this.saveWorkspaceState();
+    if (updates.hybridSearch !== undefined) {
+      this.settingsEmitter.emit("workspace-state-loaded", this.workspaceState);
+    }
     if (updates.jevRagFilterEnabled !== undefined || updates.searchUntilFound !== undefined) {
       this.settingsEmitter.emit("rag-filter-changed", name);
     }

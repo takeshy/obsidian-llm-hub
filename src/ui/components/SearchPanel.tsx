@@ -1,3 +1,4 @@
+import { RagSearchModeBadge, RagSearchResultMeta } from "obsidian-llm-hub-common/chat";
 import { useState, useEffect, useRef, useCallback, useId } from "react";
 import type { KeyboardEvent } from "react";
 import Search from "lucide-react/dist/esm/icons/search";
@@ -1036,6 +1037,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
             {t("search.topKJevNote")}
           </div>
         )}
+        <RagSearchModeBadge hybridSearch={currentRagSetting?.hybridSearch === true} />
         <div className="llm-hub-search-query-row">
           <textarea
             className="llm-hub-search-query-input"
@@ -1198,9 +1200,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                   {result.contentType === "pdf" && result.pageLabel && (
                     <span className="llm-hub-search-result-page-label">{result.pageLabel}</span>
                   )}
-                  <span className="llm-hub-search-result-score">
-                    {(result.score * 100).toFixed(1)}%
-                  </span>
+                  <RagSearchResultMeta score={result.score} retrievalSource={result.retrievalSource} />
                   {editedIndices.has(index) && (
                     <span className="llm-hub-search-result-edited-badge">{t("search.edited")}</span>
                   )}
