@@ -19,7 +19,8 @@ import { CryptView, CRYPT_VIEW_TYPE } from "src/ui/CryptView";
 import { CliTerminalView, CLI_TERMINAL_VIEW_TYPE } from "src/ui/CliTerminalView";
 import { SettingsTab } from "src/ui/SettingsTab";
 import { getJevRagMode } from "./core/jevRagFilter";
-import { getRagDecisionConfig } from "./core/ragDecision";
+import { getRagDecisionConfig, getRagDecisionModels } from "./core/ragDecision";
+import { handleDecisionNode } from "./workflow/handlers/decision";
 import { configureWorkflowHost } from "obsidian-llm-hub-common/workflow";
 import { getWorkflowModelOptions } from "src/core/workflowModels";
 import { configureMcpAppViewer, configureStoragePrefix } from "obsidian-llm-hub-common/modals";
@@ -312,6 +313,7 @@ export class LlmHubPlugin extends Plugin {
       });
     }
     configureWorkflowHost({
+      getDecisionModelOptions: () => getRagDecisionModels(this.settings),
       getModelOptions: () => getWorkflowModelOptions(this.settings),
       getCurrentModel: () => this.getSelectedModel(),
       getLastWorkflowModel: () => this.settings.lastAIWorkflowModel,
@@ -357,6 +359,7 @@ export class LlmHubPlugin extends Plugin {
       runCommandNode: ({ node, context, app, callbacks, traceId, abortSignal }) =>
         handleCommandNode(node, context, app, this, callbacks, traceId, abortSignal),
       runMcpNode: ({ node, context, app }) => handleMcpNode(node, context, app, this),
+      runDecisionNode: request => handleDecisionNode(request, this),
       runShellNode: ({ node, context, app }) => handleShellNode(node, context, app),
       runRagSyncNode: ({ node, context, app }) => handleRagSyncNode(node, context, app, this),
       tracing,

@@ -2,3 +2,4 @@
 export * from "obsidian-llm-hub-common/workflow";
 export * from "./handlers/command";
 export * from "./handlers/shell";
+export * from "./handlers/decision";

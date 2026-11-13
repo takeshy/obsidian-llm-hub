@@ -27,3 +27,4 @@ data.json
 
 # Local credential for API verification
 /tmp/jev.key
+/tmp/gemini.key

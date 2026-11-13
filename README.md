@@ -435,6 +435,35 @@ Build automated multi-step workflows directly in Markdown files. **No programmin
 
 ![Visual Workflow Editor](docs/images/visual_workflow.png)
 
+## Branching with AI decisions
+
+Choose **Boolean, Noul, Score, Choice, or Multiple questions**. Score/Noul preserve raw numbers and branch at a threshold; Choice routes each choice to its own node. Multiple questions share one API request and save named JSON results for later conditions such as `{{result.urgency}} >= 1.5`. See the [node reference](docs/okf/llm-hub-help/features/workflow-nodes.md#decision-branching) for configuration and examples.
+
+A `decision` node evaluates `input` using its `prompt`, then follows `trueNext` or `falseNext`. Both fields support `{{variables}}`; for Boolean, optional `saveTo` stores `"true"` or `"false"`. Omit `model` to use the configured decision model, or choose a registered Jev/Gemini service in the node editor. Gemini always uses `gemini-decision-1`, independently of chat model selection. API failures, invalid responses, and cancellation stop execution without selecting a branch. Cloud API charges apply.
+
+```hub-workflow
+name: Decision routing
+nodes:
+  - id: input
+    type: variable
+    name: text
+  - id: judge
+    type: decision
+    prompt: "Does this message request urgent action?"
+    input: "{{text}}"
+    saveTo: isUrgent
+    trueNext: urgent
+    falseNext: normal
+  - id: urgent
+    type: dialog
+    message: "Urgent request"
+    next: end
+  - id: normal
+    type: dialog
+    message: "Normal request"
+    next: end
+```
+
 ## AI-Powered Workflow & Skill Creation
 
 **You don't need to learn YAML syntax or node types.** Simply describe your workflow in plain language:

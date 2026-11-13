@@ -1,6 +1,7 @@
 // The workflow format the AI writes against lives in the shared library, beside the
 // executor it describes. This file only tells it what this plugin offers.
 import { CLI_MODEL, CODEX_CLI_MODEL } from "src/types";
+import { getRagDecisionModels } from "src/core/ragDecision";
 import type { LlmHubPlugin } from "src/plugin";
 import {
   getWorkflowSpecification,
@@ -27,6 +28,7 @@ export function buildWorkflowSpecContext(plugin: LlmHubPlugin): WorkflowSpecCont
   }
   return {
     modelNames,
+    decisionModelNames: getRagDecisionModels(plugin.settings).map(model => model.value),
     mcpServers: plugin.settings.mcpServers,
     ragSettingNames: Object.keys(plugin.workspaceState.ragSettings),
   };
