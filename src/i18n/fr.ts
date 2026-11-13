@@ -1,12 +1,12 @@
 // French translations
 export const fr: Record<string, string> = {
-  "search.topKJevNote": "Jev évalue les candidats par lots ; Top K limite les résultats. La recherche jusqu’à réponse renvoie les notes de 2 ou plus du premier lot pertinent. Les vérifications supplémentaires augmentent usage API et durée.",
-  "search.helpSearchUntilFound": "Chercher jusqu’à une réponse — avec Jev, évaluer les lots suivants jusqu’à trouver un candidat noté au moins 2 ou épuiser les candidats. Sinon, un seul lot.",
-  "search.helpJev": "Jev note et classe les candidats. La recherche jusqu’à une réponse exige au moins 2 points et renvoie jusqu’à Top K du premier lot pertinent.",
-  "search.jevFilter": "Classer avec Jev",
-  "settings.jevRagFilter.desc": "Jev note la pertinence de 0 à 3 et classe les candidats. S’applique au Chat, aux workflows et à Discord. Désactivé par défaut pour les nouveaux index.",
-  "settings.jevRagFilter": "Classer les résultats RAG avec Jev",
-  "search.jevScore": "Pertinence Jev : 0 sans rapport, 1 mots-clés seuls, 2 partiellement utile, 3 réponse directe.",
+  "search.topKJevNote": "le modèle de décision évalue les candidats par lots ; Top K limite les résultats. La recherche jusqu’à réponse renvoie les notes de 2 ou plus du premier lot pertinent. Les vérifications supplémentaires augmentent usage API et durée.",
+  "search.helpSearchUntilFound": "Chercher jusqu’à une réponse — avec le modèle de décision, évaluer les lots suivants jusqu’à trouver un candidat noté au moins 2 ou épuiser les candidats. Sinon, un seul lot.",
+  "search.helpJev": "le modèle de décision note et classe les candidats. La recherche jusqu’à une réponse exige au moins 2 points et renvoie jusqu’à Top K du premier lot pertinent.",
+  "search.jevFilter": "Classer avec le modèle de décision",
+  "settings.jevRagFilter.desc": "le modèle de décision note la pertinence de 0 à 3 et classe les candidats. S’applique au Chat, aux workflows et à Discord. Désactivé par défaut pour les nouveaux index.",
+  "settings.jevRagFilter": "Classer les résultats RAG avec le modèle de décision",
+  "search.jevScore": "Pertinence le modèle de décision : 0 sans rapport, 1 mots-clés seuls, 2 partiellement utile, 3 réponse directe.",
 
   // Settings - Headings
   "settings.cliProviders": "Fournisseurs CLI",

@@ -12,10 +12,10 @@ The RAG Search tab is the manual counterpart to Chat's search menu. It lets user
 
 # Search and Filtering
 
-The existing Jev toggle enables Score reranking; no separate mode selector or
-candidate-count input is shown. Jev scores candidate passages on the 0–3 rubric,
+The evaluation toggle enables Score reranking; no separate mode selector or
+candidate-count input is shown. The selected decision model scores candidate passages on the 0–3 rubric,
 sorts them, preserves retrieval order for ties, and returns up to Top K. The header
-shows Jev's score out of 3 separately from the original retrieval score.
+shows the relevance score out of 3 separately from the original retrieval score.
 
 With **Search until an answer is found** enabled, candidates are checked in batches
 until the first batch contains a score **at least 2**. Only results scoring at least
@@ -83,7 +83,7 @@ The search file extensions filter sits in the search parameter row next to Top K
 The Search tab gear exposes per-RAG-setting controls. For all settings:
 
 - AI Refine Model.
-- Existing Jev ON/OFF toggle, when credentials are configured.
+- Evaluation ON/OFF toggle, when credentials are configured.
 - Last-sync timestamp.
 - Indexed files list with per-file chunk counts.
 

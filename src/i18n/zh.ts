@@ -1,12 +1,12 @@
 // Chinese (Simplified) translations
 export const zh: Record<string, string> = {
-  "search.topKJevNote": "Jev 分组评估候选，Top K 限制返回数量。“搜索直到找到答案”返回首个满足条件分组中至少 2 分的结果。重复评估可能增加 API 用量和时间。",
-  "search.helpSearchUntilFound": "搜索直到找到答案 — 启用 Jev 后继续评估下一组，直到发现至少 2 分的候选或候选耗尽。关闭时仅评估一组。",
-  "search.helpJev": "Jev 对候选评分并排序。“搜索直到找到答案”要求至少 2 分，从首个满足条件的分组返回最多 Top K 个结果。",
-  "search.jevFilter": "使用 Jev 排序",
-  "settings.jevRagFilter.desc": "Jev 按 0–3 分评估相关度并排序候选。也适用于 Chat、工作流和 Discord。新索引默认关闭。",
-  "settings.jevRagFilter": "使用 Jev 排序 RAG 结果",
-  "search.jevScore": "Jev 相关度：0 无关，1 仅关键词匹配，2 部分有用，3 直接回答查询。",
+  "search.topKJevNote": "判定模型 分组评估候选，Top K 限制返回数量。“搜索直到找到答案”返回首个满足条件分组中至少 2 分的结果。重复评估可能增加 API 用量和时间。",
+  "search.helpSearchUntilFound": "搜索直到找到答案 — 启用 判定模型 后继续评估下一组，直到发现至少 2 分的候选或候选耗尽。关闭时仅评估一组。",
+  "search.helpJev": "判定模型 对候选评分并排序。“搜索直到找到答案”要求至少 2 分，从首个满足条件的分组返回最多 Top K 个结果。",
+  "search.jevFilter": "使用 判定模型 排序",
+  "settings.jevRagFilter.desc": "判定模型 按 0–3 分评估相关度并排序候选。也适用于 Chat、工作流和 Discord。新索引默认关闭。",
+  "settings.jevRagFilter": "使用 判定模型 排序 RAG 结果",
+  "search.jevScore": "判定模型 相关度：0 无关，1 仅关键词匹配，2 部分有用，3 直接回答查询。",
 
   // Settings - Headings
   "settings.cliProviders": "CLI 提供商",

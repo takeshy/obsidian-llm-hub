@@ -114,7 +114,7 @@ Use **Stop** to release the microphone and playback, then **Call settings** to c
 
 You can edit notes, hide the sidebar, or switch to Search/Workflow while the call continues. Use the Obsidian status bar to return to the call or **Stop** it. Closing the LLM Hub view ends the call.
 
-RAG embedding credentials are independent of the Live provider. For example, OpenAI Live can search an index created with Gemini Embedding 2 using the index's embedding key or a registered Gemini key, even if that Gemini provider is disabled for text chat. Jev filtering uses its own Jev API key or the configured OpenRouter key. The call controls show whether RAG was called, its result count, and actual tool errors.
+RAG embedding credentials are independent of the Live provider. For example, OpenAI Live can search an index created with Gemini Embedding 2 using the index's embedding key or a registered Gemini key, even if that Gemini provider is disabled for text chat. RAG evaluation uses the selected decision model: Jev with its own key or the configured OpenRouter key, or Gemini Decisions API (fixed to `gemini-decision-1`) with a registered provider key, independently of chat model selections. The call controls show whether RAG was called, its result count, and actual tool errors.
 
 Live connects to the official Gemini/OpenAI APIs using the saved key for the provider selected in the dialog. API charges apply, and the response voice is AI generated. Session setup uses the configured HTTP proxy; realtime audio connects directly to the provider and may be unavailable on networks that require a proxy. Writing, deletion, skills, scripts, MCP, and external Web search are unavailable in Live. Audio recordings are not saved. Stopping, disconnecting, or closing the view releases microphone and playback resources.
 
@@ -980,22 +980,26 @@ The first hybrid search or enabled sync automatically creates `bm25.json` beside
 
 Japanese and other CJK text use word segmentation with `Intl.Segmenter`; older runtimes fall back to overlapping two-character tokens. Identifiers such as `PRJ-123` and `snake_case` are retained whole and split into components. Bigrams use more memory and may match partial words. A query embedding is still required. Gemini-native PDF chunks contain labels rather than extracted text, so keyword retrieval is limited for them. Existing keyword filters/search are unchanged.
 
-#### Reranking RAG results with Jev
+#### Reranking RAG results with Jev or Gemini
 
-Use the existing **Rerank RAG results with Jev** ON/OFF toggle per index. Settings keep the same toggle and **Search until an answer is found** checkbox; there is no separate filter/rerank mode selector or candidate-count input. Existing enabled filter settings remain enabled and now use Score reranking. New indexes default to OFF. Older global preferences are used only when the index has no per-index choice.
+Choose **Decision model** in **Settings → RAG evaluation**. The list includes Jev when its direct or selected OpenRouter credentials are configured, and Gemini Decisions API (`gemini-decision-1`) when a Gemini provider API key is saved. Gemini evaluation is independent of provider enablement, chat verification, and selected chat models. The choice applies across Chat, RAG Search, Workflows, Discord, and Live RAG searches. Existing settings keep Jev selected. If the selected provider or key is removed, evaluation is inactive until you choose an available model.
 
-Jev scores relevance from 0 to 3: 0 unrelated, 1 keyword overlap only, 2 partly useful, 3 directly answers the query. Scores may be fractional. Candidates are sorted by score, ties keep retrieval order, and Top K limits the returned results. Confidence is not used for ranking. Search results display the Jev score out of 3 next to the original retrieval score.
+Use the **Rerank RAG results with the decision model** ON/OFF toggle per index. Settings keep the same toggle and **Search until an answer is found** checkbox; there is no separate filter/rerank mode selector or candidate-count input. Existing enabled filter settings remain enabled and now use Score reranking. New indexes default to OFF. Older global preferences are used only when the index has no per-index choice.
 
-With **Search until an answer is found** ON, Jev checks consecutive candidate batches until a batch contains a score **greater than or equal to 2**. It returns only those results scoring at least 2 from that first qualifying batch, in score order, up to Top K. If no candidates qualify, it returns no results. With the checkbox OFF, Jev scores one batch and returns the highest-scoring Top K, including scores below 2. The internal batch size defaults to 40 and is at least Top K; it is not an additional UI setting.
+The selected model scores relevance from 0 to 3: 0 unrelated, 1 keyword overlap only, 2 partly useful, 3 directly answers the query. Scores may be fractional. Candidates are sorted by score, ties keep retrieval order, and Top K limits the returned results. Confidence is not used for ranking. Search results display the relevance score out of 3 next to the original retrieval score.
 
-The toggle, Top K, and search-until-found preference apply in Chat, RAG Search, Workflows, and Discord. Chat exposes the checkbox beside RAG Top K. Workflow command nodes can override the saved preference with `ragSearchUntilFound: true` or `false`; omitted values follow the index preference. The RAG Search gear retains the existing Jev toggle.
+With **Search until an answer is found** ON, the selected model checks consecutive candidate batches until a batch contains a score **greater than or equal to 2**. It returns only those results scoring at least 2 from that first qualifying batch, in score order, up to Top K. If no candidates qualify, it returns no results. With the checkbox OFF, the model scores one batch and returns the highest-scoring Top K, including scores below 2. The internal batch size defaults to 40 and is at least Top K; it is not an additional UI setting.
+
+The toggle, Top K, and search-until-found preference apply in Chat, RAG Search, Workflows, and Discord. Chat exposes the checkbox beside RAG Top K. Workflow command nodes can override the saved preference with `ragSearchUntilFound: true` or `false`; omitted values follow the index preference. The RAG Search gear uses the same reranking toggle.
 
 Text candidates share one request per batch. Native PDFs use matched-page text where possible; scanned PDFs and images use individual bounded image requests. If scoring or media preparation fails, the search stops and returns the original retrieval Top K rather than treating unscored candidates as low scores. Each scoring batch has a 20-second deadline including `Retry-After` retries. Successful scores are cached in memory for ten minutes.
 
-Jev uses the configured cloud API; more candidates or repeated batches increase latency and cost. OpenRouter Decisions is alpha. Configure credentials in Settings → Jev:
+Evaluation uses the selected cloud API; more candidates or repeated batches increase latency and cost. OpenRouter Decisions is alpha. Configure Jev credentials in Settings → RAG evaluation:
 
 - Enter a TypeSafe API key from the [TypeSafe console](https://console.typesafe.ai/). Direct requests use the [official System One endpoint](https://docs.typesafe.ai/api/system-one).
 - Or select **Use the OpenRouter key** when an OpenRouter provider key is configured.
+
+Gemini evaluation uses the dedicated `https://generativelanguage.googleapis.com/v1beta/decisions` endpoint with `gemini-decision-1`, `input`, and Score `questions`. It reads `answers` with the same relevance rubric, timeout, caching, media handling, and fallback behavior as Jev.
 
 ![Jev RAG settings](docs/images/jev_setting.png)
 

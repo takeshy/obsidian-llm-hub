@@ -51,6 +51,20 @@ describe("Unified Jev reranking and search until score 2", () => {
     expect(body.questions.result_0.instructions).not.toContain(pdf.text);
   });
 
+  it("uses the selected Gemini model for repeated batches and the answer threshold", async () => {
+    const all = candidates(5); vi.mocked(initLocalRagStore().search).mockResolvedValue(all);
+    request.mockImplementation(async () => scoreResponse([1, request.mock.calls.length === 2 ? 2 : 0]));
+    expect(await searchLocalRagResults("test", "query", enabled, "embedding-key", undefined, undefined, undefined, {
+      ...settings, ragDecisionModel: "api:gemini:gemini-decision-1", apiProviders: [{
+        id: "gemini", name: "Gemini", type: "gemini", apiKey: "gemini-key", baseUrl: "",
+        enabled: false, verified: false, enabledModels: [], availableModels: [],
+      }],
+    }, true)).toEqual([{ ...all[3], jevScore: 2 }]);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls.every(([url, init]) => url === "https://generativelanguage.googleapis.com/v1beta/decisions"
+      && JSON.parse(String(init?.body)).model === "gemini-decision-1")).toBe(true);
+  });
+
   it("reranks low scores too when repeating is off", async () => {
     request.mockImplementation(async () => scoreResponse([0.1, 1.99]));
     expect(await search()).toEqual([{ ...other, jevScore: 1.99 }, { ...pdf, jevScore: 0.1 }]);

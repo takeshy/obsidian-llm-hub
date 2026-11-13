@@ -1,3 +1,4 @@
+import { getRagDecisionConfig } from "src/core/ragDecision";
 import { RagSearchModeBadge, RagSearchResultMeta } from "obsidian-llm-hub-common/chat";
 import { useState, useEffect, useRef, useCallback, useId } from "react";
 import type { KeyboardEvent } from "react";
@@ -22,7 +23,7 @@ import type { Attachment, ModelType, ModelInfo, Message } from "src/types";
 import { getGeminiApiKey, DEFAULT_RAG_SETTING, CLI_MODEL, CLAUDE_CLI_MODEL, CODEX_CLI_MODEL, localLlmDisplayName } from "src/types";
 import { TFile } from "obsidian";
 import { getLocalRagStore, extractPdfPages, loadRagMediaAttachments, searchLocalRagResults, type LocalRagSearchResult, type RagMediaReference } from "src/core/localRagStore";
-import { getJevRagFilterConfig, getJevRagMode } from "src/core/jevRagFilter";
+import { getJevRagMode } from "src/core/jevRagFilter";
 import { extractPdfText } from "obsidian-llm-hub-common/vault";
 import { getPdfResultModePreference, setPdfResultModePreference, type PdfResultMode } from "./pdfResultModePreference";
 import { extensionToMimeType } from "src/core/embeddingProvider";
@@ -198,7 +199,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
   // Check if current setting is internal (not external index)
   const currentRagSetting = plugin.getRagSetting(selectedRagSetting);
   const searchUntilFound = currentRagSetting?.searchUntilFound ?? false;
-  const jevActive = Boolean(getJevRagMode(currentRagSetting) === "rerank" && getJevRagFilterConfig(plugin.settings));
+  const jevActive = Boolean(getJevRagMode(currentRagSetting) === "rerank" && getRagDecisionConfig(plugin.settings));
   const topKJevNoteId = useId();
   const isInternalRag = currentRagSetting
     ? !currentRagSetting.externalIndexPath && currentRagSetting.sourceRagSettings.length === 0
@@ -818,7 +819,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
         </div>
         {showRagConfig && (
           <div className="llm-hub-rag-config-section">
-            {currentRagSetting && getJevRagFilterConfig(plugin.settings) && (
+            {currentRagSetting && getRagDecisionConfig(plugin.settings) && (
               <label className="llm-hub-search-jev-toggle" title={t("settings.jevRagFilter.desc")}>
                 <input
                   type="checkbox"
@@ -1204,7 +1205,7 @@ export default function SearchPanel({ plugin, onChatWithResults, onDiscussionWit
                   <RagSearchResultMeta score={result.score} retrievalSource={result.retrievalSource} />
                   {result.jevScore !== undefined && (
                     <span className="llm-hub-search-result-score" title={t("search.jevScore")}>
-                      Jev {result.jevScore.toFixed(2)}/3
+                      {t("search.decisionScoreLabel")} {result.jevScore.toFixed(2)}/3
                     </span>
                   )}
                   {editedIndices.has(index) && (

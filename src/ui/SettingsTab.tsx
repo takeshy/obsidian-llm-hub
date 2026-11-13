@@ -38,7 +38,7 @@ export class SettingsTab extends PluginSettingTab {
       aliases: [
         "credentials", "CLI", "local LLM", "API provider", "proxy", "workspace",
         "knowledge", "edit history", "encryption", "Langfuse", "slash commands",
-        "skills", "agent plugins", "RAG", "MCP servers", "Web search", "Tavily", "Brave",
+        "skills", "agent plugins", "RAG", "decision model", "Jev", "MCP servers", "Web search", "Tavily", "Brave",
       ],
       render: (setting) => {
         const containerEl = setting.settingEl;

@@ -1,3 +1,4 @@
+import { getRagDecisionConfig, type RagDecisionSettings } from "./ragDecision";
 import { ChunkBm25Index, collectHybridCandidates, normalizeHybridSearchOptions, type HybridSearchOptions, type RagRetrievalSource } from "obsidian-llm-hub-common/core";
 import { type App, TFile, htmlToMarkdown } from "obsidian";
 import { PDFDocument } from "pdf-lib";
@@ -25,7 +26,7 @@ import {
   loadExternalRagVectors,
 } from "./localRagStorage";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, type LlmHubSettings, type RagSetting } from "../types";
-import { getJevRagFilterConfig, getJevRagMode } from "./jevRagFilter";
+import { getJevRagMode } from "./jevRagFilter";
 import { rerankRagResultsWithJev } from "./jevRagRerank";
 import { renderRagImage, renderRagPdfImages } from "./ragPdfImages";
 // PDF text extraction and page-label mapping are shared.
@@ -140,7 +141,7 @@ function shouldIncludeFile(filePath: string, config: FilterConfig): boolean {
 }
 
 export interface LocalRagSearchResult {
-  /** Jev relevance on the ordered 0–3 rubric; the retrieval score stays intact. */
+  /** Decision model relevance on the ordered 0–3 rubric; the retrieval score stays intact. */
   jevScore?: number;
   /** Only present on RRF results; kept with the result when settings change. */
   retrievalSource?: RagRetrievalSource;
@@ -1000,7 +1001,7 @@ export async function searchLocalRagResults(
   proxyUrl?: string,
   proxyBypass?: string,
   topK?: number,
-  settings?: Pick<LlmHubSettings, "apiProviders" | "proxyUrl" | "proxyBypass" | "jevApiKey" | "jevUseOpenRouter">,
+  settings?: RagDecisionSettings & Pick<LlmHubSettings, "proxyUrl" | "proxyBypass">,
   searchUntilFound = ragSetting.searchUntilFound ?? false,
 ): Promise<LocalRagSearchResult[]> {
   const store = getLocalRagStore();
@@ -1010,7 +1011,7 @@ export async function searchLocalRagResults(
   if (!Number.isFinite(resultLimit) || resultLimit < 1) return [];
   const limit = Math.floor(resultLimit);
   const mode = getJevRagMode(ragSetting);
-  const jevConfig = settings && mode !== "off" ? getJevRagFilterConfig(settings) : null;
+  const jevConfig = settings && mode !== "off" ? getRagDecisionConfig(settings) : null;
   const repeat = Boolean(jevConfig && searchUntilFound);
   const candidateK = Number.isFinite(ragSetting.jevRerankCandidateK) && ragSetting.jevRerankCandidateK >= 1
     ? Math.floor(ragSetting.jevRerankCandidateK) : DEFAULT_RAG_SETTING.jevRerankCandidateK;
@@ -1056,7 +1057,7 @@ export async function searchLocalRag(
   fallbackApiKey: string,
   proxyUrl?: string,
   proxyBypass?: string,
-  settings?: Pick<LlmHubSettings, "apiProviders" | "proxyUrl" | "proxyBypass" | "jevApiKey" | "jevUseOpenRouter">,
+  settings?: RagDecisionSettings & Pick<LlmHubSettings, "proxyUrl" | "proxyBypass">,
 ): Promise<LocalRagResult> {
   const results = await searchLocalRagResults(
     settingName, query, ragSetting, fallbackApiKey, proxyUrl, proxyBypass, undefined, settings,

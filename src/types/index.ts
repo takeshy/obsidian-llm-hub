@@ -188,6 +188,8 @@ export interface LlmHubSettings {
   jevRagFilterEnabled: boolean;
   jevApiKey: string;
   jevUseOpenRouter: boolean;
+  /** Jev or Gemini's fixed decision model (api:{providerId}:gemini-decision-1). */
+  ragDecisionModel: string;
 
   // MCP servers
   mcpServers: McpServerConfig[];  // External MCP server configurations
@@ -321,7 +323,7 @@ export interface RagSetting extends HybridSearchOptions {
   jevMode: JevRagMode;
   jevRerankCandidateK: number;
   jevRagFilterEnabled: boolean;  // Existing ON/OFF toggle; synchronized with jevMode === "rerank"
-  searchUntilFound: boolean;     // Check further Jev batches until a score >= 2 is found
+  searchUntilFound: boolean;     // Check further scoring batches until a score >= 2 is found
   embeddingBaseUrl: string;      // Embedding API URL (空 = Gemini default)
   embeddingApiKey: string;       // APIキー (空 = Gemini API key fallback)
   embeddingApiKeyConfigured?: boolean; // 別端末で設定済み (secretStorage利用時のみ)
@@ -842,6 +844,7 @@ export const DEFAULT_SETTINGS: LlmHubSettings = {
   jevRagFilterEnabled: false,
   jevApiKey: "",
   jevUseOpenRouter: false,
+  ragDecisionModel: "jev",
   mcpServers: [],
   agentPlugins: [],
   // Function call limits

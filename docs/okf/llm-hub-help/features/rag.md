@@ -59,13 +59,19 @@ Each RAG setting controls retrieval:
 - `scoreThreshold` - minimum cosine similarity score (0.0-1.0).
 - `searchFileExtensions` - restrict results to given file extensions; empty means all.
 - `chunkSize` / `chunkOverlap` - chunking parameters used at index time.
-- `jevRagFilterEnabled` - existing Jev ON/OFF toggle. ON uses Score reranking; new indexes default off.
+- `jevRagFilterEnabled` - evaluation ON/OFF toggle. ON uses Score reranking; new indexes default off.
 - `jevRerankCandidateK` - internal scoring batch size; default 40, at least Top K. No extra UI control.
 
-# Jev Reranking
+# Reranking with Jev or Gemini
 
-Configure a direct TypeSafe key or select the existing OpenRouter key in Settings → Jev.
-Keep using the per-index Jev ON/OFF toggle and the existing search-until-found checkbox.
+Choose the decision model in Settings → RAG evaluation. Jev requires a direct
+TypeSafe key or the selected OpenRouter key. Gemini uses the fixed `gemini-decision-1` model whenever a Gemini provider key is
+saved, regardless of chat model selection, chat verification, or provider enablement. The choice applies to all
+RAG callers. Existing settings keep Jev; an unavailable selection disables evaluation
+until a configured model is selected. Gemini uses its dedicated `/v1beta/decisions` endpoint with `input` and Score
+`questions`, reading relevance scores from `answers`, with the
+same scoring, media, timeout, caching, and fallback rules below.
+Keep using the per-index evaluation ON/OFF toggle and the existing search-until-found checkbox.
 There is no filter/rerank selector, minimum-score field, or candidate-count input.
 Existing enabled filter flags and the transitional `filter` mode migrate to enabled
 Score reranking. Explicit off stays off. The old global toggle is used only when
@@ -83,16 +89,16 @@ The initial candidate retrieval happens once, without re-embedding for later bat
 The ordered relevance rubric is 0 unrelated, 1 keyword overlap only, 2 partially
 useful, and 3 directly answers the query. Jev's `score` can be fractional; confidence
 measures distribution concentration and is not used for relevance ordering. The
-Search tab shows the Jev score out of 3 alongside the original retrieval score.
+Search tab shows the relevance score out of 3 alongside the original retrieval score.
 
-Text candidates share one request with the query included once in `state`. Native
+Text candidates share one request with the query included once (`state` for Jev). Native
 PDF chunks use extracted page text; scanned PDF chunks and native images are scored
 individually with bounded JPEG assets. If content cannot be resolved, the original
 retrieval order is retained rather than scoring a filename label. Audio/video chunks
 also fall back to the original order.
 
 Reranking depends on a cloud service and sends the query and candidate contents to
-the configured TypeSafe or OpenRouter endpoint. More candidates increase processing
+the selected TypeSafe, OpenRouter, or Gemini endpoint. More candidates increase processing
 time and cost. OpenRouter Decisions (`/api/alpha/decisions`) is alpha. Each scoring batch
 has a 20-second deadline, including media preparation and rate-limit retries. HTTP 429 observes `Retry-After` within that deadline. A timeout, incomplete
 score response, or other failure stops further batches and returns the original
@@ -103,7 +109,8 @@ actual chunk contents (including resolved PDF text/images), path, chunk/page,
 endpoint/model, rubric version, and account. No scores are persisted to disk.
 
 Official contracts: [TypeSafe System One](https://docs.typesafe.ai/api/system-one.md)
-and [OpenRouter Jev](https://openrouter.ai/~typesafe/jev-latest).
+[OpenRouter Jev](https://openrouter.ai/~typesafe/jev-latest), and
+Gemini Decisions API (`https://generativelanguage.googleapis.com/v1beta/decisions`).
 
 # Operations
 

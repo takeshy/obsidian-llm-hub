@@ -1,12 +1,12 @@
 // Spanish translations
 export const es: Record<string, string> = {
-  "search.topKJevNote": "Jev evalúa lotes; Top K limita los resultados. La búsqueda hasta respuesta devuelve candidatos con 2 puntos o más del primer lote válido. Las comprobaciones adicionales aumentan uso y tiempo.",
-  "search.helpSearchUntilFound": "Buscar hasta encontrar respuesta — con Jev, evaluar lotes hasta hallar candidatos con 2 puntos o más, o agotar candidatos. Desactivado: un solo lote.",
-  "search.helpJev": "Jev puntúa y ordena candidatos. Buscar hasta encontrar respuesta exige al menos 2 puntos y devuelve hasta Top K del primer lote válido.",
-  "search.jevFilter": "Ordenar con Jev",
-  "settings.jevRagFilter.desc": "Jev puntúa la relevancia de 0 a 3 y ordena candidatos. Se aplica en Chat, flujos y Discord. Desactivado por defecto para índices nuevos.",
-  "settings.jevRagFilter": "Ordenar resultados RAG con Jev",
-  "search.jevScore": "Relevancia Jev: 0 irrelevante, 1 solo palabras clave, 2 parcialmente útil, 3 responde directamente.",
+  "search.topKJevNote": "el modelo de decisión evalúa lotes; Top K limita los resultados. La búsqueda hasta respuesta devuelve candidatos con 2 puntos o más del primer lote válido. Las comprobaciones adicionales aumentan uso y tiempo.",
+  "search.helpSearchUntilFound": "Buscar hasta encontrar respuesta — con el modelo de decisión, evaluar lotes hasta hallar candidatos con 2 puntos o más, o agotar candidatos. Desactivado: un solo lote.",
+  "search.helpJev": "el modelo de decisión puntúa y ordena candidatos. Buscar hasta encontrar respuesta exige al menos 2 puntos y devuelve hasta Top K del primer lote válido.",
+  "search.jevFilter": "Ordenar con el modelo de decisión",
+  "settings.jevRagFilter.desc": "el modelo de decisión puntúa la relevancia de 0 a 3 y ordena candidatos. Se aplica en Chat, flujos y Discord. Desactivado por defecto para índices nuevos.",
+  "settings.jevRagFilter": "Ordenar resultados RAG con el modelo de decisión",
+  "search.jevScore": "Relevancia el modelo de decisión: 0 irrelevante, 1 solo palabras clave, 2 parcialmente útil, 3 responde directamente.",
 
   // Settings - Headings
   "settings.cliProviders": "Proveedores CLI",

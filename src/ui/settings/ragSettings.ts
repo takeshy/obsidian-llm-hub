@@ -1,6 +1,7 @@
+import { getRagDecisionConfig } from "src/core/ragDecision";
 import { Setting, Notice } from "obsidian";
 import { getLocalRagStore } from "src/core/localRagStore";
-import { getJevRagFilterConfig, getJevRagMode } from "src/core/jevRagFilter";
+import { getJevRagMode } from "src/core/jevRagFilter";
 import { fetchEmbeddingModels } from "src/core/embeddingProvider";
 import { t } from "src/i18n";
 import { DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_RAG_SETTING, getGeminiApiKey } from "src/types";
@@ -59,7 +60,7 @@ function displaySelectedRagSetting(
   addRagSettingHeader(containerEl, plugin, name, display);
   addHybridSearchSettings(containerEl, ragSetting, updates => plugin.updateRagSetting(name, updates), display);
 
-  if (getJevRagFilterConfig(plugin.settings)) {
+  if (getRagDecisionConfig(plugin.settings)) {
     new Setting(containerEl)
       .setName(t("settings.jevRagFilter"))
       .setDesc(t("settings.jevRagFilter.desc"))

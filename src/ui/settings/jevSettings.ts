@@ -1,5 +1,6 @@
 import { Setting } from "obsidian";
 import { getOpenRouterApiKey } from "src/core/jevRagFilter";
+import { getRagDecisionModel, getRagDecisionModels } from "src/core/ragDecision";
 import { credentialSlot } from "src/core/credentialBundle";
 import { t } from "src/i18n";
 import { markCredentialConfiguredElsewhere } from "./credentialStorageSettings";
@@ -10,7 +11,25 @@ export function displayJevSettings(containerEl: HTMLElement, ctx: SettingsContex
   const openRouterConfigured = getOpenRouterApiKey(plugin.settings.apiProviders).length > 0;
   const useOpenRouter = openRouterConfigured && plugin.settings.jevUseOpenRouter;
 
-  new Setting(containerEl).setName(t("settings.jev")).setHeading();
+  new Setting(containerEl).setName(t("settings.ragDecision")).setHeading();
+
+  const models = getRagDecisionModels(plugin.settings);
+  const selected = getRagDecisionModel(plugin.settings);
+  new Setting(containerEl)
+    .setName(t("settings.ragDecisionModel"))
+    .setDesc(t("settings.ragDecisionModel.desc"))
+    .addDropdown(dropdown => {
+      if (!models.some(model => model.value === selected)) {
+        dropdown.addOption(selected, t("settings.ragDecisionModel.unavailable"));
+        dropdown.selectEl.options[0].disabled = true;
+      }
+      for (const model of models) dropdown.addOption(model.value, model.label);
+      dropdown.setValue(selected).setDisabled(models.length === 0).onChange(async value => {
+        plugin.settings.ragDecisionModel = value;
+        await plugin.saveSettings();
+        display();
+      });
+    });
 
   if (openRouterConfigured) {
     const openRouterSetting = new Setting(containerEl)

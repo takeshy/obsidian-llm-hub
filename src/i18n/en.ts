@@ -2,8 +2,13 @@ import type { SharedTranslationKey } from "obsidian-llm-hub-common/i18n";
 
 // English translations (base language)
 export const en = {
-  "search.helpJev": "Jev scores and sorts candidates. Search until an answer is found requires a score of at least 2 and returns up to Top K from the first qualifying batch.",
-  "search.jevScore": "Jev relevance: 0 unrelated, 1 keyword overlap only, 2 partially useful, 3 directly answers the query.",
+  "settings.ragDecision": "RAG evaluation",
+  "settings.ragDecisionModel": "Decision model",
+  "settings.ragDecisionModel.desc": "Choose Jev or Gemini. Gemini uses a fixed decision model and only requires a saved provider API key. Chat model selections do not affect evaluation. Used by chat, RAG search, workflows, and Discord.",
+  "settings.ragDecisionModel.unavailable": "Selected service unavailable — configure credentials or choose a model",
+  "search.decisionScoreLabel": "Relevance",
+  "search.helpJev": "The decision model scores and sorts candidates. Search until an answer is found requires a score of at least 2 and returns up to Top K from the first qualifying batch.",
+  "search.jevScore": "The decision model relevance: 0 unrelated, 1 keyword overlap only, 2 partially useful, 3 directly answers the query.",
 
   "live.title": "Live conversation",
   "live.provider": "Provider",
@@ -238,8 +243,8 @@ export const en = {
   // Settings - RAG
   "settings.scoreThreshold": "Score threshold",
   "settings.scoreThreshold.desc": "Minimum similarity score (0.0-1.0) to include in results. 0 = no filtering",
-  "settings.jevRagFilter": "Rerank RAG results with Jev",
-  "settings.jevRagFilter.desc": "Use Jev to score relevance from 0 to 3 and reorder candidates. Also applies in chat, workflows, and Discord. Off by default for new indexes.",
+  "settings.jevRagFilter": "Rerank RAG results with the decision model",
+  "settings.jevRagFilter.desc": "Use the decision model to score relevance from 0 to 3 and reorder candidates. Also applies in chat, workflows, and Discord. Off by default for new indexes.",
   "settings.jevRagFilter.requiresKey": "Enter a Jev API key, or select OpenRouter and configure its API key first.",
   "settings.jevApiKey": "Jev API key",
   "settings.jevApiKey.desc": "Official TypeSafe API key created at console.typesafe.ai. Leave this empty when using OpenRouter.",
@@ -248,9 +253,9 @@ export const en = {
   "settings.jevUseOpenRouter.requiresKey": "Configure an OpenRouter API key under API providers before using this option.",
   "settings.jev": "Jev",
   "search.searchUntilFound": "Search until an answer is found",
-  "search.helpSearchUntilFound": "Search until an answer is found — with Jev enabled, keep checking batches until a candidate scores at least 2 or candidates run out. When off, score one batch.",
-  "search.jevFilter": "Rerank with Jev",
-  "search.topKJevNote": "Jev scores candidate batches; Top K limits the returned results. Search until an answer is found returns scores of 2 or higher from the first qualifying batch. Repeated checks can increase API usage and time.",
+  "search.helpSearchUntilFound": "Search until an answer is found — with the decision model enabled, keep checking batches until a candidate scores at least 2 or candidates run out. When off, score one batch.",
+  "search.jevFilter": "Rerank with the decision model",
+  "search.topKJevNote": "The decision model scores candidate batches; Top K limits the returned results. Search until an answer is found returns scores of 2 or higher from the first qualifying batch. Repeated checks can increase API usage and time.",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "Embedding model",
@@ -337,7 +342,7 @@ export const en = {
   // InputArea
   "input.ragPdfChunkPages": "PDF chunk pages",
   "input.ragTopK": "RAG Top K",
-  "input.ragTopKDesc": "Candidate chunks per RAG search, before Jev filtering. Saved to the selected RAG setting and also used by workflows and Discord.",
+  "input.ragTopKDesc": "Candidate chunks per RAG search, before the decision model filtering. Saved to the selected RAG setting and also used by workflows and Discord.",
   "input.thinkingLabel": "Always think",
 
   // MessageBubble

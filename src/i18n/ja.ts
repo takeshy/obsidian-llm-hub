@@ -1,7 +1,12 @@
 // Japanese translations
 export const ja: Record<string, string> = {
-  "search.helpJev": "Jevは候補を採点して並べ替えます。「回答が見つかるまで検索する」では2点以上を回答として扱い、最初に見つかったグループから最大Top K件を返します。",
-  "search.jevScore": "Jev関連度：0 無関係、1 キーワードだけ一致、2 部分的に有用、3 クエリに直接回答。",
+  "settings.ragDecision": "RAG判定",
+  "settings.ragDecisionModel": "判定モデル",
+  "settings.ragDecisionModel.desc": "Jev、またはGemini（gemini-decision-1固定）を選びます。GeminiはAPIプロバイダーにキーが登録済みなら利用でき、チャット用モデルの選択状態には依存しません。Chat・RAG Search・Workflow・Discordで共通です。",
+  "settings.ragDecisionModel.unavailable": "選択中のサービスは未設定です。認証情報を登録するかモデルを選んでください",
+  "search.decisionScoreLabel": "関連度",
+  "search.helpJev": "判定モデルは候補を採点して並べ替えます。「回答が見つかるまで検索する」では2点以上を回答として扱い、最初に見つかったグループから最大Top K件を返します。",
+  "search.jevScore": "判定モデル関連度：0 無関係、1 キーワードだけ一致、2 部分的に有用、3 クエリに直接回答。",
 
   "live.title": "ライブ会話",
   "live.provider": "プロバイダー",
@@ -236,8 +241,8 @@ export const ja: Record<string, string> = {
   // Settings - RAG
   "settings.scoreThreshold": "スコア閾値",
   "settings.scoreThreshold.desc": "結果に含める最低類似度スコア (0.0-1.0)。0 = フィルタなし",
-  "settings.jevRagFilter": "JevでRAG結果を並べ替える",
-  "settings.jevRagFilter.desc": "Jevで関連度を0〜3点で採点し、候補を並べ替えます。Chat・Workflow・Discordでも適用されます。新規インデックスでは既定オフです。",
+  "settings.jevRagFilter": "判定モデルでRAG結果を並べ替える",
+  "settings.jevRagFilter.desc": "判定モデルで関連度を0〜3点で採点し、候補を並べ替えます。Chat・Workflow・Discordでも適用されます。新規インデックスでは既定オフです。",
   "settings.jevRagFilter.requiresKey": "Jev APIキーを入力するか、OpenRouterを使うを選んでOpenRouterのAPIキーを設定してください。",
   "settings.jevApiKey": "Jev APIキー",
   "settings.jevApiKey.desc": "console.typesafe.aiで作成したTypeSafe公式のAPIキーです。OpenRouterを使う場合は空欄のままで構いません。",
@@ -246,9 +251,9 @@ export const ja: Record<string, string> = {
   "settings.jevUseOpenRouter.requiresKey": "このオプションを使うには、APIプロバイダーでOpenRouterのAPIキーを設定してください。",
   "settings.jev": "Jev",
   "search.searchUntilFound": "回答が見つかるまで検索する",
-  "search.helpSearchUntilFound": "回答が見つかるまで検索する — Jev有効時、2点以上の候補が見つかるか候補が尽きるまで、次のグループを採点します。オフの場合は1グループだけ採点します。",
-  "search.jevFilter": "Jevで並べ替える",
-  "search.topKJevNote": "Jevは候補をグループごとに採点し、Top Kは返す結果の上限です。「回答が見つかるまで検索する」は、2点以上が最初に見つかったグループから該当結果を返します。繰り返すとAPI使用量と検索時間が増える場合があります。",
+  "search.helpSearchUntilFound": "回答が見つかるまで検索する — 判定モデル有効時、2点以上の候補が見つかるか候補が尽きるまで、次のグループを採点します。オフの場合は1グループだけ採点します。",
+  "search.jevFilter": "判定モデルで並べ替える",
+  "search.topKJevNote": "判定モデルは候補をグループごとに採点し、Top Kは返す結果の上限です。「回答が見つかるまで検索する」は、2点以上が最初に見つかったグループから該当結果を返します。繰り返すとAPI使用量と検索時間が増える場合があります。",
 
   // Settings - RAG Store
   "settings.localEmbeddingModel": "埋め込みモデル",
@@ -333,7 +338,7 @@ export const ja: Record<string, string> = {
   // InputArea
   "input.ragPdfChunkPages": "PDF分割ページ数",
   "input.ragTopK": "RAG Top K",
-  "input.ragTopKDesc": "RAG検索1回で取得する候補の件数（Jev判定前）。選択中のRAG設定に保存され、WorkflowやDiscordにも適用されます。",
+  "input.ragTopKDesc": "RAG検索1回で取得する候補の件数（判定モデル判定前）。選択中のRAG設定に保存され、WorkflowやDiscordにも適用されます。",
   "input.thinkingLabel": "常に思考",
 
   // MessageBubble

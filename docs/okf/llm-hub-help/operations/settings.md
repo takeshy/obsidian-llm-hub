@@ -116,13 +116,18 @@ The Slash Commands section manages reusable `/command` prompts. Each command can
 
 # RAG Settings
 
-Each index keeps the existing Jev ON/OFF toggle and search-until-found checkbox.
+Select a decision model under Settings → RAG evaluation: configured Jev or
+Gemini Decisions API (`gemini-decision-1`) with a saved provider key. Chat model
+selection, chat verification, and provider enablement do not affect Gemini evaluation. Existing settings
+keep Jev. An unavailable selection disables evaluation until another model is selected.
+
+Each index keeps the evaluation ON/OFF toggle and search-until-found checkbox.
 ON uses Score reranking; there is no separate filter/rerank selector, minimum-score
 field, or candidate-count input. Existing filter choices migrate to the same toggle;
 new indexes default off. Search-until-found continues until a candidate scores at
 least 2, then returns qualifying results from that first batch. With the checkbox
-off, return Top K in score order, including lower scores. Shared credentials remain
-under Jev settings. The cloud API affects cost/latency and OpenRouter Decisions is
+off, return Top K in score order, including lower scores. Jev credentials remain
+under RAG evaluation; Gemini uses its registered provider key with the dedicated `/v1beta/decisions` endpoint. The cloud API affects cost/latency and OpenRouter Decisions is
 alpha. See [RAG](../features/rag.md) for timeout, cache and fallback details.
 
 RAG uses a local embedding vector index stored in the workspace folder.

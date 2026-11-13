@@ -1,12 +1,12 @@
 // German translations
 export const de: Record<string, string> = {
-  "search.topKJevNote": "Jev bewertet Kandidatengruppen; Top K begrenzt die Ergebnisse. Die Suche bis zur Antwort gibt Treffer ab 2 Punkten aus der ersten passenden Gruppe zurück. Weitere Prüfungen erhöhen API-Nutzung und Dauer.",
-  "search.helpSearchUntilFound": "Bis zu einer Antwort suchen — mit Jev weitere Gruppen prüfen, bis ein Kandidat mindestens 2 Punkte erreicht oder keine Kandidaten bleiben. Sonst nur eine Gruppe prüfen.",
-  "search.helpJev": "Jev bewertet und sortiert Kandidaten. Weitersuchen bis zur Antwort erfordert mindestens 2 Punkte und liefert bis zu Top K aus der ersten passenden Gruppe.",
-  "search.jevFilter": "Mit Jev sortieren",
-  "settings.jevRagFilter.desc": "Jev bewertet die Relevanz von 0 bis 3 und sortiert Kandidaten. Gilt auch in Chat, Workflows und Discord. Für neue Indizes standardmäßig aus.",
-  "settings.jevRagFilter": "RAG-Ergebnisse mit Jev sortieren",
-  "search.jevScore": "Jev-Relevanz: 0 unpassend, 1 nur Schlüsselwörter, 2 teilweise hilfreich, 3 direkte Antwort.",
+  "search.topKJevNote": "das Entscheidungsmodell bewertet Kandidatengruppen; Top K begrenzt die Ergebnisse. Die Suche bis zur Antwort gibt Treffer ab 2 Punkten aus der ersten passenden Gruppe zurück. Weitere Prüfungen erhöhen API-Nutzung und Dauer.",
+  "search.helpSearchUntilFound": "Bis zu einer Antwort suchen — mit das Entscheidungsmodell weitere Gruppen prüfen, bis ein Kandidat mindestens 2 Punkte erreicht oder keine Kandidaten bleiben. Sonst nur eine Gruppe prüfen.",
+  "search.helpJev": "das Entscheidungsmodell bewertet und sortiert Kandidaten. Weitersuchen bis zur Antwort erfordert mindestens 2 Punkte und liefert bis zu Top K aus der ersten passenden Gruppe.",
+  "search.jevFilter": "Mit das Entscheidungsmodell sortieren",
+  "settings.jevRagFilter.desc": "das Entscheidungsmodell bewertet die Relevanz von 0 bis 3 und sortiert Kandidaten. Gilt auch in Chat, Workflows und Discord. Für neue Indizes standardmäßig aus.",
+  "settings.jevRagFilter": "RAG-Ergebnisse mit das Entscheidungsmodell sortieren",
+  "search.jevScore": "das Entscheidungsmodell-Relevanz: 0 unpassend, 1 nur Schlüsselwörter, 2 teilweise hilfreich, 3 direkte Antwort.",
 
   // Settings - Headings
   "settings.cliProviders": "CLI-Anbieter",

@@ -1,12 +1,12 @@
 // Italian translations
 export const it: Record<string, string> = {
-  "search.topKJevNote": "Jev valuta gruppi di candidati; Top K limita i risultati. La ricerca fino a una risposta restituisce i punteggi da 2 in su del primo gruppo valido. Ulteriori verifiche aumentano uso API e durata.",
-  "search.helpSearchUntilFound": "Cerca fino a una risposta — con Jev, valuta altri gruppi finché un candidato raggiunge 2 punti o i candidati finiscono. Se disattivato, valuta un solo gruppo.",
-  "search.helpJev": "Jev valuta e ordina i candidati. La ricerca fino a una risposta richiede almeno 2 punti e restituisce fino a Top K dal primo gruppo valido.",
-  "search.jevFilter": "Ordina con Jev",
-  "settings.jevRagFilter.desc": "Jev assegna rilevanza da 0 a 3 e ordina i candidati. Vale per Chat, workflow e Discord. Disattivato per i nuovi indici.",
-  "settings.jevRagFilter": "Ordina i risultati RAG con Jev",
-  "search.jevScore": "Rilevanza Jev: 0 non pertinente, 1 solo parole chiave, 2 parzialmente utile, 3 risposta diretta.",
+  "search.topKJevNote": "il modello di valutazione valuta gruppi di candidati; Top K limita i risultati. La ricerca fino a una risposta restituisce i punteggi da 2 in su del primo gruppo valido. Ulteriori verifiche aumentano uso API e durata.",
+  "search.helpSearchUntilFound": "Cerca fino a una risposta — con il modello di valutazione, valuta altri gruppi finché un candidato raggiunge 2 punti o i candidati finiscono. Se disattivato, valuta un solo gruppo.",
+  "search.helpJev": "il modello di valutazione valuta e ordina i candidati. La ricerca fino a una risposta richiede almeno 2 punti e restituisce fino a Top K dal primo gruppo valido.",
+  "search.jevFilter": "Ordina con il modello di valutazione",
+  "settings.jevRagFilter.desc": "il modello di valutazione assegna rilevanza da 0 a 3 e ordina i candidati. Vale per Chat, workflow e Discord. Disattivato per i nuovi indici.",
+  "settings.jevRagFilter": "Ordina i risultati RAG con il modello di valutazione",
+  "search.jevScore": "Rilevanza il modello di valutazione: 0 non pertinente, 1 solo parole chiave, 2 parzialmente utile, 3 risposta diretta.",
 
   // Settings - Headings
   "settings.cliProviders": "Provider CLI",

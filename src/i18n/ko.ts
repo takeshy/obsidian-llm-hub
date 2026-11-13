@@ -1,12 +1,12 @@
 // Korean translations
 export const ko: Record<string, string> = {
-  "search.topKJevNote": "Jev가 후보 그룹을 평가하고 Top K는 반환 수를 제한합니다. 답변을 찾을 때까지 검색은 처음 일치한 그룹의 2점 이상 결과를 반환합니다. 반복 검사는 API 사용량과 시간을 늘릴 수 있습니다.",
-  "search.helpSearchUntilFound": "답변을 찾을 때까지 검색 — Jev를 켜면 2점 이상인 후보가 나오거나 후보가 소진될 때까지 다음 그룹을 평가합니다. 끄면 한 그룹만 평가합니다.",
-  "search.helpJev": "Jev가 후보를 평가하고 정렬합니다. 답변을 찾을 때까지 검색은 2점 이상을 요구하며 처음 일치한 그룹에서 최대 Top K개를 반환합니다.",
-  "search.jevFilter": "Jev로 정렬",
-  "settings.jevRagFilter.desc": "Jev가 관련도를 0~3점으로 평가해 후보를 정렬합니다. Chat, 워크플로 및 Discord에도 적용됩니다. 새 인덱스에서는 기본적으로 꺼집니다.",
-  "settings.jevRagFilter": "Jev로 RAG 결과 정렬",
-  "search.jevScore": "Jev 관련도: 0 무관, 1 키워드만 일치, 2 부분적으로 유용, 3 질문에 직접 답변.",
+  "search.topKJevNote": "판정 모델가 후보 그룹을 평가하고 Top K는 반환 수를 제한합니다. 답변을 찾을 때까지 검색은 처음 일치한 그룹의 2점 이상 결과를 반환합니다. 반복 검사는 API 사용량과 시간을 늘릴 수 있습니다.",
+  "search.helpSearchUntilFound": "답변을 찾을 때까지 검색 — 판정 모델를 켜면 2점 이상인 후보가 나오거나 후보가 소진될 때까지 다음 그룹을 평가합니다. 끄면 한 그룹만 평가합니다.",
+  "search.helpJev": "판정 모델가 후보를 평가하고 정렬합니다. 답변을 찾을 때까지 검색은 2점 이상을 요구하며 처음 일치한 그룹에서 최대 Top K개를 반환합니다.",
+  "search.jevFilter": "판정 모델로 정렬",
+  "settings.jevRagFilter.desc": "판정 모델가 관련도를 0~3점으로 평가해 후보를 정렬합니다. Chat, 워크플로 및 Discord에도 적용됩니다. 새 인덱스에서는 기본적으로 꺼집니다.",
+  "settings.jevRagFilter": "판정 모델로 RAG 결과 정렬",
+  "search.jevScore": "판정 모델 관련도: 0 무관, 1 키워드만 일치, 2 부분적으로 유용, 3 질문에 직접 답변.",
 
   // Settings - Headings
   "settings.cliProviders": "CLI 제공자",

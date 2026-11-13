@@ -47,7 +47,7 @@ describe("rag_search tool", () => {
     await runner.run({ query: "q" });
     expect(search).toHaveBeenCalledWith("q", topK);
     expect(runner.systemPrompt).toContain(`up to ${topK} candidate chunks`);
-    expect(runner.systemPrompt).toContain("before optional Jev filtering");
+    expect(runner.systemPrompt).toContain("before optional decision-model reranking");
   });
 
   it.each([0, -1, NaN, Infinity])("falls back to the RAG default for invalid Top K (%s)", async (topK) => {
