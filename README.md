@@ -9,7 +9,7 @@
 ## Highlights
 
 - **Multi-Provider LLM Chat** - Use Gemini, OpenAI, Anthropic, OpenRouter, Grok, OpenCode Zen/Go, local LLMs, or CLI backends
-- **Live Voice Conversation** - Talk with Gemini or OpenAI, switch Live models independently of chat, and optionally use read-only Vault tools or RAG
+- **Live Voice Conversation** - Talk with Gemini or OpenAI, switch Live models independently of chat, and optionally read or write Vault notes and search a RAG index
 - **Vault Operations** - AI reads, writes, searches, and edits your notes with function calling (Gemini, OpenAI, Anthropic, OpenCode Zen/Go, and tools-capable local LLMs via LM Studio / vLLM / AnythingLLM)
 - **Workflow Builder** - Automate multi-step tasks with visual node editor and 25 node types
 - **Dashboard Hub Integration** - Supply AI models, Chat, Base generation, and Workflow execution to the separate [Dashboard Hub](https://github.com/takeshy/obsidian-dashboard-hub) plugin
@@ -101,13 +101,15 @@ Talk directly with **Gemini** or **OpenAI** by voice. Live has its own provider,
 
 1. In provider settings, enter a **Gemini** or **OpenAI** API key and click **Save**. Verification, fetching models, and enabling text-chat models are optional for Live.
 2. Click the **microphone in the chat header**, then choose the Live **Provider**, **Model**, and **Voice**.
-3. Choose chat context, Vault file access, and a RAG index independently using the options below.
+3. Choose chat context, Vault reading, Vault writing, and a RAG index independently using the options below.
 4. Click **Start conversation**. Setup closes and the existing chat sidebar shows the transcript as you speak. Use the controls below the messages to **Mute** / **Unmute**, **Stop**, or **End conversation**.
 
 | Option | What it enables |
 |--------|-----------------|
 | **Use the current chat as conversation context** | Include the last 20 text messages, up to 40,000 characters. |
 | **Read and search vault files (read-only)** | Read and search notes within **LLM vault tool folders**, including unsaved text in the current Markdown editor. |
+| **Create and append to vault notes** | Dictate into new or existing Markdown notes in the allowed folders. Off by default. |
+| **Web search (Google)** | Enable Google Search in Gemini Live. The transcript stays in the call. Off by default. |
 | **RAG** | Search the selected index with its existing Top K and Jev settings. **Works even when Vault file access is off.** Choose **Do not use** to disable RAG. The Vault tool folder list does not filter indexed results. |
 
 Use **Stop** to release the microphone and playback, then **Call settings** to change provider/model/voice, audio devices, or search options before restarting. **End conversation** / **Return to chat** restores the text composer with your draft intact so you can continue by text. Partial speech updates existing chat messages; history is checkpointed during the call and saved when it ends. Normal chat history and encryption settings apply; automatic history off means no automatic disk save. Finish the call before starting or loading a different chat.
@@ -116,11 +118,11 @@ You can edit notes, hide the sidebar, or switch to Search/Workflow while the cal
 
 RAG embedding credentials are independent of the Live provider. For example, OpenAI Live can search an index created with Gemini Embedding 2 using the index's embedding key or a registered Gemini key, even if that Gemini provider is disabled for text chat. RAG evaluation uses the selected decision model: Jev with its own key or the configured OpenRouter key, or Gemini Decisions API (fixed to `gemini-decision-1`) with a registered provider key, independently of chat model selections. The call controls show whether RAG was called, its result count, and actual tool errors.
 
-Live connects to the official Gemini/OpenAI APIs using the saved key for the provider selected in the dialog. API charges apply, and the response voice is AI generated. Session setup uses the configured HTTP proxy; realtime audio connects directly to the provider and may be unavailable on networks that require a proxy. Writing, deletion, skills, scripts, MCP, and external Web search are unavailable in Live. Audio recordings are not saved. Stopping, disconnecting, or closing the view releases microphone and playback resources.
+Live connects to the official Gemini/OpenAI APIs using the saved key for the provider selected in the dialog. API charges apply, and the response voice is AI generated. Session setup uses the configured HTTP proxy; realtime audio connects directly to the provider and may be unavailable on networks that require a proxy. Deletion, skills, scripts, and MCP are unavailable in Live. Audio recordings are not saved. Stopping, disconnecting, or closing the view releases microphone and playback resources.
 
 ## Web Search
 
-In **Settings → Web search**, choose **Built-in search (default)**, **Tavily**, or **Brave Search**. Existing Tavily/Brave selections are preserved; old empty settings default to built-in search. API keys are retained when switching and follow the credential storage preference. Built-in search uses the official OpenAI, Anthropic, or Grok API. Gemini never uses Google Search: without a selected external provider and its API key, the Web search toggle is disabled and shown as off. Chat, Workflow command nodes (`ragSetting: __websearch__`), Dashboard and Connect Hub use the same selection. External search uses the `web_search` function tool and never falls back to built-in search. Gemini image generation with external search first retrieves references using a text model (up to three searches), including its token usage in the total. Tavily uses basic search; both external providers return up to five results.
+In **Settings → Web search**, choose **Built-in search (default)**, **Tavily**, or **Brave Search**. Existing Tavily/Brave selections are preserved; old empty settings default to built-in search. API keys are retained when switching and follow the credential storage preference. Built-in search uses the official OpenAI, Anthropic, or Grok API. For text chat and workflows, Gemini uses external search: without a selected external provider and its API key, the Web search toggle is disabled and shown as off. Chat, Workflow command nodes (`ragSetting: __websearch__`), Dashboard and Connect Hub use the same selection. External search uses the `web_search` function tool and never falls back to built-in search. Gemini image generation with external search first retrieves references using a text model (up to three searches), including its token usage in the total. Tavily uses basic search; both external providers return up to five results.
 
 API references: [Tavily](https://docs.tavily.com/documentation/api-reference/endpoint/search), [Brave Search](https://api-dashboard.search.brave.com/app/documentation/web-search).
 

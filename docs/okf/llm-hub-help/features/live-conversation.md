@@ -1,7 +1,7 @@
 ---
 type: Feature
 title: Live Voice Conversation
-description: Direct Gemini/OpenAI voice sessions with optional chat context, read-only Vault tools, RAG, and transcript history.
+description: Direct Gemini/OpenAI voice sessions with optional chat context, Vault reading and writing, RAG, and transcript history.
 tags: [live, voice, audio, gemini, openai, rag]
 timestamp: 2026-11-09T00:00:00Z
 ---
@@ -16,7 +16,9 @@ Speak naturally, interrupt, or mute. Stop releases the microphone and playback w
 
 Editing notes, hiding the sidebar, or switching to the Search/Workflow tab keeps the call running. The Obsidian status bar shows the call state, a button to return to the chat, and Stop. Closing the LLM Hub view or unloading the plugin releases the call resources and flushes the transcript to history.
 
-Choose prior chat context (last 20 messages, up to 40,000 characters), read-only Vault access, and RAG independently. RAG works with Vault access off. Vault reads honor allowed folders and include unsaved editor text. RAG uses its own embedding key, or a saved Gemini key independently of voice/chat flags. Actual RAG counts/errors are shown. Index results ignore Vault tool folder limits. Writing, deletion, skills, scripts, MCP, and Web search are unavailable.
+Choose prior chat context (last 20 messages, up to 40,000 characters), Vault reading, Vault writing, and RAG independently. RAG works with Vault access off. Vault reads honor allowed folders and include unsaved editor text. RAG uses its own embedding key, or a saved Gemini key independently of voice/chat flags. Actual RAG counts/errors are shown. Index results ignore Vault tool folder limits. Enable **Create and append to vault notes** to dictate into Markdown notes in allowed folders. It is off by default. For example, say “Append this to my current note” and dictate the text, or say “Save this as a new note in Meeting Notes” and give the note a title. Deletion, skills, scripts, and MCP are unavailable.
+
+Enable **Web search (Google)** in the Gemini Live setup to use Google Search in the call. It is off by default and can be used with Vault tools and RAG. When enabled, the transcript and Google search suggestions appear only in the call. The transcript is not added to chat history.
 
 Partial transcripts update existing chat messages rather than adding a new message for each fragment. History checkpoints are saved after a pause in transcription, and finishing or closing saves the final transcript after any pending write. History/encryption settings apply; automatic history off means no automatic disk save. Raw audio is not saved.
 
