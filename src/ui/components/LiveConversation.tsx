@@ -6,8 +6,8 @@ import type { ApiProviderConfig, Message } from "src/types";
 import { t, getLocale } from "src/i18n";
 import { GeminiLiveSession } from "src/core/live/gemini-live";
 import { OpenAILiveSession, LIVE_MODELS, LIVE_VOICES } from "src/core/live/openai-live";
-import { GEMINI_LIVE_MODELS, GEMINI_LIVE_VOICES } from "src/core/live/gemini-live-config";
-import { getLiveProvider, type LiveSession, type LiveState, type LiveTranscript } from "src/core/live/live-session";
+import { EXTENDED_THINKING_MODEL, GEMINI_LIVE_MODELS, GEMINI_LIVE_VOICES } from "src/core/live/gemini-live-config";
+import { getLiveProvider, type GeminiLiveThinkingLevel, type LiveSession, type LiveState, type LiveTranscript } from "src/core/live/live-session";
 import { liveToolInstructions } from "src/core/live/live-tool-definitions";
 import { createLiveVaultToolRunner, liveTranscriptMessages } from "src/core/live/live-vault-tools";
 import { listLiveAudioDevices, supportsLiveAudioOutput } from "src/core/live/live-audio";
@@ -32,6 +32,8 @@ export default function LiveConversation({ plugin, providers, messages, selected
   const voices = kind === "gemini" ? GEMINI_LIVE_VOICES : LIVE_VOICES;
   const [model, setModel] = useState<string>(models[0]);
   const [voice, setVoice] = useState<string>(voices[0]);
+  const [thinkingLevel, setThinkingLevel] = useState<GeminiLiveThinkingLevel>("LOW");
+  const extendedThinking = kind === "gemini" && model === EXTENDED_THINKING_MODEL;
   const [state, setState] = useState<LiveState>("idle");
   const [muted, setMuted] = useState(false);
   const [error, setError] = useState("");
@@ -225,6 +227,7 @@ export default function LiveConversation({ plugin, providers, messages, selected
     const context = includeContext ? contextMessages.slice(-20).map(item => `${item.role}: ${item.content}`).join("\n").slice(-40_000) : "";
     void session.start({
       ...access, model, voice, language: getLocale() === "ja" ? "ja" : "en",
+      ...(extendedThinking ? { thinkingLevel } : {}),
       inputDeviceId, outputDeviceId: outputSupported ? outputDeviceId : "",
       instructions: [
         "You are a helpful voice assistant integrated with Obsidian. Follow the user's preferred language and speaking style. If speech is unclear, ask for clarification instead of guessing.",
@@ -284,6 +287,14 @@ export default function LiveConversation({ plugin, providers, messages, selected
           <label>{t("live.provider")}<select aria-label={t("live.provider")} value={providerId} disabled={state !== "idle"} onChange={event => changeProvider(event.target.value)}>{providers.map((item, index) => <option key={item.id} value={item.id}>{item.name}{providers.filter(other => other.name === item.name).length > 1 ? ` (${index + 1})` : ""}</option>)}</select></label>
           <label>{t("live.model")}<select aria-label={t("live.model")} value={model} disabled={state !== "idle"} onChange={event => setModel(event.target.value)}>{models.map(value => <option key={value}>{value}</option>)}</select></label>
           <label>{t("live.voice")}<select aria-label={t("live.voice")} value={voice} disabled={state !== "idle"} onChange={event => setVoice(event.target.value)}>{voices.map(value => <option key={value}>{value}</option>)}</select></label>
+          {extendedThinking && <label>{t("live.thinkingLevel")}<select value={thinkingLevel} disabled={state !== "idle"} onChange={event => {
+            const level = event.target.value;
+            if (level === "LOW" || level === "MEDIUM" || level === "HIGH") setThinkingLevel(level);
+          }}>
+            <option value="LOW">{t("live.thinkingLow")}</option>
+            <option value="MEDIUM">{t("live.thinkingMedium")}</option>
+            <option value="HIGH">{t("live.thinkingHigh")}</option>
+          </select></label>}
         </div>
         <p className="llm-hub-live-description">{t("live.switchHint")}</p>
         <div className="llm-hub-live-options">

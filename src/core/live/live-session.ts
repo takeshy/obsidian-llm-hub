@@ -3,10 +3,12 @@ import type { LiveFileAccess, LiveToolCall } from "./live-tool-definitions";
 
 export type LiveProvider = "gemini" | "openai";
 export type LiveState = "idle" | "connecting" | "connected";
+export type GeminiLiveThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
 export interface LiveTranscript { id: string; role: "user" | "assistant"; text: string }
 export interface LiveOptions extends LiveFileAccess {
   model: string; voice: string; instructions: string; language: "ja" | "en";
   inputDeviceId?: string; outputDeviceId?: string;
+  thinkingLevel?: GeminiLiveThinkingLevel;
 }
 export interface LiveConnectionConfig { apiKey: string; proxyUrl?: string; proxyBypass?: string }
 export interface LiveCallbacks {
