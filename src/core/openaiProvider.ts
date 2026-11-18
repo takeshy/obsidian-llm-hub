@@ -388,39 +388,41 @@ function buildResponsesInput(
   continuationProvider: "openai" | "xai",
 ): OpenAI.Responses.ResponseInputItem[] {
   const result: OpenAI.Responses.ResponseInputItem[] = [];
+  let historyStart = 0;
+  // Older chats store tool calls/results on the assistant message. Expand
+  // those turns (including tool-returned PDFs) before translating the wire format.
+  const appendHistory = (end: number) => {
+    for (const message of buildOpenAiMessages(messages.slice(historyStart, end))) {
+      for (const call of message.tool_calls ?? []) {
+        result.push({ type: "function_call", call_id: call.id, ...call.function });
+      }
+      if (message.role === "tool") {
+        if (message.tool_call_id && typeof message.content === "string") {
+          result.push({ type: "function_call_output", call_id: message.tool_call_id, output: message.content });
+        }
+      } else if (Array.isArray(message.content)) {
+        const content = message.content.map((part): OpenAI.Responses.ResponseInputContent => {
+          if (part.type === "image_url") return { type: "input_image", detail: "auto", image_url: part.image_url.url };
+          if (part.type === "file") return { type: "input_file", ...part.file };
+          return { type: "input_text", text: part.text };
+        });
+        result.push({ role: message.role, content });
+      } else if (message.content !== null) {
+        result.push({ role: message.role, content: message.content });
+      }
+    }
+  };
   for (let index = 0; index < messages.length; index++) {
     const msg = messages[index];
     const hasTriggeringUser = index > 0 && messages[index - 1].role === "user";
     if (msg.role === "assistant" && hasTriggeringUser
       && continuationMatches(msg.providerContinuation, continuationProvider, baseUrl, model)) {
+      appendHistory(index);
       result.push(...msg.providerContinuation.items as OpenAI.Responses.ResponseInputItem[]);
-      continue;
-    }
-
-    const text = msg.role === "user" && msg.llmContent ? msg.llmContent : msg.content;
-    if (msg.role === "user" && msg.attachments?.some(a => a.type === "image" || a.type === "pdf")) {
-      const content: OpenAI.Responses.ResponseInputContent[] = [{ type: "input_text", text }];
-      for (const attachment of msg.attachments) {
-        if (attachment.type === "image") {
-          content.push({
-            type: "input_image",
-            detail: "auto",
-            image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
-          });
-        } else if (attachment.type === "pdf") {
-          content.push({
-            type: "input_file",
-            filename: attachment.name,
-            file_data: `data:${attachment.mimeType};base64,${attachment.data}`,
-          });
-        }
-      }
-      result.push({ role: "user", content });
-    } else {
-      // Tool-role messages are a local-provider shape; this path never sees them.
-      result.push({ role: msg.role === "tool" ? "assistant" : msg.role, content: text });
+      historyStart = index + 1;
     }
   }
+  appendHistory(messages.length);
   return result;
 }
 
@@ -758,7 +760,7 @@ async function* openaiResponsesStream(
  * Stream chat completion with function calling support via OpenAI SDK.
  * When enableThinking is true, uses Responses API first for official OpenAI.
  * A tool-enabled reasoning request must not fall back to Chat Completions:
- * current GPT-5.6 models and GPT-6 Astra use Responses for that combination.
+ * some OpenAI models apply reasoning by default even without a selected effort.
  */
 export async function* openaiChatWithToolsStream(
   baseUrl: string,
@@ -804,11 +806,9 @@ export async function* openaiChatWithToolsStream(
   // Other compatible gateways continue to use Chat Completions.
   const responsesProvider = getOfficialResponsesProvider(baseUrl);
   const requiresResponsesForTools = responsesProvider === "openai"
-    && /^(?:gpt-5\.6(?:-|$)|gpt-6-astra(?:-|$))/i.test(model)
+    && /^gpt-/i.test(model)
     && tools.length > 0;
 
-  // Preserve existing non-search behavior: only OpenAI reasoning requests use
-  // Responses automatically, while search forces Responses for OpenAI or xAI.
   const shouldUseResponses = (useReasoning && responsesProvider === "openai")
     || (webSearchEnabled === true && responsesProvider !== null)
     || requiresResponsesForTools;

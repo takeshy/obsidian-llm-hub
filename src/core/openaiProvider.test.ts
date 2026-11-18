@@ -195,7 +195,7 @@ describe("openaiChatWithToolsStream", () => {
     createCompletion.mockResolvedValueOnce(round({ content: "Done." }));
 
     const stream = openaiChatWithToolsStream(
-      "https://api.openai.com", "key", "gpt-5",
+      "https://gateway.example.com", "key", "gpt-5",
       [
         { role: "user", content: "read a.md", timestamp: 0 },
         {

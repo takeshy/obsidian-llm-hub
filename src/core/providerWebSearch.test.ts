@@ -191,6 +191,56 @@ describe("OpenAI native web search", () => {
     });
   });
 
+  it.each(["gpt-4o", "gpt-6.1-sol", "gpt-6.2-sol", "gpt-6.2-astra"])("sends %s image chats with function tools through Responses at default effort", async model => {
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{
+      type: "response.completed", response: { id: "resp_image", output: [] },
+    }]));
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://api.openai.com", "key", model,
+      [{
+        role: "user", content: "Describe this image", timestamp: 1,
+        attachments: [{ type: "image", name: "photo.png", mimeType: "image/png", data: "aW1hZ2U=" }],
+      }],
+      [tool], "system", vi.fn(), undefined, undefined, undefined, undefined, false, "default",
+    ));
+
+    expect(mocks.openAiResponsesStream).toHaveBeenCalledOnce();
+    const request = mocks.openAiResponsesStream.mock.calls[0][0];
+    expect(request.input[0].content).toContainEqual({
+      type: "input_image", detail: "auto", image_url: "data:image/png;base64,aW1hZ2U=",
+    });
+    expect(request.tools).toMatchObject([{ type: "function", name: tool.name }]);
+    expect(request.reasoning).toBeUndefined();
+    expect(mocks.openAiChatCreate).not.toHaveBeenCalled();
+    expect(chunks.at(-1)?.type).toBe("done");
+  });
+
+  it("retains a GPT chat's saved tool history when switching from Chat Completions to Responses", async () => {
+    mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{
+      type: "response.completed", response: { id: "resp_next", output: [] },
+    }]));
+    const chunks = await collect(openaiChatWithToolsStream(
+      "https://api.openai.com", "key", "gpt-5",
+      [
+        { role: "user", content: "Read a.md", timestamp: 1 },
+        {
+          role: "assistant", content: "It says hello.", timestamp: 2,
+          toolCalls: [{ id: "call_1", name: "read_note", args: { path: "a.md" } }],
+          toolResults: [{ toolCallId: "call_1", result: "hello" }],
+        },
+        { role: "user", content: "Which file was that?", timestamp: 3 },
+      ], [tool], "system", vi.fn(),
+    ));
+    expect(chunks.at(-1)?.type).toBe("done");
+    expect(mocks.openAiResponsesStream.mock.calls[0][0].input).toEqual([
+      { role: "user", content: "Read a.md" },
+      { type: "function_call", call_id: "call_1", name: "read_note", arguments: '{"path":"a.md"}' },
+      { type: "function_call_output", call_id: "call_1", output: "hello" },
+      { role: "assistant", content: "It says hello." },
+      { role: "user", content: "Which file was that?" },
+    ]);
+  });
+
   it("replays matching native continuation items after their triggering user", async () => {
     const priorItem = { id: "prior", type: "message", role: "assistant", status: "completed", content: [] };
     mocks.openAiResponsesStream.mockReturnValue(asyncEvents([{

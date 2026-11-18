@@ -1,6 +1,7 @@
 import { formatComposerMention } from "obsidian-llm-hub-common/chat";
 import {
   acceptedAttachmentTypes,
+  attachmentKindFor,
   detectComposerTrigger,
   fileToAttachment,
   isAttachmentRejection,
@@ -10,7 +11,7 @@ import { clampReadAloudRate, MAX_READ_ALOUD_RATE, MIN_READ_ALOUD_RATE } from "ob
 import { CollapsedInput } from "obsidian-llm-hub-common";
 import { InputArea as SharedInputArea } from "obsidian-llm-hub-common";
 import { Composer, Autocomplete, Attachments, VaultToolControl, EnabledMcpServers, ChipRow, ReadAloudChip, VoiceConversationChip, InputButtons, SearchSelector, ModelRow, ModelDropdown } from "obsidian-llm-hub-common";
-import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, useEffect, type ClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, ChangeEvent, forwardRef, useImperativeHandle } from "react";
 
 
 import Eye from "lucide-react/dist/esm/icons/eye";
@@ -25,6 +26,7 @@ import SkillSelector from "./SkillSelector";
 import OkfSelector from "./OkfSelector";
 import { t } from "src/i18n";
 import { isCaretOnFirstLine, isCaretOnLastLine } from "./chat/chatUtils";
+import { readMacClipboardImage } from "./chat/macClipboardImage";
 import ModelSelector from "./ModelSelector";
 
 // Built-in command definition (not user-configurable)
@@ -430,6 +432,16 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
   };
 
   const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (Platform.isMacOS && e.isTrusted && e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey
+      && e.key.toLowerCase() === "v" && !isLoading && !isCompacting) {
+      const image = readMacClipboardImage();
+      if (image) {
+        e.preventDefault();
+        e.stopPropagation();
+        void addFiles([image]);
+        return;
+      }
+    }
     // Slash command autocomplete
     if (showAutocomplete) {
       if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
@@ -528,18 +540,38 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
     }
   };
 
+  const addFiles = async (files: File[]) => {
+    const attachments: Attachment[] = [];
+    for (const file of files) {
+      const attachment = await processFile(file);
+      if (attachment) attachments.push(attachment);
+    }
+    if (attachments.length) setPendingAttachments(prev => [...prev, ...attachments]);
+  };
+
+  const handleImagePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (isLoading || isCompacting) return;
+    const { files, items } = event.clipboardData;
+    const clipboardFiles = files.length ? Array.from(files) : Array.from(items)
+      .filter(item => item.kind === "file")
+      .map(item => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    const images = clipboardFiles.filter(file => attachmentKindFor(file, ["image"]));
+    if (!images.length && Platform.isMacOS && event.isTrusted && !event.clipboardData.getData("text/plain")) {
+      const image = readMacClipboardImage();
+      if (image) images.push(image);
+    }
+    if (!images.length) return;
+
+    event.preventDefault();
+    void addFiles(images);
+  };
+
   const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
+    await addFiles(Array.from(files));
 
-    for (const file of Array.from(files)) {
-      const attachment = await processFile(file);
-      if (attachment) {
-        setPendingAttachments(prev => [...prev, attachment]);
-      }
-    }
-
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -694,6 +726,7 @@ const InputArea = forwardRef<InputAreaHandle, InputAreaProps>(function InputArea
       composer={<Composer classPrefix="llm-hub" textareaRef={textareaRef}
           textarea={{ value: input,
           onChange: handleInputChange,
+          onPaste: handleImagePaste,
           onKeyDown: handleKeyDown,
           placeholder: isCompacting ? t("chat.compacting") : (Platform.isMobile ? t("input.placeholderMobile") : t("input.placeholder")),
           disabled: isCompacting }}
